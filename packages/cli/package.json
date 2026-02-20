@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@oda/api": "workspace:*",
     "@oda/core": "workspace:*",
     "@oda/executor": "workspace:*",
     "@oda/planner": "workspace:*",

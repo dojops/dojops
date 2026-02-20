@@ -9,3 +9,10 @@ export {
   DiffRequestSchema,
 } from "./schemas";
 export type { GenerateRequest, PlanRequest, DebugCIRequest, DiffRequest } from "./schemas";
+export {
+  createProvider,
+  createTools,
+  createRouter,
+  createDebugger,
+  createDiffAnalyzer,
+} from "./factory";

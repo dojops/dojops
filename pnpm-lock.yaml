@@ -87,6 +87,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@oda/api':
+        specifier: workspace:*
+        version: link:../api
       '@oda/core':
         specifier: workspace:*
         version: link:../core

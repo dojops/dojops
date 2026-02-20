@@ -21,6 +21,7 @@ export interface AppDependencies {
   debugger: CIDebugger;
   diffAnalyzer: InfraDiffAnalyzer;
   store: HistoryStore;
+  publicDir?: string;
 }
 
 export function createApp(deps: AppDependencies): Express {
@@ -30,7 +31,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use(express.json({ limit: "1mb" }));
 
   // Serve static dashboard files
-  app.use(express.static(path.join(__dirname, "..", "public")));
+  app.use(express.static(deps.publicDir ?? path.join(__dirname, "..", "public")));
 
   // Health check
   app.get("/api/health", (_req, res) => {

@@ -47,6 +47,9 @@ cd oda
 pnpm install
 cp .env.example .env    # then edit with your API keys
 pnpm build
+
+# Optional: register `oda` as a global command
+npm link
 ```
 
 ## Configuration
@@ -65,30 +68,31 @@ ODA_API_PORT=3000            # API server port (default: 3000)
 ### CLI
 
 ```bash
-# Default mode — multi-agent routing picks the best specialist
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev "Create a Terraform config for S3 with versioning"
+# After `npm link` (global install):
+oda "Create a Terraform config for S3 with versioning"
+oda --plan "Set up CI/CD for a Node.js app"
+oda --execute --yes "Create CI for Node app"
+oda --debug-ci "ERROR: tsc failed with exit code 1..."
+oda --diff "terraform plan output..."
 
-# Plan mode — decompose a goal into a task graph (generate only)
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --plan "Set up CI/CD for a Node.js app"
-
-# Execute mode — generate + sandboxed execution with approval prompts
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute "Create CI for Node app"
-
-# Execute with auto-approve — skip approval prompts
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute --yes "Create CI for Node app"
-
-# Debug CI — diagnose a failing CI log
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --debug-ci "ERROR: tsc failed with exit code 1..."
-
-# Infra diff — analyze risk/cost/security of infrastructure changes
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --diff "terraform plan output..."
+# In-repo development (no global link needed):
+pnpm oda -- "Create a Terraform config for S3 with versioning"
+pnpm oda -- --plan "Set up CI/CD for a Node.js app"
+pnpm oda -- --execute --yes "Create CI for Node app"
+pnpm oda -- --debug-ci "ERROR: tsc failed..."
+pnpm oda -- --diff "terraform plan output..."
 ```
 
 ### API Server + Web Dashboard
 
 ```bash
-# Start the API server (serves dashboard at root)
-ODA_PROVIDER=ollama pnpm --filter @oda/api dev
+# Start the API server + web dashboard
+oda serve
+oda serve --port=8080
+
+# In-repo development:
+pnpm oda -- serve
+pnpm oda -- serve --port=8080
 ```
 
 Open `http://localhost:3000` for the web dashboard.

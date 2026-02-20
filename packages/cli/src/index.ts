@@ -1,51 +1,21 @@
 #!/usr/bin/env node
 
 import "dotenv/config";
+import { LLMProvider } from "@oda/core";
 import {
-  OpenAIProvider,
-  OllamaProvider,
-  AnthropicProvider,
-  LLMProvider,
-  AgentRouter,
-  CIDebugger,
-  InfraDiffAnalyzer,
-} from "@oda/core";
+  createProvider,
+  createTools,
+  createRouter,
+  createDebugger,
+  createDiffAnalyzer,
+} from "@oda/api";
 import { decompose, PlannerExecutor } from "@oda/planner";
-import {
-  GitHubActionsTool,
-  TerraformTool,
-  KubernetesTool,
-  HelmTool,
-  AnsibleTool,
-} from "@oda/tools";
 import {
   SafeExecutor,
   AutoApproveHandler,
   CallbackApprovalHandler,
   ApprovalRequest,
 } from "@oda/executor";
-
-function createProvider(): LLMProvider {
-  const providerName = process.env.ODA_PROVIDER ?? "openai";
-
-  if (providerName === "ollama") {
-    return new OllamaProvider();
-  } else if (providerName === "anthropic") {
-    return new AnthropicProvider(process.env.ANTHROPIC_API_KEY!);
-  } else {
-    return new OpenAIProvider(process.env.OPENAI_API_KEY!);
-  }
-}
-
-function createTools(provider: LLMProvider) {
-  return [
-    new GitHubActionsTool(provider),
-    new TerraformTool(provider),
-    new KubernetesTool(provider),
-    new HelmTool(provider),
-    new AnsibleTool(provider),
-  ];
-}
 
 function cliApprovalHandler(): CallbackApprovalHandler {
   return new CallbackApprovalHandler(async (request: ApprovalRequest) => {
@@ -160,7 +130,7 @@ async function runPlan(
 }
 
 async function runDebugCI(logContent: string, provider: LLMProvider) {
-  const debugger_ = new CIDebugger(provider);
+  const debugger_ = createDebugger(provider);
 
   console.log("Analyzing CI log...\n");
   const diagnosis = await debugger_.diagnose(logContent);
@@ -188,7 +158,7 @@ async function runDebugCI(logContent: string, provider: LLMProvider) {
 }
 
 async function runDiff(diffContent: string, provider: LLMProvider) {
-  const analyzer = new InfraDiffAnalyzer(provider);
+  const analyzer = createDiffAnalyzer(provider);
 
   console.log("Analyzing infrastructure diff...\n");
   const analysis = await analyzer.analyze(diffContent);
@@ -229,9 +199,79 @@ async function runDiff(diffContent: string, provider: LLMProvider) {
   }
 }
 
-async function main() {
+async function runServe(args: string[]) {
+  const portArg = args.find((a) => a.startsWith("--port="));
+  const port = portArg
+    ? parseInt(portArg.split("=")[1], 10)
+    : parseInt(process.env.ODA_API_PORT ?? "3000", 10);
+
+  const { createApp, HistoryStore } = await import("@oda/api");
+
   const provider = createProvider();
+  const tools = createTools(provider);
+  const router = createRouter(provider);
+  const debugger_ = createDebugger(provider);
+  const diffAnalyzer = createDiffAnalyzer(provider);
+  const store = new HistoryStore();
+
+  const app = createApp({
+    provider,
+    tools,
+    router,
+    debugger: debugger_,
+    diffAnalyzer,
+    store,
+  });
+
+  app.listen(port, () => {
+    console.log(`ODA API server running on http://localhost:${port}`);
+    console.log(`Provider: ${provider.name}`);
+    console.log(`Tools: ${tools.map((t) => t.name).join(", ")}`);
+    console.log(`Dashboard: http://localhost:${port}`);
+  });
+}
+
+function printHelp() {
+  console.log("Usage: oda [command] [options] <prompt>");
+  console.log();
+  console.log("Commands:");
+  console.log("  serve          Start API server + web dashboard");
+  console.log("  <prompt>       Run agent on prompt (default)");
+  console.log();
+  console.log("Options:");
+  console.log("  --plan         Decompose into task graph and run generate phase");
+  console.log("  --execute      Also run execute phase with approval workflow");
+  console.log("  --yes          Auto-approve all execution (skip approval prompts)");
+  console.log("  --debug-ci     Analyze CI log output and diagnose failures");
+  console.log("  --diff         Analyze infrastructure diff for risk and impact");
+  console.log("  --port=N       Port for serve command (default: 3000)");
+  console.log("  --help         Show this help message");
+  console.log();
+  console.log("Examples:");
+  console.log('  oda "Create a Terraform config for S3"');
+  console.log('  oda --plan "Set up CI/CD for a Node.js app"');
+  console.log('  oda --execute --yes "Create CI for Node app"');
+  console.log('  oda --debug-ci "ERROR: tsc failed..."');
+  console.log('  oda --diff "terraform plan output..."');
+  console.log("  oda serve");
+  console.log("  oda serve --port=8080");
+}
+
+async function main() {
   const args = process.argv.slice(2);
+
+  if (args.includes("--help") || args.includes("-h")) {
+    printHelp();
+    process.exit(0);
+  }
+
+  // Serve subcommand
+  if (args[0] === "serve") {
+    await runServe(args.slice(1));
+    return;
+  }
+
+  const provider = createProvider();
 
   const planMode = args.includes("--plan");
   const executeMode = args.includes("--execute");
@@ -242,12 +282,7 @@ async function main() {
   const prompt = args.filter((a) => !flags.includes(a)).join(" ");
 
   if (!prompt) {
-    console.log("Usage: oda [options] <prompt>");
-    console.log("  --plan       Decompose into task graph and run generate phase");
-    console.log("  --execute    Also run execute phase with approval workflow");
-    console.log("  --yes        Auto-approve all execution (skip approval prompts)");
-    console.log("  --debug-ci   Analyze CI log output and diagnose failures");
-    console.log("  --diff       Analyze infrastructure diff for risk and impact");
+    printHelp();
     process.exit(1);
   }
 
@@ -259,7 +294,7 @@ async function main() {
     await runPlan(prompt, provider, executeMode, autoApprove);
   } else {
     // Multi-agent routing: pick the best specialist for the prompt
-    const router = new AgentRouter(provider);
+    const router = createRouter(provider);
     const route = router.route(prompt);
 
     if (route.confidence > 0) {

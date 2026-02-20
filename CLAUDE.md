@@ -18,20 +18,25 @@ pnpm format:check       # Prettier check (CI)
 
 # Per-package
 pnpm --filter @oda/core build
-pnpm --filter @oda/cli dev
 pnpm --filter @oda/sdk build
 pnpm --filter @oda/core test
 
-# Run CLI
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev <prompt>
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --plan "Create CI for Node app"
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute "Create CI for Node app"
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute --yes "Create CI for Node app"
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --debug-ci "ERROR: tsc failed..."
-ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --diff "terraform plan output..."
+# Run CLI (after `npm link` for global `oda`, or use `pnpm oda --`)
+oda "Create a Terraform config for S3"
+oda --plan "Create CI for Node app"
+oda --execute "Create CI for Node app"
+oda --execute --yes "Create CI for Node app"
+oda --debug-ci "ERROR: tsc failed..."
+oda --diff "terraform plan output..."
+
+# In-repo development (no global link needed)
+pnpm oda -- "Create a Terraform config for S3"
+pnpm oda -- --plan "Create CI for Node app"
 
 # Run API server + dashboard
-ODA_PROVIDER=ollama pnpm --filter @oda/api dev    # http://localhost:3000
+oda serve                         # http://localhost:3000
+oda serve --port=8080
+pnpm oda -- serve                 # in-repo alternative
 ```
 
 ## Architecture
@@ -41,8 +46,8 @@ ODA_PROVIDER=ollama pnpm --filter @oda/api dev    # http://localhost:3000
 **Package dependency flow** (top → bottom):
 
 ```
-@oda/cli          → Entry point, --plan/--execute/--yes/--debug-ci/--diff flags
-@oda/api          → REST API (Express) + web dashboard, exposes all capabilities via HTTP
+@oda/cli          → Entry point: `oda "prompt"` and `oda serve`, imports factories from @oda/api
+@oda/api          → REST API (Express) + web dashboard, factory functions, exposes all capabilities via HTTP
 @oda/planner      → TaskGraph decomposition (LLM) + topological executor
 @oda/executor     → SafeExecutor: sandbox + policy engine + approval workflows + audit log
 @oda/tools        → DevOps tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible
