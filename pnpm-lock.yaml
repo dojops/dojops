@@ -47,6 +47,9 @@ importers:
       '@oda/core':
         specifier: workspace:*
         version: link:../core
+      '@oda/executor':
+        specifier: workspace:*
+        version: link:../executor
       '@oda/planner':
         specifier: workspace:*
         version: link:../planner
@@ -68,6 +71,15 @@ importers:
       openai:
         specifier: ^4.0.0
         version: 4.104.0(zod@3.25.76)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
+  packages/executor:
+    dependencies:
+      '@oda/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       zod:
         specifier: ^3.23.0
         version: 3.25.76

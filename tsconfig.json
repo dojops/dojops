@@ -14,7 +14,8 @@
       "@oda/core/*": ["packages/core/src/*"],
       "@oda/sdk/*": ["packages/sdk/src/*"],
       "@oda/planner/*": ["packages/planner/src/*"],
-      "@oda/tools/*": ["packages/tools/src/*"]
+      "@oda/tools/*": ["packages/tools/src/*"],
+      "@oda/executor/*": ["packages/executor/src/*"]
     }
   }
 }
