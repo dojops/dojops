@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructure and CI/CD tasks using LLM providers. Structured output enforcement, a task planner, five DevOps tools, and a sandboxed execution engine with approval workflows are implemented.
+ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructure and CI/CD tasks using LLM providers. Structured output enforcement, a task planner, five DevOps tools, a sandboxed execution engine with approval workflows, a multi-agent system, CI debugging, and infra diff intelligence are implemented.
 
 ## Commands
 
@@ -12,7 +12,7 @@ ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructur
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (75 tests)
+pnpm test               # Vitest across all packages (95 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -27,6 +27,8 @@ ODA_PROVIDER=ollama pnpm --filter @oda/cli dev <prompt>
 ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --plan "Create CI for Node app"
 ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute "Create CI for Node app"
 ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute --yes "Create CI for Node app"
+ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --debug-ci "ERROR: tsc failed..."
+ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --diff "terraform plan output..."
 ```
 
 ## Architecture
@@ -36,7 +38,7 @@ ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute --yes "Create CI for No
 **Package dependency flow** (top → bottom):
 
 ```
-@oda/cli          → Entry point, --plan/--execute/--yes flags
+@oda/cli          → Entry point, --plan/--execute/--yes/--debug-ci/--diff flags
 @oda/planner      → TaskGraph decomposition (LLM) + topological executor
 @oda/executor     → SafeExecutor: sandbox + policy engine + approval workflows + audit log
 @oda/tools        → DevOps tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible
@@ -50,6 +52,10 @@ ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute --yes "Create CI for No
 - `LLMProvider` interface (`packages/core/src/llm/provider.ts`) — `generate(LLMRequest): Promise<LLMResponse>`, supports optional `schema` field for structured JSON output
 - `parseAndValidate()` (`packages/core/src/llm/json-validator.ts`) — strips markdown fences, JSON.parse, Zod safeParse; used by all 3 providers
 - `DevOpsAgent` (`packages/core/src/agent.ts`) — wraps an LLMProvider
+- `AgentRouter` (`packages/core/src/agents/router.ts`) — keyword-based routing to specialist agents with confidence scoring
+- `SpecialistAgent` (`packages/core/src/agents/specialist.ts`) — domain-specific LLM agent with system prompt (5 specialists: planner, terraform, kubernetes, cicd, security)
+- `CIDebugger` (`packages/core/src/agents/ci-debugger.ts`) — analyzes CI logs, produces structured `CIDiagnosis` (error type, root cause, fixes, confidence)
+- `InfraDiffAnalyzer` (`packages/core/src/agents/infra-diff.ts`) — analyzes infra diffs, produces `InfraDiffAnalysis` (risk level, cost impact, security impact, recommendations)
 - `BaseTool<TInput>` (`packages/sdk/src/tool.ts`) — abstract class with Zod `inputSchema`, auto `validate()`, abstract `generate()`, optional `execute()`
 - `decompose()` (`packages/planner/src/decomposer.ts`) — LLM call → `TaskGraph` with structured output
 - `PlannerExecutor` (`packages/planner/src/executor.ts`) — Kahn's topological sort, `$ref:<taskId>` input wiring, failure cascading
@@ -70,15 +76,15 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 
 ## Current Status
 
-**Implemented (Phase 1 + 2 + 3):**
+**Implemented (Phase 1 + 2 + 3 + 4):**
 
-- `@oda/core` — DevOpsAgent + 3 LLM providers (OpenAI, Anthropic, Ollama) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator)
+- `@oda/core` — DevOpsAgent + 3 LLM providers (OpenAI, Anthropic, Ollama) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + multi-agent system (AgentRouter, 5 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
 - `@oda/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`
 - `@oda/planner` — TaskGraph/TaskNode Zod schemas, `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution
 - `@oda/tools` — 5 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible (each with schemas, generator, detector/tool, tests)
 - `@oda/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging, `withTimeout()` for execution limits
-- `@oda/cli` — CLI with `--plan` (generate only), `--execute` (generate + sandboxed execute with approval), `--yes` (auto-approve)
-- Dev tooling — Vitest (75 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- `@oda/cli` — CLI with `--plan` (generate only), `--execute` (generate + sandboxed execute with approval), `--yes` (auto-approve), `--debug-ci` (CI log diagnosis), `--diff` (infra diff analysis), multi-agent routing in default mode
+- Dev tooling — Vitest (95 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 **Empty scaffolding:** `@oda/api`
 
@@ -87,7 +93,7 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 **Phase 1 — Core Intelligence: DONE**
 **Phase 2 — More tools: DONE**
 **Phase 3 — Execution: DONE**
-**Phase 4 — Intelligence (next):** Multi-agent system, CI debugging, infra diff
+**Phase 4 — Intelligence: DONE**
 **Phase 5 — Platform:** REST API, web dashboard
 
 ## Environment

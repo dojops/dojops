@@ -2,11 +2,13 @@
 
 import "dotenv/config";
 import {
-  DevOpsAgent,
   OpenAIProvider,
   OllamaProvider,
   AnthropicProvider,
   LLMProvider,
+  AgentRouter,
+  CIDebugger,
+  InfraDiffAnalyzer,
 } from "@oda/core";
 import { decompose, PlannerExecutor } from "@oda/planner";
 import {
@@ -157,6 +159,76 @@ async function runPlan(
   }
 }
 
+async function runDebugCI(logContent: string, provider: LLMProvider) {
+  const debugger_ = new CIDebugger(provider);
+
+  console.log("Analyzing CI log...\n");
+  const diagnosis = await debugger_.diagnose(logContent);
+
+  console.log(`Error Type:  ${diagnosis.errorType}`);
+  console.log(`Summary:     ${diagnosis.summary}`);
+  console.log(`Root Cause:  ${diagnosis.rootCause}`);
+  console.log(`Confidence:  ${(diagnosis.confidence * 100).toFixed(0)}%`);
+
+  if (diagnosis.affectedFiles.length > 0) {
+    console.log(`\nAffected Files:`);
+    for (const f of diagnosis.affectedFiles) {
+      console.log(`  - ${f}`);
+    }
+  }
+
+  if (diagnosis.suggestedFixes.length > 0) {
+    console.log(`\nSuggested Fixes:`);
+    for (const fix of diagnosis.suggestedFixes) {
+      console.log(`  [${(fix.confidence * 100).toFixed(0)}%] ${fix.description}`);
+      if (fix.command) console.log(`       $ ${fix.command}`);
+      if (fix.file) console.log(`       File: ${fix.file}`);
+    }
+  }
+}
+
+async function runDiff(diffContent: string, provider: LLMProvider) {
+  const analyzer = new InfraDiffAnalyzer(provider);
+
+  console.log("Analyzing infrastructure diff...\n");
+  const analysis = await analyzer.analyze(diffContent);
+
+  console.log(`Summary:     ${analysis.summary}`);
+  console.log(`Risk Level:  ${analysis.riskLevel}`);
+  console.log(`Cost Impact: ${analysis.costImpact.direction} — ${analysis.costImpact.details}`);
+  console.log(`Rollback:    ${analysis.rollbackComplexity}`);
+  console.log(`Confidence:  ${(analysis.confidence * 100).toFixed(0)}%`);
+
+  if (analysis.changes.length > 0) {
+    console.log(`\nChanges (${analysis.changes.length}):`);
+    for (const change of analysis.changes) {
+      const detail = change.attribute ? ` (${change.attribute})` : "";
+      console.log(`  ${change.action.toUpperCase()} ${change.resource}${detail}`);
+    }
+  }
+
+  if (analysis.riskFactors.length > 0) {
+    console.log(`\nRisk Factors:`);
+    for (const r of analysis.riskFactors) {
+      console.log(`  - ${r}`);
+    }
+  }
+
+  if (analysis.securityImpact.length > 0) {
+    console.log(`\nSecurity Impact:`);
+    for (const s of analysis.securityImpact) {
+      console.log(`  - ${s}`);
+    }
+  }
+
+  if (analysis.recommendations.length > 0) {
+    console.log(`\nRecommendations:`);
+    for (const rec of analysis.recommendations) {
+      console.log(`  - ${rec}`);
+    }
+  }
+}
+
 async function main() {
   const provider = createProvider();
   const args = process.argv.slice(2);
@@ -164,22 +236,37 @@ async function main() {
   const planMode = args.includes("--plan");
   const executeMode = args.includes("--execute");
   const autoApprove = args.includes("--yes");
-  const flags = ["--plan", "--execute", "--yes"];
+  const debugCI = args.includes("--debug-ci");
+  const diffMode = args.includes("--diff");
+  const flags = ["--plan", "--execute", "--yes", "--debug-ci", "--diff"];
   const prompt = args.filter((a) => !flags.includes(a)).join(" ");
 
   if (!prompt) {
-    console.log("Usage: oda [--plan] [--execute] [--yes] <prompt>");
-    console.log("  --plan     Decompose into task graph and run generate phase");
-    console.log("  --execute  Also run execute phase with approval workflow");
-    console.log("  --yes      Auto-approve all execution (skip approval prompts)");
+    console.log("Usage: oda [options] <prompt>");
+    console.log("  --plan       Decompose into task graph and run generate phase");
+    console.log("  --execute    Also run execute phase with approval workflow");
+    console.log("  --yes        Auto-approve all execution (skip approval prompts)");
+    console.log("  --debug-ci   Analyze CI log output and diagnose failures");
+    console.log("  --diff       Analyze infrastructure diff for risk and impact");
     process.exit(1);
   }
 
-  if (planMode || executeMode) {
+  if (debugCI) {
+    await runDebugCI(prompt, provider);
+  } else if (diffMode) {
+    await runDiff(prompt, provider);
+  } else if (planMode || executeMode) {
     await runPlan(prompt, provider, executeMode, autoApprove);
   } else {
-    const agent = new DevOpsAgent(provider);
-    const result = await agent.run(prompt);
+    // Multi-agent routing: pick the best specialist for the prompt
+    const router = new AgentRouter(provider);
+    const route = router.route(prompt);
+
+    if (route.confidence > 0) {
+      console.log(`[Routed to ${route.agent.name} — ${route.reason}]\n`);
+    }
+
+    const result = await route.agent.run({ prompt });
     console.log(result.content);
   }
 }
