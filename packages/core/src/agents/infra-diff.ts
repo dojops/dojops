@@ -50,7 +50,9 @@ You MUST respond with valid JSON matching this schema:
   "rollbackComplexity": "trivial|simple|moderate|complex|impossible",
   "recommendations": ["string"],
   "confidence": 0-1
-}`;
+}
+
+IMPORTANT: Do NOT ask follow-up questions or offer to continue the conversation. This is a single-shot interaction — the user cannot reply. Provide a complete, self-contained response.`;
 
 export class InfraDiffAnalyzer {
   constructor(private provider: LLMProvider) {}

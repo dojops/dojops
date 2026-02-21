@@ -36,7 +36,9 @@ Respond with a JSON object matching this structure:
       "input": { "key": "value or $ref:task-id for output from another task" }
     }
   ]
-}`,
+}
+
+Do NOT ask follow-up questions. Provide the complete task graph only.`,
     prompt: goal,
     schema: TaskGraphSchema,
   });

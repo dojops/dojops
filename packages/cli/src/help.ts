@@ -18,7 +18,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("inspect")}            Inspect config, policy, agents, session`);
   console.log(`  ${pc.cyan("agents")}             List and inspect specialist agents`);
   console.log(`  ${pc.cyan("history")}            View execution history`);
-  console.log(`  ${pc.cyan("history verify")}    Verify audit log hash chain integrity`);
+  console.log(`  ${pc.cyan("history verify")}     Verify audit log hash chain integrity`);
   console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
   console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
   console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);

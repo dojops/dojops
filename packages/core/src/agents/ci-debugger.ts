@@ -48,7 +48,9 @@ You MUST respond with valid JSON matching this schema:
   "suggestedFixes": [{ "description": "string", "command?": "string", "file?": "string", "confidence": 0-1 }],
   "affectedFiles": ["string"],
   "confidence": 0-1
-}`;
+}
+
+IMPORTANT: Do NOT ask follow-up questions or offer to continue the conversation. This is a single-shot interaction — the user cannot reply. Provide a complete, self-contained response.`;
 
 export class CIDebugger {
   constructor(private provider: LLMProvider) {}
