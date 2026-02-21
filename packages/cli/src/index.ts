@@ -16,7 +16,7 @@ import { LLMProvider } from "@odaops/core";
 import { resolveProvider, resolveModel, resolveToken, loadProfileConfig } from "./config";
 import { parseGlobalOptions, parseCommandPath } from "./parser";
 import { remapLegacyArgs } from "./compat";
-import { printHelp } from "./help";
+import { printHelp, printCommandHelp } from "./help";
 import { resolveCommand } from "./commands";
 import { CLIContext } from "./types";
 import { ExitCode } from "./exit-codes";
@@ -59,10 +59,10 @@ registerSubcommand("history", "rollback", historyCommand);
 async function main() {
   const rawArgs = process.argv.slice(2);
 
-  // Help / version early returns
-  if (rawArgs.includes("--help") || rawArgs.includes("-h") || rawArgs.length === 0) {
+  // No args → global help
+  if (rawArgs.length === 0) {
     printHelp();
-    process.exit(rawArgs.length === 0 ? 1 : 0);
+    process.exit(1);
   }
 
   // Parse global options first
@@ -78,6 +78,16 @@ async function main() {
 
   // Parse command path
   const { command, positional } = parseCommandPath(remapped);
+
+  // Help flag: show per-command or global help
+  if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    if (command.length > 0) {
+      printCommandHelp(command.join(" "));
+    } else {
+      printHelp();
+    }
+    process.exit(0);
+  }
 
   // Resolve command handler
   const resolved = resolveCommand(command, positional);

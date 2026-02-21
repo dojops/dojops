@@ -133,6 +133,7 @@ describe("API integration", () => {
       expect(res.body.agents.length).toBeGreaterThan(0);
       expect(res.body.agents[0]).toHaveProperty("name");
       expect(res.body.agents[0]).toHaveProperty("domain");
+      expect(res.body.agents[0]).toHaveProperty("description");
     });
   });
 

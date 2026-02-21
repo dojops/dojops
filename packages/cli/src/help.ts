@@ -109,22 +109,296 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} oda plan --execute <prompt>`);
       console.log(`  ${pc.dim("$")} oda plan --execute --yes <prompt>`);
       console.log(`\n${pc.bold("OPTIONS")}`);
-      console.log(`  ${pc.cyan("--execute")}    Generate + execute tasks with approval`);
-      console.log(`  ${pc.cyan("--yes")}        Auto-approve all executions`);
+      console.log(`  ${pc.cyan("--execute")}    Generate + execute tasks with approval workflow`);
+      console.log(
+        `  ${pc.cyan("--yes")}        Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
+      );
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda plan "Set up CI/CD for a Node.js app"`);
+      console.log(`  ${pc.dim("$")} oda plan --execute "Deploy a Terraform stack"`);
+      console.log(`  ${pc.dim("$")} oda plan --execute --yes "Create CI for Node app"`);
+      console.log(`  ${pc.dim("$")} oda plan "Create CI" --output json`);
       console.log();
       break;
+
+    case "generate":
+      console.log(
+        `\n${pc.bold("oda generate")} — Generate DevOps configuration via specialist agent`,
+      );
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda <prompt>`);
+      console.log(`  ${pc.dim("$")} oda generate <prompt>`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Routes your prompt to the best-matching specialist agent and generates`);
+      console.log(`  a response. This is the default command when no subcommand is given.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda "Create a Terraform config for S3"`);
+      console.log(`  ${pc.dim("$")} oda generate "Write a Kubernetes deployment"`);
+      console.log(`  ${pc.dim("$")} oda "Set up monitoring with Prometheus" --output json`);
+      console.log();
+      break;
+
+    case "apply":
+      console.log(`\n${pc.bold("oda apply")} — Execute a saved plan`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda apply [<plan-id>] [options]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--dry-run")}    Preview changes without writing files`);
+      console.log(`  ${pc.cyan("--resume")}     Skip previously completed tasks`);
+      console.log(
+        `  ${pc.cyan("--yes")}        Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
+      );
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Executes a previously saved plan. If no plan ID is given, uses the`);
+      console.log(`  current session plan or the most recent one.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda apply`);
+      console.log(`  ${pc.dim("$")} oda apply --dry-run`);
+      console.log(`  ${pc.dim("$")} oda apply --resume --yes`);
+      console.log(`  ${pc.dim("$")} oda apply plan-abc123`);
+      console.log();
+      break;
+
+    case "validate":
+      console.log(`\n${pc.bold("oda validate")} — Validate a plan against schemas`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda validate [<plan-id>]`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Validates that each task in a plan has a valid id, tool, description,`);
+      console.log(`  and that dependencies reference existing tasks.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda validate`);
+      console.log(`  ${pc.dim("$")} oda validate plan-abc123`);
+      console.log();
+      break;
+
+    case "explain":
+      console.log(`\n${pc.bold("oda explain")} — LLM explains a plan in plain language`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda explain [<plan-id>|last]`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Uses the LLM to explain what a plan does, its tasks, dependencies,`);
+      console.log(`  and potential risks. Defaults to the current session plan.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda explain`);
+      console.log(`  ${pc.dim("$")} oda explain last`);
+      console.log(`  ${pc.dim("$")} oda explain plan-abc123`);
+      console.log();
+      break;
+
     case "debug":
+    case "debug ci":
       console.log(`\n${pc.bold("oda debug ci")} — Diagnose CI/CD log failures`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} oda debug ci <log-content>`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Analyzes CI build logs to identify root causes of failures.`);
+      console.log(
+        `  Returns error type, summary, root cause, affected files, and suggested fixes.`,
+      );
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda debug ci "ERROR: tsc failed with exit code 1"`);
+      console.log(`  ${pc.dim("$")} oda debug ci "npm ERR! peer dep missing: react@^18"`);
       console.log();
       break;
+
     case "analyze":
-      console.log(`\n${pc.bold("oda analyze")} — Analyze infrastructure changes`);
+    case "analyze diff":
+      console.log(`\n${pc.bold("oda analyze diff")} — Analyze infrastructure diff for risk`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} oda analyze diff <diff-content>`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Analyzes infrastructure diffs (e.g. terraform plan output) and provides`);
+      console.log(`  risk assessment, cost impact, security impact, and recommendations.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda analyze diff "terraform plan output..."`);
+      console.log(`  ${pc.dim("$")} oda analyze diff "+ resource aws_s3_bucket main {}"`);
       console.log();
       break;
+
+    case "inspect":
+      console.log(`\n${pc.bold("oda inspect")} — Inspect runtime configuration and state`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda inspect <target>`);
+      console.log(`\n${pc.bold("TARGETS")}`);
+      console.log(`  ${pc.cyan("config")}     Show resolved provider, model, and tokens`);
+      console.log(`  ${pc.cyan("policy")}     Show execution policies`);
+      console.log(`  ${pc.cyan("agents")}     List specialist agents`);
+      console.log(`  ${pc.cyan("session")}    Show current session state`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda inspect config`);
+      console.log(`  ${pc.dim("$")} oda inspect agents`);
+      console.log(`  ${pc.dim("$")} oda inspect session --output json`);
+      console.log();
+      break;
+
+    case "agents":
+      console.log(`\n${pc.bold("oda agents")} — List and inspect specialist agents`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda agents [list|info <name>]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("list")}         List all specialist agents ${pc.dim("(default)")}`);
+      console.log(`  ${pc.cyan("info <name>")}  Show details for a specific agent`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda agents`);
+      console.log(`  ${pc.dim("$")} oda agents list`);
+      console.log(`  ${pc.dim("$")} oda agents info ops-cortex`);
+      console.log(`  ${pc.dim("$")} oda agents list --output json`);
+      console.log();
+      break;
+
+    case "history":
+      console.log(`\n${pc.bold("oda history")} — View execution history and audit logs`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda history [list|show <plan-id>|verify|rollback <plan-id>]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(
+        `  ${pc.cyan("list")}              List all plans with status ${pc.dim("(default)")}`,
+      );
+      console.log(`  ${pc.cyan("show <plan-id>")}    Show plan details and execution results`);
+      console.log(`  ${pc.cyan("verify")}            Verify audit log hash chain integrity`);
+      console.log(`  ${pc.cyan("rollback <plan-id>")} Reverse an applied plan`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda history`);
+      console.log(`  ${pc.dim("$")} oda history list`);
+      console.log(`  ${pc.dim("$")} oda history show plan-abc123`);
+      console.log(`  ${pc.dim("$")} oda history verify`);
+      console.log();
+      break;
+
+    case "config":
+      console.log(`\n${pc.bold("oda config")} — Configure provider, model, and tokens`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda config [show]`);
+      console.log(`  ${pc.dim("$")} oda config [--provider=NAME] [--model=NAME] [--token=KEY]`);
+      console.log(`  ${pc.dim("$")} oda config profile <create|use|list> [name]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--provider=NAME")}  Set default LLM provider`);
+      console.log(`  ${pc.cyan("--model=NAME")}     Set default model`);
+      console.log(`  ${pc.cyan("--token=KEY")}      Save API token for current provider`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("show")}             Display current configuration`);
+      console.log(`  ${pc.cyan("profile create")}   Save current config as a named profile`);
+      console.log(`  ${pc.cyan("profile use")}      Switch to a named profile`);
+      console.log(`  ${pc.cyan("profile list")}     List all profiles`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Without arguments, launches an interactive configuration wizard.`);
+      console.log(`  With flags, applies settings directly and exits.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda config`);
+      console.log(`  ${pc.dim("$")} oda config show`);
+      console.log(`  ${pc.dim("$")} oda config --provider=anthropic`);
+      console.log(`  ${pc.dim("$")} oda config --token=sk-...`);
+      console.log(`  ${pc.dim("$")} oda config profile create staging`);
+      console.log(`  ${pc.dim("$")} oda config profile use staging`);
+      console.log(`  ${pc.dim("$")} oda config profile list`);
+      console.log();
+      break;
+
+    case "auth":
+      console.log(`\n${pc.bold("oda auth")} — Authenticate with LLM provider`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda auth login [--token=KEY] [--provider=NAME]`);
+      console.log(`  ${pc.dim("$")} oda auth status`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("login")}    Save API token for a provider`);
+      console.log(`  ${pc.cyan("status")}   Show saved tokens and default provider`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--token=KEY")}      API key to save`);
+      console.log(`  ${pc.cyan("--provider=NAME")}  Provider to authenticate with`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda auth login --token=sk-...`);
+      console.log(`  ${pc.dim("$")} oda auth login --provider=anthropic --token=sk-ant-...`);
+      console.log(`  ${pc.dim("$")} oda auth status`);
+      console.log();
+      break;
+
+    case "serve":
+      console.log(`\n${pc.bold("oda serve")} — Start REST API server and web dashboard`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda serve [--port=N]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(
+        `  ${pc.cyan("--port=N")}    API server port ${pc.dim("(default: 3000, or $ODA_API_PORT)")}`,
+      );
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Starts an Express server exposing all ODA capabilities via REST API`);
+      console.log(`  and a web dashboard at the root URL.`);
+      console.log(`\n${pc.bold("ENDPOINTS")}`);
+      console.log(`  GET  /api/health       Provider status`);
+      console.log(`  POST /api/generate     Agent-routed LLM generation`);
+      console.log(`  POST /api/plan         Decompose goal into task graph`);
+      console.log(`  POST /api/debug-ci     CI log diagnosis`);
+      console.log(`  POST /api/diff         Infrastructure diff analysis`);
+      console.log(`  GET  /api/agents       List specialist agents`);
+      console.log(`  GET  /api/history      Execution history`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda serve`);
+      console.log(`  ${pc.dim("$")} oda serve --port=8080`);
+      console.log();
+      break;
+
+    case "doctor":
+      console.log(`\n${pc.bold("oda doctor")} — System health diagnostics`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda doctor`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Runs diagnostic checks on your ODA installation:`);
+      console.log(`  - Node.js version (>= 18)`);
+      console.log(`  - LLM provider configured`);
+      console.log(`  - API key present`);
+      console.log(`  - .oda/ project initialized`);
+      console.log(`  - Ollama reachability (if applicable)`);
+      console.log(`  - Config file permissions`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda doctor`);
+      console.log();
+      break;
+
+    case "init":
+      console.log(`\n${pc.bold("oda init")} — Initialize .oda/ project directory`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda init`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Creates the .oda/ directory structure in your project root:`);
+      console.log(`  - .oda/plans/         Saved plan files`);
+      console.log(`  - .oda/executions/    Execution records`);
+      console.log(`  - .oda/audit.log      Hash-chained audit trail`);
+      console.log(`  - .oda/session.json   Current session state`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda init`);
+      console.log();
+      break;
+
+    case "destroy":
+      console.log(`\n${pc.bold("oda destroy")} — Remove generated artifacts from a plan`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda destroy <plan-id> [options]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--dry-run")}    Preview files to be deleted without removing them`);
+      console.log(`  ${pc.cyan("--yes")}        Skip confirmation prompt`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda destroy plan-abc123`);
+      console.log(`  ${pc.dim("$")} oda destroy plan-abc123 --dry-run`);
+      console.log(`  ${pc.dim("$")} oda destroy plan-abc123 --yes`);
+      console.log();
+      break;
+
+    case "rollback":
+      console.log(`\n${pc.bold("oda rollback")} — Reverse an applied plan`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda rollback <plan-id> [options]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--dry-run")}    Preview files to be removed without deleting them`);
+      console.log(`  ${pc.cyan("--yes")}        Skip confirmation prompt`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Removes files created by the most recent execution of the given plan.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda rollback plan-abc123`);
+      console.log(`  ${pc.dim("$")} oda rollback plan-abc123 --dry-run`);
+      console.log();
+      break;
+
     default:
       printHelp();
   }

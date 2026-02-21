@@ -72,6 +72,7 @@ function inspectAgents(ctx: CLIContext): void {
         agents.map((a) => ({
           name: a.name,
           domain: a.domain,
+          description: a.description ?? null,
         })),
         null,
         2,
@@ -80,7 +81,7 @@ function inspectAgents(ctx: CLIContext): void {
     return;
   }
 
-  const lines = agents.map((a) => `  ${pc.cyan(a.name.padEnd(16))} ${pc.dim(a.domain)}`);
+  const lines = agents.map((a) => `  ${pc.cyan(a.name.padEnd(28))} ${pc.dim(a.domain)}`);
   p.note(lines.join("\n"), `Specialist Agents (${agents.length})`);
 }
 

@@ -37,11 +37,11 @@ export class AgentRouter {
 
     if (bestMatch) return bestMatch;
 
-    const fallback = this.agents.find((a) => a.domain === "planning") ?? this.agents[0];
+    const fallback = this.agents.find((a) => a.domain === "orchestration") ?? this.agents[0];
     return {
       agent: fallback,
       confidence: 0,
-      reason: "No domain match, using planner as fallback",
+      reason: "No domain match, routing to OpsCortex",
     };
   }
 

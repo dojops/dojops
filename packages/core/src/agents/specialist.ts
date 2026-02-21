@@ -3,6 +3,7 @@ import { LLMProvider, LLMRequest, LLMResponse } from "../llm/provider";
 export interface SpecialistConfig {
   name: string;
   domain: string;
+  description?: string;
   systemPrompt: string;
   keywords: string[];
 }
@@ -19,6 +20,10 @@ export class SpecialistAgent {
 
   get domain(): string {
     return this.config.domain;
+  }
+
+  get description(): string | undefined {
+    return this.config.description;
   }
 
   get keywords(): string[] {

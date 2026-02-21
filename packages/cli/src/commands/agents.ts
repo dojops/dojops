@@ -26,6 +26,7 @@ function agentList(ctx: CLIContext): void {
         agents.map((a) => ({
           name: a.name,
           domain: a.domain,
+          description: a.description ?? null,
         })),
         null,
         2,
@@ -34,7 +35,7 @@ function agentList(ctx: CLIContext): void {
     return;
   }
 
-  const lines = agents.map((a) => `  ${pc.cyan(a.name.padEnd(16))} ${pc.dim(a.domain)}`);
+  const lines = agents.map((a) => `  ${pc.cyan(a.name.padEnd(28))} ${pc.dim(a.domain)}`);
   p.note(lines.join("\n"), `Specialist Agents (${agents.length})`);
 }
 
@@ -66,6 +67,7 @@ function agentInfo(args: string[], ctx: CLIContext): void {
         {
           name: agent.name,
           domain: agent.domain,
+          description: agent.description ?? null,
         },
         null,
         2,
@@ -75,8 +77,9 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   }
 
   const lines = [
-    `${pc.bold("Name:")}     ${agent.name}`,
-    `${pc.bold("Domain:")}   ${agent.domain}`,
+    `${pc.bold("Name:")}        ${agent.name}`,
+    `${pc.bold("Domain:")}      ${agent.domain}`,
+    `${pc.bold("Description:")} ${agent.description ?? pc.dim("(none)")}`,
   ];
   p.note(lines.join("\n"), `Agent: ${agent.name}`);
 }

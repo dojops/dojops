@@ -8,6 +8,7 @@ export function createAgentsRouter(agentRouter: AgentRouter): Router {
     const agents = agentRouter.getAgents().map((agent) => ({
       name: agent.name,
       domain: agent.domain,
+      description: agent.description ?? null,
       keywords: agent.keywords,
     }));
 
