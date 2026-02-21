@@ -111,3 +111,82 @@ export function parseFlagValue(args: string[], flag: string): string | undefined
   }
   return undefined;
 }
+
+// ── Profile management ─────────────────────────────────────────────
+
+function profilesDir(): string {
+  return path.join(configDir(), "profiles");
+}
+
+function metaFile(): string {
+  return path.join(configDir(), "meta.json");
+}
+
+export function loadProfile(name: string): OdaConfig | null {
+  const file = path.join(profilesDir(), `${name}.json`);
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf-8")) as OdaConfig;
+  } catch {
+    return null;
+  }
+}
+
+export function saveProfile(name: string, config: OdaConfig): void {
+  const dir = profilesDir();
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(config, null, 2) + "\n", {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+}
+
+export function listProfiles(): string[] {
+  const dir = profilesDir();
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => f.replace(".json", ""));
+}
+
+export function getActiveProfile(): string | undefined {
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaFile(), "utf-8"));
+    return meta.activeProfile;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setActiveProfile(name: string): void {
+  const dir = configDir();
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  let meta: Record<string, unknown> = {};
+  try {
+    meta = JSON.parse(fs.readFileSync(metaFile(), "utf-8"));
+  } catch {
+    // start fresh
+  }
+  meta.activeProfile = name;
+  fs.writeFileSync(metaFile(), JSON.stringify(meta, null, 2) + "\n", {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+}
+
+/**
+ * Loads config with profile support.
+ * Priority: explicit profile > active profile > default config
+ */
+export function loadProfileConfig(profileName?: string): OdaConfig {
+  const name = profileName ?? getActiveProfile();
+  if (name) {
+    const profile = loadProfile(name);
+    if (profile) return profile;
+  }
+  return loadConfig();
+}

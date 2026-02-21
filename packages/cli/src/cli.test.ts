@@ -24,12 +24,12 @@ describe("CLI", () => {
       expect(output).toContain("oda");
       expect(output).toContain("USAGE");
       expect(output).toContain("COMMANDS");
-      expect(output).toContain("login");
+      expect(output).toContain("auth");
       expect(output).toContain("serve");
-      expect(output).toContain("--plan");
+      expect(output).toContain("plan");
       expect(output).toContain("--execute");
-      expect(output).toContain("--debug-ci");
-      expect(output).toContain("--diff");
+      expect(output).toContain("debug ci");
+      expect(output).toContain("analyze diff");
       expect(output).toContain("--port=N");
       expect(output).toContain("--model=NAME");
       expect(output).toContain("--provider=NAME");
@@ -53,11 +53,11 @@ describe("CLI", () => {
       const output = run("--help");
       expect(output).toContain("oda serve");
       expect(output).toContain("oda serve --port=8080");
-      expect(output).toContain("oda --plan");
-      expect(output).toContain("oda --execute --yes");
+      expect(output).toContain("oda plan");
+      expect(output).toContain("plan --execute --yes");
       expect(output).toContain("CONFIGURATION PRECEDENCE");
-      expect(output).toContain("LOGIN");
-      expect(output).toContain("oda login --token");
+      expect(output).toContain("BACKWARD COMPATIBILITY");
+      expect(output).toContain("oda auth login");
     });
   });
 
@@ -65,17 +65,21 @@ describe("CLI", () => {
     it("shows config command in help", () => {
       const output = run("--help");
       expect(output).toContain("config");
-      expect(output).toContain("CONFIG");
-      expect(output).toContain("oda config --show");
-      expect(output).toContain("--show");
+      expect(output).toContain("config profile create");
     });
 
-    it("config --show displays configuration", () => {
+    it("config --show displays configuration (legacy)", () => {
       const output = run("config", "--show");
       expect(output).toContain("Configuration");
       expect(output).toContain("Provider:");
       expect(output).toContain("Model:");
       expect(output).toContain("Tokens:");
+    });
+
+    it("config show displays configuration (new)", () => {
+      const output = run("config", "show");
+      expect(output).toContain("Configuration");
+      expect(output).toContain("Provider:");
     });
 
     it("config --provider sets provider directly", () => {
@@ -84,10 +88,23 @@ describe("CLI", () => {
     });
   });
 
-  describe("login suggests oda config", () => {
+  describe("login backward compat", () => {
     it("shows config suggestion when login has no --token", () => {
       const output = run("login");
       expect(output).toContain("oda config");
+    });
+  });
+
+  describe("subcommand routing", () => {
+    it("doctor runs without LLM provider", () => {
+      const output = run("doctor");
+      expect(output).toContain("Node.js version");
+      expect(output).toContain("System Diagnostics");
+    });
+
+    it("init creates .oda directory or reports already initialized", () => {
+      const output = run("init");
+      expect(output.includes("initialized") || output.includes("Initialized")).toBe(true);
     });
   });
 });

@@ -140,3 +140,5 @@ Defined in root `tsconfig.json`:
 - `@odaops/tools/*` → `packages/tools/src/*`
 - `@odaops/executor/*` → `packages/executor/src/*`
 - `@odaops/api/*` → `packages/api/src/*`
+
+claude --resume add44bef-7436-46cb-9b8f-51ff0d692a7b
