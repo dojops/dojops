@@ -10,6 +10,7 @@ process.emitWarning = (warning: string | Error, ...args: unknown[]) => {
 
 import "dotenv/config";
 import pc from "picocolors";
+import * as p from "@clack/prompts";
 import { LLMProvider } from "@odaops/core";
 import {
   createProvider,
@@ -37,7 +38,6 @@ import {
   VALID_PROVIDERS,
   OdaConfig,
 } from "./config";
-import { promptSelect, promptInput } from "./prompts";
 
 // ── Formatting helpers ─────────────────────────────────────────────
 
@@ -126,22 +126,35 @@ function changeColor(action: string): string {
   }
 }
 
+function maskToken(token: string | undefined): string {
+  if (!token) return pc.dim("(not set)");
+  if (token.length <= 6) return "***";
+  return token.slice(0, 3) + "***" + token.slice(-3);
+}
+
 // ── Approval ───────────────────────────────────────────────────────
 
 function cliApprovalHandler(): CallbackApprovalHandler {
   return new CallbackApprovalHandler(async (request: ApprovalRequest) => {
-    console.log(pc.yellow(`\n--- Approval Required ---`));
-    console.log(`  ${pc.bold("Task:")}    ${request.taskId}`);
-    console.log(`  ${pc.bold("Tool:")}    ${request.toolName}`);
-    console.log(`  ${pc.bold("Summary:")} ${request.preview.summary}`);
-    if (request.preview.filesCreated.length > 0) {
-      console.log(`  ${pc.bold("Creates:")} ${request.preview.filesCreated.join(", ")}`);
+    const body = [
+      `${pc.bold("Task:")}    ${request.taskId}`,
+      `${pc.bold("Tool:")}    ${request.toolName}`,
+      `${pc.bold("Summary:")} ${request.preview.summary}`,
+      ...(request.preview.filesCreated.length > 0
+        ? [`${pc.bold("Creates:")} ${request.preview.filesCreated.join(", ")}`]
+        : []),
+      ...(request.preview.filesModified.length > 0
+        ? [`${pc.bold("Modifies:")} ${request.preview.filesModified.join(", ")}`]
+        : []),
+    ];
+    p.note(body.join("\n"), pc.yellow("Approval Required"));
+
+    const approved = await p.confirm({ message: "Approve this execution?" });
+    if (p.isCancel(approved)) {
+      p.cancel("Cancelled.");
+      process.exit(0);
     }
-    if (request.preview.filesModified.length > 0) {
-      console.log(`  ${pc.bold("Modifies:")} ${request.preview.filesModified.join(", ")}`);
-    }
-    console.log(pc.yellow(`--- Auto-approving (use --deny to block) ---\n`));
-    return "approved";
+    return approved ? "approved" : "denied";
   });
 }
 
@@ -150,9 +163,9 @@ function cliApprovalHandler(): CallbackApprovalHandler {
 function runLogin(args: string[]): void {
   const token = parseFlagValue(args, "--token");
   if (!token) {
-    console.log(pc.yellow('Tip: Use "oda config" for interactive setup, or provide --token:'));
-    console.log(`  ${pc.dim("$")} oda login --token <API_KEY>`);
-    console.log(`  ${pc.dim("$")} oda config`);
+    p.log.warn('Tip: Use "oda config" for interactive setup, or provide --token:');
+    p.log.info(`  ${pc.dim("$")} oda login --token <API_KEY>`);
+    p.log.info(`  ${pc.dim("$")} oda config`);
     process.exit(1);
   }
 
@@ -163,13 +176,13 @@ function runLogin(args: string[]): void {
   try {
     validateProvider(provider);
   } catch (err) {
-    console.error(pc.red((err as Error).message));
+    p.log.error((err as Error).message);
     process.exit(1);
   }
 
   if (provider === "ollama") {
-    console.error(pc.red("Error: Ollama runs locally and does not require an API token."));
-    console.log(
+    p.log.error("Ollama runs locally and does not require an API token.");
+    p.log.info(
       pc.dim("Just set ODA_PROVIDER=ollama or run: oda login --provider openai --token <KEY>"),
     );
     process.exit(1);
@@ -185,32 +198,27 @@ function runLogin(args: string[]): void {
 
   saveConfig(config);
 
-  console.log(pc.green("Token saved successfully."));
-  console.log();
-  console.log(`  ${pc.bold("Provider:")} ${provider}`);
-  console.log(`  ${pc.bold("Config:")}   ${pc.dim(getConfigPath())}`);
-  if (config.defaultProvider === provider) {
-    console.log(`  ${pc.bold("Default:")}  ${pc.cyan("yes")}`);
-  }
-  console.log();
-  console.log(pc.dim('You can now run: oda "your prompt here"'));
-}
+  p.log.success("Token saved successfully.");
 
-function maskToken(token: string | undefined): string {
-  if (!token) return pc.dim("(not set)");
-  if (token.length <= 6) return "***";
-  return token.slice(0, 3) + "***" + token.slice(-3);
+  const noteLines = [
+    `${pc.bold("Provider:")} ${provider}`,
+    `${pc.bold("Config:")}   ${pc.dim(getConfigPath())}`,
+    ...(config.defaultProvider === provider ? [`${pc.bold("Default:")}  ${pc.cyan("yes")}`] : []),
+  ];
+  p.note(noteLines.join("\n"), "Saved");
+  p.log.info(pc.dim('You can now run: oda "your prompt here"'));
 }
 
 function showConfig(config: OdaConfig): void {
-  console.log(`\n${pc.bold("Configuration")} ${pc.dim(`(${getConfigPath()})`)}\n`);
-  console.log(`  ${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`);
-  console.log(`  ${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`);
-  console.log(`  ${pc.bold("Tokens:")}`);
-  console.log(`    openai:    ${maskToken(config.tokens?.openai)}`);
-  console.log(`    anthropic: ${maskToken(config.tokens?.anthropic)}`);
-  console.log(`    ollama:    ${pc.dim("(no token needed)")}`);
-  console.log();
+  const lines = [
+    `${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`,
+    `${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`,
+    `${pc.bold("Tokens:")}`,
+    `  openai:    ${maskToken(config.tokens?.openai)}`,
+    `  anthropic: ${maskToken(config.tokens?.anthropic)}`,
+    `  ollama:    ${pc.dim("(no token needed)")}`,
+  ];
+  p.note(lines.join("\n"), `Configuration ${pc.dim(`(${getConfigPath()})`)}`);
 }
 
 async function runConfig(args: string[]): Promise<void> {
@@ -233,7 +241,7 @@ async function runConfig(args: string[]): Promise<void> {
       try {
         validateProvider(providerFlag);
       } catch (err) {
-        console.error(pc.red((err as Error).message));
+        p.log.error((err as Error).message);
         process.exit(1);
       }
       config.defaultProvider = providerFlag;
@@ -242,7 +250,7 @@ async function runConfig(args: string[]): Promise<void> {
     if (tokenFlag) {
       const provider = providerFlag ?? config.defaultProvider ?? "openai";
       if (provider === "ollama") {
-        console.error(pc.red("Error: Ollama runs locally and does not require an API token."));
+        p.log.error("Ollama runs locally and does not require an API token.");
         process.exit(1);
       }
       config.tokens = config.tokens ?? {};
@@ -254,7 +262,7 @@ async function runConfig(args: string[]): Promise<void> {
     }
 
     saveConfig(config);
-    console.log(pc.green("Configuration saved."));
+    p.log.success("Configuration saved.");
     showConfig(config);
     return;
   }
@@ -262,43 +270,60 @@ async function runConfig(args: string[]): Promise<void> {
   // Mode A: interactive
   const config = loadConfig();
 
+  p.intro(pc.bgCyan(pc.black(" oda config ")));
+
   if (config.defaultProvider || config.defaultModel || config.tokens) {
-    console.log(pc.dim("Current configuration:"));
     showConfig(config);
   }
 
-  // 1. Provider
-  const provider = await promptSelect("Select your LLM provider:", VALID_PROVIDERS);
-  config.defaultProvider = provider;
-
-  // 2. Token (if not ollama)
-  if (provider !== "ollama") {
-    const currentToken = config.tokens?.[provider];
-    const hint = currentToken ? ` [current: ${maskToken(currentToken)}]` : "";
-    const token = await promptInput(`Enter your API key for ${provider}${hint}`, { mask: true });
-    if (token) {
-      config.tokens = config.tokens ?? {};
-      config.tokens[provider] = token;
-    }
-  }
-
-  // 3. Model (optional)
   const modelSuggestions: Record<string, string> = {
     openai: "e.g. gpt-4o, gpt-4o-mini",
     anthropic: "e.g. claude-sonnet-4-5-20250929",
     ollama: "e.g. llama3, mistral, codellama",
   };
-  const suggestion = modelSuggestions[provider] ?? "";
-  const model = await promptInput(
-    `Default model${suggestion ? ` (${suggestion})` : ""}, press Enter to skip`,
-    { default: config.defaultModel },
+
+  const answers = await p.group(
+    {
+      provider: () =>
+        p.select({
+          message: "Select your LLM provider:",
+          options: VALID_PROVIDERS.map((v) => ({ value: v, label: v })),
+          initialValue: config.defaultProvider ?? "openai",
+        }),
+      token: ({ results }) => {
+        if (results.provider === "ollama") return Promise.resolve("");
+        const currentToken = config.tokens?.[results.provider!];
+        const hint = currentToken ? ` [current: ${maskToken(currentToken)}]` : "";
+        return p.password({
+          message: `API key for ${results.provider}${hint}:`,
+        });
+      },
+      model: ({ results }) =>
+        p.text({
+          message: "Default model (press Enter to skip):",
+          placeholder: modelSuggestions[results.provider!] ?? "",
+          defaultValue: config.defaultModel ?? "",
+        }),
+    },
+    {
+      onCancel: () => {
+        p.cancel("Cancelled.");
+        process.exit(0);
+      },
+    },
   );
-  if (model) {
-    config.defaultModel = model;
+
+  config.defaultProvider = answers.provider as string;
+  if (answers.token) {
+    config.tokens = config.tokens ?? {};
+    config.tokens[answers.provider as string] = answers.token as string;
+  }
+  if (answers.model) {
+    config.defaultModel = answers.model as string;
   }
 
   saveConfig(config);
-  console.log(pc.green("\nConfiguration saved."));
+  p.log.success("Configuration saved.");
   showConfig(config);
 }
 
@@ -310,16 +335,17 @@ async function runPlan(
 ) {
   const tools = createTools(provider);
 
-  console.log(pc.cyan("Decomposing goal into tasks...\n"));
+  const s = p.spinner();
+  s.start("Decomposing goal into tasks...");
   const graph = await decompose(prompt, provider, tools);
+  s.stop("Tasks decomposed.");
 
-  console.log(`${pc.bold("Goal:")} ${graph.goal}`);
-  console.log(`${pc.bold("Tasks")} (${graph.tasks.length}):`);
-  for (const task of graph.tasks) {
+  // Display task graph
+  const taskLines = graph.tasks.map((task) => {
     const deps = task.dependsOn.length ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
-    console.log(`  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`);
-  }
-  console.log();
+    return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
+  });
+  p.note(taskLines.join("\n"), `${graph.goal} ${pc.dim(`(${graph.tasks.length} tasks)`)}`);
 
   if (execute) {
     const safeExecutor = new SafeExecutor({
@@ -335,22 +361,20 @@ async function runPlan(
 
     const executor = new PlannerExecutor(tools, {
       taskStart(id, desc) {
-        console.log(`${pc.cyan(">")} Running ${pc.blue(id)}: ${desc}`);
+        p.log.step(`Running ${pc.blue(id)}: ${desc}`);
       },
       taskEnd(id, status, error) {
         if (error) {
-          console.log(
-            `  ${statusIcon(status)} ${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`,
-          );
+          p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
         } else {
-          console.log(`  ${statusIcon(status)} ${pc.blue(id)}: ${statusText(status)}`);
+          p.log.success(`${pc.blue(id)}: ${statusText(status)}`);
         }
       },
     });
 
     const planResult = await executor.execute(graph);
 
-    console.log(pc.cyan(`\nExecuting approved tasks...`));
+    p.log.step("Executing approved tasks...");
     for (const taskResult of planResult.results) {
       if (taskResult.status !== "completed") continue;
 
@@ -366,36 +390,35 @@ async function runPlan(
         execResult.approval === "approved"
           ? pc.green(execResult.approval)
           : pc.yellow(execResult.approval);
-      console.log(
-        `  ${statusIcon(execResult.status)} ${pc.blue(execResult.taskId)} ${statusText(execResult.status)} (approval: ${approval})`,
+      const icon = statusIcon(execResult.status);
+      p.log.message(
+        `${icon} ${pc.blue(execResult.taskId)} ${statusText(execResult.status)} (approval: ${approval})`,
       );
       if (execResult.error) {
-        console.log(`    ${pc.red("Error:")} ${execResult.error}`);
+        p.log.error(`${pc.red("Error:")} ${execResult.error}`);
       }
     }
 
     const auditLog = safeExecutor.getAuditLog();
     if (auditLog.length > 0) {
-      console.log(pc.dim(`\nAudit log: ${auditLog.length} entries`));
+      p.log.info(pc.dim(`Audit log: ${auditLog.length} entries`));
     }
 
     if (planResult.success) {
-      console.log(pc.green(pc.bold("\nPlan succeeded.")));
+      p.log.success(pc.bold("Plan succeeded."));
     } else {
-      console.log(pc.red(pc.bold("\nPlan failed.")));
+      p.log.error(pc.bold("Plan failed."));
     }
   } else {
     const executor = new PlannerExecutor(tools, {
       taskStart(id, desc) {
-        console.log(`${pc.cyan(">")} Running ${pc.blue(id)}: ${desc}`);
+        p.log.step(`Running ${pc.blue(id)}: ${desc}`);
       },
       taskEnd(id, status, error) {
         if (error) {
-          console.log(
-            `  ${statusIcon(status)} ${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`,
-          );
+          p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
         } else {
-          console.log(`  ${statusIcon(status)} ${pc.blue(id)}: ${statusText(status)}`);
+          p.log.success(`${pc.blue(id)}: ${statusText(status)}`);
         }
       },
     });
@@ -403,50 +426,56 @@ async function runPlan(
     const result = await executor.execute(graph);
 
     if (result.success) {
-      console.log(pc.green(pc.bold("\nPlan succeeded.")));
+      p.log.success(pc.bold("Plan succeeded."));
     } else {
-      console.log(pc.red(pc.bold("\nPlan failed.")));
+      p.log.error(pc.bold("Plan failed."));
     }
     for (const r of result.results) {
       const errMsg = r.error ? `: ${pc.red(r.error)}` : "";
-      console.log(
-        `  ${statusIcon(r.status)} ${pc.blue(r.taskId)} ${statusText(r.status)}${errMsg}`,
+      p.log.message(
+        `${statusIcon(r.status)} ${pc.blue(r.taskId)} ${statusText(r.status)}${errMsg}`,
       );
     }
 
     // Print generated output for completed tasks
     const completedResults = result.results.filter((r) => r.status === "completed" && r.output);
     if (completedResults.length > 0) {
-      console.log(pc.cyan(pc.bold("\n--- Generated Output ---\n")));
       for (const r of completedResults) {
         const task = graph.tasks.find((t) => t.id === r.taskId);
         const data = r.output as Record<string, unknown>;
-
-        console.log(pc.bold(`[${r.taskId}] ${task?.tool ?? "unknown"}`));
-
-        // Show what files would be created with --execute
         const input = task?.input as Record<string, string> | undefined;
         const basePath = input?.projectPath ?? input?.outputPath ?? ".";
+        const outputLines: string[] = [];
+
+        outputLines.push(pc.bold(`[${r.taskId}] ${task?.tool ?? "unknown"}`));
 
         if (data.hcl) {
-          console.log(`  ${pc.green("Would write:")} ${pc.underline(`${basePath}/main.tf`)}`);
-          console.log(formatOutput(data.hcl as string));
+          outputLines.push(`  ${pc.green("Would write:")} ${pc.underline(`${basePath}/main.tf`)}`);
+          outputLines.push(formatOutput(data.hcl as string));
         }
         if (data.yaml) {
           const fileName = getOutputFileName(task?.tool ?? "");
-          console.log(`  ${pc.green("Would write:")} ${pc.underline(`${basePath}/${fileName}`)}`);
-          console.log(formatOutput(data.yaml as string));
+          outputLines.push(
+            `  ${pc.green("Would write:")} ${pc.underline(`${basePath}/${fileName}`)}`,
+          );
+          outputLines.push(formatOutput(data.yaml as string));
         }
         if (data.chartYaml) {
-          console.log(`  ${pc.green("Would write:")} ${pc.underline(`${basePath}/Chart.yaml`)}`);
-          console.log(formatOutput(data.chartYaml as string));
+          outputLines.push(
+            `  ${pc.green("Would write:")} ${pc.underline(`${basePath}/Chart.yaml`)}`,
+          );
+          outputLines.push(formatOutput(data.chartYaml as string));
         }
         if (data.valuesYaml) {
-          console.log(`  ${pc.green("Would write:")} ${pc.underline(`${basePath}/values.yaml`)}`);
-          console.log(formatOutput(data.valuesYaml as string));
+          outputLines.push(
+            `  ${pc.green("Would write:")} ${pc.underline(`${basePath}/values.yaml`)}`,
+          );
+          outputLines.push(formatOutput(data.valuesYaml as string));
         }
+
+        p.note(outputLines.join("\n"), "Generated Output");
       }
-      console.log(pc.dim("To write these files to disk, use --execute instead of --plan"));
+      p.log.info(pc.dim("To write these files to disk, use --execute instead of --plan"));
     }
   }
 }
@@ -454,74 +483,90 @@ async function runPlan(
 async function runDebugCI(logContent: string, provider: LLMProvider) {
   const debugger_ = createDebugger(provider);
 
-  console.log(pc.cyan("Analyzing CI log...\n"));
+  const s = p.spinner();
+  s.start("Analyzing CI log...");
   const diagnosis = await debugger_.diagnose(logContent);
+  s.stop("Analysis complete.");
 
-  console.log(`${pc.bold("Error Type:")}  ${pc.red(diagnosis.errorType)}`);
-  console.log(`${pc.bold("Summary:")}     ${diagnosis.summary}`);
-  console.log(`${pc.bold("Root Cause:")}  ${diagnosis.rootCause}`);
-  console.log(`${pc.bold("Confidence:")}  ${formatConfidence(diagnosis.confidence)}`);
+  const bodyLines = [
+    `${pc.bold("Error Type:")}  ${pc.red(diagnosis.errorType)}`,
+    `${pc.bold("Summary:")}     ${diagnosis.summary}`,
+    `${pc.bold("Root Cause:")}  ${diagnosis.rootCause}`,
+    `${pc.bold("Confidence:")}  ${formatConfidence(diagnosis.confidence)}`,
+  ];
 
   if (diagnosis.affectedFiles.length > 0) {
-    console.log(pc.bold(`\nAffected Files:`));
+    bodyLines.push("");
+    bodyLines.push(pc.bold("Affected Files:"));
     for (const f of diagnosis.affectedFiles) {
-      console.log(`  ${pc.dim("-")} ${pc.underline(f)}`);
+      bodyLines.push(`  ${pc.dim("-")} ${pc.underline(f)}`);
     }
   }
 
   if (diagnosis.suggestedFixes.length > 0) {
-    console.log(pc.bold(`\nSuggested Fixes:`));
+    bodyLines.push("");
+    bodyLines.push(pc.bold("Suggested Fixes:"));
     for (const fix of diagnosis.suggestedFixes) {
-      console.log(`  ${formatConfidence(fix.confidence)} ${fix.description}`);
-      if (fix.command) console.log(`       ${pc.dim("$")} ${pc.cyan(fix.command)}`);
-      if (fix.file) console.log(`       ${pc.dim("File:")} ${pc.underline(fix.file)}`);
+      bodyLines.push(`  ${formatConfidence(fix.confidence)} ${fix.description}`);
+      if (fix.command) bodyLines.push(`       ${pc.dim("$")} ${pc.cyan(fix.command)}`);
+      if (fix.file) bodyLines.push(`       ${pc.dim("File:")} ${pc.underline(fix.file)}`);
     }
   }
+
+  p.note(bodyLines.join("\n"), "CI Diagnosis");
 }
 
 async function runDiff(diffContent: string, provider: LLMProvider) {
   const analyzer = createDiffAnalyzer(provider);
 
-  console.log(pc.cyan("Analyzing infrastructure diff...\n"));
+  const s = p.spinner();
+  s.start("Analyzing infrastructure diff...");
   const analysis = await analyzer.analyze(diffContent);
+  s.stop("Analysis complete.");
 
-  console.log(`${pc.bold("Summary:")}     ${analysis.summary}`);
-  console.log(`${pc.bold("Risk Level:")}  ${riskColor(analysis.riskLevel)}`);
-  console.log(
+  const bodyLines = [
+    `${pc.bold("Summary:")}     ${analysis.summary}`,
+    `${pc.bold("Risk Level:")}  ${riskColor(analysis.riskLevel)}`,
     `${pc.bold("Cost Impact:")} ${analysis.costImpact.direction} — ${analysis.costImpact.details}`,
-  );
-  console.log(`${pc.bold("Rollback:")}    ${analysis.rollbackComplexity}`);
-  console.log(`${pc.bold("Confidence:")}  ${formatConfidence(analysis.confidence)}`);
+    `${pc.bold("Rollback:")}    ${analysis.rollbackComplexity}`,
+    `${pc.bold("Confidence:")}  ${formatConfidence(analysis.confidence)}`,
+  ];
 
   if (analysis.changes.length > 0) {
-    console.log(pc.bold(`\nChanges (${analysis.changes.length}):`));
+    bodyLines.push("");
+    bodyLines.push(pc.bold(`Changes (${analysis.changes.length}):`));
     for (const change of analysis.changes) {
       const detail = change.attribute ? pc.dim(` (${change.attribute})`) : "";
       const action = changeColor(change.action.toUpperCase());
-      console.log(`  ${action} ${change.resource}${detail}`);
+      bodyLines.push(`  ${action} ${change.resource}${detail}`);
     }
   }
 
   if (analysis.riskFactors.length > 0) {
-    console.log(pc.bold(`\nRisk Factors:`));
+    bodyLines.push("");
+    bodyLines.push(pc.bold("Risk Factors:"));
     for (const r of analysis.riskFactors) {
-      console.log(`  ${pc.yellow("-")} ${r}`);
+      bodyLines.push(`  ${pc.yellow("-")} ${r}`);
     }
   }
 
   if (analysis.securityImpact.length > 0) {
-    console.log(pc.bold(`\nSecurity Impact:`));
+    bodyLines.push("");
+    bodyLines.push(pc.bold("Security Impact:"));
     for (const s of analysis.securityImpact) {
-      console.log(`  ${pc.red("-")} ${s}`);
+      bodyLines.push(`  ${pc.red("-")} ${s}`);
     }
   }
 
   if (analysis.recommendations.length > 0) {
-    console.log(pc.bold(`\nRecommendations:`));
+    bodyLines.push("");
+    bodyLines.push(pc.bold("Recommendations:"));
     for (const rec of analysis.recommendations) {
-      console.log(`  ${pc.blue("-")} ${rec}`);
+      bodyLines.push(`  ${pc.blue("-")} ${rec}`);
     }
   }
+
+  p.note(bodyLines.join("\n"), "Infrastructure Diff Analysis");
 }
 
 async function runServe(
@@ -560,10 +605,13 @@ async function runServe(
   });
 
   app.listen(port, () => {
-    console.log(pc.green(pc.bold(`ODA API server running on http://localhost:${port}`)));
-    console.log(`${pc.bold("Provider:")}  ${provider.name}`);
-    console.log(`${pc.bold("Tools:")}     ${tools.map((t) => t.name).join(", ")}`);
-    console.log(`${pc.bold("Dashboard:")} ${pc.underline(`http://localhost:${port}`)}`);
+    const noteLines = [
+      `${pc.bold("Provider:")}  ${provider.name}`,
+      `${pc.bold("Tools:")}     ${tools.map((t) => t.name).join(", ")}`,
+      `${pc.bold("Dashboard:")} ${pc.underline(`http://localhost:${port}`)}`,
+    ];
+    p.note(noteLines.join("\n"), "Server Started");
+    p.log.success(`ODA API server running on ${pc.underline(`http://localhost:${port}`)}`);
   });
 }
 
@@ -653,6 +701,8 @@ async function main() {
     return;
   }
 
+  p.intro(pc.bgCyan(pc.black(" oda ")));
+
   // Load config and resolve provider/model/token
   const config = loadConfig();
   const providerFlag = parseFlagValue(args, "--provider");
@@ -662,7 +712,7 @@ async function main() {
   try {
     providerName = resolveProvider(providerFlag, config);
   } catch (err) {
-    console.error(pc.red((err as Error).message));
+    p.log.error((err as Error).message);
     process.exit(1);
   }
 
@@ -702,6 +752,7 @@ async function main() {
   const prompt = promptParts.join(" ");
 
   if (!prompt) {
+    p.log.error("No prompt provided.");
     printHelp();
     process.exit(1);
   }
@@ -715,15 +766,25 @@ async function main() {
   } else {
     // Multi-agent routing: pick the best specialist for the prompt
     const router = createRouter(provider);
+
+    const s = p.spinner();
+    s.start("Routing to specialist agent...");
     const route = router.route(prompt);
+    s.stop(
+      route.confidence > 0
+        ? `Routed to ${pc.bold(route.agent.name)} — ${route.reason}`
+        : "Using default agent.",
+    );
 
-    if (route.confidence > 0) {
-      console.log(pc.dim(`[Routed to ${pc.bold(route.agent.name)} — ${route.reason}]\n`));
-    }
-
+    const s2 = p.spinner();
+    s2.start("Thinking...");
     const result = await route.agent.run({ prompt });
-    console.log(result.content);
+    s2.stop("Done.");
+
+    p.log.message(result.content);
   }
+
+  p.outro("Done.");
 }
 
 main();
