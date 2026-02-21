@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "scannedAt": "2026-02-21T22:22:52.672Z",
+  "rootPath": "/app/personnel-projects/oda",
+  "languages": [
+    {
+      "name": "node",
+      "confidence": 0.9,
+      "indicator": "package.json"
+    }
+  ],
+  "primaryLanguage": "node",
+  "packageManager": {
+    "name": "pnpm",
+    "lockfile": "pnpm-lock.yaml"
+  },
+  "ci": [],
+  "container": {
+    "hasDockerfile": false,
+    "hasCompose": false
+  },
+  "infra": {
+    "hasTerraform": false,
+    "tfProviders": [],
+    "hasState": false,
+    "hasKubernetes": false,
+    "hasHelm": false,
+    "hasAnsible": false
+  },
+  "monitoring": {
+    "hasPrometheus": false,
+    "hasNginx": false,
+    "hasSystemd": false
+  },
+  "meta": {
+    "isGitRepo": true,
+    "isMonorepo": true,
+    "hasMakefile": false,
+    "hasReadme": true,
+    "hasEnvFile": false
+  },
+  "relevantDomains": []
+}

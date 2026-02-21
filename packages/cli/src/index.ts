@@ -31,7 +31,14 @@ import { explainCommand } from "./commands/explain";
 import { inspectCommand } from "./commands/inspect";
 import { agentsCommand } from "./commands/agents";
 import { historyCommand } from "./commands/history";
-import { doctorCommand } from "./commands/doctor";
+import { statusCommand } from "./commands/doctor";
+import {
+  toolsListCommand,
+  toolsInstallCommand,
+  toolsRemoveCommand,
+  toolsCleanCommand,
+} from "./commands/tools";
+import { prependToolsBinToPath } from "./tool-sandbox";
 
 registerCommand("init", initCommand);
 registerCommand("apply", applyCommand);
@@ -39,7 +46,8 @@ registerCommand("validate", validateCommand);
 registerCommand("destroy", destroyCommand);
 registerCommand("rollback", rollbackCommand);
 registerCommand("explain", explainCommand);
-registerCommand("doctor", doctorCommand);
+registerCommand("status", statusCommand);
+registerCommand("doctor", statusCommand); // backward compat alias
 
 // Nested: inspect <sub>, agents <sub>, history <sub>
 registerSubcommand("inspect", "config", inspectCommand);
@@ -53,9 +61,18 @@ registerSubcommand("history", "show", historyCommand);
 registerSubcommand("history", "verify", historyCommand);
 registerSubcommand("history", "rollback", historyCommand);
 
+// Nested: tools <sub>
+registerSubcommand("tools", "list", toolsListCommand);
+registerSubcommand("tools", "install", toolsInstallCommand);
+registerSubcommand("tools", "remove", toolsRemoveCommand);
+registerSubcommand("tools", "clean", toolsCleanCommand);
+
 // ── Main ───────────────────────────────────────────────────────────
 
 async function main() {
+  // Prepend sandbox tools to PATH so they are found by all commands
+  prependToolsBinToPath();
+
   const rawArgs = process.argv.slice(2);
 
   // No args → global help
@@ -120,7 +137,7 @@ async function main() {
   };
 
   // Non-LLM commands: config, auth, serve, init, doctor — no intro banner
-  const quietCommands = new Set(["config", "auth", "init", "doctor"]);
+  const quietCommands = new Set(["config", "auth", "init", "doctor", "status", "tools"]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 
   if (!isQuiet && !globalOpts.quiet) {

@@ -20,6 +20,7 @@ import {
   loadSession,
   saveSession,
   appendAudit,
+  loadContext,
   PlanState,
 } from "../state";
 
@@ -62,9 +63,15 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   const provider = ctx.getProvider();
   const tools = createTools(provider);
 
+  // Load repo context for context-aware file placement
+  const projectRoot = findProjectRoot();
+  const repoContext = projectRoot ? loadContext(projectRoot) : null;
+
   const s = p.spinner();
   s.start("Decomposing goal into tasks...");
-  const graph = await decompose(prompt, provider, tools);
+  const graph = await decompose(prompt, provider, tools, {
+    repoContext: repoContext ?? undefined,
+  });
   s.stop("Tasks decomposed.");
 
   // Display task graph

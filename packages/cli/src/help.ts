@@ -51,8 +51,11 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
   console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
   console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);
-  console.log(`  ${pc.cyan("doctor")}             System health diagnostics`);
-  console.log(`  ${pc.cyan("init")}               Initialize .oda/ in project`);
+  console.log(`  ${pc.cyan("tools")}              Manage system tool sandbox (~/.oda/tools/)`);
+  console.log(
+    `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
+  );
+  console.log(`  ${pc.cyan("init")}               Initialize .oda/ + scan repo context`);
   console.log(`  ${pc.cyan("destroy")}            Remove generated artifacts from a plan`);
   console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
   console.log();
@@ -77,9 +80,10 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--yes")}              Auto-approve all executions`);
   console.log();
   console.log(pc.bold("APPLY OPTIONS"));
-  console.log(`  ${pc.cyan("--dry-run")}          Preview changes without executing`);
-  console.log(`  ${pc.cyan("--resume")}           Resume a partially-applied plan`);
-  console.log(`  ${pc.cyan("--yes")}              Auto-approve all executions`);
+  console.log(`  ${pc.cyan("--dry-run")}              Preview changes without executing`);
+  console.log(`  ${pc.cyan("--resume")}               Resume a partially-applied plan`);
+  console.log(`  ${pc.cyan("--yes")}                  Auto-approve all executions`);
+  console.log(`  ${pc.cyan("--install-packages")}     Run package install after apply`);
   console.log();
   console.log(pc.bold("SERVE OPTIONS"));
   console.log(`  ${pc.cyan("--port=N")}           API server port ${pc.dim("(default: 3000)")}`);
@@ -95,6 +99,7 @@ export function printHelp(): void {
   );
   console.log(`  ${pc.dim("$")} oda login ...                ${pc.dim("→ oda auth login ...")}`);
   console.log(`  ${pc.dim("$")} oda config --show            ${pc.dim("→ oda config show")}`);
+  console.log(`  ${pc.dim("$")} oda doctor                   ${pc.dim("→ oda status")}`);
   console.log();
   console.log(pc.bold("EXAMPLES"));
   console.log(`  ${pc.dim("$")} oda "Create a Terraform config for S3"`);
@@ -178,18 +183,26 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} oda apply [<plan-id>] [options]`);
       console.log(`\n${pc.bold("OPTIONS")}`);
-      console.log(`  ${pc.cyan("--dry-run")}    Preview changes without writing files`);
-      console.log(`  ${pc.cyan("--resume")}     Skip previously completed tasks`);
+      console.log(`  ${pc.cyan("--dry-run")}            Preview changes without writing files`);
+      console.log(`  ${pc.cyan("--resume")}             Skip previously completed tasks`);
       console.log(
-        `  ${pc.cyan("--yes")}        Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
+        `  ${pc.cyan("--yes")}                Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
       );
+      console.log(`  ${pc.cyan("--install-packages")}  Run package install after successful apply`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Executes a previously saved plan. If no plan ID is given, uses the`);
       console.log(`  current session plan or the most recent one.`);
+      console.log();
+      console.log(`  Shows a pre-flight summary of all tasks before execution. Use`);
+      console.log(`  --dry-run to preview without writing files.`);
+      console.log();
+      console.log(`  With --install-packages, runs the detected package manager's install`);
+      console.log(`  command (e.g. pnpm install, npm install) after a successful apply.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} oda apply`);
       console.log(`  ${pc.dim("$")} oda apply --dry-run`);
       console.log(`  ${pc.dim("$")} oda apply --resume --yes`);
+      console.log(`  ${pc.dim("$")} oda apply --install-packages`);
       console.log(`  ${pc.dim("$")} oda apply plan-abc123`);
       console.log();
       break;
@@ -373,10 +386,12 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
+    case "status":
     case "doctor":
-      console.log(`\n${pc.bold("oda doctor")} — System health diagnostics`);
+      console.log(`\n${pc.bold("oda status")} — System health diagnostics`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda doctor`);
+      console.log(`  ${pc.dim("$")} oda status`);
+      console.log(`  ${pc.dim("$")} oda doctor   ${pc.dim("(alias)")}`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Runs diagnostic checks on your ODA installation:`);
       console.log(`  - Node.js version (>= 18)`);
@@ -386,23 +401,59 @@ export function printCommandHelp(command: string): void {
       console.log(`  - Ollama reachability (if applicable)`);
       console.log(`  - Config file permissions`);
       console.log(`  - Agent tool dependencies (ShellCheck, Snyk, etc.)`);
+      console.log();
+      console.log(`  When missing tools are detected, offers to install them interactively.`);
+      console.log(`  Use --non-interactive to skip the install prompt.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda doctor`);
+      console.log(`  ${pc.dim("$")} oda status`);
+      console.log(`  ${pc.dim("$")} oda status --output json`);
       console.log();
       break;
 
     case "init":
-      console.log(`\n${pc.bold("oda init")} — Initialize .oda/ project directory`);
+      console.log(`\n${pc.bold("oda init")} — Initialize .oda/ project directory and scan repo`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} oda init`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Creates the .oda/ directory structure in your project root:`);
+      console.log(`  Creates the .oda/ directory structure and scans the repository to`);
+      console.log(`  build a structured context file (.oda/context.json).`);
+      console.log();
+      console.log(`  ${pc.bold("Directory structure:")}`);
       console.log(`  - .oda/plans/         Saved plan files`);
-      console.log(`  - .oda/executions/    Execution records`);
-      console.log(`  - .oda/audit.log      Hash-chained audit trail`);
+      console.log(`  - .oda/history/       Hash-chained audit trail`);
       console.log(`  - .oda/session.json   Current session state`);
+      console.log(`  - .oda/context.json   Detected repo context`);
+      console.log();
+      console.log(`  ${pc.bold("Repo scanning detects:")}`);
+      console.log(`  - Languages (Node, Python, Go, Rust, Java, Ruby)`);
+      console.log(`  - Package managers (pnpm, yarn, npm, pip, cargo, etc.)`);
+      console.log(`  - CI/CD platforms (GitHub Actions, GitLab CI, Jenkins, CircleCI)`);
+      console.log(`  - Container configs (Dockerfile, Docker Compose)`);
+      console.log(`  - Infrastructure (Terraform, Kubernetes, Helm, Ansible)`);
+      console.log(`  - Monitoring (Prometheus, Nginx, Systemd)`);
+      console.log(`  - Repo metadata (git, monorepo, Makefile, .env)`);
+      console.log();
+      console.log(
+        `  Re-running ${pc.cyan("oda init")} on an existing project updates context.json`,
+      );
+      console.log(`  without recreating existing directories.`);
+      console.log();
+      console.log(`  ${pc.bold("LLM enrichment:")}`);
+      console.log(
+        `  When an LLM provider is configured (via ${pc.cyan("oda config")} or env vars),`,
+      );
+      console.log(`  init automatically sends scan results to the LLM for deeper analysis:`);
+      console.log(`  project description, tech stack summary, suggested workflows, and`);
+      console.log(`  recommended specialist agents. Without a provider, init works fully`);
+      console.log(`  offline with filesystem-only detection.`);
+      console.log();
+      console.log(`  ${pc.bold("Tool dependencies:")}`);
+      console.log(`  After scanning, init checks for optional tool dependencies used by`);
+      console.log(`  specialist agents (ShellCheck, Snyk, Pyright, etc.) and interactively`);
+      console.log(`  offers to install any that are missing.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} oda init`);
+      console.log(`  ${pc.dim("$")} oda init && cat .oda/context.json`);
       console.log();
       break;
 
@@ -432,6 +483,41 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} oda rollback plan-abc123`);
       console.log(`  ${pc.dim("$")} oda rollback plan-abc123 --dry-run`);
+      console.log();
+      break;
+
+    case "tools":
+      console.log(`\n${pc.bold("oda tools")} — Manage system tool sandbox`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda tools [list|install|remove|clean]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(
+        `  ${pc.cyan("list")}              List all system tools with status ${pc.dim("(default)")}`,
+      );
+      console.log(`  ${pc.cyan("install <name>")}   Download and install a tool into sandbox`);
+      console.log(`  ${pc.cyan("remove <name>")}    Remove a tool from sandbox`);
+      console.log(`  ${pc.cyan("clean")}             Remove all sandbox tools`);
+      console.log(`\n${pc.bold("AVAILABLE TOOLS")}`);
+      console.log(`  ${pc.cyan("terraform")}    Infrastructure as Code (HashiCorp)`);
+      console.log(`  ${pc.cyan("kubectl")}      Kubernetes CLI`);
+      console.log(`  ${pc.cyan("gh")}           GitHub CLI`);
+      console.log(`  ${pc.cyan("hadolint")}     Dockerfile linter`);
+      console.log(`  ${pc.cyan("ansible")}      IT automation (via pipx/pip)`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
+      console.log(`  ${pc.cyan("--yes")}           Skip confirmation (clean)`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Tools are installed into ~/.oda/tools/bin/ without elevated permissions.`);
+      console.log(`  The sandbox bin directory is prepended to PATH at startup, so installed`);
+      console.log(`  tools are available to all ODA commands transparently.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda tools`);
+      console.log(`  ${pc.dim("$")} oda tools list`);
+      console.log(`  ${pc.dim("$")} oda tools install terraform`);
+      console.log(`  ${pc.dim("$")} oda tools install kubectl`);
+      console.log(`  ${pc.dim("$")} oda tools remove terraform`);
+      console.log(`  ${pc.dim("$")} oda tools clean --yes`);
+      console.log(`  ${pc.dim("$")} oda tools list --output json`);
       console.log();
       break;
 

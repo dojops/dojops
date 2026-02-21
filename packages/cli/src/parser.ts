@@ -75,9 +75,11 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "auth",
     "serve",
     "doctor",
+    "status",
     "init",
     "destroy",
     "rollback",
+    "tools",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([
@@ -95,6 +97,9 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "profile",
     "rollback",
     "verify",
+    "install",
+    "remove",
+    "clean",
   ]);
 
   const command: string[] = [];

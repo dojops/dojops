@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { RepoContextSchema } from "@odaops/core";
+import type { RepoContext } from "@odaops/core";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -435,4 +437,17 @@ export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
   }
 
   return { valid: errors.length === 0, totalEntries: lines.length, errors };
+}
+
+// ── Repo context ──────────────────────────────────────────────────
+
+export function loadContext(rootDir: string): RepoContext | null {
+  const file = path.join(odaDir(rootDir), "context.json");
+  try {
+    const data = JSON.parse(fs.readFileSync(file, "utf-8"));
+    const parsed = RepoContextSchema.safeParse(data);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import {
@@ -23,6 +24,7 @@ import {
   acquireLock,
   releaseLock,
   isLocked,
+  loadContext,
   PlanState,
 } from "../state";
 import { ExitCode } from "../exit-codes";
@@ -61,6 +63,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const dryRun = hasFlag(args, "--dry-run");
   const resume = hasFlag(args, "--resume");
+  const installPackages = hasFlag(args, "--install-packages");
   const planId = args.find((a) => !a.startsWith("-"));
 
   let plan: PlanState | null;
@@ -99,24 +102,39 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     p.log.warn("No previous results found. Running full execution.");
   }
 
-  // Show plan summary
+  // Pre-flight summary
   const totalCount = plan.tasks.length;
   const remainingCount = totalCount - completedTaskIds.size;
+
   const summaryLines = [
     `${pc.bold("Plan:")}   ${plan.id}`,
     `${pc.bold("Goal:")}   ${plan.goal}`,
     `${pc.bold("Tasks:")}  ${resume && completedTaskIds.size > 0 ? `${remainingCount} remaining / ${totalCount} total` : `${totalCount} tasks`}`,
     `${pc.bold("Risk:")}   ${plan.risk || "unknown"}`,
   ];
+
+  // Collect unique tools used
+  const toolsUsed = [...new Set(plan.tasks.map((t) => t.tool))];
+  summaryLines.push(`${pc.bold("Tools:")}  ${toolsUsed.join(", ")}`);
+
+  summaryLines.push("");
+  summaryLines.push(pc.bold("Task breakdown:"));
+
+  for (const task of plan.tasks) {
+    const isCompleted = completedTaskIds.has(task.id);
+    const icon = isCompleted ? pc.green("✓") : pc.cyan("○");
+    const deps = task.dependsOn.length > 0 ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
+    summaryLines.push(
+      `  ${icon} ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`,
+    );
+  }
+
   p.note(
     summaryLines.join("\n"),
-    resume && completedTaskIds.size > 0 ? "Resume Summary" : "Plan Summary",
+    resume && completedTaskIds.size > 0 ? "Pre-flight: Resume" : "Pre-flight Summary",
   );
 
   if (dryRun) {
-    for (const task of plan.tasks) {
-      p.log.message(`  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}`);
-    }
     p.log.info(pc.dim("Dry run — no changes will be made."));
     return;
   }
@@ -286,7 +304,59 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     } else {
       p.log.error(pc.bold("Plan application failed."));
     }
+
+    // Post-apply: install packages if requested and plan succeeded
+    if (installPackages && allCompleted) {
+      const repoCtx = loadContext(root);
+      const pm = repoCtx?.packageManager?.name;
+      const installCmd = resolveInstallCommand(pm);
+
+      if (installCmd) {
+        const installSpinner = p.spinner();
+        installSpinner.start(`Running ${installCmd.join(" ")}...`);
+        try {
+          execFileSync(installCmd[0], installCmd.slice(1), {
+            cwd: root,
+            encoding: "utf-8",
+            timeout: 120_000,
+            stdio: "pipe",
+          });
+          installSpinner.stop(`${installCmd.join(" ")} completed.`);
+        } catch (err) {
+          installSpinner.stop(`${installCmd.join(" ")} failed.`);
+          const msg = err instanceof Error ? err.message : String(err);
+          p.log.warn(`Package install failed: ${msg}`);
+        }
+      } else {
+        p.log.info(pc.dim("No package manager detected — skipping install."));
+      }
+    }
   } finally {
     releaseLock(root);
+  }
+}
+
+function resolveInstallCommand(pm: string | undefined): string[] | null {
+  switch (pm) {
+    case "pnpm":
+      return ["pnpm", "install"];
+    case "yarn":
+      return ["yarn", "install"];
+    case "npm":
+      return ["npm", "install"];
+    case "bun":
+      return ["bun", "install"];
+    case "poetry":
+      return ["poetry", "install"];
+    case "cargo":
+      return ["cargo", "build"];
+    case "go":
+      return ["go", "mod", "download"];
+    case "bundler":
+      return ["bundle", "install"];
+    case "pip":
+      return ["pip", "install", "-r", "requirements.txt"];
+    default:
+      return null;
   }
 }

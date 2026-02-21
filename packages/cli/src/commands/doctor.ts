@@ -1,11 +1,22 @@
 import fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { ALL_SPECIALIST_CONFIGS, ToolDependency } from "@odaops/core";
+import {
+  ALL_SPECIALIST_CONFIGS,
+  ToolDependency,
+  SYSTEM_TOOLS,
+  isToolSupportedOnCurrentPlatform,
+} from "@odaops/core";
 import { CLIContext } from "../types";
 import { getConfigPath } from "../config";
 import { findProjectRoot } from "../state";
-import { resolveBinary, resolveModule } from "../preflight";
+import {
+  resolveBinary,
+  resolveModule,
+  offerToolInstall,
+  offerSystemToolInstall,
+} from "../preflight";
+import { loadToolRegistry } from "../tool-sandbox";
 
 interface Check {
   name: string;
@@ -13,7 +24,7 @@ interface Check {
   detail: string;
 }
 
-export async function doctorCommand(_args: string[], ctx: CLIContext): Promise<void> {
+export async function statusCommand(_args: string[], ctx: CLIContext): Promise<void> {
   const checks: Check[] = [];
 
   // Node.js version
@@ -109,6 +120,32 @@ export async function doctorCommand(_args: string[], ctx: CLIContext): Promise<v
     });
   }
 
+  // System tool checks
+  const toolRegistry = loadToolRegistry();
+  for (const tool of SYSTEM_TOOLS) {
+    const sandboxEntry = toolRegistry.tools.find((t) => t.name === tool.name);
+    const systemBinary = !sandboxEntry ? resolveBinary(tool.binaryName) : undefined;
+    const supported = isToolSupportedOnCurrentPlatform(tool);
+
+    let status: "pass" | "warn";
+    let detail: string;
+    if (sandboxEntry) {
+      status = "pass";
+      detail = `Sandbox v${sandboxEntry.version} (${sandboxEntry.binaryPath})`;
+    } else if (systemBinary) {
+      status = "pass";
+      detail = `System (${systemBinary})`;
+    } else if (!supported) {
+      status = "warn";
+      detail = "Unsupported on this platform";
+    } else {
+      status = "warn";
+      detail = `Not found — run: oda tools install ${tool.name}`;
+    }
+
+    checks.push({ name: `System: ${tool.name}`, status, detail });
+  }
+
   // Output
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify({ checks }, null, 2));
@@ -128,5 +165,19 @@ export async function doctorCommand(_args: string[], ctx: CLIContext): Promise<v
     p.log.error(`${failCount} check(s) failed.`);
   } else {
     p.log.success("All checks passed.");
+  }
+
+  // Offer to install missing optional tool dependencies
+  const hasMissingTools = checks.some((c) => c.name.startsWith("Tool:") && c.status === "warn");
+  if (hasMissingTools) {
+    await offerToolInstall({ nonInteractive: ctx.globalOpts.nonInteractive });
+  }
+
+  // Offer to install missing system tools
+  const hasMissingSystemTools = checks.some(
+    (c) => c.name.startsWith("System:") && c.status === "warn" && c.detail.includes("Not found"),
+  );
+  if (hasMissingSystemTools) {
+    await offerSystemToolInstall({ nonInteractive: ctx.globalOpts.nonInteractive });
   }
 }

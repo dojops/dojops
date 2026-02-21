@@ -30,6 +30,7 @@ describe("CLI", () => {
       expect(output).toContain("--execute");
       expect(output).toContain("debug ci");
       expect(output).toContain("analyze diff");
+      expect(output).toContain("tools");
       expect(output).toContain("--port=N");
       expect(output).toContain("--model=NAME");
       expect(output).toContain("--provider=NAME");
@@ -168,9 +169,15 @@ describe("CLI", () => {
       expect(output).toContain(".oda/");
     });
 
-    it("shows doctor-specific help with oda doctor --help", () => {
+    it("shows status-specific help with oda status --help", () => {
+      const output = run("status", "--help");
+      expect(output).toContain("oda status");
+      expect(output).toContain("diagnostics");
+    });
+
+    it("shows status help via doctor alias with oda doctor --help", () => {
       const output = run("doctor", "--help");
-      expect(output).toContain("oda doctor");
+      expect(output).toContain("oda status");
       expect(output).toContain("diagnostics");
     });
 
@@ -216,10 +223,27 @@ describe("CLI", () => {
       expect(output).toContain("oda analyze diff");
       expect(output).toContain("risk");
     });
+
+    it("shows tools-specific help with oda tools --help", () => {
+      const output = run("tools", "--help");
+      expect(output).toContain("oda tools");
+      expect(output).toContain("install");
+      expect(output).toContain("remove");
+      expect(output).toContain("clean");
+      expect(output).toContain("terraform");
+      expect(output).toContain("kubectl");
+      expect(output).toContain("AVAILABLE TOOLS");
+    });
   });
 
   describe("subcommand routing", () => {
-    it("doctor runs without LLM provider", () => {
+    it("status runs without LLM provider", () => {
+      const output = run("status");
+      expect(output).toContain("Node.js version");
+      expect(output).toContain("System Diagnostics");
+    });
+
+    it("doctor alias still works", () => {
       const output = run("doctor");
       expect(output).toContain("Node.js version");
       expect(output).toContain("System Diagnostics");
@@ -228,6 +252,12 @@ describe("CLI", () => {
     it("init creates .oda directory or reports already initialized", () => {
       const output = run("init");
       expect(output.includes("initialized") || output.includes("Initialized")).toBe(true);
+    });
+
+    it("tools list runs without error", () => {
+      const output = run("tools", "list");
+      expect(output).toContain("terraform");
+      expect(output).toContain("kubectl");
     });
   });
 });
