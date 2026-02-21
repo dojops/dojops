@@ -20,6 +20,8 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "test:smoke": "turbo test:smoke",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",

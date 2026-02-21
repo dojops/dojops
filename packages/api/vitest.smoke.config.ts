@@ -1,16 +1,9 @@
-import { defineConfig, defaultExclude } from "vitest/config";
+import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
   test: {
-    include: ["src/**/*.test.ts"],
-    exclude: [
-      ...defaultExclude,
-      "**/e2e.test.ts",
-      "**/*.e2e.test.ts",
-      "**/smoke.test.ts",
-      "**/*.smoke.test.ts",
-    ],
+    include: ["src/smoke.test.ts", "src/**/smoke.test.ts", "src/**/*.smoke.test.ts"],
   },
   resolve: {
     alias: {

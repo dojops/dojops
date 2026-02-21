@@ -32,7 +32,9 @@
     "start": "node dist/server.js",
     "dev": "node --require dotenv/config dist/server.js",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts"
   },
   "dependencies": {
     "@odaops/core": "workspace:*",

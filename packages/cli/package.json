@@ -35,7 +35,9 @@
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",

@@ -4,6 +4,8 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "lint": { "dependsOn": ["^build"] },
     "test": { "dependsOn": ["build"] },
+    "test:e2e": { "dependsOn": ["build"], "cache": false },
+    "test:smoke": { "dependsOn": ["build"] },
     "dev": { "cache": false, "persistent": true }
   }
 }
