@@ -65,6 +65,10 @@ function topologicalSort(tasks: TaskNode[]): TaskNode[] {
   return sorted;
 }
 
+export interface PlannerExecuteOptions {
+  completedTaskIds?: Set<string>;
+}
+
 export class PlannerExecutor {
   private toolMap: Map<string, DevOpsTool>;
 
@@ -75,12 +79,20 @@ export class PlannerExecutor {
     this.toolMap = new Map(tools.map((t) => [t.name, t]));
   }
 
-  async execute(graph: TaskGraph): Promise<PlannerResult> {
+  async execute(graph: TaskGraph, options?: PlannerExecuteOptions): Promise<PlannerResult> {
     const sorted = topologicalSort(graph.tasks);
     const results = new Map<string, TaskResult>();
     const failed = new Set<string>();
+    const completedTaskIds = options?.completedTaskIds ?? new Set<string>();
 
     for (const task of sorted) {
+      if (completedTaskIds.has(task.id)) {
+        const result: TaskResult = { taskId: task.id, status: "completed" };
+        results.set(task.id, result);
+        this.logger.taskEnd(task.id, "completed");
+        continue;
+      }
+
       const shouldSkip = task.dependsOn.some((dep) => failed.has(dep));
 
       if (shouldSkip) {

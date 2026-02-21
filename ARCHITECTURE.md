@@ -103,6 +103,50 @@ Responsible for:
 
 ---
 
+## Security Architecture
+
+ODA implements defense-in-depth with six layers between LLM output and infrastructure changes:
+
+```
+  LLM Response
+       │
+  ┌────▼────┐
+  │Structured│  Provider-native JSON mode (OpenAI response_format,
+  │ Output   │  Anthropic prefill, Ollama format)
+  └────┬─────┘
+       │
+  ┌────▼────┐
+  │  Input   │  Zod schema validation on every tool input
+  │Validation│  and LLM response (parseAndValidate)
+  └────┬─────┘
+       │
+  ┌────▼────┐
+  │ Policy   │  ExecutionPolicy: allowWrite, allowedPaths,
+  │ Engine   │  deniedPaths, envVars, timeoutMs, maxFileSize
+  └────┬─────┘
+       │
+  ┌────▼────┐
+  │Approval  │  ApprovalHandler: auto-approve, auto-deny,
+  │Workflow  │  or interactive callback with diff preview
+  └────┬─────┘
+       │
+  ┌────▼────┐
+  │Sandboxed │  SandboxedFs: path-restricted file operations
+  │Execution │  with per-file audit logging
+  └────┬─────┘
+       │
+  ┌────▼────┐
+  │Immutable │  Hash-chained JSONL audit trail (SHA-256)
+  │Audit Log │  with tamper detection via `oda history verify`
+  └──────────┘
+```
+
+**Trust boundary**: LLM output is untrusted. All data crosses the trust boundary at the Structured Output layer and is validated at every subsequent layer before any write operation occurs.
+
+**Concurrency safety**: PID-based execution locking (`lock.json`) prevents concurrent apply/destroy/rollback operations, with automatic stale-lock cleanup for dead processes.
+
+---
+
 ## Future Expansion
 
 - Multi-agent architecture

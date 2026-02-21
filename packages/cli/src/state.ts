@@ -23,9 +23,17 @@ export interface PlanState {
     description: string;
     dependsOn: string[];
   }>;
-  results?: Array<{ taskId: string; status: string; output?: unknown }>;
+  results?: Array<{
+    taskId: string;
+    status: string;
+    output?: unknown;
+    error?: string;
+    filesCreated?: string[];
+    executionStatus?: string;
+    executionApproval?: string;
+  }>;
   files: string[];
-  approvalStatus: "PENDING" | "APPROVED" | "DENIED" | "APPLIED";
+  approvalStatus: "PENDING" | "APPROVED" | "DENIED" | "APPLIED" | "PARTIAL";
 }
 
 export interface ExecutionRecord {
@@ -45,6 +53,80 @@ export interface AuditEntry {
   planId?: string;
   status: "success" | "failure" | "cancelled";
   durationMs: number;
+  seq?: number;
+  hash?: string;
+  previousHash?: string;
+}
+
+export interface AuditVerificationResult {
+  valid: boolean;
+  totalEntries: number;
+  errors: Array<{ seq: number; line: number; reason: string }>;
+}
+
+export interface LockInfo {
+  pid: number;
+  operation: string;
+  acquiredAt: string;
+}
+
+// ── Execution locking ─────────────────────────────────────────────
+
+export function acquireLock(rootDir: string, operation: string): boolean {
+  const lockFile = path.join(odaDir(rootDir), "lock.json");
+  const info: LockInfo = {
+    pid: process.pid,
+    operation,
+    acquiredAt: new Date().toISOString(),
+  };
+  try {
+    fs.writeFileSync(lockFile, JSON.stringify(info, null, 2) + "\n", {
+      flag: "wx",
+    });
+    return true;
+  } catch {
+    // File already exists — check if stale
+    const status = isLocked(rootDir);
+    if (!status.locked) {
+      // Stale lock was cleaned up, retry
+      try {
+        fs.writeFileSync(lockFile, JSON.stringify(info, null, 2) + "\n", {
+          flag: "wx",
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+}
+
+export function releaseLock(rootDir: string): void {
+  const lockFile = path.join(odaDir(rootDir), "lock.json");
+  try {
+    fs.unlinkSync(lockFile);
+  } catch {
+    // Already removed — no-op
+  }
+}
+
+export function isLocked(rootDir: string): { locked: boolean; info?: LockInfo } {
+  const lockFile = path.join(odaDir(rootDir), "lock.json");
+  try {
+    const data = JSON.parse(fs.readFileSync(lockFile, "utf-8")) as LockInfo;
+    // Check if the locking process is still alive
+    try {
+      process.kill(data.pid, 0);
+      return { locked: true, info: data };
+    } catch {
+      // Process is dead — stale lock, clean up
+      fs.unlinkSync(lockFile);
+      return { locked: false };
+    }
+  } catch {
+    return { locked: false };
+  }
 }
 
 // ── Project root detection ─────────────────────────────────────────
@@ -209,10 +291,48 @@ function auditFile(rootDir: string): string {
   return path.join(odaDir(rootDir), "history", "audit.jsonl");
 }
 
+function computeAuditHash(entry: AuditEntry): string {
+  const payload = [
+    entry.seq,
+    entry.timestamp,
+    entry.user,
+    entry.command,
+    entry.action,
+    entry.planId ?? "",
+    entry.status,
+    entry.durationMs,
+    entry.previousHash ?? "genesis",
+  ].join("|");
+  return crypto.createHash("sha256").update(payload).digest("hex");
+}
+
 export function appendAudit(rootDir: string, entry: AuditEntry): void {
   const file = auditFile(rootDir);
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  let previousHash = "genesis";
+  let seq = 1;
+
+  if (fs.existsSync(file)) {
+    const content = fs.readFileSync(file, "utf-8").trimEnd();
+    if (content.length > 0) {
+      const lines = content.split("\n");
+      const lastLine = lines[lines.length - 1];
+      try {
+        const lastEntry = JSON.parse(lastLine) as AuditEntry;
+        previousHash = lastEntry.hash ?? "genesis";
+        seq = (lastEntry.seq ?? 0) + 1;
+      } catch {
+        // Corrupt last line — reset chain
+      }
+    }
+  }
+
+  entry.seq = seq;
+  entry.previousHash = previousHash;
+  entry.hash = computeAuditHash(entry);
+
   fs.appendFileSync(file, JSON.stringify(entry) + "\n");
 }
 
@@ -243,4 +363,66 @@ export function readAudit(
     if (filters.status && e.status !== filters.status) return false;
     return true;
   });
+}
+
+export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
+  const file = auditFile(rootDir);
+  if (!fs.existsSync(file)) return { valid: true, totalEntries: 0, errors: [] };
+
+  const content = fs.readFileSync(file, "utf-8").trimEnd();
+  if (content.length === 0) return { valid: true, totalEntries: 0, errors: [] };
+
+  const lines = content.split("\n");
+  const errors: AuditVerificationResult["errors"] = [];
+  let expectedPreviousHash = "genesis";
+  let expectedSeq = 1;
+
+  for (let i = 0; i < lines.length; i++) {
+    let entry: AuditEntry;
+    try {
+      entry = JSON.parse(lines[i]) as AuditEntry;
+    } catch {
+      errors.push({ seq: expectedSeq, line: i + 1, reason: "Invalid JSON" });
+      expectedPreviousHash = "genesis";
+      expectedSeq++;
+      continue;
+    }
+
+    // Legacy entry without hash fields — skip gracefully, reset chain
+    if (entry.seq == null || entry.hash == null) {
+      expectedPreviousHash = "genesis";
+      expectedSeq = 1;
+      continue;
+    }
+
+    if (entry.seq !== expectedSeq) {
+      errors.push({
+        seq: entry.seq ?? expectedSeq,
+        line: i + 1,
+        reason: `Expected seq ${expectedSeq}, got ${entry.seq}`,
+      });
+    }
+
+    if (entry.previousHash !== expectedPreviousHash) {
+      errors.push({
+        seq: entry.seq ?? expectedSeq,
+        line: i + 1,
+        reason: `Previous hash mismatch`,
+      });
+    }
+
+    const recomputed = computeAuditHash(entry);
+    if (entry.hash !== recomputed) {
+      errors.push({
+        seq: entry.seq ?? expectedSeq,
+        line: i + 1,
+        reason: `Hash mismatch (tampered)`,
+      });
+    }
+
+    expectedPreviousHash = entry.hash;
+    expectedSeq = entry.seq + 1;
+  }
+
+  return { valid: errors.length === 0, totalEntries: lines.length, errors };
 }

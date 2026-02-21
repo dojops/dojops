@@ -19,6 +19,7 @@ import { remapLegacyArgs } from "./compat";
 import { printHelp } from "./help";
 import { resolveCommand } from "./commands";
 import { CLIContext } from "./types";
+import { ExitCode } from "./exit-codes";
 
 // ── Late-registered commands (Phases 2-6) ──────────────────────────
 import { registerCommand, registerSubcommand } from "./commands";
@@ -50,6 +51,7 @@ registerSubcommand("agents", "list", agentsCommand);
 registerSubcommand("agents", "info", agentsCommand);
 registerSubcommand("history", "list", historyCommand);
 registerSubcommand("history", "show", historyCommand);
+registerSubcommand("history", "verify", historyCommand);
 registerSubcommand("history", "rollback", historyCommand);
 
 // ── Main ───────────────────────────────────────────────────────────
@@ -116,12 +118,21 @@ async function main() {
     p.intro(pc.bgCyan(pc.black(" oda ")));
   }
 
-  if (resolved) {
-    await resolved.handler(resolved.remaining, ctx);
-  } else {
-    // Default: generate command (oda "prompt")
-    const { generateCommand } = await import("./commands/generate");
-    await generateCommand(remapped, ctx);
+  try {
+    if (resolved) {
+      await resolved.handler(resolved.remaining, ctx);
+    } else {
+      // Default: generate command (oda "prompt")
+      const { generateCommand } = await import("./commands/generate");
+      await generateCommand(remapped, ctx);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    p.log.error(msg);
+    if (globalOpts.debug) {
+      console.error(err);
+    }
+    process.exit(ExitCode.GENERAL_ERROR);
   }
 
   if (!isQuiet && !globalOpts.quiet) {

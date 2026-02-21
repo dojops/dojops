@@ -18,6 +18,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("inspect")}            Inspect config, policy, agents, session`);
   console.log(`  ${pc.cyan("agents")}             List and inspect specialist agents`);
   console.log(`  ${pc.cyan("history")}            View execution history`);
+  console.log(`  ${pc.cyan("history verify")}    Verify audit log hash chain integrity`);
   console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
   console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
   console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);
@@ -42,6 +43,11 @@ export function printHelp(): void {
   console.log();
   console.log(pc.bold("PLAN OPTIONS"));
   console.log(`  ${pc.cyan("--execute")}          Generate + execute with approval workflow`);
+  console.log(`  ${pc.cyan("--yes")}              Auto-approve all executions`);
+  console.log();
+  console.log(pc.bold("APPLY OPTIONS"));
+  console.log(`  ${pc.cyan("--dry-run")}          Preview changes without executing`);
+  console.log(`  ${pc.cyan("--resume")}           Resume a partially-applied plan`);
   console.log(`  ${pc.cyan("--yes")}              Auto-approve all executions`);
   console.log();
   console.log(pc.bold("SERVE OPTIONS"));
@@ -83,6 +89,14 @@ export function printHelp(): void {
   console.log(`  ${pc.dim("OpenAI:")}    gpt-4o, gpt-4o-mini`);
   console.log(`  ${pc.dim("Anthropic:")} claude-sonnet-4-5-20250929, claude-haiku-4-5-20251001`);
   console.log(`  ${pc.dim("Ollama:")}    llama3, mistral, codellama`);
+  console.log();
+  console.log(pc.bold("EXIT CODES"));
+  console.log(`  0    Success`);
+  console.log(`  1    General error`);
+  console.log(`  2    Validation error`);
+  console.log(`  3    Approval required`);
+  console.log(`  4    Lock conflict`);
+  console.log(`  5    No .oda/ project`);
   console.log();
 }
 

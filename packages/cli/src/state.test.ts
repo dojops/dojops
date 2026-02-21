@@ -15,7 +15,11 @@ import {
   listExecutions,
   appendAudit,
   readAudit,
+  verifyAuditIntegrity,
   findProjectRoot,
+  acquireLock,
+  releaseLock,
+  isLocked,
   PlanState,
   SessionState,
 } from "./state";
@@ -184,6 +188,72 @@ describe("audit", () => {
   });
 });
 
+describe("execution locking", () => {
+  it("acquireLock returns true on first call", () => {
+    initProject(tmpDir);
+    expect(acquireLock(tmpDir, "apply")).toBe(true);
+    releaseLock(tmpDir);
+  });
+
+  it("acquireLock returns false when already locked", () => {
+    initProject(tmpDir);
+    expect(acquireLock(tmpDir, "apply")).toBe(true);
+    // Same process holds the lock, so it's still alive
+    expect(acquireLock(tmpDir, "destroy")).toBe(false);
+    releaseLock(tmpDir);
+  });
+
+  it("releaseLock allows re-acquisition", () => {
+    initProject(tmpDir);
+    expect(acquireLock(tmpDir, "apply")).toBe(true);
+    releaseLock(tmpDir);
+    expect(acquireLock(tmpDir, "apply")).toBe(true);
+    releaseLock(tmpDir);
+  });
+
+  it("isLocked returns false when no lock", () => {
+    initProject(tmpDir);
+    const status = isLocked(tmpDir);
+    expect(status.locked).toBe(false);
+  });
+
+  it("isLocked returns true when locked by live process", () => {
+    initProject(tmpDir);
+    acquireLock(tmpDir, "apply");
+    const status = isLocked(tmpDir);
+    expect(status.locked).toBe(true);
+    expect(status.info?.operation).toBe("apply");
+    expect(status.info?.pid).toBe(process.pid);
+    releaseLock(tmpDir);
+  });
+
+  it("stale lock from dead PID is auto-cleaned", () => {
+    initProject(tmpDir);
+    // Write a lock file with a PID that doesn't exist
+    const lockFile = path.join(tmpDir, ".oda", "lock.json");
+    fs.writeFileSync(
+      lockFile,
+      JSON.stringify({ pid: 999999, operation: "apply", acquiredAt: new Date().toISOString() }),
+    );
+    const status = isLocked(tmpDir);
+    expect(status.locked).toBe(false);
+    expect(fs.existsSync(lockFile)).toBe(false);
+  });
+
+  it("acquireLock succeeds after stale lock cleanup", () => {
+    initProject(tmpDir);
+    // Write a stale lock
+    const lockFile = path.join(tmpDir, ".oda", "lock.json");
+    fs.writeFileSync(
+      lockFile,
+      JSON.stringify({ pid: 999999, operation: "apply", acquiredAt: new Date().toISOString() }),
+    );
+    // Should auto-clean stale and acquire
+    expect(acquireLock(tmpDir, "destroy")).toBe(true);
+    releaseLock(tmpDir);
+  });
+});
+
 describe("findProjectRoot", () => {
   it("finds .oda directory", () => {
     initProject(tmpDir);
@@ -191,5 +261,139 @@ describe("findProjectRoot", () => {
     fs.mkdirSync(subDir, { recursive: true });
     const root = findProjectRoot(subDir);
     expect(root).toBe(tmpDir);
+  });
+});
+
+describe("audit hash chain", () => {
+  const makeEntry = (command: string) => ({
+    timestamp: new Date().toISOString(),
+    user: "test",
+    command,
+    action: "test",
+    planId: "plan-test",
+    status: "success" as const,
+    durationMs: 100,
+  });
+
+  it("appends entry with seq, hash, previousHash fields", () => {
+    initProject(tmpDir);
+    appendAudit(tmpDir, makeEntry("cmd1"));
+    const entries = readAudit(tmpDir);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].seq).toBe(1);
+    expect(entries[0].hash).toBeDefined();
+    expect(entries[0].previousHash).toBe("genesis");
+  });
+
+  it("chains hashes across entries", () => {
+    initProject(tmpDir);
+    appendAudit(tmpDir, makeEntry("cmd1"));
+    appendAudit(tmpDir, makeEntry("cmd2"));
+    const entries = readAudit(tmpDir);
+    expect(entries).toHaveLength(2);
+    expect(entries[1].seq).toBe(2);
+    expect(entries[1].previousHash).toBe(entries[0].hash);
+  });
+
+  it("verifyAuditIntegrity passes for valid chain", () => {
+    initProject(tmpDir);
+    appendAudit(tmpDir, makeEntry("cmd1"));
+    appendAudit(tmpDir, makeEntry("cmd2"));
+    appendAudit(tmpDir, makeEntry("cmd3"));
+    const result = verifyAuditIntegrity(tmpDir);
+    expect(result.valid).toBe(true);
+    expect(result.totalEntries).toBe(3);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it("verifyAuditIntegrity detects tampered entry", () => {
+    initProject(tmpDir);
+    appendAudit(tmpDir, makeEntry("cmd1"));
+    appendAudit(tmpDir, makeEntry("cmd2"));
+
+    // Tamper with the audit file — change command text in first entry
+    const auditPath = path.join(tmpDir, ".oda", "history", "audit.jsonl");
+    const content = fs.readFileSync(auditPath, "utf-8");
+    const lines = content.trimEnd().split("\n");
+    const entry = JSON.parse(lines[0]);
+    entry.command = "TAMPERED";
+    lines[0] = JSON.stringify(entry);
+    fs.writeFileSync(auditPath, lines.join("\n") + "\n");
+
+    const result = verifyAuditIntegrity(tmpDir);
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0].reason).toContain("tampered");
+  });
+
+  it("returns valid for empty log", () => {
+    initProject(tmpDir);
+    const result = verifyAuditIntegrity(tmpDir);
+    expect(result.valid).toBe(true);
+    expect(result.totalEntries).toBe(0);
+  });
+
+  it("handles legacy entries without hash fields gracefully", () => {
+    initProject(tmpDir);
+
+    // Write a legacy entry directly (no hash fields)
+    const auditPath = path.join(tmpDir, ".oda", "history", "audit.jsonl");
+    const legacyEntry = {
+      timestamp: new Date().toISOString(),
+      user: "test",
+      command: "legacy-cmd",
+      action: "test",
+      status: "success",
+      durationMs: 50,
+    };
+    fs.writeFileSync(auditPath, JSON.stringify(legacyEntry) + "\n");
+
+    // Now append a new-format entry
+    appendAudit(tmpDir, makeEntry("new-cmd"));
+
+    const result = verifyAuditIntegrity(tmpDir);
+    expect(result.valid).toBe(true);
+    expect(result.totalEntries).toBe(2);
+  });
+});
+
+describe("plan with PARTIAL status", () => {
+  it("saves and loads plan with PARTIAL status and result fields", () => {
+    initProject(tmpDir);
+    const plan: PlanState = {
+      id: "plan-partial1",
+      goal: "Test partial",
+      createdAt: new Date().toISOString(),
+      risk: "LOW",
+      tasks: [
+        { id: "t1", tool: "terraform", description: "Create S3", dependsOn: [] },
+        { id: "t2", tool: "terraform", description: "Create IAM", dependsOn: ["t1"] },
+      ],
+      results: [
+        {
+          taskId: "t1",
+          status: "completed",
+          filesCreated: ["main.tf"],
+          executionStatus: "completed",
+          executionApproval: "approved",
+        },
+        {
+          taskId: "t2",
+          status: "failed",
+          error: "LLM provider timeout",
+          executionStatus: "failed",
+        },
+      ],
+      files: [],
+      approvalStatus: "PARTIAL",
+    };
+    savePlan(tmpDir, plan);
+    const loaded = loadPlan(tmpDir, "plan-partial1");
+    expect(loaded).not.toBeNull();
+    expect(loaded!.approvalStatus).toBe("PARTIAL");
+    expect(loaded!.results).toHaveLength(2);
+    expect(loaded!.results![0].filesCreated).toEqual(["main.tf"]);
+    expect(loaded!.results![0].executionStatus).toBe("completed");
+    expect(loaded!.results![1].error).toBe("LLM provider timeout");
   });
 });

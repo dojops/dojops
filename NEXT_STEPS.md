@@ -217,6 +217,47 @@ Deliverable:
 
 ---
 
+# Phase 7 — Enterprise Readiness
+
+## 14. RBAC & Multi-Tenancy
+
+- Role-based access control for plan/apply/destroy operations
+- Multi-tenant project isolation
+- API key scoping per tenant
+
+## 15. Persistent Storage
+
+- Pluggable storage backends (filesystem, SQLite, PostgreSQL)
+- Migrate in-memory HistoryStore to persistent backend
+- Plan and audit log archival
+
+## 16. Observability
+
+- OpenTelemetry instrumentation for LLM calls, tool execution, and plan lifecycle
+- Prometheus metrics endpoint (`/metrics`)
+- Structured logging with correlation IDs
+
+## 17. Enterprise Integrations
+
+- SSO (OIDC/SAML) for API authentication
+- Webhook notifications for plan lifecycle events
+- Slack/Teams integration for approval workflows
+- Git provider integration (auto-PR for applied plans)
+
+## 18. Resume & Recovery (DONE)
+
+- `oda apply --resume` — skip completed tasks, retry failed
+- Per-task result tracking with execution status and files created
+- PARTIAL plan status for incomplete executions
+
+## 19. Audit Integrity (DONE)
+
+- Hash-chained JSONL audit trail (SHA-256)
+- `oda history verify` for tamper detection
+- Backward-compatible with legacy (pre-chain) entries
+
+---
+
 # Engineering Priorities
 
 1. Safety over speed

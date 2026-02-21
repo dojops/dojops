@@ -1,6 +1,64 @@
 # ODA — Open DevOps Agent
 
-AI-powered DevOps automation. Generate, validate, and execute infrastructure and CI/CD configurations safely through a rich terminal UI, REST API, or web dashboard.
+Enterprise-grade AI DevOps automation. Generate, validate, and execute infrastructure and CI/CD configurations safely — with structured output enforcement, sandboxed execution, approval workflows, and hash-chained audit trails.
+
+## The Problem
+
+1. **Manual IaC is slow** — Writing Terraform, Kubernetes, and CI/CD configs from scratch takes hours. Teams spend more time on boilerplate than architecture.
+2. **AI-generated configs are unsafe** — LLMs produce plausible but unvalidated output. Without schema enforcement and execution controls, AI-generated infrastructure is a liability.
+3. **Teams lack visibility into AI-driven changes** — When AI generates configs, there's no audit trail, no approval gate, and no way to resume partial failures. Compliance teams can't sign off on what they can't verify.
+
+## How ODA Works
+
+### Simple Mode — Stateless CLI
+
+```bash
+oda "Create a Terraform config for S3 with versioning"
+oda debug ci "ERROR: tsc failed with exit code 1..."
+oda analyze diff "terraform plan output..."
+```
+
+ODA routes to the right specialist agent, enforces structured JSON output via Zod schemas, and returns validated configs.
+
+### Enterprise Mode — Full Lifecycle
+
+```bash
+oda init                              # Initialize project state
+oda plan "Create CI/CD for Node app"  # Decompose into task graph
+oda validate                          # Validate plan against schemas
+oda apply                             # Execute with approval workflow
+oda apply --resume                    # Resume partially-failed plans
+oda history verify                    # Verify audit log integrity
+oda history show <plan-id>            # Inspect per-task results
+```
+
+Plans are persisted, execution is sandboxed, every action is audit-logged with hash-chained integrity, and partial failures can be resumed without re-executing completed tasks.
+
+## Security & Compliance
+
+ODA implements defense-in-depth for AI-driven infrastructure changes:
+
+- **Structured output enforcement** — All LLM responses are constrained to JSON schemas via provider-native modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`)
+- **Zod schema validation** — Every tool input and LLM output is validated against Zod schemas before execution
+- **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, and file size limits
+- **Approval workflows** — Configurable approval handlers: auto-approve, auto-deny, or interactive callback with diff preview before any write operation
+- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with audit logging
+- **Hash-chained audit trail** — Every CLI action is logged to an append-only JSONL file with SHA-256 hash chaining (seq + previousHash + hash). Tamper detection via `oda history verify`
+- **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
+
+## Quick Start
+
+```bash
+# 1. Install
+npm i -g @odaops/cli
+
+# 2. Set your API key
+export ODA_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+
+# 3. Generate your first config
+oda "Create a Kubernetes deployment for nginx with 3 replicas"
+```
 
 ## Features
 
@@ -9,9 +67,11 @@ AI-powered DevOps automation. Generate, validate, and execute infrastructure and
 - **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution
 - **Sandboxed execution** — Policy engine controlling write paths, env vars, timeouts, and file size limits
 - **Approval workflows** — Auto-approve, auto-deny, or callback-based approval before destructive operations
+- **Resume on failure** — `oda apply --resume` skips completed tasks and retries failed ones, with per-task result tracking
 - **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, and suggested fixes
 - **Infra diff analysis** — Risk level, cost impact, security implications, and rollback complexity for infrastructure changes
-- **Rich terminal UI** — Interactive arrow-key prompts, spinners for async ops, styled note panels, semantic log levels (success/error/warn/info), session framing — powered by `@clack/prompts`
+- **Rich terminal UI** — Interactive arrow-key prompts, spinners for async ops, styled note panels, semantic log levels — powered by `@clack/prompts`
+- **Hash-chained audit logs** — Tamper-evident audit trail with SHA-256 chain integrity verification
 - **REST API** — 9 endpoints exposing all capabilities over HTTP
 - **Web dashboard** — Dark-themed single-page app for visual interaction with all features
 - **Structured output** — Zod schema enforcement on all LLM responses with JSON validation
@@ -31,147 +91,61 @@ AI-powered DevOps automation. Generate, validate, and execute infrastructure and
 
 Full details in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Prerequisites
+## CLI Reference
 
-- **Node.js** >= 18
-- **pnpm** >= 8
-- An LLM provider:
-  - **OpenAI** — requires `OPENAI_API_KEY`
-  - **Anthropic** — requires `ANTHROPIC_API_KEY`
-  - **Ollama** — requires local server running at `localhost:11434`
+### Commands
 
-## Installation
-
-### From npm
-
-```bash
-npm i -g @odaops/cli
+```
+plan               Decompose goal into task graph
+generate           Generate DevOps config (default)
+apply              Execute a saved plan
+validate           Validate plan against schemas
+explain            LLM explains a plan
+debug ci           Diagnose CI/CD log failures
+analyze diff       Analyze infrastructure diff for risk
+inspect            Inspect config, policy, agents, session
+agents             List and inspect specialist agents
+history            View execution history
+history verify     Verify audit log hash chain integrity
+config             Configure provider, model, tokens
+auth               Authenticate with LLM provider
+serve              Start API server + dashboard
+doctor             System health diagnostics
+init               Initialize .oda/ in project
+destroy            Remove generated artifacts from a plan
+rollback           Reverse an applied plan
 ```
 
-### From source
+### Apply Options
 
-```bash
-git clone <repo-url> oda
-cd oda
-pnpm install
-cp .env.example .env    # then edit with your API keys
-pnpm build
-
-# Register `oda` as a global command (pick one):
-sudo npm link                       # system-wide (requires root)
-# or
-ln -s $PWD/packages/cli/dist/index.js ~/bin/oda   # user-local
-export PATH="$HOME/bin:$PATH"       # add to ~/.bashrc or ~/.zshrc
+```
+--dry-run          Preview changes without executing
+--resume           Resume a partially-applied plan
+--yes              Auto-approve all executions
 ```
 
-## Configuration
+### Plan Options
 
-### 1. Set your LLM provider
-
-ODA supports three providers. Set the `ODA_PROVIDER` environment variable (or add it to `.env`):
-
-| Provider      | `ODA_PROVIDER` | Required env var      | Default model                |
-| ------------- | -------------- | --------------------- | ---------------------------- |
-| **OpenAI**    | `openai`       | `OPENAI_API_KEY`      | `gpt-4o-mini`                |
-| **Anthropic** | `anthropic`    | `ANTHROPIC_API_KEY`   | `claude-sonnet-4-5-20250929` |
-| **Ollama**    | `ollama`       | _(none — runs local)_ | `llama3`                     |
-
-### 2. Configure your API key
-
-**Option A — `.env` file** (recommended for development):
-
-```bash
-cp .env.example .env
+```
+--execute          Generate + execute with approval workflow
+--yes              Auto-approve all executions
 ```
 
-Then edit `.env`:
+### Global Options
 
-```bash
-ODA_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+--provider=NAME    LLM provider: openai, anthropic, ollama
+--model=NAME       LLM model override
+--profile=NAME     Use named config profile
+--output=FORMAT    Output: table (default), json, yaml
+--verbose          Verbose output
+--debug            Debug-level output
+--quiet            Suppress non-essential output
+--no-color         Disable color output
+--non-interactive  Disable interactive prompts
 ```
 
-**Option B — Shell exports** (useful for CI or one-off usage):
-
-```bash
-export ODA_PROVIDER=anthropic
-export ANTHROPIC_API_KEY=sk-ant-api03-...
-oda "Create a Terraform config for S3"
-```
-
-### 3. Select a model (optional)
-
-Override the default model per-provider using `ODA_MODEL` env var or the `--model` CLI flag:
-
-```bash
-# Via environment variable
-export ODA_MODEL=gpt-4o
-oda "Create a Kubernetes deployment for nginx"
-
-# Via CLI flag (takes precedence)
-oda --model=claude-haiku-4-5-20251001 "Create a Terraform config for S3"
-```
-
-**Supported models (examples):**
-
-| Provider  | Models                                                              |
-| --------- | ------------------------------------------------------------------- |
-| OpenAI    | `gpt-4o`, `gpt-4o-mini` (default), `gpt-4-turbo`, `o1-mini`         |
-| Anthropic | `claude-sonnet-4-5-20250929` (default), `claude-haiku-4-5-20251001` |
-| Ollama    | `llama3` (default), `mistral`, `codellama`, `deepseek-coder`        |
-
-Any model string accepted by the provider's API can be used.
-
-### 4. Other settings
-
-```bash
-ODA_API_PORT=3000    # API server port (default: 3000)
-```
-
-## Usage
-
-### CLI
-
-All CLI commands feature a rich terminal UI with interactive prompts, spinners, styled panels, and semantic log levels.
-
-```bash
-# After `npm link` (global install):
-oda "Create a Terraform config for S3 with versioning"
-oda --plan "Set up CI/CD for a Node.js app"
-oda --execute --yes "Create CI for Node app"
-oda --debug-ci "ERROR: tsc failed with exit code 1..."
-oda --diff "terraform plan output..."
-
-# Interactive configuration (arrow-key provider select, password input, model picker):
-oda config
-
-# Direct configuration:
-oda config --provider anthropic --token <KEY> --model <MODEL>
-oda config --show
-
-# In-repo development (no global link needed):
-pnpm oda -- "Create a Terraform config for S3 with versioning"
-pnpm oda -- --plan "Set up CI/CD for a Node.js app"
-pnpm oda -- --execute --yes "Create CI for Node app"
-pnpm oda -- --debug-ci "ERROR: tsc failed..."
-pnpm oda -- --diff "terraform plan output..."
-```
-
-### API Server + Web Dashboard
-
-```bash
-# Start the API server + web dashboard
-oda serve
-oda serve --port=8080
-
-# In-repo development:
-pnpm oda -- serve
-pnpm oda -- serve --port=8080
-```
-
-Open `http://localhost:3000` for the web dashboard.
-
-### API Endpoints
+## API Reference
 
 | Method   | Path               | Description                    |
 | -------- | ------------------ | ------------------------------ |
@@ -207,12 +181,34 @@ curl -X POST http://localhost:3000/api/debug-ci \
 curl -X POST http://localhost:3000/api/diff \
   -H "Content-Type: application/json" \
   -d '{"diff": "# aws_s3_bucket.main will be created\n+ resource \"aws_s3_bucket\" \"main\" {\n+   bucket = \"my-bucket\"\n+ }"}'
+```
 
-# List agents
-curl http://localhost:3000/api/agents
+## Configuration
 
-# View history
-curl http://localhost:3000/api/history
+### Providers
+
+| Provider      | `ODA_PROVIDER` | Required env var      | Default model                |
+| ------------- | -------------- | --------------------- | ---------------------------- |
+| **OpenAI**    | `openai`       | `OPENAI_API_KEY`      | `gpt-4o-mini`                |
+| **Anthropic** | `anthropic`    | `ANTHROPIC_API_KEY`   | `claude-sonnet-4-5-20250929` |
+| **Ollama**    | `ollama`       | _(none — runs local)_ | `llama3`                     |
+
+### Models
+
+| Provider  | Models                                                              |
+| --------- | ------------------------------------------------------------------- |
+| OpenAI    | `gpt-4o`, `gpt-4o-mini` (default), `gpt-4-turbo`, `o1-mini`         |
+| Anthropic | `claude-sonnet-4-5-20250929` (default), `claude-haiku-4-5-20251001` |
+| Ollama    | `llama3` (default), `mistral`, `codellama`, `deepseek-coder`        |
+
+Any model string accepted by the provider's API can be used.
+
+### Configuration precedence
+
+```
+Provider:  --provider  >  $ODA_PROVIDER  >  config  >  openai
+Model:     --model     >  $ODA_MODEL     >  config  >  provider default
+Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY  >  config token
 ```
 
 ## Development
@@ -220,7 +216,7 @@ curl http://localhost:3000/api/history
 ```bash
 pnpm build              # Build all packages
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 241 tests
+pnpm test               # Run all tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check
@@ -231,21 +227,12 @@ pnpm --filter @odaops/api build
 pnpm --filter @odaops/tools lint
 ```
 
-## Project Structure
+### Project Structure
 
 ```
 packages/
   api/            REST API + web dashboard
-    src/
-      routes/     Express route handlers
-      app.ts      Express app factory (dependency injection)
-      server.ts   Entry point
-      schemas.ts  Zod request validation
-      store.ts    In-memory history store
-      middleware.ts  Validation + error handling
-      factory.ts  Provider/tools/agents factory
-    public/       Web dashboard (HTML/CSS/JS)
-  cli/            CLI entry point
+  cli/            CLI entry point + TUI
   core/           LLM providers + agents + CI debugger + infra diff
   executor/       SafeExecutor + policy engine + approval workflows
   planner/        Task graph decomposition + topological executor
@@ -255,26 +242,24 @@ packages/
 
 ## Roadmap
 
-See [VISION.md](VISION.md) and [NEXT_STEPS.md](NEXT_STEPS.md) for the full roadmap.
+See [NEXT_STEPS.md](NEXT_STEPS.md) for the full roadmap.
 
-All 6 planned phases are complete:
+All 7 planned phases:
 
 1. **Core Intelligence** — Structured output, Zod validation, planner engine
 2. **DevOps Tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible
 3. **Execution** — Sandboxed executor, policy engine, approval workflows
 4. **Intelligence** — Multi-agent routing, CI debugging, infra diff analysis
 5. **Platform** — REST API, web dashboard
-6. **CLI TUI Overhaul** — Rich terminal UI with `@clack/prompts` (interactive prompts, spinners, styled panels, semantic log levels)
+6. **CLI TUI Overhaul** — Rich terminal UI with `@clack/prompts`
+7. **Enterprise Readiness** — RBAC, persistent storage, observability, integrations
 
 ## Publishing
 
-All packages are published under the `@odaops` scope. To publish:
+All packages are published under the `@odaops` scope:
 
 ```bash
-# Login to npm (requires @odaops org membership)
 npm login
-
-# Build and publish all packages
 pnpm publish-packages
 ```
 

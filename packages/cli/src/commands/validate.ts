@@ -2,12 +2,13 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
 import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state";
+import { ExitCode } from "../exit-codes";
 
 export async function validateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
     p.log.error("No .oda/ project found. Run `oda init` first.");
-    process.exit(1);
+    process.exit(ExitCode.NO_PROJECT);
   }
 
   const planId = args.find((a) => !a.startsWith("-"));
@@ -17,14 +18,14 @@ export async function validateCommand(args: string[], ctx: CLIContext): Promise<
     plan = loadPlan(root, planId);
     if (!plan) {
       p.log.error(`Plan "${planId}" not found.`);
-      process.exit(1);
+      process.exit(ExitCode.VALIDATION_ERROR);
     }
   } else {
     const session = loadSession(root);
     plan = session.currentPlan ? loadPlan(root, session.currentPlan) : getLatestPlan(root);
     if (!plan) {
       p.log.error("No plan found. Run `oda plan <prompt>` first.");
-      process.exit(1);
+      process.exit(ExitCode.VALIDATION_ERROR);
     }
   }
 
@@ -69,6 +70,6 @@ export async function validateCommand(args: string[], ctx: CLIContext): Promise<
     p.log.success(pc.bold("All tasks valid."));
   } else {
     p.log.error(pc.bold("Validation failed."));
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 }

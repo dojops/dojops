@@ -1,7 +1,13 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
-import { findProjectRoot, listPlans, loadPlan, listExecutions } from "../state";
+import {
+  findProjectRoot,
+  listPlans,
+  loadPlan,
+  listExecutions,
+  verifyAuditIntegrity,
+} from "../state";
 
 export async function historyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -9,6 +15,8 @@ export async function historyCommand(args: string[], ctx: CLIContext): Promise<v
   switch (sub) {
     case "show":
       return historyShow(args.slice(1), ctx);
+    case "verify":
+      return historyVerify(ctx);
     case "rollback": {
       const { rollbackCommand } = await import("./rollback");
       return rollbackCommand(args.slice(1), ctx);
@@ -55,7 +63,9 @@ function historyList(ctx: CLIContext): void {
         ? pc.green(plan.approvalStatus)
         : plan.approvalStatus === "DENIED"
           ? pc.red(plan.approvalStatus)
-          : pc.yellow(plan.approvalStatus);
+          : plan.approvalStatus === "PARTIAL"
+            ? pc.magenta(plan.approvalStatus)
+            : pc.yellow(plan.approvalStatus);
     const date = new Date(plan.createdAt).toLocaleDateString();
     return `  ${pc.cyan(plan.id.padEnd(16))} ${status.padEnd(20)} ${date}  ${pc.dim(plan.goal.slice(0, 50))}`;
   });
@@ -112,6 +122,22 @@ function historyShow(args: string[], ctx: CLIContext): void {
     }
   }
 
+  if (plan.results && plan.results.length > 0) {
+    infoLines.push("", pc.bold("Results:"));
+    for (const r of plan.results) {
+      const st =
+        r.status === "completed"
+          ? pc.green(r.status)
+          : r.status === "failed"
+            ? pc.red(r.status)
+            : pc.yellow(r.status);
+      let line = `  ${pc.blue(r.taskId)} ${st}`;
+      if (r.executionStatus) line += ` exec:${r.executionStatus}`;
+      if (r.error) line += ` ${pc.red(r.error)}`;
+      infoLines.push(line);
+    }
+  }
+
   p.note(infoLines.join("\n"), `Plan: ${plan.id}`);
 
   // Show execution records
@@ -122,5 +148,31 @@ function historyShow(args: string[], ctx: CLIContext): void {
       return `  ${status}  ${e.executedAt}  ${pc.dim(`(${e.durationMs}ms)`)}`;
     });
     p.note(execLines.join("\n"), "Execution History");
+  }
+}
+
+function historyVerify(ctx: CLIContext): void {
+  const root = findProjectRoot();
+  if (!root) {
+    p.log.info("No .oda/ project found. Run `oda init` first.");
+    return;
+  }
+
+  const result = verifyAuditIntegrity(root);
+
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (result.valid) {
+    p.log.success(`Audit log integrity verified: ${result.totalEntries} entries, chain intact.`);
+  } else {
+    p.log.error(
+      `Audit log integrity check failed: ${result.errors.length} error(s) in ${result.totalEntries} entries.`,
+    );
+    for (const err of result.errors) {
+      p.log.error(`  Line ${err.line} (seq ${err.seq}): ${err.reason}`);
+    }
   }
 }

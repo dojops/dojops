@@ -11,6 +11,17 @@ import { createTools } from "@odaops/api";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
 import { statusIcon, statusText, formatOutput, getOutputFileName } from "../formatter";
+import { ExitCode } from "../exit-codes";
+import {
+  findProjectRoot,
+  initProject,
+  generatePlanId,
+  savePlan,
+  loadSession,
+  saveSession,
+  appendAudit,
+  PlanState,
+} from "../state";
 
 function cliApprovalHandler(): CallbackApprovalHandler {
   return new CallbackApprovalHandler(async (request: ApprovalRequest) => {
@@ -45,7 +56,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   if (!prompt) {
     p.log.error("No prompt provided.");
     p.log.info(`  ${pc.dim("$")} oda plan <prompt>`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const provider = ctx.getProvider();
@@ -63,9 +74,43 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   });
   p.note(taskLines.join("\n"), `${graph.goal} ${pc.dim(`(${graph.tasks.length} tasks)`)}`);
 
+  // Save plan to .oda/plans/
+  let root = findProjectRoot();
+  if (!root) {
+    root = ctx.cwd;
+    initProject(root);
+  }
+
+  const planId = generatePlanId();
+  const savedPlan: PlanState = {
+    id: planId,
+    goal: graph.goal,
+    createdAt: new Date().toISOString(),
+    risk: "LOW",
+    tasks: graph.tasks.map((t) => ({
+      id: t.id,
+      tool: t.tool,
+      description: t.description,
+      dependsOn: t.dependsOn,
+    })),
+    files: [],
+    approvalStatus: "PENDING",
+  };
+  savePlan(root, savedPlan);
+
+  // Update session
+  const session = loadSession(root);
+  session.currentPlan = planId;
+  session.mode = "PLAN";
+  saveSession(root, session);
+
+  p.log.success(`Plan saved as ${pc.bold(planId)}`);
+
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify(graph, null, 2));
   }
+
+  const startTime = Date.now();
 
   if (executeMode) {
     const safeExecutor = new SafeExecutor({
@@ -123,6 +168,16 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     if (auditLog.length > 0) {
       p.log.info(pc.dim(`Audit log: ${auditLog.length} entries`));
     }
+
+    appendAudit(root, {
+      timestamp: new Date().toISOString(),
+      user: process.env.USER ?? "unknown",
+      command: `plan --execute "${prompt}"`,
+      action: "plan-execute",
+      planId,
+      status: planResult.success ? "success" : "failure",
+      durationMs: Date.now() - startTime,
+    });
 
     if (planResult.success) {
       p.log.success(pc.bold("Plan succeeded."));
@@ -197,5 +252,15 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       }
       p.log.info(pc.dim("To write files to disk, use --execute instead of plan"));
     }
+
+    appendAudit(root, {
+      timestamp: new Date().toISOString(),
+      user: process.env.USER ?? "unknown",
+      command: `plan "${prompt}"`,
+      action: "plan",
+      planId,
+      status: result.success ? "success" : "failure",
+      durationMs: Date.now() - startTime,
+    });
   }
 }

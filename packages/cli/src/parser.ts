@@ -94,6 +94,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "use",
     "profile",
     "rollback",
+    "verify",
   ]);
 
   const command: string[] = [];
