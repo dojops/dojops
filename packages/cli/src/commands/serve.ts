@@ -10,6 +10,7 @@ import {
 import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
 import { resolveToken } from "../config";
+import { findProjectRoot } from "../state";
 
 export async function serveCommand(args: string[], ctx: CLIContext): Promise<void> {
   const portArg = extractFlagValue(args, "--port");
@@ -42,6 +43,8 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   const diffAnalyzer = createDiffAnalyzer(provider);
   const store = new HistoryStore();
 
+  const projectRoot = findProjectRoot() ?? undefined;
+
   const app = createApp({
     provider,
     tools,
@@ -49,12 +52,14 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     debugger: debugger_,
     diffAnalyzer,
     store,
+    rootDir: projectRoot,
   });
 
   app.listen(port, () => {
     const noteLines = [
       `${pc.bold("Provider:")}  ${provider.name}`,
       `${pc.bold("Tools:")}     ${tools.map((t) => t.name).join(", ")}`,
+      `${pc.bold("Metrics:")}   ${projectRoot ? pc.green("enabled") : pc.yellow("disabled (no project root)")}`,
       `${pc.bold("Dashboard:")} ${pc.underline(`http://localhost:${port}`)}`,
     ];
     p.note(noteLines.join("\n"), "Server Started");

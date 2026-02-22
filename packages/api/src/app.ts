@@ -14,7 +14,9 @@ import {
   createHistoryRouter,
   createScanRouter,
   createChatRouter,
+  createMetricsRouter,
 } from "./routes";
+import { MetricsAggregator } from "./metrics";
 
 export interface AppDependencies {
   provider: LLMProvider;
@@ -24,6 +26,7 @@ export interface AppDependencies {
   diffAnalyzer: InfraDiffAnalyzer;
   store: HistoryStore;
   publicDir?: string;
+  rootDir?: string;
 }
 
 export function createApp(deps: AppDependencies): Express {
@@ -35,12 +38,17 @@ export function createApp(deps: AppDependencies): Express {
   // Serve static dashboard files
   app.use(express.static(deps.publicDir ?? path.join(__dirname, "..", "public")));
 
+  // Metrics aggregator (enabled when rootDir is provided)
+  const metricsEnabled = !!deps.rootDir;
+  const aggregator = deps.rootDir ? new MetricsAggregator(deps.rootDir) : null;
+
   // Health check
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
       provider: deps.provider.name,
       tools: deps.tools.map((t) => t.name),
+      metricsEnabled,
       timestamp: new Date().toISOString(),
     });
   });
@@ -54,6 +62,9 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/history", createHistoryRouter(deps.store));
   app.use("/api/scan", createScanRouter(deps.store));
   app.use("/api/chat", createChatRouter(deps.provider, deps.router, deps.store));
+  if (aggregator) {
+    app.use("/api/metrics", createMetricsRouter(aggregator));
+  }
 
   // Error handler (must be last)
   app.use(errorHandler);

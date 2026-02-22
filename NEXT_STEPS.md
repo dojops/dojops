@@ -6,7 +6,7 @@ This document tracks ODA's development from initial scaffold to production-grade
 
 # v1.0.0 — Shipped
 
-All six phases are complete. ODA v1.0.0 ships with 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, and a rich terminal UI.
+All seven phases are complete. ODA v1.0.0 ships with 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, observability metrics, and a rich terminal UI.
 
 ---
 
@@ -80,9 +80,23 @@ All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (opti
 
 ---
 
+## Phase 7 — Observability & Metrics Dashboard (DONE)
+
+- **MetricsAggregator** — reads `.oda/` data on-demand: plans, execution logs, scan reports, audit JSONL
+- **4 metrics API endpoints** — `GET /api/metrics` (full), `/overview`, `/security`, `/audit`
+- **Overview tab** — total plans, success rate, avg execution time, critical issues, recent activity, most used commands, failure reasons
+- **Security tab** — severity breakdown bar, findings trend chart (CSS-only bars), top issues table, scan history
+- **Audit tab** — hash-chain integrity badge (valid/invalid), status breakdown, command distribution, timeline
+- **Auto-refresh** — observability tabs poll every 30 seconds with visual indicator
+- **Doctor enhancement** — `oda doctor` shows plans count, success rate, scan count, audit chain integrity
+- **Health endpoint** — includes `metricsEnabled: boolean` flag
+- **25 new tests** — aggregator unit tests (17) + route integration tests (8)
+
+---
+
 # v2.0.0 — Planned
 
-## Phase 7 — Enterprise Readiness
+## Phase 8 — Enterprise Readiness
 
 ### RBAC & Multi-Tenancy
 

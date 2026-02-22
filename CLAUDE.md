@@ -12,7 +12,7 @@ ODA (Open DevOps Agent) is an enterprise-grade AI DevOps automation system. It g
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (555 tests)
+pnpm test               # Vitest across all packages (637 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -58,17 +58,21 @@ pnpm oda -- serve                 # in-repo alternative
 
 **API endpoints** (`@odaops/api`):
 
-| Method | Path               | Description                         |
-| ------ | ------------------ | ----------------------------------- |
-| GET    | `/api/health`      | Provider status                     |
-| POST   | `/api/generate`    | Agent-routed LLM generation         |
-| POST   | `/api/plan`        | Decompose goal + optional execution |
-| POST   | `/api/debug-ci`    | CI log diagnosis                    |
-| POST   | `/api/diff`        | Infrastructure diff analysis        |
-| GET    | `/api/agents`      | List specialist agents              |
-| GET    | `/api/history`     | Execution history                   |
-| GET    | `/api/history/:id` | Single history entry                |
-| DELETE | `/api/history`     | Clear history                       |
+| Method | Path                    | Description                                          |
+| ------ | ----------------------- | ---------------------------------------------------- |
+| GET    | `/api/health`           | Provider status + metricsEnabled                     |
+| POST   | `/api/generate`         | Agent-routed LLM generation                          |
+| POST   | `/api/plan`             | Decompose goal + optional execution                  |
+| POST   | `/api/debug-ci`         | CI log diagnosis                                     |
+| POST   | `/api/diff`             | Infrastructure diff analysis                         |
+| GET    | `/api/agents`           | List specialist agents                               |
+| GET    | `/api/history`          | Execution history                                    |
+| GET    | `/api/history/:id`      | Single history entry                                 |
+| DELETE | `/api/history`          | Clear history                                        |
+| GET    | `/api/metrics`          | Full dashboard metrics (overview + security + audit) |
+| GET    | `/api/metrics/overview` | Plan/execution/scan aggregates                       |
+| GET    | `/api/metrics/security` | Scan findings, severity trends                       |
+| GET    | `/api/metrics/audit`    | Audit chain integrity + timeline                     |
 
 **Key abstractions:**
 
@@ -86,8 +90,9 @@ pnpm oda -- serve                 # in-repo alternative
 - `SafeExecutor` (`packages/executor/src/safe-executor.ts`) — orchestrates generate → verify → approval → execute with policy checks, timeout, and audit logging
 - `ExecutionPolicy` (`packages/executor/src/types.ts`) — controls write permissions, allowed paths, denied paths, env vars, timeout, file size limits, approval requirements, `skipVerification` toggle
 - `ApprovalHandler` (`packages/executor/src/approval.ts`) — interface for approval workflows; ships with `AutoApproveHandler`, `AutoDenyHandler`, `CallbackApprovalHandler`
-- `createApp(deps)` (`packages/api/src/app.ts`) — Express app factory with dependency injection (`AppDependencies` interface). Testable without `listen()`
+- `createApp(deps)` (`packages/api/src/app.ts`) — Express app factory with dependency injection (`AppDependencies` interface, optional `rootDir` for metrics). Testable without `listen()`
 - `HistoryStore` (`packages/api/src/store.ts`) — in-memory operation history with `add/getAll/getById/clear`
+- `MetricsAggregator` (`packages/api/src/metrics/aggregator.ts`) — reads `.oda/` data on-demand (plans, execution logs, scan reports, audit JSONL) and computes `OverviewMetrics`, `SecurityMetrics`, `AuditMetrics` with hash-chain verification
 - Route factory functions (`packages/api/src/routes/*.ts`) — each returns an Express `Router`, receives dependencies via function params
 
 **Tool pattern** (all tools follow this):
@@ -112,8 +117,8 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 - `@odaops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, optional verifier, tool class, tests). Terraform, Dockerfile, and Kubernetes tools implement `verify()` for external validation
 - `@odaops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size/verification restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging with verification results, `withTimeout()` for execution limits
 - `@odaops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect`, `agents`, `history` (`list`, `show`, `verify`), `doctor`, `config`, `auth`, `serve`. Execution locking, hash-chained audit logs, plan persistence, rich TUI via `@clack/prompts`
-- `@odaops/api` — REST API (Express + cors) exposing all capabilities via 9 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, vanilla web dashboard (dark theme, 6 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History), `supertest` integration tests
-- Dev tooling — Vitest (555 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- `@odaops/api` — REST API (Express + cors) exposing all capabilities via 13 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.oda/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 9 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History, Overview, Security, Audit), 30s auto-refresh on metrics tabs, `supertest` integration tests
+- Dev tooling — Vitest (637 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap (from NEXT_STEPS.md)
 
@@ -123,7 +128,8 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 **Phase 4 — Intelligence: DONE**
 **Phase 5 — Platform: DONE** (REST API, web dashboard)
 **Phase 6 — CLI TUI Overhaul: DONE** (@clack/prompts: interactive prompts, spinners, styled panels, semantic logs)
-**Phase 7 — Enterprise Readiness (v2.0.0):** RBAC, persistent storage, observability, enterprise integrations
+**Phase 7 — Observability & Metrics Dashboard: DONE** (MetricsAggregator, 4 metrics API endpoints, 3 dashboard tabs: Overview/Security/Audit, doctor metrics summary)
+**Phase 8 — Enterprise Readiness (v2.0.0):** RBAC, persistent storage, OpenTelemetry, enterprise integrations
 
 ## Environment
 

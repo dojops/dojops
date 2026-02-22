@@ -135,6 +135,60 @@
             </svg>
             <span>History</span>
           </button>
+
+          <div class="nav-divider"></div>
+
+          <button class="nav-item" data-tab="overview">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            <span>Overview</span>
+          </button>
+          <button class="nav-item" data-tab="security">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span>Security</span>
+          </button>
+          <button class="nav-item" data-tab="audit">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+            <span>Audit</span>
+          </button>
         </nav>
 
         <div class="sidebar__footer">
@@ -457,6 +511,51 @@
             </button>
           </div>
           <div id="history-table"></div>
+        </section>
+
+        <!-- Overview -->
+        <section id="panel-overview" class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">Overview</h2>
+            <p class="panel__desc">Aggregated metrics across plans, executions, and scans</p>
+            <span class="auto-refresh-indicator" id="overview-refresh" title="Auto-refreshing every 30s"></span>
+          </div>
+          <div id="overview-content">
+            <div class="empty-state">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              <div>Loading metrics...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Security -->
+        <section id="panel-security" class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">Security</h2>
+            <p class="panel__desc">Security scan findings, trends, and vulnerability tracking</p>
+            <span class="auto-refresh-indicator" id="security-refresh" title="Auto-refreshing every 30s"></span>
+          </div>
+          <div id="security-content">
+            <div class="empty-state">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <div>Loading security metrics...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Audit -->
+        <section id="panel-audit" class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">Audit</h2>
+            <p class="panel__desc">Hash-chained audit trail integrity and command history</p>
+            <span class="auto-refresh-indicator" id="audit-refresh" title="Auto-refreshing every 30s"></span>
+          </div>
+          <div id="audit-content">
+            <div class="empty-state">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <div>Loading audit data...</div>
+            </div>
+          </div>
         </section>
       </main>
     </div>

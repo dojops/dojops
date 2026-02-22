@@ -28,3 +28,5 @@ export {
   createDiffAnalyzer,
 } from "./factory";
 export type { ProviderOptions } from "./factory";
+export { MetricsAggregator } from "./metrics";
+export type { OverviewMetrics, SecurityMetrics, AuditMetrics, DashboardMetrics } from "./metrics";

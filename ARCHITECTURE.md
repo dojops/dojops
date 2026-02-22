@@ -247,19 +247,35 @@ TUI features: interactive arrow-key prompts, spinners for async ops, styled note
 
 Express-based API with dependency injection via `createApp(deps)`:
 
-| Method | Path               | Description                    |
-| ------ | ------------------ | ------------------------------ |
-| GET    | `/api/health`      | Provider info and tool list    |
-| POST   | `/api/generate`    | Agent-routed LLM generation    |
-| POST   | `/api/plan`        | Decompose goal into task graph |
-| POST   | `/api/debug-ci`    | Diagnose CI log failures       |
-| POST   | `/api/diff`        | Analyze infrastructure diff    |
-| GET    | `/api/agents`      | List specialist agents         |
-| GET    | `/api/history`     | Execution history              |
-| GET    | `/api/history/:id` | Single history entry           |
-| DELETE | `/api/history`     | Clear history                  |
+| Method | Path                    | Description                                          |
+| ------ | ----------------------- | ---------------------------------------------------- |
+| GET    | `/api/health`           | Provider info, tool list, metricsEnabled flag        |
+| POST   | `/api/generate`         | Agent-routed LLM generation                          |
+| POST   | `/api/plan`             | Decompose goal into task graph                       |
+| POST   | `/api/debug-ci`         | Diagnose CI log failures                             |
+| POST   | `/api/diff`             | Analyze infrastructure diff                          |
+| GET    | `/api/agents`           | List specialist agents                               |
+| GET    | `/api/history`          | Execution history                                    |
+| GET    | `/api/history/:id`      | Single history entry                                 |
+| DELETE | `/api/history`          | Clear history                                        |
+| GET    | `/api/metrics`          | Full dashboard metrics (overview + security + audit) |
+| GET    | `/api/metrics/overview` | Plan/execution/scan aggregates                       |
+| GET    | `/api/metrics/security` | Scan findings, severity trends, top issues           |
+| GET    | `/api/metrics/audit`    | Audit chain integrity, command distribution          |
 
-Web dashboard: dark-themed SPA with 6 tabs (Generate, Plan, Debug CI, Infra Diff, Agents, History).
+Web dashboard: dark-themed SPA with 9 tabs (Generate, Plan, Debug CI, Infra Diff, Agents, History, Overview, Security, Audit).
+
+### 9. Metrics Aggregation (`@odaops/api`)
+
+`MetricsAggregator` reads `.oda/` project data on-demand and computes dashboard metrics:
+
+- **OverviewMetrics** — total plans, executions, success rate, avg execution time, scan findings (critical/high), most used commands, failure reasons, recent activity timeline
+- **SecurityMetrics** — total scans, severity breakdown (critical/high/medium/low), category breakdown (security/dependency/iac/secrets), findings trend (grouped by date), top recurring issues, scan history
+- **AuditMetrics** — total entries, hash-chain integrity verification (recomputes SHA-256 hashes), status breakdown (success/failure/cancelled), command distribution, timeline
+
+Data sources: `.oda/plans/*.json`, `.oda/execution-logs/*.json`, `.oda/scan-history/*.json`, `.oda/history/audit.jsonl`.
+
+Enabled when `rootDir` is passed to `createApp()` (the CLI `serve` command auto-detects via `findProjectRoot()`). Gracefully returns empty/zero values when no `.oda/` data exists.
 
 ---
 
@@ -325,15 +341,17 @@ ODA implements defense-in-depth with seven layers between LLM output and infrast
 
 ## Test Coverage
 
-555 tests across all packages:
+637 tests across all packages:
 
 | Package            | Tests   |
 | ------------------ | ------- |
 | `@odaops/core`     | 155     |
 | `@odaops/cli`      | 144     |
 | `@odaops/tools`    | 111     |
-| `@odaops/api`      | 70      |
+| `@odaops/api`      | 95      |
 | `@odaops/executor` | 40      |
+| `@odaops/scanner`  | 29      |
 | `@odaops/planner`  | 28      |
+| `@odaops/session`  | 28      |
 | `@odaops/sdk`      | 7       |
-| **Total**          | **555** |
+| **Total**          | **637** |

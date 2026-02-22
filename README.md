@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/version-1.0.0-00e5ff?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/tests-555%20passed-22c55e?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-637%20passed-22c55e?style=flat-square" alt="Tests" />
   <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
   <img src="https://img.shields.io/badge/agents-16-8b5cf6?style=flat-square" alt="Agents" />
   <img src="https://img.shields.io/badge/providers-5-ef4444?style=flat-square" alt="Providers" />
@@ -97,7 +97,7 @@ oda serve                             # Start at http://localhost:3000
 oda serve --port=8080                 # Custom port
 ```
 
-The dashboard provides a visual interface with dark industrial terminal aesthetic for all ODA capabilities — generate configs, decompose plans, debug CI logs, analyze infra diffs, browse agents, and review execution history.
+The dashboard provides a visual interface with dark industrial terminal aesthetic for all ODA capabilities — generate configs, decompose plans, debug CI logs, analyze infra diffs, browse agents, review execution history, and monitor observability metrics (overview, security findings, audit trail integrity).
 
 ---
 
@@ -128,14 +128,17 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Observability
 
+- **Metrics dashboard** — Overview (plans, success rate, execution time, critical issues), Security (severity breakdown, findings trend, top issues, scan history), and Audit (chain integrity, status breakdown, command distribution, timeline) — with 30-second auto-refresh
 - **Hash-chained audit logs** — Tamper-evident JSONL audit trail with SHA-256 chain integrity verification via `oda history verify`
 - **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
 - **Rich terminal UI** — Interactive prompts, spinners, styled panels, semantic log levels — powered by `@clack/prompts`
+- **Doctor diagnostics** — `oda doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity)
 
 ### Platform
 
-- **REST API** — 9 endpoints exposing all capabilities over HTTP with Zod request validation
-- **Web dashboard** — Single-page app with dark terminal aesthetic, toast notifications, copy-to-clipboard, responsive layout
+- **REST API** — 13 endpoints exposing all capabilities over HTTP with Zod request validation
+- **Web dashboard** — Single-page app with dark terminal aesthetic, 9 tabs, toast notifications, copy-to-clipboard, responsive layout
+- **Metrics API** — 4 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`) powered by `MetricsAggregator` reading `.oda/` data on-demand
 - **Configuration profiles** — Named profiles for switching between providers/environments
 
 ---
@@ -304,17 +307,21 @@ All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (opti
 
 ### Endpoints
 
-| Method   | Path               | Description                      |
-| -------- | ------------------ | -------------------------------- |
-| `GET`    | `/api/health`      | Provider info, tool list, status |
-| `POST`   | `/api/generate`    | Agent-routed LLM generation      |
-| `POST`   | `/api/plan`        | Decompose goal into task graph   |
-| `POST`   | `/api/debug-ci`    | Diagnose CI log failures         |
-| `POST`   | `/api/diff`        | Analyze infrastructure diff      |
-| `GET`    | `/api/agents`      | List specialist agents           |
-| `GET`    | `/api/history`     | Execution history                |
-| `GET`    | `/api/history/:id` | Single history entry             |
-| `DELETE` | `/api/history`     | Clear history                    |
+| Method   | Path                    | Description                                          |
+| -------- | ----------------------- | ---------------------------------------------------- |
+| `GET`    | `/api/health`           | Provider info, tool list, metricsEnabled flag        |
+| `POST`   | `/api/generate`         | Agent-routed LLM generation                          |
+| `POST`   | `/api/plan`             | Decompose goal into task graph                       |
+| `POST`   | `/api/debug-ci`         | Diagnose CI log failures                             |
+| `POST`   | `/api/diff`             | Analyze infrastructure diff                          |
+| `GET`    | `/api/agents`           | List specialist agents                               |
+| `GET`    | `/api/history`          | Execution history                                    |
+| `GET`    | `/api/history/:id`      | Single history entry                                 |
+| `DELETE` | `/api/history`          | Clear history                                        |
+| `GET`    | `/api/metrics`          | Full dashboard metrics (overview + security + audit) |
+| `GET`    | `/api/metrics/overview` | Plan/execution/scan aggregates                       |
+| `GET`    | `/api/metrics/security` | Scan findings, severity trends, top issues           |
+| `GET`    | `/api/metrics/audit`    | Audit chain integrity, command distribution          |
 
 ### Examples
 
@@ -405,7 +412,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 555 tests
+pnpm test               # Run all 637 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -440,11 +447,13 @@ packages/
 | `@odaops/core`     | 155     |
 | `@odaops/cli`      | 144     |
 | `@odaops/tools`    | 111     |
-| `@odaops/api`      | 70      |
+| `@odaops/api`      | 95      |
 | `@odaops/executor` | 40      |
+| `@odaops/scanner`  | 29      |
 | `@odaops/planner`  | 28      |
+| `@odaops/session`  | 28      |
 | `@odaops/sdk`      | 7       |
-| **Total**          | **555** |
+| **Total**          | **637** |
 
 ---
 
@@ -469,9 +478,10 @@ Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `ap
 - 12 DevOps tools — CI/CD, IaC, containers, monitoring, system services
 - Sandboxed execution — Policy engine, approval workflows, resume/recovery
 - Multi-agent system — 16 specialist agents, CI debugging, infra diff analysis
-- Platform — REST API (9 endpoints), web dashboard
+- Platform — REST API (13 endpoints), web dashboard (9 tabs)
 - CLI TUI — Rich terminal UI with `@clack/prompts`
 - Enterprise foundations — Hash-chained audit logs, execution locking, config profiles
+- Observability dashboard — Overview, Security, and Audit metrics tabs with auto-refresh
 
 ### v2.0.0 (planned)
 

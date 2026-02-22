@@ -1,4 +1,4 @@
-/* global document, fetch, navigator, setTimeout */
+/* global document, fetch, navigator, setTimeout, setInterval, clearInterval */
 
 const API = "/api";
 
@@ -168,6 +168,12 @@ document.querySelectorAll(".nav-item").forEach((item) => {
 
     if (item.dataset.tab === "agents") loadAgents();
     if (item.dataset.tab === "history") loadHistory();
+    if (item.dataset.tab === "overview") loadOverview();
+    if (item.dataset.tab === "security") loadSecurity();
+    if (item.dataset.tab === "audit") loadAudit();
+
+    // Manage auto-refresh for metrics tabs
+    updateAutoRefresh(item.dataset.tab);
 
     closeSidebar();
   });
@@ -803,6 +809,503 @@ $("history-clear").addEventListener("click", async () => {
     toast("error", "Clear failed", "Could not clear history.");
   }
 });
+
+// ── Auto-refresh for metrics tabs ─────────────────────
+
+let autoRefreshTimer = null;
+const REFRESH_INTERVAL = 30000;
+const metricsTabLoaders = {
+  overview: () => loadOverview(true),
+  security: () => loadSecurity(true),
+  audit: () => loadAudit(true),
+};
+
+function updateAutoRefresh(tab) {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+
+  // Deactivate all refresh indicators
+  for (const id of ["overview-refresh", "security-refresh", "audit-refresh"]) {
+    const el = $(id);
+    if (el) el.classList.remove("active");
+  }
+
+  const loader = metricsTabLoaders[tab];
+  if (loader) {
+    const indicator = $(tab + "-refresh");
+    if (indicator) indicator.classList.add("active");
+    autoRefreshTimer = setInterval(loader, REFRESH_INTERVAL);
+  }
+}
+
+// ── Overview ──────────────────────────────────────────
+
+async function loadOverview() {
+  const container = $("overview-content");
+  try {
+    const data = await apiCall("/metrics/overview");
+    container.innerHTML = renderOverview(data);
+  } catch (err) {
+    if (err.message.includes("404") || err.message.includes("Cannot GET")) {
+      container.innerHTML = renderMetricsEmpty(
+        "No project data",
+        "Start the server from a project directory with .oda/ to see metrics.",
+      );
+    } else {
+      container.innerHTML = '<div class="empty-state">' + escapeHtml(err.message) + "</div>";
+    }
+  }
+}
+
+function renderOverview(data) {
+  let html = '<div class="stat-grid">';
+
+  html += renderStatCard(data.totalPlans, "Total Plans", "");
+  html += renderStatCard(
+    data.successRate + "%",
+    "Success Rate",
+    data.successRate >= 80 ? "success" : data.successRate >= 50 ? "warning" : "error",
+  );
+  html += renderStatCard(
+    data.avgExecutionTimeMs > 0 ? formatDuration(data.avgExecutionTimeMs) : "N/A",
+    "Avg Exec Time",
+    "",
+  );
+  html += renderStatCard(
+    data.criticalFindings,
+    "Critical Issues",
+    data.criticalFindings > 0 ? "error" : "success",
+  );
+  html += "</div>";
+
+  // Recent activity
+  if (data.recentActivity.length > 0) {
+    html += '<div class="metrics-section">';
+    html += '<div class="metrics-section__title">Recent Activity</div>';
+    html += '<div class="timeline-list">';
+    for (const item of data.recentActivity.slice(0, 10)) {
+      const statusChip =
+        item.status === "success"
+          ? '<span class="chip chip--success">ok</span>'
+          : item.status === "failure"
+            ? '<span class="chip chip--error">fail</span>'
+            : '<span class="chip chip--muted">' + escapeHtml(item.status) + "</span>";
+      html +=
+        '<div class="timeline-entry">' +
+        '<span class="timeline-entry__time">' +
+        escapeHtml(new Date(item.timestamp).toLocaleString()) +
+        "</span>" +
+        '<span class="timeline-entry__action">' +
+        escapeHtml(item.action) +
+        "</span>" +
+        statusChip +
+        (item.planId
+          ? '<span class="chip chip--muted">' + escapeHtml(item.planId) + "</span>"
+          : "") +
+        "</div>";
+    }
+    html += "</div></div>";
+  }
+
+  // Two-column layout for agent usage and failure reasons
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">';
+
+  // Most used agents
+  if (data.mostUsedAgents.length > 0) {
+    html += '<div class="metrics-section glass-card">';
+    html += '<div class="metrics-section__title">Most Used Commands</div>';
+    html +=
+      '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
+    for (const item of data.mostUsedAgents.slice(0, 8)) {
+      html +=
+        '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
+        escapeHtml(item.agent) +
+        '</code></td><td style="font-family:var(--font-mono)">' +
+        item.count +
+        "</td></tr>";
+    }
+    html += "</tbody></table></div>";
+  }
+
+  // Failure reasons
+  if (data.failureReasons.length > 0) {
+    html += '<div class="metrics-section glass-card">';
+    html += '<div class="metrics-section__title">Failure Reasons</div>';
+    html +=
+      '<table class="metric-table"><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody>';
+    for (const item of data.failureReasons.slice(0, 8)) {
+      html +=
+        '<tr><td style="color:var(--error)">' +
+        escapeHtml(item.reason) +
+        '</td><td style="font-family:var(--font-mono)">' +
+        item.count +
+        "</td></tr>";
+    }
+    html += "</tbody></table></div>";
+  } else {
+    html +=
+      '<div class="metrics-section glass-card"><div class="metrics-section__title">Failure Reasons</div><div style="color:var(--text-muted);font-size:13px;padding:8px 0">No failures recorded</div></div>';
+  }
+
+  html += "</div>";
+  return html;
+}
+
+function renderStatCard(value, label, variant) {
+  const cls = variant ? " stat-card__value--" + variant : "";
+  return (
+    '<div class="stat-card">' +
+    '<div class="stat-card__value' +
+    cls +
+    '">' +
+    escapeHtml(String(value)) +
+    "</div>" +
+    '<div class="stat-card__label">' +
+    escapeHtml(label) +
+    "</div>" +
+    "</div>"
+  );
+}
+
+function formatDuration(ms) {
+  if (ms < 1000) return ms + "ms";
+  if (ms < 60000) return (ms / 1000).toFixed(1) + "s";
+  return (ms / 60000).toFixed(1) + "m";
+}
+
+// ── Security ──────────────────────────────────────────
+
+async function loadSecurity() {
+  const container = $("security-content");
+  try {
+    const data = await apiCall("/metrics/security");
+    container.innerHTML = renderSecurity(data);
+  } catch (err) {
+    if (err.message.includes("404") || err.message.includes("Cannot GET")) {
+      container.innerHTML = renderMetricsEmpty(
+        "No security data",
+        "Run scans to populate security metrics.",
+      );
+    } else {
+      container.innerHTML = '<div class="empty-state">' + escapeHtml(err.message) + "</div>";
+    }
+  }
+}
+
+function renderSecurity(data) {
+  if (data.totalScans === 0) {
+    return renderMetricsEmpty("No scans yet", "Run a security scan to see findings here.");
+  }
+
+  let html = '<div class="stat-grid">';
+  html += renderStatCard(data.totalScans, "Total Scans", "");
+  html += renderStatCard(
+    data.totalFindings,
+    "Total Findings",
+    data.totalFindings > 0 ? "warning" : "success",
+  );
+  html += renderStatCard(
+    data.bySeverity.critical,
+    "Critical",
+    data.bySeverity.critical > 0 ? "error" : "success",
+  );
+  html += renderStatCard(
+    data.bySeverity.high,
+    "High",
+    data.bySeverity.high > 0 ? "warning" : "success",
+  );
+  html += "</div>";
+
+  // Severity bar
+  var total = data.totalFindings || 1;
+  html += '<div class="metrics-section">';
+  html += '<div class="metrics-section__title">Severity Distribution</div>';
+  html += '<div class="severity-bar">';
+  html +=
+    '<div class="severity-bar__seg severity-bar__seg--critical" style="width:' +
+    (data.bySeverity.critical / total) * 100 +
+    '%"></div>';
+  html +=
+    '<div class="severity-bar__seg severity-bar__seg--high" style="width:' +
+    (data.bySeverity.high / total) * 100 +
+    '%"></div>';
+  html +=
+    '<div class="severity-bar__seg severity-bar__seg--medium" style="width:' +
+    (data.bySeverity.medium / total) * 100 +
+    '%"></div>';
+  html +=
+    '<div class="severity-bar__seg severity-bar__seg--low" style="width:' +
+    (data.bySeverity.low / total) * 100 +
+    '%"></div>';
+  html += "</div>";
+  html += '<div class="severity-legend">';
+  html +=
+    '<div class="severity-legend__item"><span class="severity-legend__dot severity-legend__dot--critical"></span>Critical (' +
+    data.bySeverity.critical +
+    ")</div>";
+  html +=
+    '<div class="severity-legend__item"><span class="severity-legend__dot severity-legend__dot--high"></span>High (' +
+    data.bySeverity.high +
+    ")</div>";
+  html +=
+    '<div class="severity-legend__item"><span class="severity-legend__dot severity-legend__dot--medium"></span>Medium (' +
+    data.bySeverity.medium +
+    ")</div>";
+  html +=
+    '<div class="severity-legend__item"><span class="severity-legend__dot severity-legend__dot--low"></span>Low (' +
+    data.bySeverity.low +
+    ")</div>";
+  html += "</div></div>";
+
+  // Findings trend chart
+  if (data.findingsTrend.length > 0) {
+    html += '<div class="metrics-section glass-card">';
+    html += '<div class="metrics-section__title">Findings Trend</div>';
+    var maxVal = Math.max(
+      1,
+      ...data.findingsTrend.map(function (d) {
+        return d.critical + d.high + d.medium + d.low;
+      }),
+    );
+    html += '<div class="trend-chart">';
+    for (var i = 0; i < data.findingsTrend.length; i++) {
+      var point = data.findingsTrend[i];
+      var cH = (point.critical / maxVal) * 100;
+      var hH = (point.high / maxVal) * 100;
+      var mH = (point.medium / maxVal) * 100;
+      var lH = (point.low / maxVal) * 100;
+      html += '<div class="trend-chart__bar-group">';
+      if (point.low > 0)
+        html +=
+          '<div class="trend-chart__bar trend-chart__bar--low" style="height:' + lH + '%"></div>';
+      if (point.medium > 0)
+        html +=
+          '<div class="trend-chart__bar trend-chart__bar--medium" style="height:' +
+          mH +
+          '%"></div>';
+      if (point.high > 0)
+        html +=
+          '<div class="trend-chart__bar trend-chart__bar--high" style="height:' + hH + '%"></div>';
+      if (point.critical > 0)
+        html +=
+          '<div class="trend-chart__bar trend-chart__bar--critical" style="height:' +
+          cH +
+          '%"></div>';
+      html += '<span class="trend-chart__label">' + escapeHtml(point.date.slice(5)) + "</span>";
+      html += "</div>";
+    }
+    html += "</div></div>";
+  }
+
+  // Top issues table
+  if (data.topIssues.length > 0) {
+    html += '<div class="metrics-section glass-card">';
+    html += '<div class="metrics-section__title">Top Issues</div>';
+    html +=
+      '<table class="metric-table"><thead><tr><th>Issue</th><th>Severity</th><th>Tool</th><th>Count</th></tr></thead><tbody>';
+    for (var j = 0; j < data.topIssues.length; j++) {
+      var issue = data.topIssues[j];
+      var sevClass = "severity-" + issue.severity;
+      html +=
+        "<tr>" +
+        '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+        escapeHtml(issue.message) +
+        "</td>" +
+        '<td class="' +
+        sevClass +
+        '">' +
+        escapeHtml(issue.severity) +
+        "</td>" +
+        '<td><code style="font-family:var(--font-mono);font-size:11px">' +
+        escapeHtml(issue.tool) +
+        "</code></td>" +
+        '<td style="font-family:var(--font-mono)">' +
+        issue.count +
+        "</td>" +
+        "</tr>";
+    }
+    html += "</tbody></table></div>";
+  }
+
+  // Scan history
+  if (data.scanHistory.length > 0) {
+    html += '<div class="metrics-section glass-card">';
+    html += '<div class="metrics-section__title">Scan History</div>';
+    html +=
+      '<table class="metric-table"><thead><tr><th>ID</th><th>Time</th><th>Total</th><th>Critical</th><th>High</th><th>Duration</th></tr></thead><tbody>';
+    for (var k = 0; k < data.scanHistory.length; k++) {
+      var scan = data.scanHistory[k];
+      html +=
+        "<tr>" +
+        '<td><code style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">' +
+        escapeHtml(scan.id) +
+        "</code></td>" +
+        "<td>" +
+        escapeHtml(new Date(scan.timestamp).toLocaleString()) +
+        "</td>" +
+        '<td style="font-family:var(--font-mono)">' +
+        scan.total +
+        "</td>" +
+        '<td class="severity-critical" style="font-family:var(--font-mono)">' +
+        scan.critical +
+        "</td>" +
+        '<td class="severity-high" style="font-family:var(--font-mono)">' +
+        scan.high +
+        "</td>" +
+        '<td style="font-family:var(--font-mono);color:var(--text-muted)">' +
+        formatDuration(scan.durationMs) +
+        "</td>" +
+        "</tr>";
+    }
+    html += "</tbody></table></div>";
+  }
+
+  return html;
+}
+
+// ── Audit ─────────────────────────────────────────────
+
+async function loadAudit() {
+  const container = $("audit-content");
+  try {
+    const data = await apiCall("/metrics/audit");
+    container.innerHTML = renderAudit(data);
+  } catch (err) {
+    if (err.message.includes("404") || err.message.includes("Cannot GET")) {
+      container.innerHTML = renderMetricsEmpty(
+        "No audit data",
+        "Start using ODA commands to build an audit trail.",
+      );
+    } else {
+      container.innerHTML = '<div class="empty-state">' + escapeHtml(err.message) + "</div>";
+    }
+  }
+}
+
+function renderAudit(data) {
+  if (data.totalEntries === 0) {
+    return renderMetricsEmpty(
+      "No audit entries",
+      "Execute ODA commands to populate the audit trail.",
+    );
+  }
+
+  let html = "";
+
+  // Chain integrity badge
+  var valid = data.chainIntegrity.valid;
+  var badgeClass = valid ? "integrity-badge--valid" : "integrity-badge--invalid";
+  var badgeIcon = valid
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  html +=
+    '<div class="integrity-badge ' +
+    badgeClass +
+    '">' +
+    '<div class="integrity-badge__icon">' +
+    badgeIcon +
+    "</div>" +
+    "<div>" +
+    '<div class="integrity-badge__text">' +
+    (valid ? "Chain Integrity Valid" : "Chain Integrity Broken") +
+    "</div>" +
+    '<div class="integrity-badge__detail">' +
+    data.chainIntegrity.totalEntries +
+    " entries, " +
+    data.chainIntegrity.errors +
+    " error(s)</div>" +
+    "</div></div>";
+
+  // Status breakdown
+  html += '<div class="status-breakdown">';
+  html +=
+    '<div class="status-breakdown__item"><span class="status-breakdown__count status-breakdown__count--success">' +
+    data.byStatus.success +
+    '</span><span class="status-breakdown__label">Success</span></div>';
+  html +=
+    '<div class="status-breakdown__item"><span class="status-breakdown__count status-breakdown__count--failure">' +
+    data.byStatus.failure +
+    '</span><span class="status-breakdown__label">Failure</span></div>';
+  html +=
+    '<div class="status-breakdown__item"><span class="status-breakdown__count status-breakdown__count--cancelled">' +
+    data.byStatus.cancelled +
+    '</span><span class="status-breakdown__label">Cancelled</span></div>';
+  html += "</div>";
+
+  // Command distribution
+  if (data.byCommand.length > 0) {
+    html += '<div class="metrics-section glass-card">';
+    html += '<div class="metrics-section__title">Command Distribution</div>';
+    html +=
+      '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
+    for (var i = 0; i < data.byCommand.length; i++) {
+      var item = data.byCommand[i];
+      html +=
+        '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
+        escapeHtml(item.command) +
+        '</code></td><td style="font-family:var(--font-mono)">' +
+        item.count +
+        "</td></tr>";
+    }
+    html += "</tbody></table></div>";
+  }
+
+  // Timeline
+  if (data.timeline.length > 0) {
+    html += '<div class="metrics-section">';
+    html += '<div class="metrics-section__title">Timeline</div>';
+    html += '<div class="timeline-list">';
+    var max = Math.min(data.timeline.length, 30);
+    for (var j = 0; j < max; j++) {
+      var entry = data.timeline[j];
+      var statusChip =
+        entry.status === "success"
+          ? '<span class="chip chip--success">ok</span>'
+          : entry.status === "failure"
+            ? '<span class="chip chip--error">fail</span>'
+            : '<span class="chip chip--muted">' + escapeHtml(entry.status) + "</span>";
+      html +=
+        '<div class="timeline-entry" style="animation-delay:' +
+        j * 0.02 +
+        's">' +
+        '<span class="timeline-entry__time">' +
+        escapeHtml(new Date(entry.timestamp).toLocaleString()) +
+        "</span>" +
+        '<span class="timeline-entry__cmd">' +
+        escapeHtml(entry.command) +
+        "</span>" +
+        '<span class="timeline-entry__action">' +
+        escapeHtml(entry.action) +
+        "</span>" +
+        statusChip +
+        (entry.planId
+          ? '<span class="chip chip--muted">' + escapeHtml(entry.planId) + "</span>"
+          : "") +
+        "</div>";
+    }
+    html += "</div></div>";
+  }
+
+  return html;
+}
+
+// ── Shared metrics helpers ────────────────────────────
+
+function renderMetricsEmpty(title, detail) {
+  return (
+    '<div class="metrics-empty">' +
+    '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>' +
+    '<div class="metrics-empty__title">' +
+    escapeHtml(title) +
+    "</div>" +
+    "<div>" +
+    escapeHtml(detail) +
+    "</div>" +
+    "</div>"
+  );
+}
 
 // ── Init ─────────────────────────────────────────────────
 

@@ -9,7 +9,13 @@ import {
 } from "@odaops/core";
 import { CLIContext } from "../types";
 import { getConfigPath } from "../config";
-import { findProjectRoot } from "../state";
+import {
+  findProjectRoot,
+  listPlans,
+  listExecutions,
+  listScanReports,
+  verifyAuditIntegrity,
+} from "../state";
 import {
   resolveBinary,
   resolveModule,
@@ -144,6 +150,41 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     }
 
     checks.push({ name: `System: ${tool.name}`, status, detail });
+  }
+
+  // Project metrics summary
+  if (root && fs.existsSync(`${root}/.oda`)) {
+    const plans = listPlans(root);
+    const executions = listExecutions(root);
+    const scanReports = listScanReports(root);
+    const auditResult = verifyAuditIntegrity(root);
+
+    const successCount = executions.filter((e) => e.status === "SUCCESS").length;
+    const successRate =
+      executions.length > 0 ? Math.round((successCount / executions.length) * 100) : 0;
+
+    checks.push({
+      name: "Plans",
+      status: "pass",
+      detail: `${plans.length} plan(s)`,
+    });
+    checks.push({
+      name: "Executions",
+      status: executions.length > 0 ? "pass" : "warn",
+      detail: executions.length > 0 ? `${executions.length} (${successRate}% success)` : "None",
+    });
+    checks.push({
+      name: "Security scans",
+      status: "pass",
+      detail: `${scanReports.length} scan(s)`,
+    });
+    checks.push({
+      name: "Audit chain",
+      status: auditResult.valid ? "pass" : "fail",
+      detail: auditResult.valid
+        ? `Valid (${auditResult.totalEntries} entries)`
+        : `Invalid — ${auditResult.errors.length} error(s) in ${auditResult.totalEntries} entries`,
+    });
   }
 
   // Output
