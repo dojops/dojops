@@ -12,7 +12,7 @@ ODA (Open DevOps Agent) is an enterprise-grade AI DevOps automation system. It g
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (442 tests)
+pnpm test               # Vitest across all packages (555 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -79,11 +79,12 @@ pnpm oda -- serve                 # in-repo alternative
 - `SpecialistAgent` (`packages/core/src/agents/specialist.ts`) — domain-specific LLM agent with system prompt (16 specialists: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python)
 - `CIDebugger` (`packages/core/src/agents/ci-debugger.ts`) — analyzes CI logs, produces structured `CIDiagnosis` (error type, root cause, fixes, confidence)
 - `InfraDiffAnalyzer` (`packages/core/src/agents/infra-diff.ts`) — analyzes infra diffs, produces `InfraDiffAnalysis` (risk level, cost impact, security impact, recommendations)
-- `BaseTool<TInput>` (`packages/sdk/src/tool.ts`) — abstract class with Zod `inputSchema`, auto `validate()`, abstract `generate()`, optional `execute()`
+- `BaseTool<TInput>` (`packages/sdk/src/tool.ts`) — abstract class with Zod `inputSchema`, auto `validate()`, abstract `generate()`, optional `execute()`, optional `verify()` for external tool validation
+- `VerificationResult` / `VerificationIssue` (`packages/sdk/src/tool.ts`) — structured verification output from external tools (terraform validate, hadolint, kubectl dry-run)
 - `decompose()` (`packages/planner/src/decomposer.ts`) — LLM call → `TaskGraph` with structured output
 - `PlannerExecutor` (`packages/planner/src/executor.ts`) — Kahn's topological sort, `$ref:<taskId>` input wiring, failure cascading
-- `SafeExecutor` (`packages/executor/src/safe-executor.ts`) — orchestrates generate → approval → execute with policy checks, timeout, and audit logging
-- `ExecutionPolicy` (`packages/executor/src/types.ts`) — controls write permissions, allowed paths, denied paths, env vars, timeout, file size limits, approval requirements
+- `SafeExecutor` (`packages/executor/src/safe-executor.ts`) — orchestrates generate → verify → approval → execute with policy checks, timeout, and audit logging
+- `ExecutionPolicy` (`packages/executor/src/types.ts`) — controls write permissions, allowed paths, denied paths, env vars, timeout, file size limits, approval requirements, `skipVerification` toggle
 - `ApprovalHandler` (`packages/executor/src/approval.ts`) — interface for approval workflows; ships with `AutoApproveHandler`, `AutoDenyHandler`, `CallbackApprovalHandler`
 - `createApp(deps)` (`packages/api/src/app.ts`) — Express app factory with dependency injection (`AppDependencies` interface). Testable without `listen()`
 - `HistoryStore` (`packages/api/src/store.ts`) — in-memory operation history with `add/getAll/getById/clear`
@@ -95,7 +96,8 @@ pnpm oda -- serve                 # in-repo alternative
 schemas.ts     → Zod input/output schemas
 detector.ts    → (optional) filesystem detection
 generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
-*-tool.ts      → BaseTool subclass: generate() returns data, execute() writes to disk
+verifier.ts    → (optional) external tool validation (terraform validate, hadolint, kubectl)
+*-tool.ts      → BaseTool subclass: generate() returns data, verify() validates, execute() writes to disk
 ```
 
 **Design principles** (from ARCHITECTURE.md): No blind execution. Structured JSON outputs. Schema validation before tool execution. Idempotent operations.
@@ -105,13 +107,13 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 **Implemented (Phase 1 + 2 + 3 + 4 + 5 + 6 + CLI hardening):**
 
 - `@odaops/core` — DevOpsAgent + 5 LLM providers (OpenAI, Anthropic, Ollama, DeepSeek, Gemini) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + dynamic model selection via `listModels()` + multi-agent system (AgentRouter, 16 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
-- `@odaops/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`
+- `@odaops/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`, `VerificationResult`/`VerificationIssue` types, optional `verify()` interface
 - `@odaops/planner` — TaskGraph/TaskNode Zod schemas, `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution + `completedTaskIds` skip for resume
-- `@odaops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, tool class, tests)
-- `@odaops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging, `withTimeout()` for execution limits
+- `@odaops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, optional verifier, tool class, tests). Terraform, Dockerfile, and Kubernetes tools implement `verify()` for external validation
+- `@odaops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size/verification restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging with verification results, `withTimeout()` for execution limits
 - `@odaops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect`, `agents`, `history` (`list`, `show`, `verify`), `doctor`, `config`, `auth`, `serve`. Execution locking, hash-chained audit logs, plan persistence, rich TUI via `@clack/prompts`
 - `@odaops/api` — REST API (Express + cors) exposing all capabilities via 9 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, vanilla web dashboard (dark theme, 6 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History), `supertest` integration tests
-- Dev tooling — Vitest (442 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (555 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap (from NEXT_STEPS.md)
 

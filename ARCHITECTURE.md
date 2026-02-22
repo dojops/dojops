@@ -38,7 +38,7 @@ Execution Engine (Sandboxed, policy-enforced, approval-gated, audit-logged)
 @odaops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                      Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
 @odaops/core         LLM abstraction + 16 specialist agents + CI debugger + infra diff
-@odaops/sdk          BaseTool<T> abstract class with Zod validation
+@odaops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
 ```
 
 **Dependency flow** (top → bottom):
@@ -156,8 +156,11 @@ abstract class BaseTool<TInput> {
   validate(input: unknown): TInput; // Zod validation
   abstract generate(input: TInput): Promise<Result>; // LLM generation
   execute?(input: TInput): Promise<void>; // Optional: write to disk
+  verify?(data: unknown): Promise<VerificationResult>; // Optional: validate generated output
 }
 ```
+
+Tools that implement `verify()` can validate their generated output with external tools (e.g. `terraform validate`, `hadolint`, `kubectl --dry-run=client`) before files are written. Verification is opt-in via `--verify` and gracefully skips if the external binary is not found.
 
 ---
 
@@ -165,20 +168,20 @@ abstract class BaseTool<TInput> {
 
 12 tools covering CI/CD, IaC, containers, monitoring, and system services:
 
-| Tool           | Directory         | Detector | Serialization                | Output Files                        |
-| -------------- | ----------------- | -------- | ---------------------------- | ----------------------------------- |
-| GitHub Actions | `github/`         | Yes      | js-yaml                      | `.github/workflows/ci.yml`          |
-| Terraform      | `terraform/`      | Yes      | Custom HCL builder           | `main.tf`, `variables.tf`           |
-| Kubernetes     | `kubernetes/`     | No       | js-yaml                      | K8s manifests                       |
-| Helm           | `helm/`           | No       | js-yaml                      | `Chart.yaml`, `values.yaml`         |
-| Ansible        | `ansible/`        | No       | js-yaml                      | `{name}.yml`                        |
-| Docker Compose | `docker-compose/` | Yes      | js-yaml                      | `docker-compose.yml`                |
-| Dockerfile     | `dockerfile/`     | Yes      | Custom string builder        | `Dockerfile`, `.dockerignore`       |
-| Nginx          | `nginx/`          | No       | Custom string builder        | `nginx.conf`                        |
-| Makefile       | `makefile/`       | Yes      | Custom string builder (tabs) | `Makefile`                          |
-| GitLab CI      | `gitlab-ci/`      | Yes      | js-yaml                      | `.gitlab-ci.yml`                    |
-| Prometheus     | `prometheus/`     | No       | js-yaml                      | `prometheus.yml`, `alert-rules.yml` |
-| Systemd        | `systemd/`        | No       | Custom string builder (INI)  | `{name}.service`                    |
+| Tool           | Directory         | Detector | Verifier             | Serialization                | Output Files                        |
+| -------------- | ----------------- | -------- | -------------------- | ---------------------------- | ----------------------------------- |
+| GitHub Actions | `github/`         | Yes      | —                    | js-yaml                      | `.github/workflows/ci.yml`          |
+| Terraform      | `terraform/`      | Yes      | `terraform validate` | Custom HCL builder           | `main.tf`, `variables.tf`           |
+| Kubernetes     | `kubernetes/`     | No       | `kubectl --dry-run`  | js-yaml                      | K8s manifests                       |
+| Helm           | `helm/`           | No       | —                    | js-yaml                      | `Chart.yaml`, `values.yaml`         |
+| Ansible        | `ansible/`        | No       | —                    | js-yaml                      | `{name}.yml`                        |
+| Docker Compose | `docker-compose/` | Yes      | —                    | js-yaml                      | `docker-compose.yml`                |
+| Dockerfile     | `dockerfile/`     | Yes      | `hadolint`           | Custom string builder        | `Dockerfile`, `.dockerignore`       |
+| Nginx          | `nginx/`          | No       | —                    | Custom string builder        | `nginx.conf`                        |
+| Makefile       | `makefile/`       | Yes      | —                    | Custom string builder (tabs) | `Makefile`                          |
+| GitLab CI      | `gitlab-ci/`      | Yes      | —                    | js-yaml                      | `.gitlab-ci.yml`                    |
+| Prometheus     | `prometheus/`     | No       | —                    | js-yaml                      | `prometheus.yml`, `alert-rules.yml` |
+| Systemd        | `systemd/`        | No       | —                    | Custom string builder (INI)  | `{name}.service`                    |
 
 All tools follow the same file pattern:
 
@@ -186,7 +189,8 @@ All tools follow the same file pattern:
 schemas.ts     → Zod input/output schemas
 detector.ts    → (optional) filesystem detection of project context
 generator.ts   → LLM call with structured schema → serialization (YAML/HCL/custom)
-*-tool.ts      → BaseTool subclass: generate() returns data, execute() writes to disk
+verifier.ts    → (optional) external tool validation (terraform validate, hadolint, kubectl)
+*-tool.ts      → BaseTool subclass: generate() returns data, verify() validates, execute() writes
 index.ts       → barrel exports
 *.test.ts      → Vitest tests
 ```
@@ -197,11 +201,12 @@ index.ts       → barrel exports
 
 Responsible for safe, auditable execution of generated configs:
 
-- **SafeExecutor** — orchestrates generate → approval → execute pipeline
-- **ExecutionPolicy** — controls write permissions, allowed/denied paths, env vars, timeouts, file size limits
+- **SafeExecutor** — orchestrates generate → **verify** → approval → execute pipeline
+- **Verification step** — after generate succeeds, calls `tool.verify(data)` if the tool implements it and `skipVerification` is false. Failed verification blocks execution. Missing external binaries gracefully skip with a warning
+- **ExecutionPolicy** — controls write permissions, allowed/denied paths, env vars, timeouts, file size limits, and `skipVerification` toggle (default: true, opt-in via `--verify`)
 - **ApprovalHandler** — interface with three implementations: `AutoApproveHandler`, `AutoDenyHandler`, `CallbackApprovalHandler`
 - **SandboxedFs** — path-restricted file operations with per-file audit logging
-- **AuditEntry** — structured audit records for every operation
+- **AuditEntry** — structured audit records for every operation, including verification results
 - **withTimeout()** — execution time limits
 
 ---
@@ -215,6 +220,7 @@ oda "prompt"           → Agent-routed generation (default command)
 oda plan "goal"        → LLM task decomposition
 oda validate           → Schema validation of saved plan
 oda apply              → Execute plan with approval workflow
+oda apply --verify     → Execute with external config verification
 oda apply --resume     → Resume partially-failed plan
 oda apply --dry-run    → Preview without executing
 oda destroy            → Remove generated artifacts
@@ -259,7 +265,7 @@ Web dashboard: dark-themed SPA with 6 tabs (Generate, Plan, Debug CI, Infra Diff
 
 ## Security Architecture
 
-ODA implements defense-in-depth with six layers between LLM output and infrastructure changes:
+ODA implements defense-in-depth with seven layers between LLM output and infrastructure changes:
 
 ```
   LLM Response
@@ -273,6 +279,11 @@ ODA implements defense-in-depth with six layers between LLM output and infrastru
   │  Input   │  Zod schema validation on every tool input
   │Validation│  and LLM response (parseAndValidate)
   └────┬─────┘
+       │
+  ┌────▼─────┐
+  │  Deep     │  Optional external tool verification (--verify):
+  │Verification│  terraform validate, hadolint, kubectl dry-run
+  └────┬──────┘
        │
   ┌────▼────┐
   │ Policy   │  ExecutionPolicy: allowWrite, allowedPaths,
@@ -314,15 +325,15 @@ ODA implements defense-in-depth with six layers between LLM output and infrastru
 
 ## Test Coverage
 
-442 tests across all packages:
+555 tests across all packages:
 
 | Package            | Tests   |
 | ------------------ | ------- |
-| `@odaops/cli`      | 140     |
-| `@odaops/tools`    | 101     |
+| `@odaops/core`     | 155     |
+| `@odaops/cli`      | 144     |
+| `@odaops/tools`    | 111     |
 | `@odaops/api`      | 70      |
-| `@odaops/core`     | 62      |
-| `@odaops/executor` | 36      |
+| `@odaops/executor` | 40      |
 | `@odaops/planner`  | 28      |
-| `@odaops/sdk`      | 5       |
-| **Total**          | **442** |
+| `@odaops/sdk`      | 7       |
+| **Total**          | **555** |

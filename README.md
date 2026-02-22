@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/version-1.0.0-00e5ff?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/tests-456%20passed-22c55e?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-555%20passed-22c55e?style=flat-square" alt="Tests" />
   <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
   <img src="https://img.shields.io/badge/agents-16-8b5cf6?style=flat-square" alt="Agents" />
   <img src="https://img.shields.io/badge/providers-5-ef4444?style=flat-square" alt="Providers" />
@@ -114,13 +114,15 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 - **12 DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
 - **Schema-validated** — Every tool input and LLM output is validated against Zod schemas before execution
+- **Deep verification** — Optional `--verify` runs generated configs through external validators (terraform validate, hadolint, kubectl dry-run) before writing files
 - **Structured output** — Provider-native JSON modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, Gemini `responseMimeType`)
 
 ### Execution
 
 - **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution (Kahn's algorithm)
+- **Verification pipeline** — Optional `verify()` step between generate and execute validates output with external tools (terraform validate, hadolint, kubectl --dry-run=client). Graceful fallback when tools are missing
 - **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths
-- **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, and file size limits
+- **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, file size limits, and verification toggle
 - **Approval workflows** — Auto-approve, auto-deny, or interactive callback with diff preview before any write operation
 - **Resume on failure** — `oda apply --resume` skips completed tasks and retries failed ones
 
@@ -148,7 +150,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 @odaops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                      Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
 @odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff
-@odaops/sdk          BaseTool<T> abstract class with Zod validation
+@odaops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
 ```
 
 ### Package Dependency Flow
@@ -171,6 +173,7 @@ Full architecture details in [ARCHITECTURE.md](ARCHITECTURE.md).
 | `oda plan <prompt>`           | Decompose goal into dependency-aware task graph |
 | `oda plan --execute <prompt>` | Plan + execute with approval workflow           |
 | `oda apply`                   | Execute a saved plan                            |
+| `oda apply --verify`          | Execute with external config verification       |
 | `oda apply --resume`          | Resume a partially-failed plan                  |
 | `oda validate`                | Validate plan against schemas                   |
 | `oda explain`                 | LLM explains a plan in plain language           |
@@ -216,6 +219,7 @@ oda "Set up monitoring with Prometheus"
 # Plan and execute
 oda plan "Set up CI/CD for a Node.js app"
 oda plan --execute --yes "Create CI for Node app"
+oda apply --verify
 oda apply --dry-run
 oda apply --resume --yes
 
@@ -243,6 +247,7 @@ ODA implements defense-in-depth for AI-driven infrastructure changes:
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                             |
 | **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                      |
+| **Deep verification**   | Optional external tool validation: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write |
 | **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits            |
 | **Approval workflows**  | Configurable handlers: auto-approve, auto-deny, or interactive callback with diff preview                           |
 | **Sandboxed execution** | `SandboxedFs` restricts file operations to policy-allowed paths with audit logging                                  |
@@ -253,22 +258,22 @@ ODA implements defense-in-depth for AI-driven infrastructure changes:
 
 ## Tools
 
-| Tool           | Serialization      | Output Files                        |
-| -------------- | ------------------ | ----------------------------------- |
-| GitHub Actions | YAML               | `.github/workflows/ci.yml`          |
-| Terraform      | HCL                | `main.tf`, `variables.tf`           |
-| Kubernetes     | YAML               | K8s manifests                       |
-| Helm           | YAML               | `Chart.yaml`, `values.yaml`         |
-| Ansible        | YAML               | `{name}.yml`                        |
-| Docker Compose | YAML               | `docker-compose.yml`                |
-| Dockerfile     | Dockerfile syntax  | `Dockerfile`, `.dockerignore`       |
-| Nginx          | Nginx conf         | `nginx.conf`                        |
-| Makefile       | Make syntax (tabs) | `Makefile`                          |
-| GitLab CI      | YAML               | `.gitlab-ci.yml`                    |
-| Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` |
-| Systemd        | INI                | `{name}.service`                    |
+| Tool           | Serialization      | Output Files                        | Verifier             |
+| -------------- | ------------------ | ----------------------------------- | -------------------- |
+| GitHub Actions | YAML               | `.github/workflows/ci.yml`          | —                    |
+| Terraform      | HCL                | `main.tf`, `variables.tf`           | `terraform validate` |
+| Kubernetes     | YAML               | K8s manifests                       | `kubectl --dry-run`  |
+| Helm           | YAML               | `Chart.yaml`, `values.yaml`         | —                    |
+| Ansible        | YAML               | `{name}.yml`                        | —                    |
+| Docker Compose | YAML               | `docker-compose.yml`                | —                    |
+| Dockerfile     | Dockerfile syntax  | `Dockerfile`, `.dockerignore`       | `hadolint`           |
+| Nginx          | Nginx conf         | `nginx.conf`                        | —                    |
+| Makefile       | Make syntax (tabs) | `Makefile`                          | —                    |
+| GitLab CI      | YAML               | `.gitlab-ci.yml`                    | —                    |
+| Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | —                    |
+| Systemd        | INI                | `{name}.service`                    | —                    |
 
-All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `*-tool.ts` → tests.
+All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `verifier.ts` (optional) → `*-tool.ts` → tests.
 
 ---
 
@@ -400,7 +405,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 456 tests
+pnpm test               # Run all 555 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -425,21 +430,21 @@ packages/
   planner/        Task graph decomposition + topological executor
   executor/       SafeExecutor + policy engine + approval workflows + audit log
   tools/          12 DevOps tools
-  sdk/            BaseTool<T> abstract class + Zod re-export
+  sdk/            BaseTool<T> abstract class + Zod re-export + verification types
 ```
 
 ### Test Coverage
 
 | Package            | Tests   |
 | ------------------ | ------- |
-| `@odaops/cli`      | 140     |
-| `@odaops/tools`    | 101     |
-| `@odaops/core`     | 76      |
+| `@odaops/core`     | 155     |
+| `@odaops/cli`      | 144     |
+| `@odaops/tools`    | 111     |
 | `@odaops/api`      | 70      |
-| `@odaops/executor` | 36      |
+| `@odaops/executor` | 40      |
 | `@odaops/planner`  | 28      |
-| `@odaops/sdk`      | 5       |
-| **Total**          | **456** |
+| `@odaops/sdk`      | 7       |
+| **Total**          | **555** |
 
 ---
 
