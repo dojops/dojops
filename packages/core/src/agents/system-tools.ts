@@ -114,6 +114,43 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     ],
   },
   {
+    name: "trivy",
+    description:
+      "Comprehensive security scanner for vulnerabilities, misconfigurations, and secrets",
+    latestVersion: "0.69.1",
+    archiveType: "tar.gz",
+    binaryName: "trivy",
+    verifyCommand: ["trivy", "--version"],
+    urlTemplate:
+      "https://github.com/aquasecurity/trivy/releases/download/v{{version}}/trivy_{{version}}_{{platform}}-{{arch}}.tar.gz",
+    platformMap: { linux: "Linux", darwin: "macOS", win32: "Windows" },
+    archMap: { x64: "64bit", arm64: "ARM64" },
+    supportedTargets: [
+      { platform: "linux", arch: "x64" },
+      { platform: "linux", arch: "arm64" },
+      { platform: "darwin", arch: "x64" },
+      { platform: "darwin", arch: "arm64" },
+    ],
+  },
+  {
+    name: "gitleaks",
+    description: "Secret detection tool for scanning repositories for hardcoded credentials",
+    latestVersion: "8.30.0",
+    archiveType: "tar.gz",
+    binaryName: "gitleaks",
+    verifyCommand: ["gitleaks", "version"],
+    urlTemplate:
+      "https://github.com/gitleaks/gitleaks/releases/download/v{{version}}/gitleaks_{{version}}_{{platform}}_{{arch}}.tar.gz",
+    platformMap: { linux: "linux", darwin: "darwin", win32: "windows" },
+    archMap: { x64: "x64", arm64: "arm64" },
+    supportedTargets: [
+      { platform: "linux", arch: "x64" },
+      { platform: "linux", arch: "arm64" },
+      { platform: "darwin", arch: "x64" },
+      { platform: "darwin", arch: "arm64" },
+    ],
+  },
+  {
     name: "ansible",
     description: "IT automation tool for configuration management and deployment",
     latestVersion: "11.1.0",

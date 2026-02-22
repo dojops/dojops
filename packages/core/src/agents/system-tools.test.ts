@@ -46,6 +46,24 @@ describe("system-tools", () => {
       const tool = findSystemTool("ansible")!;
       expect(buildDownloadUrl(tool)).toBeUndefined();
     });
+
+    it("interpolates trivy URL correctly", () => {
+      const tool = findSystemTool("trivy")!;
+      const url = buildDownloadUrl(tool, "0.69.1");
+      expect(url).toBeDefined();
+      expect(url).toContain("aquasecurity/trivy");
+      expect(url).toContain("0.69.1");
+      expect(url).toContain(".tar.gz");
+    });
+
+    it("interpolates gitleaks URL correctly", () => {
+      const tool = findSystemTool("gitleaks")!;
+      const url = buildDownloadUrl(tool, "8.30.0");
+      expect(url).toBeDefined();
+      expect(url).toContain("gitleaks/gitleaks");
+      expect(url).toContain("8.30.0");
+      expect(url).toContain(".tar.gz");
+    });
   });
 
   describe("buildBinaryPathInArchive", () => {
@@ -72,8 +90,8 @@ describe("system-tools", () => {
   });
 
   describe("SYSTEM_TOOLS registry", () => {
-    it("contains 5 tool definitions", () => {
-      expect(SYSTEM_TOOLS).toHaveLength(5);
+    it("contains 7 tool definitions", () => {
+      expect(SYSTEM_TOOLS).toHaveLength(7);
     });
 
     it("all tools have required fields", () => {

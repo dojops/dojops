@@ -238,6 +238,26 @@ describe("MetricsAggregator", () => {
       expect(result.byCategory).toEqual({ security: 1, dependency: 1, iac: 1, secrets: 1 });
     });
 
+    it("handles uppercase severity and category from scanners", () => {
+      writeScanReport(odaDir, {
+        id: "scan-upper",
+        timestamp: "2024-01-01T00:00:00Z",
+        findings: [
+          { message: "vuln1", severity: "CRITICAL", tool: "trivy", category: "SECURITY" },
+          { message: "vuln2", severity: "HIGH", tool: "npm-audit", category: "DEPENDENCY" },
+          { message: "vuln3", severity: "MEDIUM", tool: "checkov", category: "IAC" },
+          { message: "vuln4", severity: "LOW", tool: "gitleaks", category: "SECRETS" },
+        ],
+      });
+
+      const agg = new MetricsAggregator(rootDir);
+      const result = agg.getSecurity();
+
+      expect(result.totalFindings).toBe(4);
+      expect(result.bySeverity).toEqual({ critical: 1, high: 1, medium: 1, low: 1 });
+      expect(result.byCategory).toEqual({ security: 1, dependency: 1, iac: 1, secrets: 1 });
+    });
+
     it("groups findings trend by date", () => {
       writeScanReport(odaDir, {
         id: "scan-1",

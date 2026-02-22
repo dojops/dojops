@@ -157,8 +157,10 @@ export class MetricsAggregator {
         highFindings += report.summary.high;
       } else if (report.findings) {
         totalFindings += report.findings.length;
-        criticalFindings += report.findings.filter((f) => f.severity === "critical").length;
-        highFindings += report.findings.filter((f) => f.severity === "high").length;
+        criticalFindings += report.findings.filter(
+          (f) => f.severity.toUpperCase() === "CRITICAL",
+        ).length;
+        highFindings += report.findings.filter((f) => f.severity.toUpperCase() === "HIGH").length;
       }
     }
 
@@ -224,10 +226,10 @@ export class MetricsAggregator {
     for (const report of scanReports) {
       const findings = report.findings || [];
       for (const f of findings) {
-        const sev = f.severity as keyof typeof bySeverity;
+        const sev = f.severity.toLowerCase() as keyof typeof bySeverity;
         if (sev in bySeverity) bySeverity[sev]++;
 
-        const cat = (f.category || "security") as keyof typeof byCategory;
+        const cat = (f.category || "security").toLowerCase() as keyof typeof byCategory;
         if (cat in byCategory) byCategory[cat]++;
 
         const key = f.message;
@@ -260,7 +262,7 @@ export class MetricsAggregator {
       }
       const bucket = dateMap.get(date)!;
       for (const f of report.findings || []) {
-        const sev = f.severity as keyof typeof bucket;
+        const sev = f.severity.toLowerCase() as keyof typeof bucket;
         if (sev in bucket) bucket[sev]++;
       }
     }
@@ -282,8 +284,13 @@ export class MetricsAggregator {
         timestamp: r.timestamp,
         total: r.summary?.total ?? r.findings?.length ?? 0,
         critical:
-          r.summary?.critical ?? r.findings?.filter((f) => f.severity === "critical").length ?? 0,
-        high: r.summary?.high ?? r.findings?.filter((f) => f.severity === "high").length ?? 0,
+          r.summary?.critical ??
+          r.findings?.filter((f) => f.severity.toUpperCase() === "CRITICAL").length ??
+          0,
+        high:
+          r.summary?.high ??
+          r.findings?.filter((f) => f.severity.toUpperCase() === "HIGH").length ??
+          0,
         durationMs: r.durationMs ?? 0,
       }));
 

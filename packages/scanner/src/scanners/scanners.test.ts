@@ -7,6 +7,7 @@ vi.mock("node:fs");
 
 const mockExecFileSync = vi.mocked(child_process.execFileSync);
 const mockExistsSync = vi.mocked(fs.existsSync);
+const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockReaddirSync = vi.mocked(fs.readdirSync);
 
 beforeEach(() => {
@@ -500,26 +501,37 @@ describe("scanGitleaks", () => {
 
   it("parses gitleaks JSON array output", async () => {
     const { scanGitleaks } = await import("./gitleaks");
-    mockExecFileSync.mockReturnValue(
-      JSON.stringify([
-        {
-          RuleID: "aws-access-key-id",
-          Description: "AWS Access Key ID",
-          File: "config.js",
-          StartLine: 12,
-          EndLine: 12,
-          Secret: "AKIA...",
-        },
-        {
-          RuleID: "generic-api-key",
-          Description: "Generic API Key",
-          File: ".env",
-          StartLine: 3,
-          EndLine: 3,
-          Secret: "sk-...",
-        },
-      ]),
-    );
+    const jsonOutput = JSON.stringify([
+      {
+        RuleID: "aws-access-key-id",
+        Description: "AWS Access Key ID",
+        File: "config.js",
+        StartLine: 12,
+        EndLine: 12,
+        Secret: "AKIA...",
+      },
+      {
+        RuleID: "generic-api-key",
+        Description: "Generic API Key",
+        File: ".env",
+        StartLine: 3,
+        EndLine: 3,
+        Secret: "sk-...",
+      },
+    ]);
+    // gitleaks exits 1 when leaks found; report is written to temp file
+    const execErr = new Error("leaks found") as Error & {
+      stdout?: string;
+      stderr?: string;
+      status?: number;
+    };
+    execErr.status = 1;
+    execErr.stdout = "";
+    execErr.stderr = "";
+    mockExecFileSync.mockImplementation(() => {
+      throw execErr;
+    });
+    mockReadFileSync.mockReturnValue(jsonOutput);
 
     const result = await scanGitleaks("/project");
     expect(result.findings).toHaveLength(2);
@@ -528,9 +540,13 @@ describe("scanGitleaks", () => {
     expect(result.findings[1].file).toBe(".env");
   });
 
-  it("returns empty findings on clean scan (exit 0, empty output)", async () => {
+  it("returns empty findings on clean scan (exit 0, no report file)", async () => {
     const { scanGitleaks } = await import("./gitleaks");
     mockExecFileSync.mockReturnValue("");
+    // readFileSync throws because temp file doesn't exist (no leaks → no report written)
+    mockReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const result = await scanGitleaks("/project");
     expect(result.findings).toHaveLength(0);
     expect(result.skipped).toBeUndefined();
