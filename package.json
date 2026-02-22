@@ -20,6 +20,7 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "test": "turbo test",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "turbo test:e2e",
     "test:smoke": "turbo test:smoke",
     "format": "prettier --write .",
@@ -47,6 +48,7 @@
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.56.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "vitest": "^4.0.18"
   }
 }

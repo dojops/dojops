@@ -24,7 +24,9 @@
   <img src="https://img.shields.io/badge/version-1.0.0-00e5ff?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/tests-637%20passed-22c55e?style=flat-square" alt="Tests" />
+  <a href="https://github.com/MHChlagou/oda/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MHChlagou/oda/ci.yml?style=flat-square&label=CI" alt="CI" /></a>
+  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/oda/badges/coverage-badge.json&style=flat-square" alt="Coverage" />
+  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/oda/badges/security-badge.json&style=flat-square" alt="Security" />
   <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
   <img src="https://img.shields.io/badge/agents-16-8b5cf6?style=flat-square" alt="Agents" />
   <img src="https://img.shields.io/badge/providers-5-ef4444?style=flat-square" alt="Providers" />

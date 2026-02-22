@@ -1,0 +1,192 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  lint:
+    name: Lint & Format
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm format:check
+
+  test:
+    name: Test & Coverage
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    outputs:
+      audit-passed: ${{ steps.audit.outputs.passed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run security audit
+        id: audit
+        run: |
+          if pnpm audit --audit-level=moderate; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  badges:
+    name: Update Badges
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+      - name: Generate coverage badge
+        id: coverage
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE=$(node -e "
+              const s = require('./coverage/coverage-summary.json');
+              console.log(s.total.lines.pct);
+            ")
+          else
+            COVERAGE="0"
+          fi
+          echo "pct=${COVERAGE}" >> "$GITHUB_OUTPUT"
+
+          if [ "$(echo "$COVERAGE >= 90" | bc -l)" = "1" ]; then
+            COLOR="brightgreen"
+          elif [ "$(echo "$COVERAGE >= 80" | bc -l)" = "1" ]; then
+            COLOR="green"
+          elif [ "$(echo "$COVERAGE >= 70" | bc -l)" = "1" ]; then
+            COLOR="yellowgreen"
+          elif [ "$(echo "$COVERAGE >= 60" | bc -l)" = "1" ]; then
+            COLOR="yellow"
+          else
+            COLOR="red"
+          fi
+          echo "color=${COLOR}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate security badge
+        id: security
+        run: |
+          if [ "${{ needs.security.outputs.audit-passed }}" = "true" ]; then
+            echo "message=passing" >> "$GITHUB_OUTPUT"
+            echo "color=brightgreen" >> "$GITHUB_OUTPUT"
+          else
+            echo "message=vulnerabilities found" >> "$GITHUB_OUTPUT"
+            echo "color=yellow" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create badge JSON files
+        env:
+          COVERAGE_PCT: ${{ steps.coverage.outputs.pct }}
+          COVERAGE_COLOR: ${{ steps.coverage.outputs.color }}
+          SECURITY_MSG: ${{ steps.security.outputs.message }}
+          SECURITY_COLOR: ${{ steps.security.outputs.color }}
+        run: |
+          mkdir -p /tmp/badges
+          node -e "
+            const fs = require('fs');
+            fs.writeFileSync('/tmp/badges/coverage-badge.json', JSON.stringify({
+              schemaVersion: 1,
+              label: 'coverage',
+              message: process.env.COVERAGE_PCT + '%',
+              color: process.env.COVERAGE_COLOR
+            }, null, 2));
+            fs.writeFileSync('/tmp/badges/security-badge.json', JSON.stringify({
+              schemaVersion: 1,
+              label: 'security',
+              message: process.env.SECURITY_MSG,
+              color: process.env.SECURITY_COLOR
+            }, null, 2));
+          "
+          echo "Generated badges:"
+          cat /tmp/badges/coverage-badge.json
+          cat /tmp/badges/security-badge.json
+
+      - name: Deploy to badges branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          cp -r /tmp/badges /tmp/badge-deploy
+
+          if git ls-remote --heads origin badges | grep -q badges; then
+            git fetch origin badges
+            git checkout badges
+          else
+            git checkout --orphan badges
+            git rm -rf . 2>/dev/null || true
+          fi
+
+          cp /tmp/badge-deploy/*.json .
+          git add *.json
+          git diff --staged --quiet && echo "No badge changes" && exit 0
+          git commit -m "Update badges [skip ci]"
+          git push origin badges --force
