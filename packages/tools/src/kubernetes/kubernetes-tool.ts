@@ -1,9 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@odaops/sdk";
+import { BaseTool, ToolOutput, VerificationResult } from "@odaops/sdk";
 import { LLMProvider } from "@odaops/core";
 import { KubernetesInputSchema, KubernetesInput } from "./schemas";
 import { generateKubernetesManifest, manifestToYaml } from "./generator";
+import { verifyKubernetesYaml } from "./verifier";
 
 export class KubernetesTool extends BaseTool<KubernetesInput> {
   name = "kubernetes";
@@ -40,6 +41,12 @@ export class KubernetesTool extends BaseTool<KubernetesInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as { yaml?: string };
+    const yaml = d?.yaml ?? "";
+    return verifyKubernetesYaml(yaml);
   }
 
   async execute(input: KubernetesInput): Promise<ToolOutput> {

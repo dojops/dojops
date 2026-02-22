@@ -64,6 +64,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const dryRun = hasFlag(args, "--dry-run");
   const resume = hasFlag(args, "--resume");
   const installPackages = hasFlag(args, "--install-packages");
+  const verify = hasFlag(args, "--verify");
   const planId = args.find((a) => !a.startsWith("-"));
 
   let plan: PlanState | null;
@@ -163,6 +164,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         allowWrite: true,
         requireApproval: !autoApprove,
         timeoutMs: 60_000,
+        skipVerification: !verify,
       },
       approvalHandler: autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
     });
@@ -258,6 +260,21 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       p.log.message(
         `${icon} ${pc.blue(execResult.taskId)} ${statusText(execResult.status)} (approval: ${approval})`,
       );
+
+      // Render verification issues if present
+      if (execResult.verification?.issues.length) {
+        for (const issue of execResult.verification.issues) {
+          const line = issue.line ? `:${issue.line}` : "";
+          const rule = issue.rule ? ` [${issue.rule}]` : "";
+          if (issue.severity === "error") {
+            p.log.error(`  ${pc.red("\u2717")} ${issue.message}${line}${rule}`);
+          } else if (issue.severity === "warning") {
+            p.log.warn(`  ${pc.yellow("!")} ${issue.message}${line}${rule}`);
+          } else {
+            p.log.info(pc.dim(`    ${issue.message}${line}${rule}`));
+          }
+        }
+      }
     }
 
     const durationMs = Date.now() - startTime;

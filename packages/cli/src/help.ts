@@ -83,6 +83,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--dry-run")}              Preview changes without executing`);
   console.log(`  ${pc.cyan("--resume")}               Resume a partially-applied plan`);
   console.log(`  ${pc.cyan("--yes")}                  Auto-approve all executions`);
+  console.log(
+    `  ${pc.cyan("--verify")}               Validate generated configs with external tools`,
+  );
   console.log(`  ${pc.cyan("--install-packages")}     Run package install after apply`);
   console.log();
   console.log(pc.bold("SERVE OPTIONS"));
@@ -188,6 +191,9 @@ export function printCommandHelp(command: string): void {
       console.log(
         `  ${pc.cyan("--yes")}                Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
       );
+      console.log(
+        `  ${pc.cyan("--verify")}            Validate generated configs (terraform, hadolint, kubectl)`,
+      );
       console.log(`  ${pc.cyan("--install-packages")}  Run package install after successful apply`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Executes a previously saved plan. If no plan ID is given, uses the`);
@@ -202,6 +208,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} oda apply`);
       console.log(`  ${pc.dim("$")} oda apply --dry-run`);
       console.log(`  ${pc.dim("$")} oda apply --resume --yes`);
+      console.log(`  ${pc.dim("$")} oda apply --verify`);
       console.log(`  ${pc.dim("$")} oda apply --install-packages`);
       console.log(`  ${pc.dim("$")} oda apply plan-abc123`);
       console.log();

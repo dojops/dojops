@@ -1,10 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@odaops/sdk";
+import { BaseTool, ToolOutput, VerificationResult } from "@odaops/sdk";
 import { LLMProvider } from "@odaops/core";
 import { DockerfileInputSchema, DockerfileInput } from "./schemas";
 import { detectDockerContext } from "./detector";
 import { generateDockerfileConfig, dockerfileToString, dockerignoreToString } from "./generator";
+import { verifyDockerfile as verifyDockerfileContent } from "./verifier";
 
 export class DockerfileTool extends BaseTool<DockerfileInput> {
   name = "dockerfile";
@@ -49,6 +50,12 @@ export class DockerfileTool extends BaseTool<DockerfileInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as { dockerfile?: string };
+    const dockerfile = d?.dockerfile ?? "";
+    return verifyDockerfileContent(dockerfile);
   }
 
   async execute(input: DockerfileInput): Promise<ToolOutput> {

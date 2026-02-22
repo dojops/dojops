@@ -1,4 +1,4 @@
-import { DevOpsTool, ToolOutput } from "@odaops/sdk";
+import { DevOpsTool, ToolOutput, VerificationResult } from "@odaops/sdk";
 import { ExecutionPolicy, ExecutionResult, AuditEntry, ApprovalDecision } from "./types";
 import { ApprovalHandler, AutoApproveHandler, buildPreview } from "./approval";
 import { DEFAULT_POLICY, PolicyViolationError } from "./policy";
@@ -53,10 +53,35 @@ export class SafeExecutor {
       });
     }
 
+    // Verification step: run after generate, before approval/execute
+    let verification: VerificationResult | undefined;
+    if (tool.verify && !this.policy.skipVerification) {
+      try {
+        verification = await withTimeout(tool.verify(generateOutput.data), this.policy.timeoutMs);
+
+        if (!verification.passed) {
+          const errorMessages = verification.issues
+            .filter((i) => i.severity === "error")
+            .map((i) => i.message)
+            .join("; ");
+          return this.buildResult(taskId, tool.name, "failed", startTime, {
+            error: `Verification failed: ${errorMessages}`,
+            output: generateOutput.data,
+            verification,
+            filesWritten,
+          });
+        }
+      } catch {
+        // Graceful degradation: verification errors don't block execution
+        verification = undefined;
+      }
+    }
+
     if (!tool.execute) {
       return this.buildResult(taskId, tool.name, "completed", startTime, {
         output: generateOutput.data,
         approval: "skipped",
+        verification,
         filesWritten,
       });
     }
@@ -76,6 +101,7 @@ export class SafeExecutor {
         return this.buildResult(taskId, tool.name, "denied", startTime, {
           output: generateOutput.data,
           approval,
+          verification,
           filesWritten,
         });
       }
@@ -91,6 +117,7 @@ export class SafeExecutor {
           error: executeOutput.error,
           output: executeOutput.data,
           approval,
+          verification,
           filesWritten,
         });
       }
@@ -98,6 +125,7 @@ export class SafeExecutor {
       return this.buildResult(taskId, tool.name, "completed", startTime, {
         output: executeOutput.data,
         approval,
+        verification,
         filesWritten,
       });
     } catch (err) {
@@ -108,6 +136,7 @@ export class SafeExecutor {
       return this.buildResult(taskId, tool.name, status, startTime, {
         error: err instanceof Error ? err.message : String(err),
         approval,
+        verification,
         filesWritten,
       });
     }
@@ -126,6 +155,7 @@ export class SafeExecutor {
       output?: unknown;
       error?: string;
       approval?: ApprovalDecision;
+      verification?: VerificationResult;
       filesWritten: string[];
     },
   ): ExecutionResult {
@@ -140,6 +170,7 @@ export class SafeExecutor {
       approval,
       status,
       error: details.error,
+      verification: details.verification,
       filesWritten: details.filesWritten,
       durationMs,
     };
@@ -151,6 +182,7 @@ export class SafeExecutor {
       approval,
       output: details.output,
       error: details.error,
+      verification: details.verification,
       durationMs,
       auditLog: auditEntry,
     };

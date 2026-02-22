@@ -72,4 +72,5 @@ export const DEFAULT_POLICY: ExecutionPolicy = {
   timeoutMs: 30_000,
   maxFileSizeBytes: 1_048_576,
   requireApproval: true,
+  skipVerification: true,
 };

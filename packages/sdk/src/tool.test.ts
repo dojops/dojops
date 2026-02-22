@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BaseTool, ToolOutput, z } from "./tool";
+import { BaseTool, ToolOutput, VerificationResult, z } from "./tool";
 
 const EchoInputSchema = z.object({
   message: z.string().min(1),
@@ -50,5 +50,25 @@ describe("BaseTool", () => {
     const tool = new EchoTool();
     expect(tool.name).toBe("echo");
     expect(tool.description).toBe("Echoes the input message");
+  });
+
+  it("does not have verify by default", () => {
+    const tool = new EchoTool();
+    expect(tool.verify).toBeUndefined();
+  });
+
+  it("supports optional verify method on subclass", async () => {
+    class VerifiableEchoTool extends EchoTool {
+      async verify(): Promise<VerificationResult> {
+        return { passed: true, tool: "echo-verify", issues: [] };
+      }
+    }
+
+    const tool = new VerifiableEchoTool();
+    expect(tool.verify).toBeDefined();
+    const result = await tool.verify!({});
+    expect(result.passed).toBe(true);
+    expect(result.tool).toBe("echo-verify");
+    expect(result.issues).toHaveLength(0);
   });
 });

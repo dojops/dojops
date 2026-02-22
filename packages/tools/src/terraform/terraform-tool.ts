@@ -1,10 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@odaops/sdk";
+import { BaseTool, ToolOutput, VerificationResult } from "@odaops/sdk";
 import { LLMProvider } from "@odaops/core";
 import { TerraformInputSchema, TerraformInput } from "./schemas";
 import { detectTerraformProject } from "./detector";
 import { generateTerraformConfig, configToHcl } from "./generator";
+import { verifyTerraformHcl } from "./verifier";
 
 export class TerraformTool extends BaseTool<TerraformInput> {
   name = "terraform";
@@ -42,6 +43,12 @@ export class TerraformTool extends BaseTool<TerraformInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as { hcl?: string };
+    const hcl = d?.hcl ?? "";
+    return verifyTerraformHcl(hcl);
   }
 
   async execute(input: TerraformInput): Promise<ToolOutput> {
