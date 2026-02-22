@@ -170,31 +170,80 @@ Full architecture details in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ### Commands
 
+#### Generation & Planning
+
 | Command                       | Description                                     |
 | ----------------------------- | ----------------------------------------------- |
 | `oda <prompt>`                | Generate DevOps config (default command)        |
+| `oda generate <prompt>`       | Explicit generation (same as default)           |
 | `oda plan <prompt>`           | Decompose goal into dependency-aware task graph |
 | `oda plan --execute <prompt>` | Plan + execute with approval workflow           |
-| `oda apply`                   | Execute a saved plan                            |
+| `oda apply [<plan-id>]`       | Execute a saved plan                            |
 | `oda apply --verify`          | Execute with external config verification       |
 | `oda apply --resume`          | Resume a partially-failed plan                  |
-| `oda validate`                | Validate plan against schemas                   |
-| `oda explain`                 | LLM explains a plan in plain language           |
-| `oda debug ci <log>`          | Diagnose CI/CD log failures                     |
-| `oda analyze diff <diff>`     | Analyze infrastructure diff for risk            |
-| `oda inspect <target>`        | Inspect config, policy, agents, session         |
-| `oda agents list`             | List specialist agents                          |
-| `oda agents info <name>`      | Show agent details                              |
-| `oda history list`            | View execution history                          |
-| `oda history show <id>`       | Show plan details and results                   |
-| `oda history verify`          | Verify audit log hash chain integrity           |
-| `oda config`                  | Configure provider, model, tokens (interactive) |
-| `oda auth login`              | Authenticate with LLM provider                  |
-| `oda serve`                   | Start API server + web dashboard                |
-| `oda doctor`                  | System health diagnostics                       |
-| `oda init`                    | Initialize `.oda/` project directory            |
-| `oda destroy <plan-id>`       | Remove generated artifacts from a plan          |
-| `oda rollback <plan-id>`      | Reverse an applied plan                         |
+| `oda apply --dry-run`         | Preview changes without writing files           |
+| `oda validate [<plan-id>]`    | Validate plan against schemas                   |
+| `oda explain [<plan-id>]`     | LLM explains a plan in plain language           |
+
+#### Diagnostics & Analysis
+
+| Command                   | Description                                        |
+| ------------------------- | -------------------------------------------------- |
+| `oda debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)    |
+| `oda analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security) |
+| `oda scan`                | Security scan: vulnerabilities, deps, IaC, secrets |
+| `oda scan --security`     | Run security scanners only (trivy, gitleaks)       |
+| `oda scan --deps`         | Run dependency audit only (npm, pip)               |
+| `oda scan --iac`          | Run IaC scanners only (checkov, hadolint)          |
+| `oda scan --fix`          | Generate and apply LLM-powered remediation         |
+
+#### Interactive
+
+| Command                   | Description                              |
+| ------------------------- | ---------------------------------------- |
+| `oda chat`                | Interactive multi-turn AI DevOps session |
+| `oda chat --session=NAME` | Resume or create a named session         |
+| `oda chat --resume`       | Resume the most recent session           |
+| `oda chat --agent=NAME`   | Pin conversation to a specialist agent   |
+
+Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
+
+#### Agents & Tools
+
+| Command                    | Description                                      |
+| -------------------------- | ------------------------------------------------ |
+| `oda agents list`          | List all 16 specialist agents                    |
+| `oda agents info <name>`   | Show agent details and tool dependencies         |
+| `oda tools list`           | List system tools with install status            |
+| `oda tools install <name>` | Download tool into sandbox (~/.oda/tools/)       |
+| `oda tools remove <name>`  | Remove a sandboxed tool                          |
+| `oda tools clean`          | Remove all sandbox tools                         |
+| `oda inspect <target>`     | Inspect config, policy, agents, or session state |
+
+#### History & Audit
+
+| Command                      | Description                            |
+| ---------------------------- | -------------------------------------- |
+| `oda history list`           | View execution history                 |
+| `oda history show <plan-id>` | Show plan details and per-task results |
+| `oda history verify`         | Verify audit log hash chain integrity  |
+| `oda destroy <plan-id>`      | Remove generated artifacts from a plan |
+| `oda rollback <plan-id>`     | Reverse an applied plan                |
+
+#### Configuration & Server
+
+| Command                          | Description                                      |
+| -------------------------------- | ------------------------------------------------ |
+| `oda config`                     | Configure provider, model, tokens (interactive)  |
+| `oda config show`                | Display current configuration                    |
+| `oda config profile create NAME` | Save current config as a named profile           |
+| `oda config profile use NAME`    | Switch to a named profile                        |
+| `oda config profile list`        | List all profiles                                |
+| `oda auth login`                 | Authenticate with LLM provider                   |
+| `oda auth status`                | Show saved tokens and default provider           |
+| `oda serve [--port=N]`           | Start API server + web dashboard                 |
+| `oda init`                       | Initialize `.oda/` project directory + repo scan |
+| `oda doctor`                     | System health diagnostics + project metrics      |
 
 ### Global Options
 
@@ -205,11 +254,25 @@ Full architecture details in [ARCHITECTURE.md](ARCHITECTURE.md).
 | `--profile=NAME`    | Use named config profile                                            |
 | `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                           |
 | `--verbose`         | Verbose output                                                      |
-| `--debug`           | Debug-level output                                                  |
+| `--debug`           | Debug-level output with stack traces                                |
 | `--quiet`           | Suppress non-essential output                                       |
 | `--no-color`        | Disable color output                                                |
 | `--non-interactive` | Disable interactive prompts                                         |
+| `--yes`             | Auto-approve all confirmations (implies `--non-interactive`)        |
 | `--help, -h`        | Show help message                                                   |
+
+### Exit Codes
+
+| Code | Meaning                              |
+| ---- | ------------------------------------ |
+| 0    | Success                              |
+| 1    | General error                        |
+| 2    | Validation error                     |
+| 3    | Approval required                    |
+| 4    | Lock conflict (concurrent operation) |
+| 5    | No `.oda/` project                   |
+| 6    | HIGH security findings detected      |
+| 7    | CRITICAL security findings detected  |
 
 ### Examples
 
@@ -230,6 +293,19 @@ oda apply --resume --yes
 oda debug ci "ERROR: tsc failed with exit code 1..."
 oda analyze diff "terraform plan output..."
 oda explain last
+
+# Security scanning
+oda scan
+oda scan --security
+oda scan --fix --yes
+
+# Interactive chat
+oda chat
+oda chat --session myproject --agent terraform
+
+# Tool management
+oda tools install terraform
+oda tools install kubectl
 
 # Administration
 oda doctor
@@ -492,7 +568,7 @@ Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `ap
 - Git provider integration (auto-PR)
 - Plugin system for custom tools and agents
 
-See [NEXT_STEPS.md](NEXT_STEPS.md) for the full roadmap.
+See [ROADMAP.md](ROADMAP.md) for the full roadmap.
 
 ---
 
