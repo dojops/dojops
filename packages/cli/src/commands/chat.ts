@@ -12,6 +12,7 @@ import type { ChatSessionState, SessionMode } from "@dojops/session";
 import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
+import { ExitCode } from "../exit-codes";
 
 export async function chatCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sessionName = extractFlagValue(args, "--session");
@@ -22,7 +23,7 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   const rootDir = findProjectRoot(ctx.cwd);
   if (!rootDir) {
     p.log.error("No .dojops/ project found. Run `dojops init` first.");
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const provider = ctx.getProvider();

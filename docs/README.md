@@ -1,6 +1,6 @@
 # DojOps Documentation
 
-Welcome to the **DojOps (DojOps — AI DevOps Automation Engine)** documentation. DojOps is an enterprise-grade AI DevOps automation system that generates, validates, and executes infrastructure and CI/CD configurations using LLM providers — with structured output enforcement, sandboxed execution, approval workflows, and hash-chained audit trails.
+Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps is an enterprise-grade AI DevOps automation system that generates, validates, and executes infrastructure and CI/CD configurations using LLM providers — with structured output enforcement, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 

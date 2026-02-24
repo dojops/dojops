@@ -2,6 +2,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { SYSTEM_TOOLS, findSystemTool, isToolSupportedOnCurrentPlatform } from "@dojops/core";
 import { CommandHandler } from "../types";
+import { ExitCode } from "../exit-codes";
 import {
   loadToolRegistry,
   installSystemTool,
@@ -85,7 +86,7 @@ export const toolsInstallCommand: CommandHandler = async (args, ctx) => {
     if (ctx.globalOpts.nonInteractive) {
       p.log.error("Tool name required in non-interactive mode.");
       p.log.info(`  ${pc.dim("$")} dojops tools install <name>`);
-      process.exit(1);
+      process.exit(ExitCode.VALIDATION_ERROR);
     }
 
     const selected = await p.multiselect({
@@ -148,7 +149,7 @@ export const toolsRemoveCommand: CommandHandler = async (args) => {
   if (!name) {
     p.log.error("Tool name required.");
     p.log.info(`  ${pc.dim("$")} dojops tools remove <name>`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const removed = removeSystemTool(name);

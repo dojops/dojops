@@ -2,7 +2,7 @@
   <img src="packages/api/public/icons/dojops-icon.png" alt="DojOps" width="120" />
 </p>
 
-<h1 align="center">DojOps — DojOps — AI DevOps Automation Engine</h1>
+<h1 align="center">DojOps — AI DevOps Automation Engine</h1>
 
 <p align="center">
   <strong>Enterprise-grade AI DevOps automation.</strong><br />
@@ -220,15 +220,15 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 #### Agents & Tools
 
-| Command                       | Description                                      |
-| ----------------------------- | ------------------------------------------------ |
-| `dojops agents list`          | List all 16 specialist agents                    |
-| `dojops agents info <name>`   | Show agent details and tool dependencies         |
-| `dojops tools list`           | List system tools with install status            |
-| `dojops tools install <name>` | Download tool into sandbox (~/.dojops/tools/)    |
-| `dojops tools remove <name>`  | Remove a sandboxed tool                          |
-| `dojops tools clean`          | Remove all sandbox tools                         |
-| `dojops inspect <target>`     | Inspect config, policy, agents, or session state |
+| Command                       | Description                                   |
+| ----------------------------- | --------------------------------------------- |
+| `dojops agents list`          | List all 16 specialist agents                 |
+| `dojops agents info <name>`   | Show agent details and tool dependencies      |
+| `dojops tools list`           | List system tools with install status         |
+| `dojops tools install <name>` | Download tool into sandbox (~/.dojops/tools/) |
+| `dojops tools remove <name>`  | Remove a sandboxed tool                       |
+| `dojops tools clean`          | Remove all sandbox tools                      |
+| `dojops inspect <target>`     | Inspect config or session state               |
 
 #### History & Audit
 
@@ -238,7 +238,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops history show <plan-id>` | Show plan details and per-task results |
 | `dojops history verify`         | Verify audit log hash chain integrity  |
 | `dojops destroy <plan-id>`      | Remove generated artifacts from a plan |
-| `dojops rollback <plan-id>`     | Reverse an applied plan                |
+| `dojops rollback <plan-id>`     | Reverse an applied plan (file cleanup) |
 
 #### Configuration & Server
 
@@ -497,7 +497,7 @@ dojops --profile=staging "Create S3..."  # One-off profile override
 ### Setup
 
 ```bash
-git clone https://github.com/dojops/oda.git
+git clone https://github.com/MHChlagou/dojops.git
 cd dojops
 pnpm install
 pnpm build
@@ -508,7 +508,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 685 tests
+pnpm test               # Run all 698 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -543,7 +543,7 @@ packages/
 | Package            | Tests   |
 | ------------------ | ------- |
 | `@dojops/core`     | 208     |
-| `@dojops/cli`      | 144     |
+| `@dojops/cli`      | 137     |
 | `@dojops/tools`    | 111     |
 | `@dojops/api`      | 96      |
 | `@dojops/scanner`  | 43      |
@@ -551,7 +551,7 @@ packages/
 | `@dojops/planner`  | 28      |
 | `@dojops/session`  | 28      |
 | `@dojops/sdk`      | 7       |
-| **Total**          | **685** |
+| **Total**          | **698** |
 
 ---
 

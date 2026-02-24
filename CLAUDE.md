@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DojOps (DojOps — AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation system. It generates, validates, and executes infrastructure and CI/CD configurations using LLM providers — with structured output enforcement, 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, and a rich terminal UI (@clack/prompts).
+DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation system. It generates, validates, and executes infrastructure and CI/CD configurations using LLM providers — with structured output enforcement, 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, and a rich terminal UI (@clack/prompts).
 
 ## Commands
 
@@ -12,7 +12,7 @@ DojOps (DojOps — AI DevOps Automation Engine) is an enterprise-grade AI DevOps
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (637 tests)
+pnpm test               # Vitest across all packages (698 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -116,9 +116,9 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 - `@dojops/planner` — TaskGraph/TaskNode Zod schemas, `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution + `completedTaskIds` skip for resume
 - `@dojops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, optional verifier, tool class, tests). Terraform, Dockerfile, and Kubernetes tools implement `verify()` for external validation
 - `@dojops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size/verification restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging with verification results, `withTimeout()` for execution limits
-- `@dojops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect`, `agents`, `history` (`list`, `show`, `verify`), `doctor`, `config`, `auth`, `serve`. Execution locking, hash-chained audit logs, plan persistence, rich TUI via `@clack/prompts`
+- `@dojops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve`, `chat`, `check`, `scan`, `tools`. Execution locking, hash-chained audit logs, plan persistence, rich TUI via `@clack/prompts`
 - `@dojops/api` — REST API (Express + cors) exposing all capabilities via 13 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 9 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History, Overview, Security, Audit), 30s auto-refresh on metrics tabs, `supertest` integration tests
-- Dev tooling — Vitest (637 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (698 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap
 

@@ -98,12 +98,14 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "create",
     "use",
     "profile",
-    "rollback",
     "verify",
     "install",
     "remove",
     "clean",
-    "fix",
+    "config",
+    "policy",
+    "agents",
+    "session",
   ]);
 
   const command: string[] = [];

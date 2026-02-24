@@ -24,6 +24,7 @@ export interface PlanState {
     tool: string;
     description: string;
     dependsOn: string[];
+    input?: Record<string, unknown>;
   }>;
   results?: Array<{
     taskId: string;

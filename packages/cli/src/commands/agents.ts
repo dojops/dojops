@@ -1,9 +1,10 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
-import { getInstallCommand } from "@dojops/core";
+import { ALL_SPECIALIST_CONFIGS, getInstallCommand } from "@dojops/core";
 import { CLIContext } from "../types";
 import { runPreflight } from "../preflight";
+import { ExitCode } from "../exit-codes";
 
 export async function agentsCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -18,9 +19,8 @@ export async function agentsCommand(args: string[], ctx: CLIContext): Promise<vo
 }
 
 function agentList(ctx: CLIContext): void {
-  const provider = ctx.getProvider();
-  const router = createRouter(provider);
-  const agents = router.getAgents();
+  // Agent listing uses static config — no LLM provider needed
+  const agents = ALL_SPECIALIST_CONFIGS;
 
   if (ctx.globalOpts.output === "json") {
     console.log(
@@ -46,7 +46,7 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   if (!name) {
     p.log.error("Agent name required.");
     p.log.info(`  ${pc.dim("$")} dojops agents info <name>`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const provider = ctx.getProvider();
@@ -60,7 +60,7 @@ function agentInfo(args: string[], ctx: CLIContext): void {
       .map((a) => a.name)
       .join(", ");
     p.log.info(`Available agents: ${names}`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const deps = agent.toolDependencies;

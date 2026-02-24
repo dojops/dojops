@@ -48,15 +48,15 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Agents & Tools
 
-| Command                       | Description                                      |
-| ----------------------------- | ------------------------------------------------ |
-| `dojops agents list`          | List all 16 specialist agents                    |
-| `dojops agents info <name>`   | Show agent details and tool dependencies         |
-| `dojops tools list`           | List system tools with install status            |
-| `dojops tools install <name>` | Download tool into sandbox (~/.dojops/tools/)    |
-| `dojops tools remove <name>`  | Remove a sandboxed tool                          |
-| `dojops tools clean`          | Remove all sandbox tools                         |
-| `dojops inspect <target>`     | Inspect config, policy, agents, or session state |
+| Command                       | Description                                   |
+| ----------------------------- | --------------------------------------------- |
+| `dojops agents list`          | List all 16 specialist agents                 |
+| `dojops agents info <name>`   | Show agent details and tool dependencies      |
+| `dojops tools list`           | List system tools with install status         |
+| `dojops tools install <name>` | Download tool into sandbox (~/.dojops/tools/) |
+| `dojops tools remove <name>`  | Remove a sandboxed tool                       |
+| `dojops tools clean`          | Remove all sandbox tools                      |
+| `dojops inspect <target>`     | Inspect config or session state               |
 
 ### History & Audit
 
@@ -66,7 +66,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops history show <plan-id>` | Show plan details and per-task results |
 | `dojops history verify`         | Verify audit log hash chain integrity  |
 | `dojops destroy <plan-id>`      | Remove generated artifacts from a plan |
-| `dojops rollback <plan-id>`     | Reverse an applied plan                |
+| `dojops rollback <plan-id>`     | Reverse an applied plan (file cleanup) |
 
 ### Configuration & Server
 

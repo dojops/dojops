@@ -3,6 +3,7 @@ import * as p from "@clack/prompts";
 import { createDiffAnalyzer } from "@dojops/api";
 import { CLIContext } from "../types";
 import { formatConfidence, riskColor, changeColor } from "../formatter";
+import { ExitCode } from "../exit-codes";
 
 export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<void> {
   // Subcommands: analyze diff <content>
@@ -11,7 +12,7 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
   if (!content) {
     p.log.error("No diff content provided.");
     p.log.info(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const provider = ctx.getProvider();

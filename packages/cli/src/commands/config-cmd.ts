@@ -6,14 +6,15 @@ import {
   getConfigPath,
   validateProvider,
   VALID_PROVIDERS,
-  OdaConfig,
+  DojOpsConfig,
 } from "../config";
 import { CLIContext } from "../types";
 import { maskToken } from "../formatter";
 import { extractFlagValue } from "../parser";
+import { ExitCode } from "../exit-codes";
 import { createProvider } from "@dojops/api";
 
-function showConfig(config: OdaConfig): void {
+function showConfig(config: DojOpsConfig): void {
   const lines = [
     `${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`,
     `${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`,
@@ -28,8 +29,8 @@ function showConfig(config: OdaConfig): void {
 }
 
 export async function configCommand(args: string[], ctx: CLIContext): Promise<void> {
-  // dojops config show
-  if (args[0] === "show" || args.includes("--show")) {
+  // dojops config show (--show is remapped by compat.ts)
+  if (args[0] === "show") {
     const config = loadConfig();
     if (ctx.globalOpts.output === "json") {
       const safeConfig = {
@@ -64,7 +65,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
         validateProvider(providerFlag);
       } catch (err) {
         p.log.error((err as Error).message);
-        process.exit(1);
+        process.exit(ExitCode.VALIDATION_ERROR);
       }
       config.defaultProvider = providerFlag;
     }
@@ -73,7 +74,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
       const provider = providerFlag ?? config.defaultProvider ?? "openai";
       if (provider === "ollama") {
         p.log.error("Ollama runs locally and does not require an API token.");
-        process.exit(1);
+        process.exit(ExitCode.VALIDATION_ERROR);
       }
       config.tokens = config.tokens ?? {};
       config.tokens[provider] = tokenFlag;

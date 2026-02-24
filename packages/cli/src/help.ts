@@ -44,7 +44,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("explain")}            LLM explains a plan`);
   console.log(`  ${pc.cyan("debug ci")}           Diagnose CI/CD log failures`);
   console.log(`  ${pc.cyan("analyze diff")}       Analyze infrastructure diff for risk`);
-  console.log(`  ${pc.cyan("inspect")}            Inspect config, policy, agents, session`);
+  console.log(`  ${pc.cyan("inspect")}            Inspect config and session state`);
   console.log(`  ${pc.cyan("agents")}             List and inspect specialist agents`);
   console.log(`  ${pc.cyan("history")}            View execution history`);
   console.log(`  ${pc.cyan("history verify")}     Verify audit log hash chain integrity`);
@@ -286,12 +286,9 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops inspect <target>`);
       console.log(`\n${pc.bold("TARGETS")}`);
       console.log(`  ${pc.cyan("config")}     Show resolved provider, model, and tokens`);
-      console.log(`  ${pc.cyan("policy")}     Show execution policies`);
-      console.log(`  ${pc.cyan("agents")}     List specialist agents`);
       console.log(`  ${pc.cyan("session")}    Show current session state`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops inspect config`);
-      console.log(`  ${pc.dim("$")} dojops inspect agents`);
       console.log(`  ${pc.dim("$")} dojops inspect session --output json`);
       console.log();
       break;
@@ -314,16 +311,13 @@ export function printCommandHelp(command: string): void {
     case "history":
       console.log(`\n${pc.bold("dojops history")} — View execution history and audit logs`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(
-        `  ${pc.dim("$")} dojops history [list|show <plan-id>|verify|rollback <plan-id>]`,
-      );
+      console.log(`  ${pc.dim("$")} dojops history [list|show <plan-id>|verify]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all plans with status ${pc.dim("(default)")}`,
       );
       console.log(`  ${pc.cyan("show <plan-id>")}    Show plan details and execution results`);
       console.log(`  ${pc.cyan("verify")}            Verify audit log hash chain integrity`);
-      console.log(`  ${pc.cyan("rollback <plan-id>")} Reverse an applied plan`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops history`);
       console.log(`  ${pc.dim("$")} dojops history list`);

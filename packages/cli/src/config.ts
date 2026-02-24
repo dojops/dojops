@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-export interface OdaConfig {
+export interface DojOpsConfig {
   defaultProvider?: string;
   defaultModel?: string;
   tokens?: Record<string, string>;
@@ -32,21 +32,21 @@ export function getConfigPath(): string {
 }
 
 /** Loads config from ~/.dojops/config.json. Returns empty config if missing or invalid. */
-export function loadConfig(): OdaConfig {
+export function loadConfig(): DojOpsConfig {
   try {
     const raw = fs.readFileSync(configFile(), "utf-8");
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return {};
     }
-    return parsed as OdaConfig;
+    return parsed as DojOpsConfig;
   } catch {
     return {};
   }
 }
 
 /** Writes config to ~/.dojops/config.json. Creates directory with 0o700 and file with 0o600. */
-export function saveConfig(config: OdaConfig): void {
+export function saveConfig(config: DojOpsConfig): void {
   const dir = configDir();
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -69,7 +69,7 @@ export function validateProvider(name: string): Provider {
  * Resolves the LLM provider to use.
  * Priority: CLI flag > DOJOPS_PROVIDER env > config defaultProvider > "openai"
  */
-export function resolveProvider(cliFlag: string | undefined, config: OdaConfig): string {
+export function resolveProvider(cliFlag: string | undefined, config: DojOpsConfig): string {
   const raw = cliFlag ?? process.env.DOJOPS_PROVIDER ?? config.defaultProvider ?? "openai";
   return validateProvider(raw);
 }
@@ -78,7 +78,10 @@ export function resolveProvider(cliFlag: string | undefined, config: OdaConfig):
  * Resolves the LLM model to use.
  * Priority: CLI flag > DOJOPS_MODEL env > config defaultModel > undefined
  */
-export function resolveModel(cliFlag: string | undefined, config: OdaConfig): string | undefined {
+export function resolveModel(
+  cliFlag: string | undefined,
+  config: DojOpsConfig,
+): string | undefined {
   return cliFlag ?? process.env.DOJOPS_MODEL ?? config.defaultModel ?? undefined;
 }
 
@@ -87,7 +90,7 @@ export function resolveModel(cliFlag: string | undefined, config: OdaConfig): st
  * Priority: environment variable > config token
  * Returns undefined for ollama (no token needed).
  */
-export function resolveToken(provider: string, config: OdaConfig): string | undefined {
+export function resolveToken(provider: string, config: DojOpsConfig): string | undefined {
   if (provider === "ollama") return undefined;
 
   const envVar = TOKEN_ENV_MAP[provider];
@@ -96,22 +99,6 @@ export function resolveToken(provider: string, config: OdaConfig): string | unde
   }
 
   return config.tokens?.[provider];
-}
-
-/**
- * Parses a flag value from CLI args. Supports both `--flag=value` and `--flag value` forms.
- * Returns undefined if the flag is not present.
- */
-export function parseFlagValue(args: string[], flag: string): string | undefined {
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === flag && i + 1 < args.length) {
-      return args[i + 1];
-    }
-    if (args[i].startsWith(`${flag}=`)) {
-      return args[i].slice(flag.length + 1);
-    }
-  }
-  return undefined;
 }
 
 // ── Profile management ─────────────────────────────────────────────
@@ -124,16 +111,16 @@ function metaFile(): string {
   return path.join(configDir(), "meta.json");
 }
 
-export function loadProfile(name: string): OdaConfig | null {
+export function loadProfile(name: string): DojOpsConfig | null {
   const file = path.join(profilesDir(), `${name}.json`);
   try {
-    return JSON.parse(fs.readFileSync(file, "utf-8")) as OdaConfig;
+    return JSON.parse(fs.readFileSync(file, "utf-8")) as DojOpsConfig;
   } catch {
     return null;
   }
 }
 
-export function saveProfile(name: string, config: OdaConfig): void {
+export function saveProfile(name: string, config: DojOpsConfig): void {
   const dir = profilesDir();
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -184,7 +171,7 @@ export function setActiveProfile(name: string): void {
  * Loads config with profile support.
  * Priority: explicit profile > active profile > default config
  */
-export function loadProfileConfig(profileName?: string): OdaConfig {
+export function loadProfileConfig(profileName?: string): DojOpsConfig {
   const name = profileName ?? getActiveProfile();
   if (name) {
     const profile = loadProfile(name);

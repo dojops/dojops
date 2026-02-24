@@ -56,16 +56,12 @@ registerCommand("chat", chatCommand);
 registerCommand("check", checkCommand);
 
 // Nested: inspect <sub>, agents <sub>, history <sub>
-registerSubcommand("inspect", "config", inspectCommand);
-registerSubcommand("inspect", "policy", inspectCommand);
-registerSubcommand("inspect", "agents", inspectCommand);
-registerSubcommand("inspect", "session", inspectCommand);
+registerCommand("inspect", inspectCommand);
 registerSubcommand("agents", "list", agentsCommand);
 registerSubcommand("agents", "info", agentsCommand);
 registerSubcommand("history", "list", historyCommand);
 registerSubcommand("history", "show", historyCommand);
 registerSubcommand("history", "verify", historyCommand);
-registerSubcommand("history", "rollback", historyCommand);
 
 // Nested: tools <sub>
 registerSubcommand("tools", "list", toolsListCommand);
@@ -131,7 +127,7 @@ async function main() {
         providerName = resolveProvider(globalOpts.provider, config);
       } catch (err) {
         p.log.error((err as Error).message);
-        process.exit(1);
+        process.exit(ExitCode.VALIDATION_ERROR);
       }
 
       const model = resolveModel(globalOpts.model, config);
@@ -156,7 +152,7 @@ async function main() {
   ]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 
-  if (!isQuiet && !globalOpts.quiet) {
+  if (!isQuiet && !globalOpts.quiet && globalOpts.output !== "json") {
     printBanner();
   }
 
@@ -177,7 +173,7 @@ async function main() {
     process.exit(ExitCode.GENERAL_ERROR);
   }
 
-  if (!isQuiet && !globalOpts.quiet) {
+  if (!isQuiet && !globalOpts.quiet && globalOpts.output !== "json") {
     p.outro("Done.");
   }
 }

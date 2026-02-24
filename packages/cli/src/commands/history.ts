@@ -8,6 +8,7 @@ import {
   listExecutions,
   verifyAuditIntegrity,
 } from "../state";
+import { ExitCode } from "../exit-codes";
 
 export async function historyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -17,10 +18,6 @@ export async function historyCommand(args: string[], ctx: CLIContext): Promise<v
       return historyShow(args.slice(1), ctx);
     case "verify":
       return historyVerify(ctx);
-    case "rollback": {
-      const { rollbackCommand } = await import("./rollback");
-      return rollbackCommand(args.slice(1), ctx);
-    }
     case "list":
     default:
       return historyList(ctx);
@@ -84,13 +81,13 @@ function historyShow(args: string[], ctx: CLIContext): void {
   if (!planId) {
     p.log.error("Plan ID required.");
     p.log.info(`  ${pc.dim("$")} dojops history show <plan-id>`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const plan = loadPlan(root, planId);
   if (!plan) {
     p.log.error(`Plan "${planId}" not found.`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   if (ctx.globalOpts.output === "json") {

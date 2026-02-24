@@ -159,7 +159,6 @@ describe("CLI", () => {
       const output = run("inspect", "--help");
       expect(output).toContain("dojops inspect");
       expect(output).toContain("config");
-      expect(output).toContain("agents");
       expect(output).toContain("session");
     });
 

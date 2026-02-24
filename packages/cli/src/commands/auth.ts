@@ -4,6 +4,7 @@ import { loadConfig, saveConfig, getConfigPath, validateProvider } from "../conf
 import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
 import { maskToken } from "../formatter";
+import { ExitCode } from "../exit-codes";
 
 export async function authCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -28,7 +29,7 @@ async function authLogin(args: string[]): Promise<void> {
     p.log.warn('Tip: Use "dojops config" for interactive setup, or provide --token:');
     p.log.info(`  ${pc.dim("$")} dojops auth login --token <API_KEY>`);
     p.log.info(`  ${pc.dim("$")} dojops config`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const config = loadConfig();
@@ -39,7 +40,7 @@ async function authLogin(args: string[]): Promise<void> {
     validateProvider(provider);
   } catch (err) {
     p.log.error((err as Error).message);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   if (provider === "ollama") {
@@ -49,7 +50,7 @@ async function authLogin(args: string[]): Promise<void> {
         "Just set DOJOPS_PROVIDER=ollama or run: dojops auth login --provider openai --token <KEY>",
       ),
     );
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   config.tokens = config.tokens ?? {};

@@ -3,6 +3,7 @@ import * as p from "@clack/prompts";
 import { createDebugger } from "@dojops/api";
 import { CLIContext } from "../types";
 import { formatConfidence } from "../formatter";
+import { ExitCode } from "../exit-codes";
 
 export async function debugCommand(args: string[], ctx: CLIContext): Promise<void> {
   // Subcommand: debug ci <log>
@@ -12,7 +13,7 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
   if (!logContent) {
     p.log.error("No CI log content provided.");
     p.log.info(`  ${pc.dim("$")} dojops debug ci <log-content>`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const provider = ctx.getProvider();

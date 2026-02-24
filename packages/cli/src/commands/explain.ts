@@ -1,12 +1,13 @@
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
 import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state";
+import { ExitCode } from "../exit-codes";
 
 export async function explainCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
     p.log.error("No .dojops/ project found. Run `dojops init` first.");
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const planArg = args.find((a) => !a.startsWith("-"));
@@ -21,7 +22,7 @@ export async function explainCommand(args: string[], ctx: CLIContext): Promise<v
 
   if (!plan) {
     p.log.error("No plan found. Run `dojops plan <prompt>` first.");
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const provider = ctx.getProvider();

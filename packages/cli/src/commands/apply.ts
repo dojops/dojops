@@ -1,12 +1,7 @@
 import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import {
-  SafeExecutor,
-  AutoApproveHandler,
-  CallbackApprovalHandler,
-  ApprovalRequest,
-} from "@dojops/executor";
+import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { createTools } from "@dojops/api";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
@@ -28,30 +23,7 @@ import {
   PlanState,
 } from "../state";
 import { ExitCode } from "../exit-codes";
-
-function cliApprovalHandler(): CallbackApprovalHandler {
-  return new CallbackApprovalHandler(async (request: ApprovalRequest) => {
-    const body = [
-      `${pc.bold("Task:")}    ${request.taskId}`,
-      `${pc.bold("Tool:")}    ${request.toolName}`,
-      `${pc.bold("Summary:")} ${request.preview.summary}`,
-      ...(request.preview.filesCreated.length > 0
-        ? [`${pc.bold("Creates:")} ${request.preview.filesCreated.join(", ")}`]
-        : []),
-      ...(request.preview.filesModified.length > 0
-        ? [`${pc.bold("Modifies:")} ${request.preview.filesModified.join(", ")}`]
-        : []),
-    ];
-    p.note(body.join("\n"), pc.yellow("Approval Required"));
-
-    const approved = await p.confirm({ message: "Approve this execution?" });
-    if (p.isCancel(approved)) {
-      p.cancel("Cancelled.");
-      process.exit(0);
-    }
-    return approved ? "approved" : "denied";
-  });
-}
+import { cliApprovalHandler } from "../approval";
 
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
@@ -179,7 +151,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         tool: t.tool,
         description: t.description,
         dependsOn: t.dependsOn,
-        input: {},
+        input: t.input ?? {},
       })),
     };
 

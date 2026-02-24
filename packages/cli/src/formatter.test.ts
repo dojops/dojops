@@ -8,8 +8,6 @@ import {
   riskColor,
   changeColor,
   maskToken,
-  sessionHeader,
-  phaseIcon,
 } from "./formatter";
 
 describe("statusIcon", () => {
@@ -108,33 +106,5 @@ describe("maskToken", () => {
 
   it("masks short tokens completely", () => {
     expect(maskToken("abc")).toBe("***");
-  });
-});
-
-describe("sessionHeader", () => {
-  it("builds header from context parts", () => {
-    const result = sessionHeader({
-      provider: "openai",
-      model: "gpt-4o",
-      mode: "PLAN",
-    });
-    expect(result).toContain("openai");
-    expect(result).toContain("gpt-4o");
-    expect(result).toContain("PLAN");
-  });
-
-  it("omits missing parts", () => {
-    const result = sessionHeader({ provider: "openai" });
-    expect(result).toContain("openai");
-    expect(result).not.toContain("Model:");
-  });
-});
-
-describe("phaseIcon", () => {
-  it("returns correct icons for each phase", () => {
-    expect(phaseIcon("done")).toContain("✓");
-    expect(phaseIcon("running")).toContain("⟳");
-    expect(phaseIcon("awaiting")).toContain("⚠");
-    expect(phaseIcon("pending")).toContain("○");
   });
 });

@@ -1,6 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
+import { ExitCode } from "../exit-codes";
 import {
   loadProfile,
   saveProfile,
@@ -19,7 +20,7 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       if (!name) {
         p.log.error("Profile name required.");
         p.log.info(`  ${pc.dim("$")} dojops config profile create <name>`);
-        process.exit(1);
+        process.exit(ExitCode.VALIDATION_ERROR);
       }
       const config = loadConfig();
       saveProfile(name, config);
@@ -31,7 +32,7 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       if (!name) {
         p.log.error("Profile name required.");
         p.log.info(`  ${pc.dim("$")} dojops config profile use <name>`);
-        process.exit(1);
+        process.exit(ExitCode.VALIDATION_ERROR);
       }
       const existing = loadProfile(name);
       if (!existing) {
@@ -40,7 +41,7 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
         if (available.length > 0) {
           p.log.info(`Available profiles: ${available.join(", ")}`);
         }
-        process.exit(1);
+        process.exit(ExitCode.VALIDATION_ERROR);
       }
       setActiveProfile(name);
       p.log.success(`Switched to profile "${name}".`);
@@ -70,6 +71,6 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       p.log.info(`  ${pc.dim("$")} dojops config profile create <name>`);
       p.log.info(`  ${pc.dim("$")} dojops config profile use <name>`);
       p.log.info(`  ${pc.dim("$")} dojops config profile list`);
-      process.exit(1);
+      process.exit(ExitCode.VALIDATION_ERROR);
   }
 }

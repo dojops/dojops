@@ -12,7 +12,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     p.log.error("No prompt provided.");
     p.log.info(`  ${pc.dim("$")} dojops generate <prompt>`);
     p.log.info(`  ${pc.dim("$")} dojops "your prompt here"`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const provider = ctx.getProvider();

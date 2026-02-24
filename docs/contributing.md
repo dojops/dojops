@@ -16,7 +16,7 @@ Contributions to DojOps are welcome. This guide covers development setup, coding
 
 ```bash
 # Clone the repository
-git clone https://github.com/dojops/oda.git
+git clone https://github.com/MHChlagou/dojops.git
 cd dojops
 
 # Install dependencies
@@ -111,7 +111,7 @@ DojOps uses Vitest for testing. Current coverage:
 | Package            | Tests   |
 | ------------------ | ------- |
 | `@dojops/core`     | 208     |
-| `@dojops/cli`      | 144     |
+| `@dojops/cli`      | 137     |
 | `@dojops/tools`    | 111     |
 | `@dojops/api`      | 96      |
 | `@dojops/scanner`  | 43      |
@@ -119,7 +119,7 @@ DojOps uses Vitest for testing. Current coverage:
 | `@dojops/planner`  | 28      |
 | `@dojops/session`  | 28      |
 | `@dojops/sdk`      | 7       |
-| **Total**          | **685** |
+| **Total**          | **698** |
 
 ### Writing Tests
 

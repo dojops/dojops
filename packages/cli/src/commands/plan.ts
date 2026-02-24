@@ -1,17 +1,13 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { decompose, PlannerExecutor } from "@dojops/planner";
-import {
-  SafeExecutor,
-  AutoApproveHandler,
-  CallbackApprovalHandler,
-  ApprovalRequest,
-} from "@dojops/executor";
+import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { createTools } from "@dojops/api";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
 import { statusIcon, statusText, formatOutput, getOutputFileName } from "../formatter";
 import { ExitCode } from "../exit-codes";
+import { cliApprovalHandler } from "../approval";
 import {
   findProjectRoot,
   initProject,
@@ -23,30 +19,6 @@ import {
   loadContext,
   PlanState,
 } from "../state";
-
-function cliApprovalHandler(): CallbackApprovalHandler {
-  return new CallbackApprovalHandler(async (request: ApprovalRequest) => {
-    const body = [
-      `${pc.bold("Task:")}    ${request.taskId}`,
-      `${pc.bold("Tool:")}    ${request.toolName}`,
-      `${pc.bold("Summary:")} ${request.preview.summary}`,
-      ...(request.preview.filesCreated.length > 0
-        ? [`${pc.bold("Creates:")} ${request.preview.filesCreated.join(", ")}`]
-        : []),
-      ...(request.preview.filesModified.length > 0
-        ? [`${pc.bold("Modifies:")} ${request.preview.filesModified.join(", ")}`]
-        : []),
-    ];
-    p.note(body.join("\n"), pc.yellow("Approval Required"));
-
-    const approved = await p.confirm({ message: "Approve this execution?" });
-    if (p.isCancel(approved)) {
-      p.cancel("Cancelled.");
-      process.exit(0);
-    }
-    return approved ? "approved" : "denied";
-  });
-}
 
 export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
   const executeMode = hasFlag(args, "--execute");
@@ -99,6 +71,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       tool: t.tool,
       description: t.description,
       dependsOn: t.dependsOn,
+      input: t.input as Record<string, unknown> | undefined,
     })),
     files: [],
     approvalStatus: "PENDING",

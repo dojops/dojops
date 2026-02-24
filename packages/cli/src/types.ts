@@ -1,5 +1,5 @@
 import { LLMProvider } from "@dojops/core";
-import { OdaConfig } from "./config";
+import { DojOpsConfig } from "./config";
 
 export type OutputFormat = "table" | "json" | "yaml";
 
@@ -17,7 +17,7 @@ export interface GlobalOptions {
 
 export interface CLIContext {
   globalOpts: GlobalOptions;
-  config: OdaConfig;
+  config: DojOpsConfig;
   cwd: string;
   /** Lazy provider creation — avoids API key requirement for non-LLM commands */
   getProvider(): LLMProvider;

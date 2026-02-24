@@ -75,7 +75,7 @@ All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (opti
 ## Phase 6 — CLI TUI Overhaul (DONE)
 
 - **@clack/prompts** — interactive arrow-key prompts, spinners, styled note panels, semantic log levels
-- **Full command set** — init, plan, validate, apply, destroy, rollback, explain, debug ci, analyze diff, inspect, agents, history, doctor, config, auth, serve
+- **Full command set** — init, plan, validate, apply, destroy, rollback, explain, debug ci, analyze diff, inspect, agents, history, status/doctor, config, auth, serve, chat, check, scan, tools
 - **Session framing** — intro/outro wrapping, approval flow with confirm/cancel
 
 ---

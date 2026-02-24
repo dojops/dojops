@@ -5,6 +5,7 @@ import * as p from "@clack/prompts";
 import { DevOpsChecker } from "@dojops/core";
 import { CommandHandler } from "../types";
 import { findProjectRoot, loadContext, appendAudit } from "../state";
+import { ExitCode } from "../exit-codes";
 
 const MAX_FILES = 20;
 const MAX_FILE_SIZE = 50 * 1024; // 50 KB
@@ -14,13 +15,13 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   const root = findProjectRoot();
   if (!root) {
     p.log.error(`No .dojops/ project found. Run ${pc.cyan("dojops init")} first.`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const ctx = loadContext(root);
   if (!ctx) {
     p.log.error(`Could not load context.json. Run ${pc.cyan("dojops init")} to regenerate.`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   if (ctx.devopsFiles.length === 0) {
@@ -54,7 +55,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   } catch (err) {
     p.log.error(`LLM provider required. ${(err as Error).message}`);
     p.log.info(`Run ${pc.cyan("dojops config")} to configure a provider.`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   const s = p.spinner();
@@ -168,6 +169,6 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
       status: "failure",
       durationMs: Date.now() - start,
     });
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 };

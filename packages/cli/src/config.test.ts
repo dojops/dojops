@@ -9,7 +9,6 @@ import {
   resolveProvider,
   resolveModel,
   resolveToken,
-  parseFlagValue,
   validateProvider,
 } from "./config";
 
@@ -178,24 +177,6 @@ describe("config", () => {
 
     it("returns undefined when nothing set", () => {
       expect(resolveToken("openai", {})).toBeUndefined();
-    });
-  });
-
-  describe("parseFlagValue", () => {
-    it("parses --flag=value form", () => {
-      expect(parseFlagValue(["--provider=anthropic", "hello"], "--provider")).toBe("anthropic");
-    });
-
-    it("parses --flag value form", () => {
-      expect(parseFlagValue(["--provider", "anthropic", "hello"], "--provider")).toBe("anthropic");
-    });
-
-    it("returns undefined when flag not present", () => {
-      expect(parseFlagValue(["hello", "--plan"], "--provider")).toBeUndefined();
-    });
-
-    it("returns undefined when --flag is last arg (no value)", () => {
-      expect(parseFlagValue(["--provider"], "--provider")).toBeUndefined();
     });
   });
 });

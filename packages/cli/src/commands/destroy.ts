@@ -6,6 +6,7 @@ import { hasFlag } from "../parser";
 import {
   findProjectRoot,
   loadPlan,
+  listExecutions,
   appendAudit,
   acquireLock,
   releaseLock,
@@ -21,6 +22,7 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
   }
 
   const dryRun = hasFlag(args, "--dry-run");
+  const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const planId = args.find((a) => !a.startsWith("-"));
   if (!planId) {
     p.log.error("Plan ID required for destroy (safety measure).");
@@ -31,27 +33,34 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
   const plan = loadPlan(root, planId);
   if (!plan) {
     p.log.error(`Plan "${planId}" not found.`);
-    process.exit(1);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
-  if (plan.files.length === 0) {
+  // Collect files from execution records (same source as rollback)
+  const executions = listExecutions(root).filter((e) => e.planId === planId);
+  const execFiles = executions.flatMap((e) => e.filesCreated);
+
+  // Also include plan.files for backward compatibility
+  const allFiles = [...new Set([...plan.files, ...execFiles])];
+
+  if (allFiles.length === 0) {
     p.log.info("No files to destroy for this plan.");
     return;
   }
 
   // Show what will be destroyed
-  const lines = plan.files.map((f) => `  ${pc.red("-")} ${f}`);
+  const lines = allFiles.map((f) => `  ${pc.red("-")} ${f}`);
   p.note(lines.join("\n"), pc.red(`Destroy artifacts from ${plan.id}`));
 
   if (dryRun) {
-    p.log.info(`${plan.files.length} file(s) would be deleted.`);
+    p.log.info(`${allFiles.length} file(s) would be deleted.`);
     p.log.info(pc.dim("Dry run — no changes will be made."));
     return;
   }
 
-  if (!ctx.globalOpts.nonInteractive) {
+  if (!autoApprove) {
     const confirm = await p.confirm({
-      message: `Delete ${plan.files.length} file(s)? This cannot be undone.`,
+      message: `Delete ${allFiles.length} file(s)? This cannot be undone.`,
     });
     if (p.isCancel(confirm) || !confirm) {
       p.cancel("Cancelled.");
@@ -68,7 +77,7 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
   const startTime = Date.now();
   try {
     let deleted = 0;
-    for (const file of plan.files) {
+    for (const file of allFiles) {
       try {
         if (fs.existsSync(file)) {
           fs.unlinkSync(file);
@@ -92,7 +101,7 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
       durationMs: Date.now() - startTime,
     });
 
-    p.log.success(`Destroyed ${deleted}/${plan.files.length} artifacts.`);
+    p.log.success(`Destroyed ${deleted}/${allFiles.length} artifacts.`);
   } finally {
     releaseLock(root);
   }
