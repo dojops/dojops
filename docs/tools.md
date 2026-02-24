@@ -422,6 +422,14 @@ blockedPlugins:
   - untrusted-tool
 ```
 
+### Plugin Isolation
+
+Plugins are sandboxed with three security controls:
+
+- **Verification command whitelist** — Only 16 known DevOps binaries are allowed (terraform, kubectl, helm, ansible-lint, docker, hadolint, yamllint, jsonlint, shellcheck, tflint, kubeval, conftest, checkov, trivy, kube-score, polaris). Non-whitelisted commands are rejected at runtime
+- **Permission enforcement** — The `permissions.child_process` field must be `"required"` for verification commands to execute. Omitted or `"none"` means the command is silently skipped (default-safe)
+- **Path traversal prevention** — File paths in `files[].path` and `detector.path` cannot contain `..` segments, preventing writes outside the project directory
+
 ### Plugin Audit Trail
 
 Plugin executions include additional audit metadata:
@@ -430,6 +438,7 @@ Plugin executions include additional audit metadata:
 - `pluginSource: "global" | "project"` — where the plugin was discovered
 - `pluginVersion` — version from the manifest
 - `pluginHash` — SHA-256 hash of plugin directory for integrity verification
+- `systemPromptHash` — SHA-256 hash of the plugin's system prompt for reproducibility tracking
 
 ### Supported Serializers
 

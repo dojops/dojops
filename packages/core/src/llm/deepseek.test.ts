@@ -93,4 +93,28 @@ describe("DeepSeekProvider", () => {
 
     expect(models).toEqual(["deepseek-chat", "deepseek-reasoner"]);
   });
+
+  it("passes temperature when provided", async () => {
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: "ok" } }],
+    });
+
+    const provider = new DeepSeekProvider("key");
+    await provider.generate({ prompt: "Hi", temperature: 0.3 });
+
+    const call = mockCreate.mock.calls[0][0];
+    expect(call.temperature).toBe(0.3);
+  });
+
+  it("omits temperature when not provided", async () => {
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: "ok" } }],
+    });
+
+    const provider = new DeepSeekProvider("key");
+    await provider.generate({ prompt: "Hi" });
+
+    const call = mockCreate.mock.calls[0][0];
+    expect(call.temperature).toBeUndefined();
+  });
 });

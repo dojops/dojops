@@ -89,6 +89,30 @@ describe("OpenAIProvider", () => {
 
     expect(res.content).toBe("");
   });
+
+  it("passes temperature when provided", async () => {
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: "ok" } }],
+    });
+
+    const provider = new OpenAIProvider("key");
+    await provider.generate({ prompt: "Hi", temperature: 0.7 });
+
+    const call = mockOpenAICreate.mock.calls[0][0];
+    expect(call.temperature).toBe(0.7);
+  });
+
+  it("omits temperature when not provided", async () => {
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: "ok" } }],
+    });
+
+    const provider = new OpenAIProvider("key");
+    await provider.generate({ prompt: "Hi" });
+
+    const call = mockOpenAICreate.mock.calls[0][0];
+    expect(call.temperature).toBeUndefined();
+  });
 });
 
 describe("AnthropicProvider", () => {
@@ -131,6 +155,30 @@ describe("AnthropicProvider", () => {
 
     const call = mockAnthropicCreate.mock.calls[0][0];
     expect(call.messages).toContainEqual({ role: "assistant", content: "{" });
+  });
+
+  it("passes temperature when provided", async () => {
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+    });
+
+    const provider = new AnthropicProvider("key");
+    await provider.generate({ prompt: "Hi", temperature: 0 });
+
+    const call = mockAnthropicCreate.mock.calls[0][0];
+    expect(call.temperature).toBe(0);
+  });
+
+  it("omits temperature when not provided", async () => {
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+    });
+
+    const provider = new AnthropicProvider("key");
+    await provider.generate({ prompt: "Hi" });
+
+    const call = mockAnthropicCreate.mock.calls[0][0];
+    expect(call.temperature).toBeUndefined();
   });
 });
 
@@ -183,5 +231,25 @@ describe("OllamaProvider", () => {
     await provider.generate({ prompt: "Hi" });
 
     expect(mockAxiosPost.mock.calls[0][0]).toBe("http://custom:9999/api/generate");
+  });
+
+  it("passes temperature via options when provided", async () => {
+    mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+    const provider = new OllamaProvider();
+    await provider.generate({ prompt: "Hi", temperature: 0.5 });
+
+    const call = mockAxiosPost.mock.calls[0];
+    expect(call[1].options).toEqual({ temperature: 0.5 });
+  });
+
+  it("omits options when temperature not provided", async () => {
+    mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+    const provider = new OllamaProvider();
+    await provider.generate({ prompt: "Hi" });
+
+    const call = mockAxiosPost.mock.calls[0];
+    expect(call[1].options).toBeUndefined();
   });
 });

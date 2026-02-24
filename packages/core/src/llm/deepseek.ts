@@ -39,6 +39,7 @@ export class DeepSeekProvider implements LLMProvider {
         model: this.model,
         messages,
         ...(req.schema ? { response_format: { type: "json_object" } } : {}),
+        ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
     } catch (err: unknown) {
       throw new Error(extractApiError(err), { cause: err });

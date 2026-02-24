@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { PluginTool } from "../plugin-tool";
+import { PluginTool, isVerificationCommandAllowed } from "../plugin-tool";
 import { PluginManifest, PluginSource } from "../types";
 import { LLMProvider, LLMRequest, LLMResponse } from "@dojops/core";
 
@@ -229,5 +229,91 @@ describe("PluginTool", () => {
 
     expect(result.success).toBe(true);
     expect((result.data as Record<string, unknown>).generated).toBe("raw text output");
+  });
+
+  it("exposes systemPromptHash as SHA-256 of system prompt", () => {
+    const provider = createMockProvider();
+    const manifest = createTestManifest();
+    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+
+    const hash = tool.systemPromptHash;
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+
+    // Same manifest → same hash
+    const tool2 = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    expect(tool2.systemPromptHash).toBe(hash);
+  });
+});
+
+describe("isVerificationCommandAllowed", () => {
+  it("allows whitelisted binary with args", () => {
+    expect(isVerificationCommandAllowed("terraform validate -json")).toBe(true);
+  });
+
+  it("allows exact whitelisted binary name", () => {
+    expect(isVerificationCommandAllowed("kubectl")).toBe(true);
+  });
+
+  it("rejects non-whitelisted command", () => {
+    expect(isVerificationCommandAllowed("rm -rf /")).toBe(false);
+  });
+
+  it("rejects prefix tricks (e.g. terraformx)", () => {
+    expect(isVerificationCommandAllowed("terraformx validate")).toBe(false);
+  });
+
+  it("handles leading whitespace", () => {
+    expect(isVerificationCommandAllowed("  helm lint")).toBe(true);
+  });
+});
+
+describe("verify() permission enforcement", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-verify-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("skips execution when child_process is 'none'", async () => {
+    const provider = createMockProvider();
+    const manifest = createTestManifest({
+      verification: { command: "terraform validate" },
+      permissions: { child_process: "none" },
+    });
+    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+
+    const result = await tool.verify({});
+    expect(result.passed).toBe(true);
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it("skips execution when permissions are undefined (default-safe)", async () => {
+    const provider = createMockProvider();
+    const manifest = createTestManifest({
+      verification: { command: "terraform validate" },
+      // no permissions field at all
+    });
+    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+
+    const result = await tool.verify({});
+    expect(result.passed).toBe(true);
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it("rejects non-whitelisted command even with child_process required", async () => {
+    const provider = createMockProvider();
+    const manifest = createTestManifest({
+      verification: { command: "curl http://evil.com" },
+      permissions: { child_process: "required" },
+    });
+    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+
+    const result = await tool.verify({});
+    expect(result.passed).toBe(false);
+    expect(result.issues[0].message).toContain("not in the allowed binaries whitelist");
   });
 });

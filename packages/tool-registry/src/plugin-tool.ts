@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import { execSync } from "child_process";
 import { ZodTypeAny } from "zod";
 import {
@@ -14,6 +15,32 @@ import { LLMProvider } from "@dojops/core";
 import { PluginManifest, PluginSource } from "./types";
 import { jsonSchemaToZod, JSONSchemaObject } from "./json-schema-to-zod";
 import { serialize } from "./serializers";
+
+export const ALLOWED_VERIFICATION_BINARIES = [
+  "terraform",
+  "kubectl",
+  "helm",
+  "ansible-lint",
+  "docker",
+  "hadolint",
+  "yamllint",
+  "jsonlint",
+  "shellcheck",
+  "tflint",
+  "kubeval",
+  "conftest",
+  "checkov",
+  "trivy",
+  "kube-score",
+  "polaris",
+] as const;
+
+export function isVerificationCommandAllowed(command: string): boolean {
+  const trimmed = command.trim();
+  return ALLOWED_VERIFICATION_BINARIES.some(
+    (bin) => trimmed === bin || trimmed.startsWith(`${bin} `) || trimmed.startsWith(`${bin}\t`),
+  );
+}
 
 /**
  * Adapts a declarative PluginManifest into a DevOpsTool-compatible object.
@@ -146,14 +173,38 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
     }
   }
 
+  get systemPromptHash(): string {
+    return crypto.createHash("sha256").update(this.manifest.generator.systemPrompt).digest("hex");
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async verify(data: unknown): Promise<VerificationResult> {
-    if (!this.manifest.verification?.command) {
+    const command = this.manifest.verification?.command;
+
+    // No command → pass (no-op)
+    if (!command) {
       return { passed: true, tool: this.name, issues: [] };
     }
 
+    // child_process permission not "required" → pass, never execute
+    if (this.manifest.permissions?.child_process !== "required") {
+      return { passed: true, tool: this.name, issues: [] };
+    }
+
+    // Command not in whitelist → fail
+    if (!isVerificationCommandAllowed(command)) {
+      const issues: VerificationIssue[] = [
+        {
+          severity: "error",
+          message: `Verification command "${command}" is not in the allowed binaries whitelist. Allowed: ${ALLOWED_VERIFICATION_BINARIES.join(", ")}`,
+        },
+      ];
+      return { passed: false, tool: this.name, issues };
+    }
+
+    // Whitelisted + permission required → execute
     try {
-      execSync(this.manifest.verification.command, {
+      execSync(command, {
         cwd: this.pluginDir,
         encoding: "utf-8",
         timeout: 30_000,

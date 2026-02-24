@@ -58,6 +58,7 @@ export class ToolRegistry {
         pluginVersion?: string;
         pluginHash?: string;
         pluginSource?: string;
+        systemPromptHash?: string;
       }
     | undefined {
     const tool = this.toolMap.get(name);
@@ -70,6 +71,7 @@ export class ToolRegistry {
         pluginVersion: plugin.source.pluginVersion,
         pluginHash: plugin.source.pluginHash,
         pluginSource: plugin.source.location,
+        systemPromptHash: plugin.systemPromptHash,
       };
     }
 

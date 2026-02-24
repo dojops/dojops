@@ -30,6 +30,7 @@ export class OllamaProvider implements LLMProvider {
         messages: chatMessages,
         stream: false,
         ...(req.schema ? { format: "json" } : {}),
+        ...(req.temperature !== undefined ? { options: { temperature: req.temperature } } : {}),
       });
       content = response.data.message.content;
     } else {
@@ -39,6 +40,7 @@ export class OllamaProvider implements LLMProvider {
         system,
         stream: false,
         ...(req.schema ? { format: "json" } : {}),
+        ...(req.temperature !== undefined ? { options: { temperature: req.temperature } } : {}),
       });
       content = response.data.response;
     }

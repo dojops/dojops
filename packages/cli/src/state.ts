@@ -29,6 +29,7 @@ export interface PlanState {
     pluginVersion?: string;
     pluginHash?: string;
     pluginSource?: "global" | "project";
+    systemPromptHash?: string;
   }>;
   results?: Array<{
     taskId: string;
@@ -44,6 +45,7 @@ export interface PlanState {
   executionContext?: {
     provider: string;
     model?: string;
+    temperature?: number;
   };
 }
 

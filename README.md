@@ -113,12 +113,12 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, affected files, and suggested fixes with confidence scores
 - **Infra diff analysis** — Risk level, cost impact, security implications, rollback complexity, and actionable recommendations for infrastructure changes
 - **DevOps config checker** — LLM-powered quality analysis of detected DevOps files with maturity scoring (0-100), severity-ranked findings, and missing file recommendations
-- **5 LLM providers** — OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini — with dynamic model selection via provider API
+- **5 LLM providers** — OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini — with dynamic model selection via provider API and temperature passthrough for deterministic reproducibility
 
 ### Tools
 
 - **12 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
-- **Plugin system** — Extend DojOps with custom tools via declarative `plugin.yaml` manifests + JSON Schema. Drop a plugin into `~/.dojops/plugins/` or `.dojops/plugins/` and it's automatically available to all commands. Scaffold new plugins with `dojops tools plugins init <name>`
+- **Plugin system** — Extend DojOps with custom tools via declarative `plugin.yaml` manifests + JSON Schema. Drop a plugin into `~/.dojops/plugins/` or `.dojops/plugins/` and it's automatically available to all commands. Scaffold new plugins with `dojops tools plugins init <name>`. Plugin isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
 - **Schema-validated** — Every tool input and LLM output is validated against Zod schemas before execution
 - **Deep verification** — Optional `--verify` runs generated configs through external validators (terraform validate, hadolint, kubectl dry-run) before writing files
@@ -268,6 +268,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | ------------------- | ------------------------------------------------------------------- |
 | `--provider=NAME`   | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini` |
 | `--model=NAME`      | LLM model override                                                  |
+| `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility             |
 | `--profile=NAME`    | Use named config profile                                            |
 | `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                           |
 | `--verbose`         | Verbose output                                                      |
@@ -356,6 +357,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Layer                   | Mechanism                                                                                                              |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                                |
+| **Plugin isolation**    | Verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention        |
 | **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                         |
 | **Deep verification**   | Optional external tool validation: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write    |
 | **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits               |
@@ -487,9 +489,10 @@ dojops --model=deepseek-reasoner "..." # One-off override
 ### Configuration Precedence
 
 ```
-Provider:  --provider  >  $DOJOPS_PROVIDER  >  config  >  openai
-Model:     --model     >  $DOJOPS_MODEL     >  config  >  provider default
-Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / ...  >  config token
+Provider:     --provider     >  $DOJOPS_PROVIDER     >  config  >  openai
+Model:        --model        >  $DOJOPS_MODEL        >  config  >  provider default
+Temperature:  --temperature  >  $DOJOPS_TEMPERATURE  >  config  >  undefined (provider default)
+Token:        $OPENAI_API_KEY / $ANTHROPIC_API_KEY / ...  >  config token
 ```
 
 ### Profiles
@@ -525,7 +528,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 806 tests
+pnpm test               # Run all 834 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -560,17 +563,17 @@ packages/
 
 | Package                 | Tests   |
 | ----------------------- | ------- |
-| `@dojops/core`          | 208     |
+| `@dojops/core`          | 218     |
 | `@dojops/cli`           | 137     |
 | `@dojops/tools`         | 121     |
+| `@dojops/tool-registry` | 109     |
 | `@dojops/api`           | 96      |
-| `@dojops/tool-registry` | 91      |
 | `@dojops/scanner`       | 43      |
 | `@dojops/executor`      | 40      |
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
 | `@dojops/sdk`           | 14      |
-| **Total**               | **806** |
+| **Total**               | **834** |
 
 ---
 

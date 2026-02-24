@@ -37,6 +37,7 @@ The interactive wizard:
 export DOJOPS_PROVIDER=openai
 export OPENAI_API_KEY=sk-...
 export DOJOPS_MODEL=gpt-4o              # Optional model override
+export DOJOPS_TEMPERATURE=0.7           # Optional temperature override
 export DOJOPS_API_PORT=3000              # API server port (default: 3000)
 ```
 
@@ -45,6 +46,7 @@ export DOJOPS_API_PORT=3000              # API server port (default: 3000)
 ```bash
 dojops --provider=anthropic "Create a Terraform config"
 dojops --model=gpt-4o "Create a Kubernetes deployment"
+dojops --temperature=0.2 "Create a Terraform config"
 ```
 
 ### Config File
@@ -55,6 +57,7 @@ DojOps saves configuration to `~/.dojops/config.json`:
 {
   "provider": "openai",
   "model": "gpt-4o-mini",
+  "defaultTemperature": 0.7,
   "token": "sk-..."
 }
 ```
@@ -66,9 +69,10 @@ DojOps saves configuration to `~/.dojops/config.json`:
 Values are resolved in order (first match wins):
 
 ```
-Provider:  --provider flag  >  $DOJOPS_PROVIDER  >  config file  >  "openai" (default)
-Model:     --model flag     >  $DOJOPS_MODEL     >  config file  >  provider default
-Token:     $OPENAI_API_KEY (etc.)  >  config file token
+Provider:     --provider flag     >  $DOJOPS_PROVIDER     >  config file  >  "openai" (default)
+Model:        --model flag        >  $DOJOPS_MODEL        >  config file  >  provider default
+Temperature:  --temperature flag  >  $DOJOPS_TEMPERATURE  >  config file  >  undefined (provider default)
+Token:        $OPENAI_API_KEY (etc.)  >  config file token
 ```
 
 ---
@@ -150,15 +154,16 @@ dojops config profile use prod   # Uses OpenAI GPT-4o
 
 ## Environment Variables Reference
 
-| Variable            | Description           | Default          |
-| ------------------- | --------------------- | ---------------- |
-| `DOJOPS_PROVIDER`   | LLM provider name     | `openai`         |
-| `DOJOPS_MODEL`      | Model override        | Provider default |
-| `OPENAI_API_KEY`    | OpenAI API key        | --               |
-| `ANTHROPIC_API_KEY` | Anthropic API key     | --               |
-| `DEEPSEEK_API_KEY`  | DeepSeek API key      | --               |
-| `GEMINI_API_KEY`    | Google Gemini API key | --               |
-| `DOJOPS_API_PORT`   | API server port       | `3000`           |
+| Variable             | Description           | Default          |
+| -------------------- | --------------------- | ---------------- |
+| `DOJOPS_PROVIDER`    | LLM provider name     | `openai`         |
+| `DOJOPS_MODEL`       | Model override        | Provider default |
+| `DOJOPS_TEMPERATURE` | Temperature override  | Provider default |
+| `OPENAI_API_KEY`     | OpenAI API key        | --               |
+| `ANTHROPIC_API_KEY`  | Anthropic API key     | --               |
+| `DEEPSEEK_API_KEY`   | DeepSeek API key      | --               |
+| `GEMINI_API_KEY`     | Google Gemini API key | --               |
+| `DOJOPS_API_PORT`    | API server port       | `3000`           |
 
 ### Ollama Setup
 

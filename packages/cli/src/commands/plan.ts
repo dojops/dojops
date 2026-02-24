@@ -56,6 +56,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
         task.pluginVersion = meta.pluginVersion;
         task.pluginHash = meta.pluginHash;
         task.pluginSource = meta.pluginSource as "global" | "project" | undefined;
+        task.systemPromptHash = meta.systemPromptHash;
       }
     }
   }
@@ -90,12 +91,14 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       pluginVersion: t.pluginVersion,
       pluginHash: t.pluginHash,
       pluginSource: t.pluginSource,
+      systemPromptHash: t.systemPromptHash,
     })),
     files: [],
     approvalStatus: "PENDING",
     executionContext: {
       provider: provider.name,
       model: ctx.globalOpts.model,
+      temperature: ctx.globalOpts.temperature,
     },
   };
   savePlan(root, savedPlan);

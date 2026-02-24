@@ -106,7 +106,7 @@ interface LLMProvider {
 }
 ```
 
-All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema.
+All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema. All 5 providers support `temperature` passthrough for deterministic reproducibility (conditionally included in API calls only when explicitly set).
 
 ### 2. Multi-Agent System (`@dojops/core`)
 
@@ -146,7 +146,8 @@ Unified registry layer between consumers (Planner, Executor, CLI, API) and tool 
 - **Manifest validation** — Zod schema validates plugin manifests; JSON Schema inputs are converted to Zod at runtime
 - **PluginTool adapter** — Converts declarative `plugin.yaml` into a `DevOpsTool`-compatible object with generate/execute/verify
 - **Plugin policy** — `.dojops/policy.yaml` supports `allowedPlugins` and `blockedPlugins` lists
-- **Audit enrichment** — Plugin executions include `toolType`, `pluginSource`, `pluginVersion`, and `pluginHash` in audit entries
+- **Audit enrichment** — Plugin executions include `toolType`, `pluginSource`, `pluginVersion`, `pluginHash`, and `systemPromptHash` in audit entries
+- **Plugin isolation** — Verification commands restricted to a whitelist of 16 allowed binaries (terraform, kubectl, helm, etc.), `child_process` permission must be `"required"` for execution, path traversal (`..`) blocked in manifest file paths and detector paths
 - **Unified interface** — `ToolRegistry.getAll()` returns `DevOpsTool[]`, so Planner, Executor, and API remain unchanged
 
 ### 6. Execution Engine (`@dojops/executor`)

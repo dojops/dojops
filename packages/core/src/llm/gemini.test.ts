@@ -88,4 +88,24 @@ describe("GeminiProvider", () => {
 
     expect(models).toEqual(["gemini-2.5-flash", "gemini-2.5-pro"]);
   });
+
+  it("passes temperature in config when provided", async () => {
+    mockGenerateContent.mockResolvedValue({ text: "ok" });
+
+    const provider = new GeminiProvider("key");
+    await provider.generate({ prompt: "Hi", temperature: 0.9 });
+
+    const call = mockGenerateContent.mock.calls[0][0];
+    expect(call.config.temperature).toBe(0.9);
+  });
+
+  it("omits temperature from config when not provided", async () => {
+    mockGenerateContent.mockResolvedValue({ text: "ok" });
+
+    const provider = new GeminiProvider("key");
+    await provider.generate({ prompt: "Hi" });
+
+    const call = mockGenerateContent.mock.calls[0][0];
+    expect(call.config.temperature).toBeUndefined();
+  });
 });

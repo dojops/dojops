@@ -147,7 +147,8 @@ This avoids re-running expensive LLM calls for tasks that already succeeded.
 Plans are saved to `.dojops/plans/<plan-id>.json` containing:
 
 - The full `TaskGraph`
-- Metadata (goal, timestamp, provider)
+- Metadata (goal, timestamp, provider, model, temperature)
+- Plugin metadata per task (`toolType`, `pluginVersion`, `pluginHash`, `pluginSource`, `systemPromptHash`)
 - Execution state (per-task status, outputs)
 
 ### Plan Lifecycle

@@ -42,6 +42,10 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
       globalOpts.model = args[++i];
     } else if (arg.startsWith("--model=")) {
       globalOpts.model = arg.slice("--model=".length);
+    } else if (arg === "--temperature" && i + 1 < args.length) {
+      globalOpts.temperature = Number(args[++i]);
+    } else if (arg.startsWith("--temperature=")) {
+      globalOpts.temperature = Number(arg.slice("--temperature=".length));
     } else if (arg === "--output" && i + 1 < args.length) {
       globalOpts.output = args[++i] as OutputFormat;
     } else if (arg.startsWith("--output=")) {

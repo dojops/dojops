@@ -5,6 +5,7 @@ import os from "node:os";
 export interface DojOpsConfig {
   defaultProvider?: string;
   defaultModel?: string;
+  defaultTemperature?: number;
   tokens?: Record<string, string>;
 }
 
@@ -83,6 +84,20 @@ export function resolveModel(
   config: DojOpsConfig,
 ): string | undefined {
   return cliFlag ?? process.env.DOJOPS_MODEL ?? config.defaultModel ?? undefined;
+}
+
+/**
+ * Resolves the LLM temperature to use.
+ * Priority: CLI flag > DOJOPS_TEMPERATURE env > config defaultTemperature > undefined
+ */
+export function resolveTemperature(
+  cliFlag: number | undefined,
+  config: DojOpsConfig,
+): number | undefined {
+  if (cliFlag !== undefined) return cliFlag;
+  const envVal = process.env.DOJOPS_TEMPERATURE;
+  if (envVal !== undefined) return Number(envVal);
+  return config.defaultTemperature ?? undefined;
 }
 
 /**

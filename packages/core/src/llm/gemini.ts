@@ -34,6 +34,7 @@ export class GeminiProvider implements LLMProvider {
         config: {
           systemInstruction: systemPrompt,
           ...(req.schema ? { responseMimeType: "application/json" } : {}),
+          ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
         },
       });
     } catch (err: unknown) {

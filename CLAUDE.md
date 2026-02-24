@@ -12,7 +12,7 @@ DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (810 tests)
+pnpm test               # Vitest across all packages (834 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -77,7 +77,7 @@ pnpm dojops -- serve                 # in-repo alternative
 
 **Key abstractions:**
 
-- `LLMProvider` interface (`packages/core/src/llm/provider.ts`) — `generate(LLMRequest): Promise<LLMResponse>`, optional `listModels(): Promise<string[]>`, supports optional `schema` field for structured JSON output
+- `LLMProvider` interface (`packages/core/src/llm/provider.ts`) — `generate(LLMRequest): Promise<LLMResponse>`, optional `listModels(): Promise<string[]>`, supports optional `schema` field for structured JSON output, `temperature` passthrough to all 5 providers
 - `parseAndValidate()` (`packages/core/src/llm/json-validator.ts`) — strips markdown fences, JSON.parse, Zod safeParse; used by all 5 providers
 - `DevOpsAgent` (`packages/core/src/agent.ts`) — wraps an LLMProvider
 - `AgentRouter` (`packages/core/src/agents/router.ts`) — keyword-based routing to specialist agents with confidence scoring
@@ -89,7 +89,9 @@ pnpm dojops -- serve                 # in-repo alternative
 - `readExistingConfig()` (`packages/sdk/src/file-reader.ts`) — reads existing config files (up to 50KB) for update/enhance workflows; returns `null` for missing or oversized files
 - `backupFile()` (`packages/sdk/src/file-reader.ts`) — creates `.bak` copy of existing config files before overwriting
 - `ToolRegistry` (`packages/tool-registry/src/registry.ts`) — unified registry combining built-in + plugin tools with `getAll()` / `get(name)` / `has()` / `getToolMetadata(name)` interface
-- `PluginTool` (`packages/tool-registry/src/plugin-tool.ts`) — adapter converting declarative `plugin.yaml` manifests into `DevOpsTool`-compatible objects
+- `PluginTool` (`packages/tool-registry/src/plugin-tool.ts`) — adapter converting declarative `plugin.yaml` manifests into `DevOpsTool`-compatible objects; `systemPromptHash` getter for reproducibility tracking
+- `ALLOWED_VERIFICATION_BINARIES` / `isVerificationCommandAllowed()` (`packages/tool-registry/src/plugin-tool.ts`) — whitelist of 16 allowed verification binaries enforced at runtime; `verify()` enforces 3-tier check: no command → pass, no `child_process` permission → pass (never execute), non-whitelisted → reject
+- Path traversal prevention (`packages/tool-registry/src/manifest-schema.ts`) — `.refine()` on `FileEntrySchema.path` and `DetectorSchema.path` rejects `..` segments
 - `createToolRegistry()` (`packages/tool-registry/src/index.ts`) — factory: loads all 12 built-in tools, discovers plugins, filters by policy, returns `ToolRegistry`
 - `jsonSchemaToZod()` (`packages/tool-registry/src/json-schema-to-zod.ts`) — converts JSON Schema to runtime Zod schemas for plugin input validation
 - `decompose()` (`packages/planner/src/decomposer.ts`) — LLM call → `TaskGraph` with structured output
@@ -118,15 +120,15 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 
 **Implemented (Phase 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8):**
 
-- `@dojops/core` — DevOpsAgent + 5 LLM providers (OpenAI, Anthropic, Ollama, DeepSeek, Gemini) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + dynamic model selection via `listModels()` + multi-agent system (AgentRouter, 16 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
+- `@dojops/core` — DevOpsAgent + 5 LLM providers (OpenAI, Anthropic, Ollama, DeepSeek, Gemini) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + temperature passthrough to all providers + dynamic model selection via `listModels()` + multi-agent system (AgentRouter, 16 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
 - `@dojops/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`, `VerificationResult`/`VerificationIssue` types, optional `verify()` interface, `readExistingConfig()`/`backupFile()` file-reader utilities for update workflows
-- `@dojops/planner` — TaskGraph/TaskNode Zod schemas (TaskNode extended with optional `toolType`/`pluginVersion`/`pluginHash`/`pluginSource` metadata), `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution + `completedTaskIds` skip for resume
+- `@dojops/planner` — TaskGraph/TaskNode Zod schemas (TaskNode extended with optional `toolType`/`pluginVersion`/`pluginHash`/`pluginSource`/`systemPromptHash` metadata), `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution + `completedTaskIds` skip for resume
 - `@dojops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, optional verifier, tool class, tests). All tools support updating existing configs via auto-detection + `existingContent` input field + `.bak` backup before overwrite. Terraform, Dockerfile, and Kubernetes tools implement `verify()` for external validation
-- `@dojops/tool-registry` — Unified tool registry combining 12 built-in tools + plugin tools discovered from `~/.dojops/plugins/` (global) and `.dojops/plugins/` (project). Plugin manifests (`plugin.yaml` + JSON Schema) converted to `DevOpsTool` at runtime. Plugin policy via `.dojops/policy.yaml`. Audit enrichment with `toolType`/`pluginSource`/`pluginVersion`/`pluginHash`
+- `@dojops/tool-registry` — Unified tool registry combining 12 built-in tools + plugin tools discovered from `~/.dojops/plugins/` (global) and `.dojops/plugins/` (project). Plugin manifests (`plugin.yaml` + JSON Schema) converted to `DevOpsTool` at runtime. Plugin policy via `.dojops/policy.yaml`. Audit enrichment with `toolType`/`pluginSource`/`pluginVersion`/`pluginHash`/`systemPromptHash`. Plugin isolation: verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention on manifest file paths
 - `@dojops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size/verification restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging with verification results + plugin metadata, `withTimeout()` for execution limits
-- `@dojops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve`, `chat`, `check`, `scan`, `tools` (including `plugins list/validate/init`). Execution locking, hash-chained audit logs, plan persistence with plugin version pinning + execution context (provider/model), plugin integrity validation on resume, plugin metadata passed to SafeExecutor for audit enrichment, rich TUI via `@clack/prompts`
+- `@dojops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve`, `chat`, `check`, `scan`, `tools` (including `plugins list/validate/init`). `--temperature` global flag. Execution locking, hash-chained audit logs, plan persistence with plugin version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, plugin integrity validation on resume, plugin metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
 - `@dojops/api` — REST API (Express + cors) exposing all capabilities via 13 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 9 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History, Overview, Security, Audit), 30s auto-refresh on metrics tabs, `supertest` integration tests
-- Dev tooling — Vitest (810 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (834 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap
 
@@ -146,6 +148,8 @@ Set in `.env` (see `.env.example`):
 
 - `DOJOPS_PROVIDER`: `openai` (default) | `anthropic` | `ollama` | `deepseek` | `gemini`
 - `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `GEMINI_API_KEY` as needed
+- `DOJOPS_MODEL`: LLM model override
+- `DOJOPS_TEMPERATURE`: LLM temperature override (0-2)
 - `DOJOPS_API_PORT`: API server port (default `3000`)
 - Ollama requires local server at `localhost:11434`
 

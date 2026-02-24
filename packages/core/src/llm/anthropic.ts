@@ -43,6 +43,7 @@ export class AnthropicProvider implements LLMProvider {
         max_tokens: req.maxTokens ?? 8192,
         system,
         messages,
+        ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
     } catch (err: unknown) {
       throw new Error(extractApiError(err), { cause: err });

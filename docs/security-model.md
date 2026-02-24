@@ -168,6 +168,40 @@ See [Security Scanning](security-scanning.md) for details.
 
 ---
 
+## Plugin Isolation
+
+Plugin tools are sandboxed with three security controls:
+
+### Verification Command Whitelist
+
+The `verification.command` field in plugin manifests can only invoke whitelisted binaries:
+
+```
+terraform, kubectl, helm, ansible-lint, docker, hadolint,
+yamllint, jsonlint, shellcheck, tflint, kubeval, conftest,
+checkov, trivy, kube-score, polaris
+```
+
+Any other command (e.g., `curl`, `rm`, `bash`) is rejected at runtime with a descriptive error.
+
+### Permission Enforcement
+
+The `permissions.child_process` field controls whether verification commands execute:
+
+| Value        | Behavior                                            |
+| ------------ | --------------------------------------------------- |
+| `"required"` | Command is checked against whitelist, then executed |
+| `"none"`     | Command is never executed (skip)                    |
+| _(omitted)_  | Default-safe: command is never executed             |
+
+This ensures plugins cannot execute shell commands unless they explicitly declare `child_process: "required"` AND the command is whitelisted.
+
+### Path Traversal Prevention
+
+File paths in `files[].path` and `detector.path` are validated at schema level — any segment containing `..` is rejected. This prevents plugins from writing to or detecting files outside the project directory (e.g., `../../etc/passwd`).
+
+---
+
 ## Best Practices
 
 1. **Always use `--verify`** in production for Terraform, Dockerfile, and Kubernetes tools

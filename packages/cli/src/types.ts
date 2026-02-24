@@ -7,6 +7,7 @@ export interface GlobalOptions {
   profile?: string;
   provider?: string;
   model?: string;
+  temperature?: number;
   output: OutputFormat;
   nonInteractive: boolean;
   verbose: boolean;

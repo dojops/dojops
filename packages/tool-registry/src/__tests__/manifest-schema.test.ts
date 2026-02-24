@@ -139,4 +139,46 @@ describe("validateManifest", () => {
       expect(result.valid).toBe(true);
     }
   });
+
+  it("rejects file path with '..' traversal", () => {
+    const result = validateManifest({
+      ...validManifest,
+      files: [{ path: "../../etc/passwd", serializer: "raw" }],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("traversal");
+  });
+
+  it("rejects embedded path traversal", () => {
+    const result = validateManifest({
+      ...validManifest,
+      files: [{ path: "config/../../../secret", serializer: "yaml" }],
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it("rejects detector path with '..' traversal", () => {
+    const result = validateManifest({
+      ...validManifest,
+      detector: { path: "../outside/config.yaml" },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("traversal");
+  });
+
+  it("accepts template path with placeholder", () => {
+    const result = validateManifest({
+      ...validManifest,
+      files: [{ path: "{outputPath}/config.yaml", serializer: "yaml" }],
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts detector path without traversal", () => {
+    const result = validateManifest({
+      ...validManifest,
+      detector: { path: "config.yaml" },
+    });
+    expect(result.valid).toBe(true);
+  });
 });

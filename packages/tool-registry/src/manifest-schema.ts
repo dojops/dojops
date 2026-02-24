@@ -1,7 +1,9 @@
 import { z } from "zod";
 
+const noPathTraversal = (val: string) => !val.split(/[/\\]/).includes("..");
+
 const FileEntrySchema = z.object({
-  path: z.string().min(1),
+  path: z.string().min(1).refine(noPathTraversal, "Path must not contain '..' traversal segments"),
   serializer: z.enum(["yaml", "json", "hcl", "ini", "toml", "raw"]),
 });
 
@@ -17,7 +19,7 @@ const VerificationSchema = z.object({
 });
 
 const DetectorSchema = z.object({
-  path: z.string().min(1),
+  path: z.string().min(1).refine(noPathTraversal, "Path must not contain '..' traversal segments"),
 });
 
 const PermissionsSchema = z.object({

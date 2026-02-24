@@ -22,6 +22,7 @@ export type TaskNode = TaskNodeBase & {
   pluginVersion?: string;
   pluginHash?: string;
   pluginSource?: "global" | "project";
+  systemPromptHash?: string;
 };
 
 export type TaskGraph = Omit<z.infer<typeof TaskGraphSchema>, "tasks"> & {

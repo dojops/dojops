@@ -94,6 +94,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | ------------------- | ------------------------------------------------------------------- |
 | `--provider=NAME`   | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini` |
 | `--model=NAME`      | LLM model override                                                  |
+| `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility             |
 | `--profile=NAME`    | Use named config profile                                            |
 | `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                           |
 | `--verbose`         | Verbose output                                                      |
