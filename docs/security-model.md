@@ -1,6 +1,6 @@
 # Security Model
 
-ODA implements defense-in-depth with seven layers between LLM output and infrastructure changes. No LLM output is trusted — every response crosses a trust boundary and is validated at every subsequent layer.
+DojOps implements defense-in-depth with seven layers between LLM output and infrastructure changes. No LLM output is trusted — every response crosses a trust boundary and is validated at every subsequent layer.
 
 ---
 
@@ -41,7 +41,7 @@ ODA implements defense-in-depth with seven layers between LLM output and infrast
        |
   +----v-----+
   | Immutable |  Layer 7: Hash-chained JSONL audit trail (SHA-256)
-  | Audit Log |  with tamper detection via `oda history verify`
+  | Audit Log |  with tamper detection via `dojops history verify`
   +----------+
 ```
 
@@ -124,9 +124,9 @@ The approval context includes file paths, content preview, and tool name.
 
 Every operation produces a hash-chained audit entry:
 
-- **Append-only** — Entries are appended to `.oda/history/audit.jsonl`
+- **Append-only** — Entries are appended to `.dojops/history/audit.jsonl`
 - **Hash chain** — Each entry's hash includes the previous entry's hash (SHA-256)
-- **Tamper detection** — `oda history verify` recomputes all hashes and detects any modifications
+- **Tamper detection** — `dojops history verify` recomputes all hashes and detects any modifications
 - **Structured entries** — Each entry includes seq, timestamp, command, tool, status, verification result
 
 ---
@@ -149,7 +149,7 @@ LLM output is treated as untrusted external input. The trust boundary is at the 
 
 PID-based execution locking prevents concurrent mutations:
 
-- **Lock file** — `.oda/lock.json` containing `{ pid, command, timestamp }`
+- **Lock file** — `.dojops/lock.json` containing `{ pid, command, timestamp }`
 - **Mutual exclusion** — Only one `apply`, `destroy`, or `rollback` operation at a time
 - **Stale lock cleanup** — If the locking PID is dead, the lock is automatically removed
 - **Exit code 4** — Returned when a lock conflict is detected
@@ -158,7 +158,7 @@ PID-based execution locking prevents concurrent mutations:
 
 ## Security Scanning
 
-Beyond the execution pipeline, ODA provides proactive security scanning via `@odaops/scanner`:
+Beyond the execution pipeline, DojOps provides proactive security scanning via `@dojops/scanner`:
 
 - 6 scanners covering vulnerabilities, dependencies, IaC issues, and secrets
 - Exit codes 6 (HIGH) and 7 (CRITICAL) for CI/CD integration
@@ -172,7 +172,7 @@ See [Security Scanning](security-scanning.md) for details.
 
 1. **Always use `--verify`** in production for Terraform, Dockerfile, and Kubernetes tools
 2. **Review diffs** before approving write operations in interactive mode
-3. **Run `oda history verify`** periodically to check audit trail integrity
+3. **Run `dojops history verify`** periodically to check audit trail integrity
 4. **Use `--dry-run`** to preview changes before applying
 5. **Restrict `allowedPaths`** in execution policies to limit blast radius
-6. **Run `oda scan`** after applying changes to check for introduced vulnerabilities
+6. **Run `dojops scan`** after applying changes to check for introduced vulnerabilities

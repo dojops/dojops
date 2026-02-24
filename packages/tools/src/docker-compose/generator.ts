@@ -1,4 +1,4 @@
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { ComposeConfig, ComposeConfigSchema } from "./schemas";
 import { ComposeDetectionResult } from "./detector";

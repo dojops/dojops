@@ -1,5 +1,5 @@
 /**
- * User-scoped tool sandbox at ~/.oda/tools/.
+ * User-scoped tool sandbox at ~/.dojops/tools/.
  *
  * Downloads, manages, and cleans up binary tools without elevated permissions.
  * Uses node:https for downloads, system unzip/tar for extraction.
@@ -17,14 +17,14 @@ import {
   ToolRegistry,
   buildDownloadUrl,
   buildBinaryPathInArchive,
-} from "@odaops/core";
+} from "@dojops/core";
 
-export const TOOLS_DIR = path.join(os.homedir(), ".oda", "tools");
+export const TOOLS_DIR = path.join(os.homedir(), ".dojops", "tools");
 export const TOOLS_BIN_DIR = path.join(TOOLS_DIR, "bin");
 export const REGISTRY_FILE = path.join(TOOLS_DIR, "registry.json");
 
 /**
- * Ensure ~/.oda/tools/bin/ exists.
+ * Ensure ~/.dojops/tools/bin/ exists.
  */
 export function ensureToolsDir(): void {
   fs.mkdirSync(TOOLS_BIN_DIR, { recursive: true, mode: 0o755 });
@@ -53,7 +53,7 @@ export function saveToolRegistry(registry: ToolRegistry): void {
 }
 
 /**
- * Prepend ~/.oda/tools/bin to PATH (idempotent).
+ * Prepend ~/.dojops/tools/bin to PATH (idempotent).
  */
 export function prependToolsBinToPath(): void {
   const currentPath = process.env.PATH ?? "";
@@ -70,7 +70,7 @@ export function downloadToTemp(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const tmpFile = path.join(
       os.tmpdir(),
-      `oda-download-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `dojops-download-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
 
     function follow(currentUrl: string, hops: number): void {
@@ -140,7 +140,7 @@ export function extractTarGz(archivePath: string, destDir: string): void {
 }
 
 /**
- * Install a system tool into ~/.oda/tools/bin/.
+ * Install a system tool into ~/.dojops/tools/bin/.
  */
 export async function installSystemTool(
   tool: SystemTool,
@@ -160,7 +160,7 @@ export async function installSystemTool(
 
   // Download
   const tmpFile = await downloadToTemp(url);
-  const extractDir = path.join(os.tmpdir(), `oda-extract-${Date.now()}`);
+  const extractDir = path.join(os.tmpdir(), `dojops-extract-${Date.now()}`);
 
   try {
     let binarySource: string;
@@ -237,7 +237,7 @@ function commandExists(name: string): boolean {
  * Strategy order:
  * 1. `pipx install ansible` — if pipx binary is on PATH
  * 2. `python3 -m pipx install ansible` — if pipx is available as a Python module
- * 3. Sandbox venv at ~/.oda/tools/venvs/ansible/ — always works on PEP 668 systems
+ * 3. Sandbox venv at ~/.dojops/tools/venvs/ansible/ — always works on PEP 668 systems
  */
 export async function installAnsible(tool: SystemTool): Promise<InstalledTool> {
   const venvDir = path.join(TOOLS_DIR, "venvs", "ansible");

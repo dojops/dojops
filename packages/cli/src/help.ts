@@ -6,26 +6,26 @@ function printBanner(): void {
   const bc = (s: string) => pc.bold(pc.cyan(s));
 
   console.log();
-  console.log(d("  ╔══════════════════════════════════════════════╗"));
-  console.log(d("  ║") + "                                              " + d("║"));
-  console.log(d("  ║") + bc("       ██████╗  ██████╗   █████╗              ") + d("║"));
-  console.log(d("  ║") + bc("      ██╔═══██╗ ██╔══██╗ ██╔══██╗             ") + d("║"));
-  console.log(d("  ║") + bc("      ██║   ██║ ██║  ██║ ███████║             ") + d("║"));
-  console.log(d("  ║") + bc("      ██║   ██║ ██║  ██║ ██╔══██║             ") + d("║"));
-  console.log(d("  ║") + bc("      ╚██████╔╝ ██████╔╝ ██║  ██║             ") + d("║"));
-  console.log(d("  ║") + bc("       ╚═════╝  ╚═════╝  ╚═╝  ╚═╝             ") + d("║"));
-  console.log(d("  ║") + "                                              " + d("║"));
+  console.log(d("  ╔════════════════════════════════════════════════════╗"));
+  console.log(d("  ║") + "                                                    " + d("║"));
+  console.log(d("  ║") + bc("   ██████╗   ██████╗    ██╗ ██████╗ ██████╗ ███████╗") + d("  ║"));
+  console.log(d("  ║") + bc("   ██╔══██╗ ██╔═══██╗   ██║██╔═══██╗██╔══██╗██╔════╝") + d(" ║"));
+  console.log(d("  ║") + bc("   ██║  ██║ ██║   ██║   ██║██║   ██║██████╔╝███████╗") + d("  ║"));
+  console.log(d("  ║") + bc("   ██║  ██║ ██║   ██║██ ██║██║   ██║██╔═══╝ ╚════██║") + d("  ║"));
+  console.log(d("  ║") + bc("   ██████╔╝ ╚██████╔╝╚███╔╝╚██████╔╝██║     ███████║") + d("  ║"));
+  console.log(d("  ║") + bc("   ╚═════╝   ╚═════╝  ╚══╝  ╚═════╝ ╚═╝     ╚══════╝") + d(" ║"));
+  console.log(d("  ║") + "                                                    " + d("║"));
   console.log(
     d("  ║") +
       "  " +
       c("▸") +
-      pc.bold(pc.white(" Open DevOps Agent")) +
-      d("  ·  v1.0.0              ") +
+      pc.bold(pc.white(" DojOps — AI DevOps Automation Engine")) +
+      d("  ·  v1.0.0  ") +
       d("║"),
   );
-  console.log(d("  ║") + "  " + d("  AI-powered DevOps automation engine       ") + d("║"));
-  console.log(d("  ║") + "                                              " + d("║"));
-  console.log(d("  ╚══════════════════════════════════════════════╝"));
+  console.log(d("  ║") + "  " + d("  AI-powered DevOps automation engine           ") + d("║"));
+  console.log(d("  ║") + "                                                    " + d("║"));
+  console.log(d("  ╚════════════════════════════════════════════════════╝"));
   console.log();
 }
 
@@ -34,7 +34,7 @@ export { printBanner };
 export function printHelp(): void {
   printBanner();
   console.log(pc.bold("USAGE"));
-  console.log(`  ${pc.dim("$")} oda [command] [options] <prompt>`);
+  console.log(`  ${pc.dim("$")} dojops [command] [options] <prompt>`);
   console.log();
   console.log(pc.bold("COMMANDS"));
   console.log(`  ${pc.cyan("plan")}               Decompose goal into task graph`);
@@ -54,11 +54,11 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
   console.log(`  ${pc.cyan("check")}              LLM-powered DevOps config quality check`);
   console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
-  console.log(`  ${pc.cyan("tools")}              Manage system tool sandbox (~/.oda/tools/)`);
+  console.log(`  ${pc.cyan("tools")}              Manage system tool sandbox (~/.dojops/tools/)`);
   console.log(
     `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
   );
-  console.log(`  ${pc.cyan("init")}               Initialize .oda/ + scan repo context`);
+  console.log(`  ${pc.cyan("init")}               Initialize .dojops/ + scan repo context`);
   console.log(`  ${pc.cyan("destroy")}            Remove generated artifacts from a plan`);
   console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
   console.log();
@@ -95,36 +95,40 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--port=N")}           API server port ${pc.dim("(default: 3000)")}`);
   console.log();
   console.log(pc.bold("BACKWARD COMPATIBILITY"));
-  console.log(`  ${pc.dim("$")} oda --plan "..."             ${pc.dim('→ oda plan "..."')}`);
+  console.log(`  ${pc.dim("$")} dojops --plan "..."             ${pc.dim('→ dojops plan "..."')}`);
   console.log(
-    `  ${pc.dim("$")} oda --execute "..."          ${pc.dim('→ oda plan --execute "..."')}`,
+    `  ${pc.dim("$")} dojops --execute "..."          ${pc.dim('→ dojops plan --execute "..."')}`,
   );
-  console.log(`  ${pc.dim("$")} oda --debug-ci "..."         ${pc.dim('→ oda debug ci "..."')}`);
   console.log(
-    `  ${pc.dim("$")} oda --diff "..."             ${pc.dim('→ oda analyze diff "..."')}`,
+    `  ${pc.dim("$")} dojops --debug-ci "..."         ${pc.dim('→ dojops debug ci "..."')}`,
   );
-  console.log(`  ${pc.dim("$")} oda login ...                ${pc.dim("→ oda auth login ...")}`);
-  console.log(`  ${pc.dim("$")} oda config --show            ${pc.dim("→ oda config show")}`);
-  console.log(`  ${pc.dim("$")} oda doctor                   ${pc.dim("→ oda status")}`);
+  console.log(
+    `  ${pc.dim("$")} dojops --diff "..."             ${pc.dim('→ dojops analyze diff "..."')}`,
+  );
+  console.log(
+    `  ${pc.dim("$")} dojops login ...                ${pc.dim("→ dojops auth login ...")}`,
+  );
+  console.log(`  ${pc.dim("$")} dojops config --show            ${pc.dim("→ dojops config show")}`);
+  console.log(`  ${pc.dim("$")} dojops doctor                   ${pc.dim("→ dojops status")}`);
   console.log();
   console.log(pc.bold("EXAMPLES"));
-  console.log(`  ${pc.dim("$")} oda "Create a Terraform config for S3"`);
-  console.log(`  ${pc.dim("$")} oda plan "Set up CI/CD for a Node.js app"`);
-  console.log(`  ${pc.dim("$")} oda plan --execute --yes "Create CI for Node app"`);
-  console.log(`  ${pc.dim("$")} oda apply`);
-  console.log(`  ${pc.dim("$")} oda debug ci "ERROR: tsc failed..."`);
-  console.log(`  ${pc.dim("$")} oda analyze diff "terraform plan output..."`);
-  console.log(`  ${pc.dim("$")} oda explain last`);
-  console.log(`  ${pc.dim("$")} oda doctor`);
-  console.log(`  ${pc.dim("$")} oda agents list`);
-  console.log(`  ${pc.dim("$")} oda history list`);
-  console.log(`  ${pc.dim("$")} oda serve --port=8080`);
-  console.log(`  ${pc.dim("$")} oda plan "Create CI" --output json`);
-  console.log(`  ${pc.dim("$")} oda config profile create staging`);
+  console.log(`  ${pc.dim("$")} dojops "Create a Terraform config for S3"`);
+  console.log(`  ${pc.dim("$")} dojops plan "Set up CI/CD for a Node.js app"`);
+  console.log(`  ${pc.dim("$")} dojops plan --execute --yes "Create CI for Node app"`);
+  console.log(`  ${pc.dim("$")} dojops apply`);
+  console.log(`  ${pc.dim("$")} dojops debug ci "ERROR: tsc failed..."`);
+  console.log(`  ${pc.dim("$")} dojops analyze diff "terraform plan output..."`);
+  console.log(`  ${pc.dim("$")} dojops explain last`);
+  console.log(`  ${pc.dim("$")} dojops doctor`);
+  console.log(`  ${pc.dim("$")} dojops agents list`);
+  console.log(`  ${pc.dim("$")} dojops history list`);
+  console.log(`  ${pc.dim("$")} dojops serve --port=8080`);
+  console.log(`  ${pc.dim("$")} dojops plan "Create CI" --output json`);
+  console.log(`  ${pc.dim("$")} dojops config profile create staging`);
   console.log();
   console.log(pc.bold("CONFIGURATION PRECEDENCE"));
-  console.log(`  Provider:  --provider  >  $ODA_PROVIDER  >  config  >  openai`);
-  console.log(`  Model:     --model     >  $ODA_MODEL     >  config  >  provider default`);
+  console.log(`  Provider:  --provider  >  $DOJOPS_PROVIDER  >  config  >  openai`);
+  console.log(`  Model:     --model     >  $DOJOPS_MODEL     >  config  >  provider default`);
   console.log(
     `  Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / $DEEPSEEK_API_KEY / $GEMINI_API_KEY  >  config token`,
   );
@@ -142,7 +146,7 @@ export function printHelp(): void {
   console.log(`  2    Validation error`);
   console.log(`  3    Approval required`);
   console.log(`  4    Lock conflict`);
-  console.log(`  5    No .oda/ project`);
+  console.log(`  5    No .dojops/ project`);
   console.log(`  6    Security issues (HIGH findings)`);
   console.log(`  7    Critical vulnerabilities`);
   console.log();
@@ -151,45 +155,45 @@ export function printHelp(): void {
 export function printCommandHelp(command: string): void {
   switch (command) {
     case "plan":
-      console.log(`\n${pc.bold("oda plan")} — Decompose a goal into a task graph`);
+      console.log(`\n${pc.bold("dojops plan")} — Decompose a goal into a task graph`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda plan <prompt>`);
-      console.log(`  ${pc.dim("$")} oda plan --execute <prompt>`);
-      console.log(`  ${pc.dim("$")} oda plan --execute --yes <prompt>`);
+      console.log(`  ${pc.dim("$")} dojops plan <prompt>`);
+      console.log(`  ${pc.dim("$")} dojops plan --execute <prompt>`);
+      console.log(`  ${pc.dim("$")} dojops plan --execute --yes <prompt>`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--execute")}    Generate + execute tasks with approval workflow`);
       console.log(
         `  ${pc.cyan("--yes")}        Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
       );
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda plan "Set up CI/CD for a Node.js app"`);
-      console.log(`  ${pc.dim("$")} oda plan --execute "Deploy a Terraform stack"`);
-      console.log(`  ${pc.dim("$")} oda plan --execute --yes "Create CI for Node app"`);
-      console.log(`  ${pc.dim("$")} oda plan "Create CI" --output json`);
+      console.log(`  ${pc.dim("$")} dojops plan "Set up CI/CD for a Node.js app"`);
+      console.log(`  ${pc.dim("$")} dojops plan --execute "Deploy a Terraform stack"`);
+      console.log(`  ${pc.dim("$")} dojops plan --execute --yes "Create CI for Node app"`);
+      console.log(`  ${pc.dim("$")} dojops plan "Create CI" --output json`);
       console.log();
       break;
 
     case "generate":
       console.log(
-        `\n${pc.bold("oda generate")} — Generate DevOps configuration via specialist agent`,
+        `\n${pc.bold("dojops generate")} — Generate DevOps configuration via specialist agent`,
       );
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda <prompt>`);
-      console.log(`  ${pc.dim("$")} oda generate <prompt>`);
+      console.log(`  ${pc.dim("$")} dojops <prompt>`);
+      console.log(`  ${pc.dim("$")} dojops generate <prompt>`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Routes your prompt to the best-matching specialist agent and generates`);
       console.log(`  a response. This is the default command when no subcommand is given.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda "Create a Terraform config for S3"`);
-      console.log(`  ${pc.dim("$")} oda generate "Write a Kubernetes deployment"`);
-      console.log(`  ${pc.dim("$")} oda "Set up monitoring with Prometheus" --output json`);
+      console.log(`  ${pc.dim("$")} dojops "Create a Terraform config for S3"`);
+      console.log(`  ${pc.dim("$")} dojops generate "Write a Kubernetes deployment"`);
+      console.log(`  ${pc.dim("$")} dojops "Set up monitoring with Prometheus" --output json`);
       console.log();
       break;
 
     case "apply":
-      console.log(`\n${pc.bold("oda apply")} — Execute a saved plan`);
+      console.log(`\n${pc.bold("dojops apply")} — Execute a saved plan`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda apply [<plan-id>] [options]`);
+      console.log(`  ${pc.dim("$")} dojops apply [<plan-id>] [options]`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--dry-run")}            Preview changes without writing files`);
       console.log(`  ${pc.cyan("--resume")}             Skip previously completed tasks`);
@@ -210,107 +214,109 @@ export function printCommandHelp(command: string): void {
       console.log(`  With --install-packages, runs the detected package manager's install`);
       console.log(`  command (e.g. pnpm install, npm install) after a successful apply.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda apply`);
-      console.log(`  ${pc.dim("$")} oda apply --dry-run`);
-      console.log(`  ${pc.dim("$")} oda apply --resume --yes`);
-      console.log(`  ${pc.dim("$")} oda apply --verify`);
-      console.log(`  ${pc.dim("$")} oda apply --install-packages`);
-      console.log(`  ${pc.dim("$")} oda apply plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops apply`);
+      console.log(`  ${pc.dim("$")} dojops apply --dry-run`);
+      console.log(`  ${pc.dim("$")} dojops apply --resume --yes`);
+      console.log(`  ${pc.dim("$")} dojops apply --verify`);
+      console.log(`  ${pc.dim("$")} dojops apply --install-packages`);
+      console.log(`  ${pc.dim("$")} dojops apply plan-abc123`);
       console.log();
       break;
 
     case "validate":
-      console.log(`\n${pc.bold("oda validate")} — Validate a plan against schemas`);
+      console.log(`\n${pc.bold("dojops validate")} — Validate a plan against schemas`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda validate [<plan-id>]`);
+      console.log(`  ${pc.dim("$")} dojops validate [<plan-id>]`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Validates that each task in a plan has a valid id, tool, description,`);
       console.log(`  and that dependencies reference existing tasks.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda validate`);
-      console.log(`  ${pc.dim("$")} oda validate plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops validate`);
+      console.log(`  ${pc.dim("$")} dojops validate plan-abc123`);
       console.log();
       break;
 
     case "explain":
-      console.log(`\n${pc.bold("oda explain")} — LLM explains a plan in plain language`);
+      console.log(`\n${pc.bold("dojops explain")} — LLM explains a plan in plain language`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda explain [<plan-id>|last]`);
+      console.log(`  ${pc.dim("$")} dojops explain [<plan-id>|last]`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Uses the LLM to explain what a plan does, its tasks, dependencies,`);
       console.log(`  and potential risks. Defaults to the current session plan.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda explain`);
-      console.log(`  ${pc.dim("$")} oda explain last`);
-      console.log(`  ${pc.dim("$")} oda explain plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops explain`);
+      console.log(`  ${pc.dim("$")} dojops explain last`);
+      console.log(`  ${pc.dim("$")} dojops explain plan-abc123`);
       console.log();
       break;
 
     case "debug":
     case "debug ci":
-      console.log(`\n${pc.bold("oda debug ci")} — Diagnose CI/CD log failures`);
+      console.log(`\n${pc.bold("dojops debug ci")} — Diagnose CI/CD log failures`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda debug ci <log-content>`);
+      console.log(`  ${pc.dim("$")} dojops debug ci <log-content>`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Analyzes CI build logs to identify root causes of failures.`);
       console.log(
         `  Returns error type, summary, root cause, affected files, and suggested fixes.`,
       );
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda debug ci "ERROR: tsc failed with exit code 1"`);
-      console.log(`  ${pc.dim("$")} oda debug ci "npm ERR! peer dep missing: react@^18"`);
+      console.log(`  ${pc.dim("$")} dojops debug ci "ERROR: tsc failed with exit code 1"`);
+      console.log(`  ${pc.dim("$")} dojops debug ci "npm ERR! peer dep missing: react@^18"`);
       console.log();
       break;
 
     case "analyze":
     case "analyze diff":
-      console.log(`\n${pc.bold("oda analyze diff")} — Analyze infrastructure diff for risk`);
+      console.log(`\n${pc.bold("dojops analyze diff")} — Analyze infrastructure diff for risk`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda analyze diff <diff-content>`);
+      console.log(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Analyzes infrastructure diffs (e.g. terraform plan output) and provides`);
       console.log(`  risk assessment, cost impact, security impact, and recommendations.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda analyze diff "terraform plan output..."`);
-      console.log(`  ${pc.dim("$")} oda analyze diff "+ resource aws_s3_bucket main {}"`);
+      console.log(`  ${pc.dim("$")} dojops analyze diff "terraform plan output..."`);
+      console.log(`  ${pc.dim("$")} dojops analyze diff "+ resource aws_s3_bucket main {}"`);
       console.log();
       break;
 
     case "inspect":
-      console.log(`\n${pc.bold("oda inspect")} — Inspect runtime configuration and state`);
+      console.log(`\n${pc.bold("dojops inspect")} — Inspect runtime configuration and state`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda inspect <target>`);
+      console.log(`  ${pc.dim("$")} dojops inspect <target>`);
       console.log(`\n${pc.bold("TARGETS")}`);
       console.log(`  ${pc.cyan("config")}     Show resolved provider, model, and tokens`);
       console.log(`  ${pc.cyan("policy")}     Show execution policies`);
       console.log(`  ${pc.cyan("agents")}     List specialist agents`);
       console.log(`  ${pc.cyan("session")}    Show current session state`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda inspect config`);
-      console.log(`  ${pc.dim("$")} oda inspect agents`);
-      console.log(`  ${pc.dim("$")} oda inspect session --output json`);
+      console.log(`  ${pc.dim("$")} dojops inspect config`);
+      console.log(`  ${pc.dim("$")} dojops inspect agents`);
+      console.log(`  ${pc.dim("$")} dojops inspect session --output json`);
       console.log();
       break;
 
     case "agents":
-      console.log(`\n${pc.bold("oda agents")} — List and inspect specialist agents`);
+      console.log(`\n${pc.bold("dojops agents")} — List and inspect specialist agents`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda agents [list|info <name>]`);
+      console.log(`  ${pc.dim("$")} dojops agents [list|info <name>]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(`  ${pc.cyan("list")}         List all specialist agents ${pc.dim("(default)")}`);
       console.log(`  ${pc.cyan("info <name>")}  Show details for a specific agent`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda agents`);
-      console.log(`  ${pc.dim("$")} oda agents list`);
-      console.log(`  ${pc.dim("$")} oda agents info ops-cortex`);
-      console.log(`  ${pc.dim("$")} oda agents list --output json`);
+      console.log(`  ${pc.dim("$")} dojops agents`);
+      console.log(`  ${pc.dim("$")} dojops agents list`);
+      console.log(`  ${pc.dim("$")} dojops agents info ops-cortex`);
+      console.log(`  ${pc.dim("$")} dojops agents list --output json`);
       console.log();
       break;
 
     case "history":
-      console.log(`\n${pc.bold("oda history")} — View execution history and audit logs`);
+      console.log(`\n${pc.bold("dojops history")} — View execution history and audit logs`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda history [list|show <plan-id>|verify|rollback <plan-id>]`);
+      console.log(
+        `  ${pc.dim("$")} dojops history [list|show <plan-id>|verify|rollback <plan-id>]`,
+      );
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all plans with status ${pc.dim("(default)")}`,
@@ -319,19 +325,19 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("verify")}            Verify audit log hash chain integrity`);
       console.log(`  ${pc.cyan("rollback <plan-id>")} Reverse an applied plan`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda history`);
-      console.log(`  ${pc.dim("$")} oda history list`);
-      console.log(`  ${pc.dim("$")} oda history show plan-abc123`);
-      console.log(`  ${pc.dim("$")} oda history verify`);
+      console.log(`  ${pc.dim("$")} dojops history`);
+      console.log(`  ${pc.dim("$")} dojops history list`);
+      console.log(`  ${pc.dim("$")} dojops history show plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops history verify`);
       console.log();
       break;
 
     case "config":
-      console.log(`\n${pc.bold("oda config")} — Configure provider, model, and tokens`);
+      console.log(`\n${pc.bold("dojops config")} — Configure provider, model, and tokens`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda config [show]`);
-      console.log(`  ${pc.dim("$")} oda config [--provider=NAME] [--model=NAME] [--token=KEY]`);
-      console.log(`  ${pc.dim("$")} oda config profile <create|use|list> [name]`);
+      console.log(`  ${pc.dim("$")} dojops config [show]`);
+      console.log(`  ${pc.dim("$")} dojops config [--provider=NAME] [--model=NAME] [--token=KEY]`);
+      console.log(`  ${pc.dim("$")} dojops config profile <create|use|list> [name]`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--provider=NAME")}  Set default LLM provider`);
       console.log(`  ${pc.cyan("--model=NAME")}     Set default model`);
@@ -345,21 +351,21 @@ export function printCommandHelp(command: string): void {
       console.log(`  Without arguments, launches an interactive configuration wizard.`);
       console.log(`  With flags, applies settings directly and exits.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda config`);
-      console.log(`  ${pc.dim("$")} oda config show`);
-      console.log(`  ${pc.dim("$")} oda config --provider=anthropic`);
-      console.log(`  ${pc.dim("$")} oda config --token=sk-...`);
-      console.log(`  ${pc.dim("$")} oda config profile create staging`);
-      console.log(`  ${pc.dim("$")} oda config profile use staging`);
-      console.log(`  ${pc.dim("$")} oda config profile list`);
+      console.log(`  ${pc.dim("$")} dojops config`);
+      console.log(`  ${pc.dim("$")} dojops config show`);
+      console.log(`  ${pc.dim("$")} dojops config --provider=anthropic`);
+      console.log(`  ${pc.dim("$")} dojops config --token=sk-...`);
+      console.log(`  ${pc.dim("$")} dojops config profile create staging`);
+      console.log(`  ${pc.dim("$")} dojops config profile use staging`);
+      console.log(`  ${pc.dim("$")} dojops config profile list`);
       console.log();
       break;
 
     case "auth":
-      console.log(`\n${pc.bold("oda auth")} — Authenticate with LLM provider`);
+      console.log(`\n${pc.bold("dojops auth")} — Authenticate with LLM provider`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda auth login [--token=KEY] [--provider=NAME]`);
-      console.log(`  ${pc.dim("$")} oda auth status`);
+      console.log(`  ${pc.dim("$")} dojops auth login [--token=KEY] [--provider=NAME]`);
+      console.log(`  ${pc.dim("$")} dojops auth status`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(`  ${pc.cyan("login")}    Save API token for a provider`);
       console.log(`  ${pc.cyan("status")}   Show saved tokens and default provider`);
@@ -367,22 +373,22 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--token=KEY")}      API key to save`);
       console.log(`  ${pc.cyan("--provider=NAME")}  Provider to authenticate with`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda auth login --token=sk-...`);
-      console.log(`  ${pc.dim("$")} oda auth login --provider=anthropic --token=sk-ant-...`);
-      console.log(`  ${pc.dim("$")} oda auth status`);
+      console.log(`  ${pc.dim("$")} dojops auth login --token=sk-...`);
+      console.log(`  ${pc.dim("$")} dojops auth login --provider=anthropic --token=sk-ant-...`);
+      console.log(`  ${pc.dim("$")} dojops auth status`);
       console.log();
       break;
 
     case "serve":
-      console.log(`\n${pc.bold("oda serve")} — Start REST API server and web dashboard`);
+      console.log(`\n${pc.bold("dojops serve")} — Start REST API server and web dashboard`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda serve [--port=N]`);
+      console.log(`  ${pc.dim("$")} dojops serve [--port=N]`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(
-        `  ${pc.cyan("--port=N")}    API server port ${pc.dim("(default: 3000, or $ODA_API_PORT)")}`,
+        `  ${pc.cyan("--port=N")}    API server port ${pc.dim("(default: 3000, or $DOJOPS_API_PORT)")}`,
       );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Starts an Express server exposing all ODA capabilities via REST API`);
+      console.log(`  Starts an Express server exposing all DojOps capabilities via REST API`);
       console.log(`  and a web dashboard at the root URL.`);
       console.log(`\n${pc.bold("ENDPOINTS")}`);
       console.log(`  GET  /api/health       Provider status`);
@@ -394,23 +400,23 @@ export function printCommandHelp(command: string): void {
       console.log(`  GET  /api/history      Execution history`);
       console.log(`  POST /api/scan         Security scan`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda serve`);
-      console.log(`  ${pc.dim("$")} oda serve --port=8080`);
+      console.log(`  ${pc.dim("$")} dojops serve`);
+      console.log(`  ${pc.dim("$")} dojops serve --port=8080`);
       console.log();
       break;
 
     case "status":
     case "doctor":
-      console.log(`\n${pc.bold("oda status")} — System health diagnostics`);
+      console.log(`\n${pc.bold("dojops status")} — System health diagnostics`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda status`);
-      console.log(`  ${pc.dim("$")} oda doctor   ${pc.dim("(alias)")}`);
+      console.log(`  ${pc.dim("$")} dojops status`);
+      console.log(`  ${pc.dim("$")} dojops doctor   ${pc.dim("(alias)")}`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Runs diagnostic checks on your ODA installation:`);
+      console.log(`  Runs diagnostic checks on your DojOps installation:`);
       console.log(`  - Node.js version (>= 18)`);
       console.log(`  - LLM provider configured`);
       console.log(`  - API key present`);
-      console.log(`  - .oda/ project initialized`);
+      console.log(`  - .dojops/ project initialized`);
       console.log(`  - Ollama reachability (if applicable)`);
       console.log(`  - Config file permissions`);
       console.log(`  - Agent tool dependencies (ShellCheck, Snyk, etc.)`);
@@ -418,24 +424,26 @@ export function printCommandHelp(command: string): void {
       console.log(`  When missing tools are detected, offers to install them interactively.`);
       console.log(`  Use --non-interactive to skip the install prompt.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda status`);
-      console.log(`  ${pc.dim("$")} oda status --output json`);
+      console.log(`  ${pc.dim("$")} dojops status`);
+      console.log(`  ${pc.dim("$")} dojops status --output json`);
       console.log();
       break;
 
     case "init":
-      console.log(`\n${pc.bold("oda init")} — Initialize .oda/ project directory and scan repo`);
+      console.log(
+        `\n${pc.bold("dojops init")} — Initialize .dojops/ project directory and scan repo`,
+      );
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda init`);
+      console.log(`  ${pc.dim("$")} dojops init`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Creates the .oda/ directory structure and scans the repository to`);
-      console.log(`  build a structured context file (.oda/context.json).`);
+      console.log(`  Creates the .dojops/ directory structure and scans the repository to`);
+      console.log(`  build a structured context file (.dojops/context.json).`);
       console.log();
       console.log(`  ${pc.bold("Directory structure:")}`);
-      console.log(`  - .oda/plans/         Saved plan files`);
-      console.log(`  - .oda/history/       Hash-chained audit trail`);
-      console.log(`  - .oda/session.json   Current session state`);
-      console.log(`  - .oda/context.json   Detected repo context`);
+      console.log(`  - .dojops/plans/         Saved plan files`);
+      console.log(`  - .dojops/history/       Hash-chained audit trail`);
+      console.log(`  - .dojops/session.json   Current session state`);
+      console.log(`  - .dojops/context.json   Detected repo context`);
       console.log();
       console.log(`  ${pc.bold("Repo scanning detects:")}`);
       console.log(`  - Languages (Node, Python, Go, Rust, Java, Ruby)`);
@@ -447,13 +455,13 @@ export function printCommandHelp(command: string): void {
       console.log(`  - Repo metadata (git, monorepo, Makefile, .env)`);
       console.log();
       console.log(
-        `  Re-running ${pc.cyan("oda init")} on an existing project updates context.json`,
+        `  Re-running ${pc.cyan("dojops init")} on an existing project updates context.json`,
       );
       console.log(`  without recreating existing directories.`);
       console.log();
       console.log(`  ${pc.bold("LLM enrichment:")}`);
       console.log(
-        `  When an LLM provider is configured (via ${pc.cyan("oda config")} or env vars),`,
+        `  When an LLM provider is configured (via ${pc.cyan("dojops config")} or env vars),`,
       );
       console.log(`  init automatically sends scan results to the LLM for deeper analysis:`);
       console.log(`  project description, tech stack summary, suggested workflows, and`);
@@ -465,44 +473,44 @@ export function printCommandHelp(command: string): void {
       console.log(`  specialist agents (ShellCheck, Snyk, Pyright, etc.) and interactively`);
       console.log(`  offers to install any that are missing.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda init`);
-      console.log(`  ${pc.dim("$")} oda init && cat .oda/context.json`);
+      console.log(`  ${pc.dim("$")} dojops init`);
+      console.log(`  ${pc.dim("$")} dojops init && cat .dojops/context.json`);
       console.log();
       break;
 
     case "destroy":
-      console.log(`\n${pc.bold("oda destroy")} — Remove generated artifacts from a plan`);
+      console.log(`\n${pc.bold("dojops destroy")} — Remove generated artifacts from a plan`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda destroy <plan-id> [options]`);
+      console.log(`  ${pc.dim("$")} dojops destroy <plan-id> [options]`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--dry-run")}    Preview files to be deleted without removing them`);
       console.log(`  ${pc.cyan("--yes")}        Skip confirmation prompt`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda destroy plan-abc123`);
-      console.log(`  ${pc.dim("$")} oda destroy plan-abc123 --dry-run`);
-      console.log(`  ${pc.dim("$")} oda destroy plan-abc123 --yes`);
+      console.log(`  ${pc.dim("$")} dojops destroy plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops destroy plan-abc123 --dry-run`);
+      console.log(`  ${pc.dim("$")} dojops destroy plan-abc123 --yes`);
       console.log();
       break;
 
     case "rollback":
-      console.log(`\n${pc.bold("oda rollback")} — Reverse an applied plan`);
+      console.log(`\n${pc.bold("dojops rollback")} — Reverse an applied plan`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda rollback <plan-id> [options]`);
+      console.log(`  ${pc.dim("$")} dojops rollback <plan-id> [options]`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--dry-run")}    Preview files to be removed without deleting them`);
       console.log(`  ${pc.cyan("--yes")}        Skip confirmation prompt`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Removes files created by the most recent execution of the given plan.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda rollback plan-abc123`);
-      console.log(`  ${pc.dim("$")} oda rollback plan-abc123 --dry-run`);
+      console.log(`  ${pc.dim("$")} dojops rollback plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops rollback plan-abc123 --dry-run`);
       console.log();
       break;
 
     case "scan":
-      console.log(`\n${pc.bold("oda scan")} — Scan project for security vulnerabilities`);
+      console.log(`\n${pc.bold("dojops scan")} — Scan project for security vulnerabilities`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda scan [options]`);
+      console.log(`  ${pc.dim("$")} dojops scan [options]`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--security")}     Run security scanners only (trivy, gitleaks)`);
       console.log(`  ${pc.cyan("--deps")}         Run dependency audit only (npm, pip)`);
@@ -522,7 +530,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("hadolint")}       Dockerfile linting`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Runs security scanners against the project directory. Scanners are`);
-      console.log(`  selected based on project context (detected via ${pc.cyan("oda init")}).`);
+      console.log(`  selected based on project context (detected via ${pc.cyan("dojops init")}).`);
       console.log(`  Missing scanner binaries are gracefully skipped.`);
       console.log();
       console.log(`  With ${pc.cyan("--fix")}, sends HIGH/CRITICAL findings to the LLM to`);
@@ -532,24 +540,24 @@ export function printCommandHelp(command: string): void {
       console.log(`  6    HIGH findings detected`);
       console.log(`  7    CRITICAL findings detected`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda scan`);
-      console.log(`  ${pc.dim("$")} oda scan --deps`);
-      console.log(`  ${pc.dim("$")} oda scan --security`);
-      console.log(`  ${pc.dim("$")} oda scan --iac`);
-      console.log(`  ${pc.dim("$")} oda scan --fix`);
-      console.log(`  ${pc.dim("$")} oda scan --fix --yes`);
-      console.log(`  ${pc.dim("$")} oda scan --output json`);
+      console.log(`  ${pc.dim("$")} dojops scan`);
+      console.log(`  ${pc.dim("$")} dojops scan --deps`);
+      console.log(`  ${pc.dim("$")} dojops scan --security`);
+      console.log(`  ${pc.dim("$")} dojops scan --iac`);
+      console.log(`  ${pc.dim("$")} dojops scan --fix`);
+      console.log(`  ${pc.dim("$")} dojops scan --fix --yes`);
+      console.log(`  ${pc.dim("$")} dojops scan --output json`);
       console.log();
       break;
 
     case "chat":
-      console.log(`\n${pc.bold("oda chat")} — Interactive AI DevOps session`);
+      console.log(`\n${pc.bold("dojops chat")} — Interactive AI DevOps session`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda chat`);
-      console.log(`  ${pc.dim("$")} oda chat --session <name>`);
-      console.log(`  ${pc.dim("$")} oda chat --resume`);
-      console.log(`  ${pc.dim("$")} oda chat --agent <name>`);
-      console.log(`  ${pc.dim("$")} oda chat --deterministic`);
+      console.log(`  ${pc.dim("$")} dojops chat`);
+      console.log(`  ${pc.dim("$")} dojops chat --session <name>`);
+      console.log(`  ${pc.dim("$")} dojops chat --resume`);
+      console.log(`  ${pc.dim("$")} dojops chat --agent <name>`);
+      console.log(`  ${pc.dim("$")} dojops chat --deterministic`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--session=NAME")}     Resume or create a named session`);
       console.log(`  ${pc.cyan("--resume")}           Resume the most recent session`);
@@ -558,25 +566,25 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("SLASH COMMANDS")}`);
       console.log(`  ${pc.cyan("/exit")}              Save and exit`);
       console.log(`  ${pc.cyan("/agent <name>")}      Pin to specialist agent (or 'auto')`);
-      console.log(`  ${pc.cyan("/plan <goal>")}       Bridge to oda plan`);
-      console.log(`  ${pc.cyan("/apply")}             Bridge to oda apply`);
-      console.log(`  ${pc.cyan("/scan")}              Bridge to oda scan`);
+      console.log(`  ${pc.cyan("/plan <goal>")}       Bridge to dojops plan`);
+      console.log(`  ${pc.cyan("/apply")}             Bridge to dojops apply`);
+      console.log(`  ${pc.cyan("/scan")}              Bridge to dojops scan`);
       console.log(`  ${pc.cyan("/history")}           Show session message history`);
       console.log(`  ${pc.cyan("/clear")}             Clear session messages`);
       console.log(`  ${pc.cyan("/save")}              Save session to disk`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda chat`);
-      console.log(`  ${pc.dim("$")} oda chat --session myproject`);
-      console.log(`  ${pc.dim("$")} oda chat --resume`);
-      console.log(`  ${pc.dim("$")} oda chat --agent terraform`);
-      console.log(`  ${pc.dim("$")} oda chat --deterministic`);
+      console.log(`  ${pc.dim("$")} dojops chat`);
+      console.log(`  ${pc.dim("$")} dojops chat --session myproject`);
+      console.log(`  ${pc.dim("$")} dojops chat --resume`);
+      console.log(`  ${pc.dim("$")} dojops chat --agent terraform`);
+      console.log(`  ${pc.dim("$")} dojops chat --deterministic`);
       console.log();
       break;
 
     case "tools":
-      console.log(`\n${pc.bold("oda tools")} — Manage system tool sandbox`);
+      console.log(`\n${pc.bold("dojops tools")} — Manage system tool sandbox`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda tools [list|install|remove|clean]`);
+      console.log(`  ${pc.dim("$")} dojops tools [list|install|remove|clean]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all system tools with status ${pc.dim("(default)")}`,
@@ -594,27 +602,27 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
       console.log(`  ${pc.cyan("--yes")}           Skip confirmation (clean)`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Tools are installed into ~/.oda/tools/bin/ without elevated permissions.`);
+      console.log(`  Tools are installed into ~/.dojops/tools/bin/ without elevated permissions.`);
       console.log(`  The sandbox bin directory is prepended to PATH at startup, so installed`);
-      console.log(`  tools are available to all ODA commands transparently.`);
+      console.log(`  tools are available to all DojOps commands transparently.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda tools`);
-      console.log(`  ${pc.dim("$")} oda tools list`);
-      console.log(`  ${pc.dim("$")} oda tools install terraform`);
-      console.log(`  ${pc.dim("$")} oda tools install kubectl`);
-      console.log(`  ${pc.dim("$")} oda tools remove terraform`);
-      console.log(`  ${pc.dim("$")} oda tools clean --yes`);
-      console.log(`  ${pc.dim("$")} oda tools list --output json`);
+      console.log(`  ${pc.dim("$")} dojops tools`);
+      console.log(`  ${pc.dim("$")} dojops tools list`);
+      console.log(`  ${pc.dim("$")} dojops tools install terraform`);
+      console.log(`  ${pc.dim("$")} dojops tools install kubectl`);
+      console.log(`  ${pc.dim("$")} dojops tools remove terraform`);
+      console.log(`  ${pc.dim("$")} dojops tools clean --yes`);
+      console.log(`  ${pc.dim("$")} dojops tools list --output json`);
       console.log();
       break;
 
     case "check":
-      console.log(`\n${pc.bold("oda check")} — LLM-powered DevOps configuration quality check`);
+      console.log(`\n${pc.bold("dojops check")} — LLM-powered DevOps configuration quality check`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} oda check`);
-      console.log(`  ${pc.dim("$")} oda check --output json`);
+      console.log(`  ${pc.dim("$")} dojops check`);
+      console.log(`  ${pc.dim("$")} dojops check --output json`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Reads DevOps files detected during ${pc.cyan("oda init")} and sends them`);
+      console.log(`  Reads DevOps files detected during ${pc.cyan("dojops init")} and sends them`);
       console.log(`  to the LLM for quality, security, and best-practice analysis.`);
       console.log();
       console.log(`  Returns a maturity score (0-100), findings by severity, and`);
@@ -625,10 +633,10 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("51-75")}  Good — solid setup with room for improvement`);
       console.log(`  ${pc.green("76-100")} Excellent — production-ready with best practices`);
       console.log(`\n${pc.bold("PREREQUISITES")}`);
-      console.log(`  Requires ${pc.cyan("oda init")} and a configured LLM provider.`);
+      console.log(`  Requires ${pc.cyan("dojops init")} and a configured LLM provider.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} oda check`);
-      console.log(`  ${pc.dim("$")} oda check --output json`);
+      console.log(`  ${pc.dim("$")} dojops check`);
+      console.log(`  ${pc.dim("$")} dojops check --output json`);
       console.log();
       break;
 

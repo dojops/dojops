@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
-import { AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@odaops/core";
+import { AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { createApp, AppDependencies } from "./app";
 import { createProvider, createTools } from "./factory";
 import { HistoryStore } from "./store";

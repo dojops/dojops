@@ -65,10 +65,10 @@ function computeAuditHash(entry: AuditEntry): string {
 }
 
 export class MetricsAggregator {
-  private readonly odaDir: string;
+  private readonly dojopsDir: string;
 
   constructor(private rootDir: string) {
-    this.odaDir = path.join(rootDir, ".oda");
+    this.dojopsDir = path.join(rootDir, ".dojops");
   }
 
   private readJsonFiles<T>(dir: string): T[] {
@@ -87,7 +87,7 @@ export class MetricsAggregator {
   }
 
   private readAuditEntries(): AuditEntry[] {
-    const file = path.join(this.odaDir, "history", "audit.jsonl");
+    const file = path.join(this.dojopsDir, "history", "audit.jsonl");
     if (!fs.existsSync(file)) return [];
     return fs
       .readFileSync(file, "utf-8")
@@ -142,9 +142,11 @@ export class MetricsAggregator {
   }
 
   getOverview(): OverviewMetrics {
-    const plans = this.readJsonFiles<PlanData>(path.join(this.odaDir, "plans"));
-    const executions = this.readJsonFiles<ExecutionData>(path.join(this.odaDir, "execution-logs"));
-    const scanReports = this.readJsonFiles<ScanReport>(path.join(this.odaDir, "scan-history"));
+    const plans = this.readJsonFiles<PlanData>(path.join(this.dojopsDir, "plans"));
+    const executions = this.readJsonFiles<ExecutionData>(
+      path.join(this.dojopsDir, "execution-logs"),
+    );
+    const scanReports = this.readJsonFiles<ScanReport>(path.join(this.dojopsDir, "scan-history"));
     const auditEntries = this.readAuditEntries();
 
     const successfulExecs = executions.filter((e) => e.status === "SUCCESS").length;
@@ -224,7 +226,7 @@ export class MetricsAggregator {
   }
 
   getSecurity(): SecurityMetrics {
-    const scanReports = this.readJsonFiles<ScanReport>(path.join(this.odaDir, "scan-history"));
+    const scanReports = this.readJsonFiles<ScanReport>(path.join(this.dojopsDir, "scan-history"));
 
     const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
     const byCategory = { security: 0, dependency: 0, iac: 0, secrets: 0 };

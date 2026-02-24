@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { LLMProvider, AgentRouter } from "@odaops/core";
-import { ChatSession } from "@odaops/session";
-import type { ChatSessionState } from "@odaops/session";
+import { LLMProvider, AgentRouter } from "@dojops/core";
+import { ChatSession } from "@dojops/session";
+import type { ChatSessionState } from "@dojops/session";
 import { HistoryStore } from "../store";
 import { ChatRequestSchema, ChatSessionRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";

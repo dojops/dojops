@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { VerificationResult } from "@odaops/sdk";
+import { VerificationResult } from "@dojops/sdk";
 
 interface TerraformDiagnostic {
   severity: "error" | "warning";
@@ -16,7 +16,7 @@ interface TerraformValidateOutput {
 }
 
 export async function verifyTerraformHcl(hcl: string): Promise<VerificationResult> {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-tf-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-tf-"));
 
   try {
     fs.writeFileSync(path.join(tmpDir, "main.tf"), hcl, "utf-8");

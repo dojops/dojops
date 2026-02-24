@@ -1,11 +1,11 @@
 {
-  "name": "@odaops/executor",
+  "name": "@dojops/executor",
   "version": "1.0.0",
-  "description": "Sandboxed execution engine with policy controls and approval workflows for ODA",
+  "description": "Sandboxed execution engine with policy controls and approval workflows for DojOps",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oda-devops/oda.git",
+    "url": "https://github.com/dojops/dojops.git",
     "directory": "packages/executor"
   },
   "keywords": [
@@ -32,7 +32,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@odaops/sdk": "workspace:*",
+    "@dojops/sdk": "workspace:*",
     "zod": "^3.23.0"
   }
 }

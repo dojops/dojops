@@ -10,8 +10,8 @@ process.emitWarning = (warning: string | Error, ...args: unknown[]) => {
 
 import "dotenv/config";
 import * as p from "@clack/prompts";
-import { createProvider } from "@odaops/api";
-import { LLMProvider } from "@odaops/core";
+import { createProvider } from "@dojops/api";
+import { LLMProvider } from "@dojops/core";
 import { resolveProvider, resolveModel, resolveToken, loadProfileConfig } from "./config";
 import { parseGlobalOptions, parseCommandPath } from "./parser";
 import { remapLegacyArgs } from "./compat";
@@ -164,7 +164,7 @@ async function main() {
     if (resolved) {
       await resolved.handler(resolved.remaining, ctx);
     } else {
-      // Default: generate command (oda "prompt")
+      // Default: generate command (dojops "prompt")
       const { generateCommand } = await import("./commands/generate");
       await generateCommand(remapped, ctx);
     }

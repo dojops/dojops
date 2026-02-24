@@ -1,6 +1,6 @@
 # DevOps Tools
 
-ODA includes 12 DevOps tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All tools follow a consistent pattern built on the `BaseTool<T>` abstract class.
+DojOps includes 12 DevOps tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All tools follow a consistent pattern built on the `BaseTool<T>` abstract class.
 
 ---
 
@@ -210,14 +210,14 @@ Generates systemd service unit files.
 
 ## Creating a New Tool
 
-To add a new tool to ODA:
+To add a new tool to DojOps:
 
 1. **Create the directory:** `packages/tools/src/my-tool/`
 
 2. **Define schemas** (`schemas.ts`):
 
    ```typescript
-   import { z } from "@odaops/sdk";
+   import { z } from "@dojops/sdk";
    export const MyToolInputSchema = z.object({
      /* ... */
    });
@@ -241,7 +241,7 @@ To add a new tool to ODA:
 4. **Create the tool class** (`my-tool.ts`):
 
    ```typescript
-   import { BaseTool } from "@odaops/sdk";
+   import { BaseTool } from "@dojops/sdk";
    export class MyTool extends BaseTool<MyToolInput> {
      name = "my-tool";
      inputSchema = MyToolInputSchema;

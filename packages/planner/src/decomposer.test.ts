@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { LLMProvider } from "@odaops/core";
-import { BaseTool, ToolOutput, z } from "@odaops/sdk";
+import { LLMProvider } from "@dojops/core";
+import { BaseTool, ToolOutput, z } from "@dojops/sdk";
 import { decompose } from "./decomposer";
 import { TaskGraphSchema } from "./types";
 

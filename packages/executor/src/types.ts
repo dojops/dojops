@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { VerificationResult } from "@odaops/sdk";
+import type { VerificationResult } from "@dojops/sdk";
 
 export const ExecutionPolicySchema = z.object({
   allowWrite: z.boolean().default(false),

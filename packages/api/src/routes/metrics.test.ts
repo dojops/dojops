@@ -3,22 +3,22 @@ import request from "supertest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@odaops/core";
-import { DevOpsTool } from "@odaops/sdk";
+import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
+import { DevOpsTool } from "@dojops/sdk";
 import { createApp, AppDependencies } from "../app";
 import { HistoryStore } from "../store";
 
 function createTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "oda-metrics-route-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-route-test-"));
 }
 
 function setupOda(rootDir: string) {
-  const odaDir = path.join(rootDir, ".oda");
-  fs.mkdirSync(path.join(odaDir, "plans"), { recursive: true });
-  fs.mkdirSync(path.join(odaDir, "execution-logs"), { recursive: true });
-  fs.mkdirSync(path.join(odaDir, "scan-history"), { recursive: true });
-  fs.mkdirSync(path.join(odaDir, "history"), { recursive: true });
-  return odaDir;
+  const dojopsDir = path.join(rootDir, ".dojops");
+  fs.mkdirSync(path.join(dojopsDir, "plans"), { recursive: true });
+  fs.mkdirSync(path.join(dojopsDir, "execution-logs"), { recursive: true });
+  fs.mkdirSync(path.join(dojopsDir, "scan-history"), { recursive: true });
+  fs.mkdirSync(path.join(dojopsDir, "history"), { recursive: true });
+  return dojopsDir;
 }
 
 function createMockProvider(): LLMProvider {
@@ -89,9 +89,9 @@ describe("Metrics API routes", () => {
     });
 
     it("reflects plan data", async () => {
-      const odaDir = path.join(rootDir, ".oda");
+      const dojopsDir = path.join(rootDir, ".dojops");
       fs.writeFileSync(
-        path.join(odaDir, "plans", "plan-1.json"),
+        path.join(dojopsDir, "plans", "plan-1.json"),
         JSON.stringify({
           id: "plan-1",
           goal: "test",

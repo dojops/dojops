@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { DockerComposeTool } from "./docker-compose-tool";
 import { ComposeConfig } from "./schemas";
 import { detectComposeContext } from "./detector";
@@ -44,7 +44,7 @@ describe("DockerComposeTool", () => {
   let tmpDir: string;
 
   function makeTmpDir(): string {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-compose-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-compose-"));
     return tmpDir;
   }
 

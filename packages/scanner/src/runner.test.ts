@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { RepoContext } from "@odaops/core";
+import type { RepoContext } from "@dojops/core";
 
 // Mock all scanner modules
 vi.mock("./scanners/npm", () => ({

@@ -1,4 +1,4 @@
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { OdaConfig } from "./config";
 
 export type OutputFormat = "table" | "json" | "yaml";

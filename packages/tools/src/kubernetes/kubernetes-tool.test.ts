@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { KubernetesTool } from "./kubernetes-tool";
 import { KubernetesManifest } from "./schemas";
 
@@ -39,7 +39,7 @@ describe("KubernetesTool", () => {
   let tmpDir: string;
 
   function makeTmpDir(): string {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-k8s-tool-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-k8s-tool-"));
     return tmpDir;
   }
 

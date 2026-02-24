@@ -57,5 +57,5 @@ CLAUDE.md
 # MCP (local server config)
 .mcp.json
 
-# ODA project runtime data (created by `oda init`, user-local)
-.oda/
+# DojOps project runtime data (created by `dojops init`, user-local)
+.dojops/

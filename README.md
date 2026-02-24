@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="packages/api/public/icons/oda-icon.png" alt="ODA" width="120" />
+  <img src="packages/api/public/icons/oda-icon.png" alt="DojOps" width="120" />
 </p>
 
-<h1 align="center">ODA — Open DevOps Agent</h1>
+<h1 align="center">DojOps — DojOps — AI DevOps Automation Engine</h1>
 
 <p align="center">
   <strong>Enterprise-grade AI DevOps automation.</strong><br />
@@ -24,9 +24,9 @@
   <img src="https://img.shields.io/badge/version-1.0.0-00e5ff?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <a href="https://github.com/MHChlagou/oda/actions/workflows/ci.yml"><img src="https://github.com/MHChlagou/oda/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/oda/badges/coverage-badge.json&style=flat-square" alt="Coverage" />
-  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/oda/badges/security-badge.json&style=flat-square" alt="Security" />
+  <a href="https://github.com/MHChlagou/dojops/actions/workflows/ci.yml"><img src="https://github.com/MHChlagou/dojops/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/dojops/badges/coverage-badge.json&style=flat-square" alt="Coverage" />
+  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/dojops/badges/security-badge.json&style=flat-square" alt="Security" />
   <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
   <img src="https://img.shields.io/badge/agents-16-8b5cf6?style=flat-square" alt="Agents" />
   <img src="https://img.shields.io/badge/providers-5-ef4444?style=flat-square" alt="Providers" />
@@ -47,49 +47,49 @@
 
 ```bash
 # 1. Install globally
-npm i -g @odaops/cli
+npm i -g @dojops/cli
 
 # 2. Configure your provider (interactive wizard)
-oda config
+dojops config
 
 # 3. Generate your first config
-oda "Create a Kubernetes deployment for nginx with 3 replicas"
+dojops "Create a Kubernetes deployment for nginx with 3 replicas"
 ```
 
 Or set environment variables directly:
 
 ```bash
-export ODA_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini
+export DOJOPS_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini
 export OPENAI_API_KEY=sk-...        # your API key
-oda "Create a Terraform config for S3 with versioning"
+dojops "Create a Terraform config for S3 with versioning"
 ```
 
 ---
 
-## How ODA Works
+## How DojOps Works
 
 ### Simple Mode — Stateless CLI
 
 ```bash
-oda "Create a Terraform config for S3 with versioning"
-oda "Create a Dockerfile for a Node.js Express app"
-oda debug ci "ERROR: tsc failed with exit code 1..."
-oda analyze diff "terraform plan output..."
+dojops "Create a Terraform config for S3 with versioning"
+dojops "Create a Dockerfile for a Node.js Express app"
+dojops debug ci "ERROR: tsc failed with exit code 1..."
+dojops analyze diff "terraform plan output..."
 ```
 
-ODA routes to the right specialist agent, enforces structured JSON output via Zod schemas, and returns validated configs.
+DojOps routes to the right specialist agent, enforces structured JSON output via Zod schemas, and returns validated configs.
 
 ### Enterprise Mode — Full Lifecycle
 
 ```bash
-oda init                              # Initialize project state + scan repo
-oda check                             # LLM-powered DevOps config quality check
-oda plan "Create CI/CD for Node app"  # Decompose into task graph
-oda validate                          # Validate plan against schemas
-oda apply                             # Execute with approval workflow
-oda apply --resume                    # Resume partially-failed plans
-oda history verify                    # Verify audit log integrity
-oda history show <plan-id>            # Inspect per-task results
+dojops init                              # Initialize project state + scan repo
+dojops check                             # LLM-powered DevOps config quality check
+dojops plan "Create CI/CD for Node app"  # Decompose into task graph
+dojops validate                          # Validate plan against schemas
+dojops apply                             # Execute with approval workflow
+dojops apply --resume                    # Resume partially-failed plans
+dojops history verify                    # Verify audit log integrity
+dojops history show <plan-id>            # Inspect per-task results
 ```
 
 Plans are persisted, execution is sandboxed, every action is audit-logged with hash-chained integrity, and partial failures can be resumed without re-executing completed tasks.
@@ -97,11 +97,11 @@ Plans are persisted, execution is sandboxed, every action is audit-logged with h
 ### Web Dashboard
 
 ```bash
-oda serve                             # Start at http://localhost:3000
-oda serve --port=8080                 # Custom port
+dojops serve                             # Start at http://localhost:3000
+dojops serve --port=8080                 # Custom port
 ```
 
-The dashboard provides a visual interface with dark industrial terminal aesthetic for all ODA capabilities — generate configs, decompose plans, debug CI logs, analyze infra diffs, browse agents, review execution history, and monitor observability metrics (overview, security findings, audit trail integrity).
+The dashboard provides a visual interface with dark industrial terminal aesthetic for all DojOps capabilities — generate configs, decompose plans, debug CI logs, analyze infra diffs, browse agents, review execution history, and monitor observability metrics (overview, security findings, audit trail integrity).
 
 ---
 
@@ -129,21 +129,21 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths
 - **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, file size limits, and verification toggle
 - **Approval workflows** — Auto-approve, auto-deny, or interactive callback with diff preview before any write operation
-- **Resume on failure** — `oda apply --resume` skips completed tasks and retries failed ones
+- **Resume on failure** — `dojops apply --resume` skips completed tasks and retries failed ones
 
 ### Observability
 
 - **Metrics dashboard** — Overview (plans, success rate, execution time, critical issues), Security (severity breakdown, findings trend, top issues, scan history), and Audit (chain integrity, status breakdown, command distribution, timeline) — with 30-second auto-refresh
-- **Hash-chained audit logs** — Tamper-evident JSONL audit trail with SHA-256 chain integrity verification via `oda history verify`
+- **Hash-chained audit logs** — Tamper-evident JSONL audit trail with SHA-256 chain integrity verification via `dojops history verify`
 - **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
 - **Rich terminal UI** — Interactive prompts, spinners, styled panels, semantic log levels — powered by `@clack/prompts`
-- **Doctor diagnostics** — `oda doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity)
+- **Doctor diagnostics** — `dojops doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity)
 
 ### Platform
 
 - **REST API** — 19 endpoints exposing all capabilities over HTTP with Zod request validation
 - **Web dashboard** — Single-page app with dark terminal aesthetic, 5 tabs (Overview, Security, Audit, Agents, History), toast notifications, responsive layout
-- **Metrics API** — 4 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`) powered by `MetricsAggregator` reading `.oda/` data on-demand
+- **Metrics API** — 4 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`) powered by `MetricsAggregator` reading `.dojops/` data on-demand
 - **Configuration profiles** — Named profiles for switching between providers/environments
 
 ---
@@ -151,16 +151,16 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ## Architecture
 
 ```
-@odaops/cli          CLI entry point + rich TUI (@clack/prompts)
-@odaops/api          REST API (Express) + web dashboard + factory functions
-@odaops/planner      TaskGraph decomposition + topological executor
-@odaops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
-@odaops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
+@dojops/cli          CLI entry point + rich TUI (@clack/prompts)
+@dojops/api          REST API (Express) + web dashboard + factory functions
+@dojops/planner      TaskGraph decomposition + topological executor
+@dojops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
+@dojops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                      Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@odaops/scanner      6 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) + remediation
-@odaops/session      Chat session management + memory + context injection
-@odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
-@odaops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
+@dojops/scanner      6 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) + remediation
+@dojops/session      Chat session management + memory + context injection
+@dojops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
 ```
 
 ### Package Dependency Flow
@@ -181,79 +181,79 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 
 #### Generation & Planning
 
-| Command                       | Description                                     |
-| ----------------------------- | ----------------------------------------------- |
-| `oda <prompt>`                | Generate DevOps config (default command)        |
-| `oda generate <prompt>`       | Explicit generation (same as default)           |
-| `oda plan <prompt>`           | Decompose goal into dependency-aware task graph |
-| `oda plan --execute <prompt>` | Plan + execute with approval workflow           |
-| `oda apply [<plan-id>]`       | Execute a saved plan                            |
-| `oda apply --verify`          | Execute with external config verification       |
-| `oda apply --resume`          | Resume a partially-failed plan                  |
-| `oda apply --dry-run`         | Preview changes without writing files           |
-| `oda validate [<plan-id>]`    | Validate plan against schemas                   |
-| `oda explain [<plan-id>]`     | LLM explains a plan in plain language           |
+| Command                          | Description                                     |
+| -------------------------------- | ----------------------------------------------- |
+| `dojops <prompt>`                | Generate DevOps config (default command)        |
+| `dojops generate <prompt>`       | Explicit generation (same as default)           |
+| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph |
+| `dojops plan --execute <prompt>` | Plan + execute with approval workflow           |
+| `dojops apply [<plan-id>]`       | Execute a saved plan                            |
+| `dojops apply --verify`          | Execute with external config verification       |
+| `dojops apply --resume`          | Resume a partially-failed plan                  |
+| `dojops apply --dry-run`         | Preview changes without writing files           |
+| `dojops validate [<plan-id>]`    | Validate plan against schemas                   |
+| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language           |
 
 #### Diagnostics & Analysis
 
-| Command                   | Description                                           |
-| ------------------------- | ----------------------------------------------------- |
-| `oda check`               | LLM-powered DevOps config quality check (score 0-100) |
-| `oda debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)       |
-| `oda analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security)    |
-| `oda scan`                | Security scan: vulnerabilities, deps, IaC, secrets    |
-| `oda scan --security`     | Run security scanners only (trivy, gitleaks)          |
-| `oda scan --deps`         | Run dependency audit only (npm, pip)                  |
-| `oda scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
-| `oda scan --fix`          | Generate and apply LLM-powered remediation            |
+| Command                      | Description                                           |
+| ---------------------------- | ----------------------------------------------------- |
+| `dojops check`               | LLM-powered DevOps config quality check (score 0-100) |
+| `dojops debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)       |
+| `dojops analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security)    |
+| `dojops scan`                | Security scan: vulnerabilities, deps, IaC, secrets    |
+| `dojops scan --security`     | Run security scanners only (trivy, gitleaks)          |
+| `dojops scan --deps`         | Run dependency audit only (npm, pip)                  |
+| `dojops scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
+| `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
 
 #### Interactive
 
-| Command                   | Description                              |
-| ------------------------- | ---------------------------------------- |
-| `oda chat`                | Interactive multi-turn AI DevOps session |
-| `oda chat --session=NAME` | Resume or create a named session         |
-| `oda chat --resume`       | Resume the most recent session           |
-| `oda chat --agent=NAME`   | Pin conversation to a specialist agent   |
+| Command                      | Description                              |
+| ---------------------------- | ---------------------------------------- |
+| `dojops chat`                | Interactive multi-turn AI DevOps session |
+| `dojops chat --session=NAME` | Resume or create a named session         |
+| `dojops chat --resume`       | Resume the most recent session           |
+| `dojops chat --agent=NAME`   | Pin conversation to a specialist agent   |
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
 
 #### Agents & Tools
 
-| Command                    | Description                                      |
-| -------------------------- | ------------------------------------------------ |
-| `oda agents list`          | List all 16 specialist agents                    |
-| `oda agents info <name>`   | Show agent details and tool dependencies         |
-| `oda tools list`           | List system tools with install status            |
-| `oda tools install <name>` | Download tool into sandbox (~/.oda/tools/)       |
-| `oda tools remove <name>`  | Remove a sandboxed tool                          |
-| `oda tools clean`          | Remove all sandbox tools                         |
-| `oda inspect <target>`     | Inspect config, policy, agents, or session state |
+| Command                       | Description                                      |
+| ----------------------------- | ------------------------------------------------ |
+| `dojops agents list`          | List all 16 specialist agents                    |
+| `dojops agents info <name>`   | Show agent details and tool dependencies         |
+| `dojops tools list`           | List system tools with install status            |
+| `dojops tools install <name>` | Download tool into sandbox (~/.dojops/tools/)    |
+| `dojops tools remove <name>`  | Remove a sandboxed tool                          |
+| `dojops tools clean`          | Remove all sandbox tools                         |
+| `dojops inspect <target>`     | Inspect config, policy, agents, or session state |
 
 #### History & Audit
 
-| Command                      | Description                            |
-| ---------------------------- | -------------------------------------- |
-| `oda history list`           | View execution history                 |
-| `oda history show <plan-id>` | Show plan details and per-task results |
-| `oda history verify`         | Verify audit log hash chain integrity  |
-| `oda destroy <plan-id>`      | Remove generated artifacts from a plan |
-| `oda rollback <plan-id>`     | Reverse an applied plan                |
+| Command                         | Description                            |
+| ------------------------------- | -------------------------------------- |
+| `dojops history list`           | View execution history                 |
+| `dojops history show <plan-id>` | Show plan details and per-task results |
+| `dojops history verify`         | Verify audit log hash chain integrity  |
+| `dojops destroy <plan-id>`      | Remove generated artifacts from a plan |
+| `dojops rollback <plan-id>`     | Reverse an applied plan                |
 
 #### Configuration & Server
 
-| Command                          | Description                                                                            |
-| -------------------------------- | -------------------------------------------------------------------------------------- |
-| `oda config`                     | Configure provider, model, tokens (interactive)                                        |
-| `oda config show`                | Display current configuration                                                          |
-| `oda config profile create NAME` | Save current config as a named profile                                                 |
-| `oda config profile use NAME`    | Switch to a named profile                                                              |
-| `oda config profile list`        | List all profiles                                                                      |
-| `oda auth login`                 | Authenticate with LLM provider                                                         |
-| `oda auth status`                | Show saved tokens and default provider                                                 |
-| `oda serve [--port=N]`           | Start API server + web dashboard                                                       |
-| `oda init`                       | Initialize `.oda/` + comprehensive repo scan (11 CI platforms, IaC, scripts, security) |
-| `oda doctor`                     | System health diagnostics + project metrics                                            |
+| Command                             | Description                                                                               |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `dojops config`                     | Configure provider, model, tokens (interactive)                                           |
+| `dojops config show`                | Display current configuration                                                             |
+| `dojops config profile create NAME` | Save current config as a named profile                                                    |
+| `dojops config profile use NAME`    | Switch to a named profile                                                                 |
+| `dojops config profile list`        | List all profiles                                                                         |
+| `dojops auth login`                 | Authenticate with LLM provider                                                            |
+| `dojops auth status`                | Show saved tokens and default provider                                                    |
+| `dojops serve [--port=N]`           | Start API server + web dashboard                                                          |
+| `dojops init`                       | Initialize `.dojops/` + comprehensive repo scan (11 CI platforms, IaC, scripts, security) |
+| `dojops doctor`                     | System health diagnostics + project metrics                                               |
 
 ### Global Options
 
@@ -280,7 +280,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | 2    | Validation error                     |
 | 3    | Approval required                    |
 | 4    | Lock conflict (concurrent operation) |
-| 5    | No `.oda/` project                   |
+| 5    | No `.dojops/` project                |
 | 6    | HIGH security findings detected      |
 | 7    | CRITICAL security findings detected  |
 
@@ -288,64 +288,64 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ```bash
 # Generate configs
-oda "Create a Terraform config for S3"
-oda "Write a Kubernetes deployment for nginx"
-oda "Set up monitoring with Prometheus"
+dojops "Create a Terraform config for S3"
+dojops "Write a Kubernetes deployment for nginx"
+dojops "Set up monitoring with Prometheus"
 
 # Plan and execute
-oda plan "Set up CI/CD for a Node.js app"
-oda plan --execute --yes "Create CI for Node app"
-oda apply --verify
-oda apply --dry-run
-oda apply --resume --yes
+dojops plan "Set up CI/CD for a Node.js app"
+dojops plan --execute --yes "Create CI for Node app"
+dojops apply --verify
+dojops apply --dry-run
+dojops apply --resume --yes
 
 # Diagnose and analyze
-oda debug ci "ERROR: tsc failed with exit code 1..."
-oda analyze diff "terraform plan output..."
-oda explain last
+dojops debug ci "ERROR: tsc failed with exit code 1..."
+dojops analyze diff "terraform plan output..."
+dojops explain last
 
 # DevOps quality check
-oda check
-oda check --output json
+dojops check
+dojops check --output json
 
 # Security scanning
-oda scan
-oda scan --security
-oda scan --fix --yes
+dojops scan
+dojops scan --security
+dojops scan --fix --yes
 
 # Interactive chat
-oda chat
-oda chat --session myproject --agent terraform
+dojops chat
+dojops chat --session myproject --agent terraform
 
 # Tool management
-oda tools install terraform
-oda tools install kubectl
+dojops tools install terraform
+dojops tools install kubectl
 
 # Administration
-oda doctor
-oda agents list
-oda history list
-oda history verify
-oda serve --port=8080
-oda config profile create staging
+dojops doctor
+dojops agents list
+dojops history list
+dojops history verify
+dojops serve --port=8080
+dojops config profile create staging
 ```
 
 ---
 
 ## Security & Compliance
 
-ODA implements defense-in-depth for AI-driven infrastructure changes:
+DojOps implements defense-in-depth for AI-driven infrastructure changes:
 
-| Layer                   | Mechanism                                                                                                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                             |
-| **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                      |
-| **Deep verification**   | Optional external tool validation: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write |
-| **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits            |
-| **Approval workflows**  | Configurable handlers: auto-approve, auto-deny, or interactive callback with diff preview                           |
-| **Sandboxed execution** | `SandboxedFs` restricts file operations to policy-allowed paths with audit logging                                  |
-| **Audit trail**         | Append-only JSONL with SHA-256 hash chaining (seq + previousHash + hash). Tamper detection via `oda history verify` |
-| **Execution locking**   | PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup                                 |
+| Layer                   | Mechanism                                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                                |
+| **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                         |
+| **Deep verification**   | Optional external tool validation: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write    |
+| **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits               |
+| **Approval workflows**  | Configurable handlers: auto-approve, auto-deny, or interactive callback with diff preview                              |
+| **Sandboxed execution** | `SandboxedFs` restricts file operations to policy-allowed paths with audit logging                                     |
+| **Audit trail**         | Append-only JSONL with SHA-256 hash chaining (seq + previousHash + hash). Tamper detection via `dojops history verify` |
+| **Execution locking**   | PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup                                    |
 
 ---
 
@@ -449,39 +449,39 @@ curl -X POST http://localhost:3000/api/diff \
 
 ### Supported Providers
 
-| Provider  | `ODA_PROVIDER` | Required Env Var    | Default Model                |
-| --------- | -------------- | ------------------- | ---------------------------- |
-| OpenAI    | `openai`       | `OPENAI_API_KEY`    | `gpt-4o-mini`                |
-| Anthropic | `anthropic`    | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` |
-| Ollama    | `ollama`       | _(none — local)_    | `llama3`                     |
-| DeepSeek  | `deepseek`     | `DEEPSEEK_API_KEY`  | `deepseek-chat`              |
-| Gemini    | `gemini`       | `GEMINI_API_KEY`    | `gemini-2.5-flash`           |
+| Provider  | `DOJOPS_PROVIDER` | Required Env Var    | Default Model                |
+| --------- | ----------------- | ------------------- | ---------------------------- |
+| OpenAI    | `openai`          | `OPENAI_API_KEY`    | `gpt-4o-mini`                |
+| Anthropic | `anthropic`       | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` |
+| Ollama    | `ollama`          | _(none — local)_    | `llama3`                     |
+| DeepSeek  | `deepseek`        | `DEEPSEEK_API_KEY`  | `deepseek-chat`              |
+| Gemini    | `gemini`          | `GEMINI_API_KEY`    | `gemini-2.5-flash`           |
 
 ### Model Selection
 
 Each provider ships with a sensible default, but you can choose any model your provider supports:
 
 ```bash
-oda config                          # Interactive: fetches models, shows picker
-oda config --model=gpt-4o           # Set directly
-oda --model=deepseek-reasoner "..." # One-off override
+dojops config                          # Interactive: fetches models, shows picker
+dojops config --model=gpt-4o           # Set directly
+dojops --model=deepseek-reasoner "..." # One-off override
 ```
 
 ### Configuration Precedence
 
 ```
-Provider:  --provider  >  $ODA_PROVIDER  >  config  >  openai
-Model:     --model     >  $ODA_MODEL     >  config  >  provider default
+Provider:  --provider  >  $DOJOPS_PROVIDER  >  config  >  openai
+Model:     --model     >  $DOJOPS_MODEL     >  config  >  provider default
 Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / ...  >  config token
 ```
 
 ### Profiles
 
 ```bash
-oda config profile create staging     # Save current config as "staging"
-oda config profile use staging        # Switch to staging profile
-oda config profile list               # List all profiles
-oda --profile=staging "Create S3..."  # One-off profile override
+dojops config profile create staging     # Save current config as "staging"
+dojops config profile use staging        # Switch to staging profile
+dojops config profile list               # List all profiles
+dojops --profile=staging "Create S3..."  # One-off profile override
 ```
 
 ---
@@ -497,8 +497,8 @@ oda --profile=staging "Create S3..."  # One-off profile override
 ### Setup
 
 ```bash
-git clone https://github.com/oda-devops/oda.git
-cd oda
+git clone https://github.com/dojops/oda.git
+cd dojops
 pnpm install
 pnpm build
 ```
@@ -514,13 +514,13 @@ pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
 # Per-package
-pnpm --filter @odaops/core test
-pnpm --filter @odaops/api build
-pnpm --filter @odaops/tools lint
+pnpm --filter @dojops/core test
+pnpm --filter @dojops/api build
+pnpm --filter @dojops/tools lint
 
 # Run locally (no global install)
-pnpm oda -- "Create a Terraform config for S3"
-pnpm oda -- serve --port=8080
+pnpm dojops -- "Create a Terraform config for S3"
+pnpm dojops -- serve --port=8080
 ```
 
 ### Project Structure
@@ -542,22 +542,22 @@ packages/
 
 | Package            | Tests   |
 | ------------------ | ------- |
-| `@odaops/core`     | 208     |
-| `@odaops/cli`      | 144     |
-| `@odaops/tools`    | 111     |
-| `@odaops/api`      | 96      |
-| `@odaops/scanner`  | 43      |
-| `@odaops/executor` | 40      |
-| `@odaops/planner`  | 28      |
-| `@odaops/session`  | 28      |
-| `@odaops/sdk`      | 7       |
+| `@dojops/core`     | 208     |
+| `@dojops/cli`      | 144     |
+| `@dojops/tools`    | 111     |
+| `@dojops/api`      | 96      |
+| `@dojops/scanner`  | 43      |
+| `@dojops/executor` | 40      |
+| `@dojops/planner`  | 28      |
+| `@dojops/session`  | 28      |
+| `@dojops/sdk`      | 7       |
 | **Total**          | **685** |
 
 ---
 
 ## Publishing
 
-All packages are published under the `@odaops` scope:
+All packages are published under the `@dojops` scope:
 
 ```bash
 npm login

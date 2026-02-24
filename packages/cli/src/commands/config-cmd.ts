@@ -11,7 +11,7 @@ import {
 import { CLIContext } from "../types";
 import { maskToken } from "../formatter";
 import { extractFlagValue } from "../parser";
-import { createProvider } from "@odaops/api";
+import { createProvider } from "@dojops/api";
 
 function showConfig(config: OdaConfig): void {
   const lines = [
@@ -28,7 +28,7 @@ function showConfig(config: OdaConfig): void {
 }
 
 export async function configCommand(args: string[], ctx: CLIContext): Promise<void> {
-  // oda config show
+  // dojops config show
   if (args[0] === "show" || args.includes("--show")) {
     const config = loadConfig();
     if (ctx.globalOpts.output === "json") {
@@ -45,7 +45,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     return;
   }
 
-  // oda config profile <subcommand> — handled in Phase 6
+  // dojops config profile <subcommand> — handled in Phase 6
   if (args[0] === "profile") {
     const { configProfileCommand } = await import("./config-profile");
     return configProfileCommand(args.slice(1), ctx);
@@ -92,7 +92,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   // Interactive mode
   const config = loadConfig();
 
-  p.intro(pc.bgCyan(pc.black(" oda config ")));
+  p.intro(pc.bgCyan(pc.black(" dojops config ")));
 
   if (config.defaultProvider || config.defaultModel || config.tokens) {
     showConfig(config);

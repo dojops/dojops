@@ -8,7 +8,7 @@ function run(...args: string[]): string {
   try {
     return execFileSync("node", [CLI_PATH, ...args], {
       encoding: "utf-8",
-      env: { ...process.env, ODA_PROVIDER: "ollama" },
+      env: { ...process.env, DOJOPS_PROVIDER: "ollama" },
       timeout: 5000,
     });
   } catch (err) {
@@ -21,7 +21,7 @@ describe("CLI", () => {
   describe("--help", () => {
     it("shows help text with --help flag", () => {
       const output = run("--help");
-      expect(output).toContain("oda");
+      expect(output).toContain("dojops");
       expect(output).toContain("USAGE");
       expect(output).toContain("COMMANDS");
       expect(output).toContain("auth");
@@ -52,13 +52,13 @@ describe("CLI", () => {
   describe("examples in help", () => {
     it("shows usage examples and config precedence", () => {
       const output = run("--help");
-      expect(output).toContain("oda serve");
-      expect(output).toContain("oda serve --port=8080");
-      expect(output).toContain("oda plan");
+      expect(output).toContain("dojops serve");
+      expect(output).toContain("dojops serve --port=8080");
+      expect(output).toContain("dojops plan");
       expect(output).toContain("plan --execute --yes");
       expect(output).toContain("CONFIGURATION PRECEDENCE");
       expect(output).toContain("BACKWARD COMPATIBILITY");
-      expect(output).toContain("oda auth login");
+      expect(output).toContain("dojops auth login");
     });
   });
 
@@ -92,14 +92,14 @@ describe("CLI", () => {
   describe("login backward compat", () => {
     it("shows config suggestion when login has no --token", () => {
       const output = run("login");
-      expect(output).toContain("oda config");
+      expect(output).toContain("dojops config");
     });
   });
 
   describe("per-command help", () => {
-    it("shows plan-specific help with oda plan --help", () => {
+    it("shows plan-specific help with dojops plan --help", () => {
       const output = run("plan", "--help");
-      expect(output).toContain("oda plan");
+      expect(output).toContain("dojops plan");
       expect(output).toContain("--execute");
       expect(output).toContain("--yes");
       expect(output).toContain("EXAMPLES");
@@ -107,126 +107,126 @@ describe("CLI", () => {
       expect(output).not.toContain("COMMANDS");
     });
 
-    it("shows plan-specific help with oda plan -h", () => {
+    it("shows plan-specific help with dojops plan -h", () => {
       const output = run("plan", "-h");
-      expect(output).toContain("oda plan");
+      expect(output).toContain("dojops plan");
       expect(output).toContain("--execute");
     });
 
-    it("shows apply-specific help with oda apply --help", () => {
+    it("shows apply-specific help with dojops apply --help", () => {
       const output = run("apply", "--help");
-      expect(output).toContain("oda apply");
+      expect(output).toContain("dojops apply");
       expect(output).toContain("--dry-run");
       expect(output).toContain("--resume");
       expect(output).toContain("--yes");
     });
 
-    it("shows serve-specific help with oda serve --help", () => {
+    it("shows serve-specific help with dojops serve --help", () => {
       const output = run("serve", "--help");
-      expect(output).toContain("oda serve");
+      expect(output).toContain("dojops serve");
       expect(output).toContain("--port=N");
       expect(output).toContain("ENDPOINTS");
     });
 
-    it("shows debug-specific help with oda debug --help", () => {
+    it("shows debug-specific help with dojops debug --help", () => {
       const output = run("debug", "--help");
-      expect(output).toContain("oda debug ci");
+      expect(output).toContain("dojops debug ci");
       expect(output).toContain("log");
     });
 
-    it("shows agents-specific help with oda agents --help", () => {
+    it("shows agents-specific help with dojops agents --help", () => {
       const output = run("agents", "--help");
-      expect(output).toContain("oda agents");
+      expect(output).toContain("dojops agents");
       expect(output).toContain("list");
       expect(output).toContain("info");
     });
 
-    it("shows config-specific help with oda config --help", () => {
+    it("shows config-specific help with dojops config --help", () => {
       const output = run("config", "--help");
-      expect(output).toContain("oda config");
+      expect(output).toContain("dojops config");
       expect(output).toContain("profile");
       expect(output).toContain("--token=KEY");
     });
 
-    it("shows history-specific help with oda history --help", () => {
+    it("shows history-specific help with dojops history --help", () => {
       const output = run("history", "--help");
-      expect(output).toContain("oda history");
+      expect(output).toContain("dojops history");
       expect(output).toContain("verify");
       expect(output).toContain("show");
     });
 
-    it("shows inspect-specific help with oda inspect --help", () => {
+    it("shows inspect-specific help with dojops inspect --help", () => {
       const output = run("inspect", "--help");
-      expect(output).toContain("oda inspect");
+      expect(output).toContain("dojops inspect");
       expect(output).toContain("config");
       expect(output).toContain("agents");
       expect(output).toContain("session");
     });
 
-    it("shows init-specific help with oda init --help", () => {
+    it("shows init-specific help with dojops init --help", () => {
       const output = run("init", "--help");
-      expect(output).toContain("oda init");
-      expect(output).toContain(".oda/");
+      expect(output).toContain("dojops init");
+      expect(output).toContain(".dojops/");
     });
 
-    it("shows status-specific help with oda status --help", () => {
+    it("shows status-specific help with dojops status --help", () => {
       const output = run("status", "--help");
-      expect(output).toContain("oda status");
+      expect(output).toContain("dojops status");
       expect(output).toContain("diagnostics");
     });
 
-    it("shows status help via doctor alias with oda doctor --help", () => {
+    it("shows status help via doctor alias with dojops doctor --help", () => {
       const output = run("doctor", "--help");
-      expect(output).toContain("oda status");
+      expect(output).toContain("dojops status");
       expect(output).toContain("diagnostics");
     });
 
-    it("shows destroy-specific help with oda destroy --help", () => {
+    it("shows destroy-specific help with dojops destroy --help", () => {
       const output = run("destroy", "--help");
-      expect(output).toContain("oda destroy");
+      expect(output).toContain("dojops destroy");
       expect(output).toContain("--dry-run");
     });
 
-    it("shows rollback-specific help with oda rollback --help", () => {
+    it("shows rollback-specific help with dojops rollback --help", () => {
       const output = run("rollback", "--help");
-      expect(output).toContain("oda rollback");
+      expect(output).toContain("dojops rollback");
       expect(output).toContain("--dry-run");
     });
 
-    it("shows generate-specific help with oda generate --help", () => {
+    it("shows generate-specific help with dojops generate --help", () => {
       const output = run("generate", "--help");
-      expect(output).toContain("oda generate");
+      expect(output).toContain("dojops generate");
       expect(output).toContain("default command");
     });
 
-    it("shows explain-specific help with oda explain --help", () => {
+    it("shows explain-specific help with dojops explain --help", () => {
       const output = run("explain", "--help");
-      expect(output).toContain("oda explain");
+      expect(output).toContain("dojops explain");
       expect(output).toContain("plan-id");
     });
 
-    it("shows validate-specific help with oda validate --help", () => {
+    it("shows validate-specific help with dojops validate --help", () => {
       const output = run("validate", "--help");
-      expect(output).toContain("oda validate");
+      expect(output).toContain("dojops validate");
       expect(output).toContain("plan-id");
     });
 
-    it("shows auth-specific help with oda auth --help", () => {
+    it("shows auth-specific help with dojops auth --help", () => {
       const output = run("auth", "--help");
-      expect(output).toContain("oda auth");
+      expect(output).toContain("dojops auth");
       expect(output).toContain("login");
       expect(output).toContain("status");
     });
 
-    it("shows analyze-specific help with oda analyze --help", () => {
+    it("shows analyze-specific help with dojops analyze --help", () => {
       const output = run("analyze", "--help");
-      expect(output).toContain("oda analyze diff");
+      expect(output).toContain("dojops analyze diff");
       expect(output).toContain("risk");
     });
 
-    it("shows tools-specific help with oda tools --help", () => {
+    it("shows tools-specific help with dojops tools --help", () => {
       const output = run("tools", "--help");
-      expect(output).toContain("oda tools");
+      expect(output).toContain("dojops tools");
       expect(output).toContain("install");
       expect(output).toContain("remove");
       expect(output).toContain("clean");
@@ -249,7 +249,7 @@ describe("CLI", () => {
       expect(output).toContain("System Diagnostics");
     });
 
-    it("init creates .oda directory or reports already initialized", () => {
+    it("init creates .dojops directory or reports already initialized", () => {
       const output = run("init");
       expect(output.includes("initialized") || output.includes("Initialized")).toBe(true);
     });

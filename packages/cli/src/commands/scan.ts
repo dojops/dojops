@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { runScan, planRemediation, applyFixes } from "@odaops/scanner";
-import type { ScanType, ScanReport, ScanFinding } from "@odaops/scanner";
+import { runScan, planRemediation, applyFixes } from "@dojops/scanner";
+import type { ScanType, ScanReport, ScanFinding } from "@dojops/scanner";
 import { CLIContext } from "../types";
 import { hasFlag } from "../parser";
 import { ExitCode } from "../exit-codes";

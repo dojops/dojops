@@ -1,6 +1,6 @@
 # Task Planner
 
-The `@odaops/planner` package transforms complex DevOps goals into structured, dependency-aware task graphs that are executed in topological order with failure cascading and resume support.
+The `@dojops/planner` package transforms complex DevOps goals into structured, dependency-aware task graphs that are executed in topological order with failure cascading and resume support.
 
 ---
 
@@ -129,10 +129,10 @@ Task 4 (depends on 1) -> OK (independent of 2)
 Plans can be resumed after partial failures using `completedTaskIds`:
 
 ```bash
-oda apply --resume
+dojops apply --resume
 ```
 
-1. The executor loads the saved plan from `.oda/plans/`
+1. The executor loads the saved plan from `.dojops/plans/`
 2. Previously completed tasks are identified from execution logs
 3. Completed tasks are skipped (their outputs are loaded from cache)
 4. Failed and pending tasks are re-executed
@@ -144,7 +144,7 @@ This avoids re-running expensive LLM calls for tasks that already succeeded.
 
 ## Plan Persistence
 
-Plans are saved to `.oda/plans/<plan-id>.json` containing:
+Plans are saved to `.dojops/plans/<plan-id>.json` containing:
 
 - The full `TaskGraph`
 - Metadata (goal, timestamp, provider)
@@ -154,28 +154,28 @@ Plans are saved to `.oda/plans/<plan-id>.json` containing:
 
 ```bash
 # Create a plan
-oda plan "Set up CI/CD for Node.js"
+dojops plan "Set up CI/CD for Node.js"
 
 # Inspect the plan
-oda history show <plan-id>
+dojops history show <plan-id>
 
 # Validate the plan
-oda validate <plan-id>
+dojops validate <plan-id>
 
 # Explain the plan in plain language
-oda explain <plan-id>
+dojops explain <plan-id>
 
 # Execute the plan
-oda apply <plan-id>
+dojops apply <plan-id>
 
 # Resume after failure
-oda apply --resume
+dojops apply --resume
 
 # Remove generated artifacts
-oda destroy <plan-id>
+dojops destroy <plan-id>
 
 # Reverse applied changes
-oda rollback <plan-id>
+dojops rollback <plan-id>
 ```
 
 ---
@@ -184,13 +184,13 @@ oda rollback <plan-id>
 
 ```bash
 # Decompose a goal into tasks
-oda plan "Create CI/CD pipeline for a Python app"
+dojops plan "Create CI/CD pipeline for a Python app"
 
 # Plan and execute immediately
-oda plan --execute "Set up monitoring with Prometheus"
+dojops plan --execute "Set up monitoring with Prometheus"
 
 # Plan, execute, and auto-approve
-oda plan --execute --yes "Create Kubernetes deployment"
+dojops plan --execute --yes "Create Kubernetes deployment"
 ```
 
 ---

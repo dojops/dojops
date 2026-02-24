@@ -6,31 +6,34 @@ import crypto from "node:crypto";
 import { MetricsAggregator } from "./aggregator";
 
 function createTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "oda-metrics-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
 }
 
 function setupOda(rootDir: string) {
-  const odaDir = path.join(rootDir, ".oda");
-  fs.mkdirSync(path.join(odaDir, "plans"), { recursive: true });
-  fs.mkdirSync(path.join(odaDir, "execution-logs"), { recursive: true });
-  fs.mkdirSync(path.join(odaDir, "scan-history"), { recursive: true });
-  fs.mkdirSync(path.join(odaDir, "history"), { recursive: true });
-  return odaDir;
+  const dojopsDir = path.join(rootDir, ".dojops");
+  fs.mkdirSync(path.join(dojopsDir, "plans"), { recursive: true });
+  fs.mkdirSync(path.join(dojopsDir, "execution-logs"), { recursive: true });
+  fs.mkdirSync(path.join(dojopsDir, "scan-history"), { recursive: true });
+  fs.mkdirSync(path.join(dojopsDir, "history"), { recursive: true });
+  return dojopsDir;
 }
 
-function writePlan(odaDir: string, plan: Record<string, unknown>) {
-  fs.writeFileSync(path.join(odaDir, "plans", `${plan.id}.json`), JSON.stringify(plan));
+function writePlan(dojopsDir: string, plan: Record<string, unknown>) {
+  fs.writeFileSync(path.join(dojopsDir, "plans", `${plan.id}.json`), JSON.stringify(plan));
 }
 
-function writeExecution(odaDir: string, record: Record<string, unknown>) {
+function writeExecution(dojopsDir: string, record: Record<string, unknown>) {
   fs.writeFileSync(
-    path.join(odaDir, "execution-logs", `${record.planId}-${Date.now()}.json`),
+    path.join(dojopsDir, "execution-logs", `${record.planId}-${Date.now()}.json`),
     JSON.stringify(record),
   );
 }
 
-function writeScanReport(odaDir: string, report: Record<string, unknown>) {
-  fs.writeFileSync(path.join(odaDir, "scan-history", `${report.id}.json`), JSON.stringify(report));
+function writeScanReport(dojopsDir: string, report: Record<string, unknown>) {
+  fs.writeFileSync(
+    path.join(dojopsDir, "scan-history", `${report.id}.json`),
+    JSON.stringify(report),
+  );
 }
 
 function computeAuditHash(entry: Record<string, unknown>): string {
@@ -48,7 +51,7 @@ function computeAuditHash(entry: Record<string, unknown>): string {
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
-function writeAuditEntries(odaDir: string, entries: Array<Record<string, unknown>>) {
+function writeAuditEntries(dojopsDir: string, entries: Array<Record<string, unknown>>) {
   let previousHash = "genesis";
   const lines: string[] = [];
   for (let i = 0; i < entries.length; i++) {
@@ -57,16 +60,16 @@ function writeAuditEntries(odaDir: string, entries: Array<Record<string, unknown
     previousHash = e.hash as string;
     lines.push(JSON.stringify(e));
   }
-  fs.writeFileSync(path.join(odaDir, "history", "audit.jsonl"), lines.join("\n") + "\n");
+  fs.writeFileSync(path.join(dojopsDir, "history", "audit.jsonl"), lines.join("\n") + "\n");
 }
 
 describe("MetricsAggregator", () => {
   let rootDir: string;
-  let odaDir: string;
+  let dojopsDir: string;
 
   beforeEach(() => {
     rootDir = createTempDir();
-    odaDir = setupOda(rootDir);
+    dojopsDir = setupOda(rootDir);
   });
 
   afterEach(() => {
@@ -91,7 +94,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("computes correct totals from plans and executions", () => {
-      writePlan(odaDir, {
+      writePlan(dojopsDir, {
         id: "plan-1",
         goal: "test",
         createdAt: "2024-01-01",
@@ -99,7 +102,7 @@ describe("MetricsAggregator", () => {
         tasks: [],
         approvalStatus: "APPLIED",
       });
-      writePlan(odaDir, {
+      writePlan(dojopsDir, {
         id: "plan-2",
         goal: "test2",
         createdAt: "2024-01-02",
@@ -108,7 +111,7 @@ describe("MetricsAggregator", () => {
         approvalStatus: "PENDING",
       });
 
-      writeExecution(odaDir, {
+      writeExecution(dojopsDir, {
         planId: "plan-1",
         executedAt: "2024-01-01",
         status: "SUCCESS",
@@ -116,7 +119,7 @@ describe("MetricsAggregator", () => {
         filesModified: [],
         durationMs: 1000,
       });
-      writeExecution(odaDir, {
+      writeExecution(dojopsDir, {
         planId: "plan-2",
         executedAt: "2024-01-02",
         status: "FAILURE",
@@ -135,7 +138,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("aggregates scan findings from summary", () => {
-      writeScanReport(odaDir, {
+      writeScanReport(dojopsDir, {
         id: "scan-1",
         timestamp: "2024-01-01T00:00:00Z",
         findings: [],
@@ -152,7 +155,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("aggregates scan findings from individual findings when no summary", () => {
-      writeScanReport(odaDir, {
+      writeScanReport(dojopsDir, {
         id: "scan-2",
         timestamp: "2024-01-01T00:00:00Z",
         findings: [
@@ -171,7 +174,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("extracts most used agents from audit entries", () => {
-      writeAuditEntries(odaDir, [
+      writeAuditEntries(dojopsDir, [
         {
           timestamp: "2024-01-01T00:00:00Z",
           user: "test",
@@ -219,7 +222,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("aggregates severity breakdown", () => {
-      writeScanReport(odaDir, {
+      writeScanReport(dojopsDir, {
         id: "scan-1",
         timestamp: "2024-01-01T00:00:00Z",
         findings: [
@@ -239,7 +242,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("handles uppercase severity and category from scanners", () => {
-      writeScanReport(odaDir, {
+      writeScanReport(dojopsDir, {
         id: "scan-upper",
         timestamp: "2024-01-01T00:00:00Z",
         findings: [
@@ -259,7 +262,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("groups findings trend by date", () => {
-      writeScanReport(odaDir, {
+      writeScanReport(dojopsDir, {
         id: "scan-1",
         timestamp: "2024-01-15T10:00:00Z",
         findings: [
@@ -267,7 +270,7 @@ describe("MetricsAggregator", () => {
           { message: "vuln2", severity: "high", tool: "tool1" },
         ],
       });
-      writeScanReport(odaDir, {
+      writeScanReport(dojopsDir, {
         id: "scan-2",
         timestamp: "2024-01-16T10:00:00Z",
         findings: [{ message: "vuln3", severity: "medium", tool: "tool1" }],
@@ -285,7 +288,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("ranks top issues by count", () => {
-      writeScanReport(odaDir, {
+      writeScanReport(dojopsDir, {
         id: "scan-1",
         timestamp: "2024-01-01T00:00:00Z",
         findings: [
@@ -316,7 +319,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("verifies valid audit chain", () => {
-      writeAuditEntries(odaDir, [
+      writeAuditEntries(dojopsDir, [
         {
           timestamp: "2024-01-01T00:00:00Z",
           user: "test",
@@ -345,7 +348,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("detects tampered audit chain", () => {
-      writeAuditEntries(odaDir, [
+      writeAuditEntries(dojopsDir, [
         {
           timestamp: "2024-01-01T00:00:00Z",
           user: "test",
@@ -357,7 +360,7 @@ describe("MetricsAggregator", () => {
       ]);
 
       // Tamper with the file
-      const auditFile = path.join(odaDir, "history", "audit.jsonl");
+      const auditFile = path.join(dojopsDir, "history", "audit.jsonl");
       const content = fs.readFileSync(auditFile, "utf-8");
       const entry = JSON.parse(content.trim());
       entry.status = "failure"; // tamper
@@ -371,7 +374,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("computes command distribution", () => {
-      writeAuditEntries(odaDir, [
+      writeAuditEntries(dojopsDir, [
         {
           timestamp: "2024-01-01T00:00:00Z",
           user: "test",
@@ -408,7 +411,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("returns timeline in reverse order (newest first)", () => {
-      writeAuditEntries(odaDir, [
+      writeAuditEntries(dojopsDir, [
         {
           timestamp: "2024-01-01T00:00:00Z",
           user: "test",
@@ -448,7 +451,7 @@ describe("MetricsAggregator", () => {
   });
 
   describe("graceful handling", () => {
-    it("handles missing .oda directory", () => {
+    it("handles missing .dojops directory", () => {
       const emptyRoot = createTempDir();
       const agg = new MetricsAggregator(emptyRoot);
 
@@ -460,8 +463,8 @@ describe("MetricsAggregator", () => {
     });
 
     it("handles corrupt JSON files gracefully", () => {
-      fs.writeFileSync(path.join(odaDir, "plans", "bad.json"), "not json");
-      fs.writeFileSync(path.join(odaDir, "scan-history", "bad.json"), "{invalid");
+      fs.writeFileSync(path.join(dojopsDir, "plans", "bad.json"), "not json");
+      fs.writeFileSync(path.join(dojopsDir, "scan-history", "bad.json"), "{invalid");
 
       const agg = new MetricsAggregator(rootDir);
       expect(agg.getOverview().totalPlans).toBe(0);

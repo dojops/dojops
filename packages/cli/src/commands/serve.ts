@@ -6,7 +6,7 @@ import {
   createRouter,
   createDebugger,
   createDiffAnalyzer,
-} from "@odaops/api";
+} from "@dojops/api";
 import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
 import { resolveToken } from "../config";
@@ -14,17 +14,19 @@ import { findProjectRoot } from "../state";
 
 export async function serveCommand(args: string[], ctx: CLIContext): Promise<void> {
   const portArg = extractFlagValue(args, "--port");
-  const port = portArg ? parseInt(portArg, 10) : parseInt(process.env.ODA_API_PORT ?? "3000", 10);
+  const port = portArg
+    ? parseInt(portArg, 10)
+    : parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
 
-  const { createApp, HistoryStore } = await import("@odaops/api");
+  const { createApp, HistoryStore } = await import("@dojops/api");
 
   const providerName = ctx.globalOpts.provider ?? ctx.config.defaultProvider ?? "openai";
   const model = ctx.globalOpts.model ?? ctx.config.defaultModel;
   const apiKey = resolveToken(providerName, ctx.config);
 
   // Populate env vars so createProvider() inside the API also picks them up
-  if (providerName) process.env.ODA_PROVIDER = providerName;
-  if (model) process.env.ODA_MODEL = model;
+  if (providerName) process.env.DOJOPS_PROVIDER = providerName;
+  if (model) process.env.DOJOPS_MODEL = model;
   if (apiKey) {
     const envVarMap: Record<string, string> = {
       openai: "OPENAI_API_KEY",
@@ -63,6 +65,6 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
       `${pc.bold("Dashboard:")} ${pc.underline(`http://localhost:${port}`)}`,
     ];
     p.note(noteLines.join("\n"), "Server Started");
-    p.log.success(`ODA API server running on ${pc.underline(`http://localhost:${port}`)}`);
+    p.log.success(`DojOps API server running on ${pc.underline(`http://localhost:${port}`)}`);
   });
 }

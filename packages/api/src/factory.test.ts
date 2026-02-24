@@ -19,35 +19,35 @@ describe("factory", () => {
   });
 
   describe("createProvider", () => {
-    it("creates OllamaProvider when ODA_PROVIDER=ollama", () => {
-      process.env.ODA_PROVIDER = "ollama";
+    it("creates OllamaProvider when DOJOPS_PROVIDER=ollama", () => {
+      process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       expect(provider.name).toBe("ollama");
     });
 
-    it("creates AnthropicProvider when ODA_PROVIDER=anthropic", () => {
-      process.env.ODA_PROVIDER = "anthropic";
+    it("creates AnthropicProvider when DOJOPS_PROVIDER=anthropic", () => {
+      process.env.DOJOPS_PROVIDER = "anthropic";
       process.env.ANTHROPIC_API_KEY = "test-key";
       const provider = createProvider();
       expect(provider.name).toBe("anthropic");
     });
 
     it("creates OpenAIProvider by default", () => {
-      delete process.env.ODA_PROVIDER;
+      delete process.env.DOJOPS_PROVIDER;
       process.env.OPENAI_API_KEY = "test-key";
       const provider = createProvider();
       expect(provider.name).toBe("openai");
     });
 
     it("creates OpenAIProvider for explicit openai", () => {
-      process.env.ODA_PROVIDER = "openai";
+      process.env.DOJOPS_PROVIDER = "openai";
       process.env.OPENAI_API_KEY = "test-key";
       const provider = createProvider();
       expect(provider.name).toBe("openai");
     });
 
     it("uses ProviderOptions.provider over env", () => {
-      process.env.ODA_PROVIDER = "openai";
+      process.env.DOJOPS_PROVIDER = "openai";
       process.env.OPENAI_API_KEY = "test-key";
       const provider = createProvider({ provider: "ollama" });
       expect(provider.name).toBe("ollama");
@@ -78,7 +78,7 @@ describe("factory", () => {
     });
 
     it("backward compatible: no options argument works", () => {
-      process.env.ODA_PROVIDER = "ollama";
+      process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       expect(provider.name).toBe("ollama");
     });
@@ -86,7 +86,7 @@ describe("factory", () => {
 
   describe("createTools", () => {
     it("creates 5 tools", () => {
-      process.env.ODA_PROVIDER = "ollama";
+      process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const tools = createTools(provider);
       expect(tools).toHaveLength(5);
@@ -101,7 +101,7 @@ describe("factory", () => {
 
   describe("createRouter", () => {
     it("creates an AgentRouter with agents", () => {
-      process.env.ODA_PROVIDER = "ollama";
+      process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const router = createRouter(provider);
       expect(router.getAgents().length).toBeGreaterThan(0);
@@ -110,7 +110,7 @@ describe("factory", () => {
 
   describe("createDebugger", () => {
     it("creates a CIDebugger instance", () => {
-      process.env.ODA_PROVIDER = "ollama";
+      process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const debugger_ = createDebugger(provider);
       expect(debugger_).toBeDefined();
@@ -120,7 +120,7 @@ describe("factory", () => {
 
   describe("createDiffAnalyzer", () => {
     it("creates an InfraDiffAnalyzer instance", () => {
-      process.env.ODA_PROVIDER = "ollama";
+      process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const analyzer = createDiffAnalyzer(provider);
       expect(analyzer).toBeDefined();

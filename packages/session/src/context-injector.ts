@@ -4,8 +4,8 @@ import path from "node:path";
 export function buildSessionContext(rootDir: string): string {
   const parts: string[] = [];
 
-  // Load repo context from oda init
-  const contextFile = path.join(rootDir, ".oda", "context.json");
+  // Load repo context from dojops init
+  const contextFile = path.join(rootDir, ".dojops", "context.json");
   if (fs.existsSync(contextFile)) {
     try {
       const ctx = JSON.parse(fs.readFileSync(contextFile, "utf-8"));
@@ -25,7 +25,7 @@ export function buildSessionContext(rootDir: string): string {
   }
 
   // Load latest scan summary
-  const scanDir = path.join(rootDir, ".oda", "scan-history");
+  const scanDir = path.join(rootDir, ".dojops", "scan-history");
   if (fs.existsSync(scanDir)) {
     try {
       const files = fs
@@ -46,7 +46,7 @@ export function buildSessionContext(rootDir: string): string {
   }
 
   // Load current session state
-  const sessionFile = path.join(rootDir, ".oda", "session.json");
+  const sessionFile = path.join(rootDir, ".dojops", "session.json");
   if (fs.existsSync(sessionFile)) {
     try {
       const session = JSON.parse(fs.readFileSync(sessionFile, "utf-8"));

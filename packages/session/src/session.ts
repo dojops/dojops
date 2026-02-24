@@ -1,4 +1,4 @@
-import { LLMProvider, AgentRouter } from "@odaops/core";
+import { LLMProvider, AgentRouter } from "@dojops/core";
 import { ChatMessage, ChatSessionState, SessionMode } from "./types";
 import { MemoryManager } from "./memory";
 import { SessionSummarizer } from "./summarizer";

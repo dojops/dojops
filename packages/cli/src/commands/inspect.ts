@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createRouter } from "@odaops/api";
+import { createRouter } from "@dojops/api";
 import { CLIContext } from "../types";
 import { maskToken } from "../formatter";
 import { getConfigPath } from "../config";
@@ -88,7 +88,7 @@ function inspectAgents(ctx: CLIContext): void {
 function inspectSession(ctx: CLIContext): void {
   const root = findProjectRoot();
   if (!root) {
-    p.log.info("No .oda/ project found. Run `oda init` first.");
+    p.log.info("No .dojops/ project found. Run `dojops init` first.");
     return;
   }
 

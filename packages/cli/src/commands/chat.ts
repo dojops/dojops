@@ -1,14 +1,14 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createRouter } from "@odaops/api";
+import { createRouter } from "@dojops/api";
 import {
   ChatSession,
   buildSessionContext,
   saveSession as saveChatSession,
   listSessions as listChatSessions,
   generateSessionId,
-} from "@odaops/session";
-import type { ChatSessionState, SessionMode } from "@odaops/session";
+} from "@dojops/session";
+import type { ChatSessionState, SessionMode } from "@dojops/session";
 import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
@@ -21,7 +21,7 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
 
   const rootDir = findProjectRoot(ctx.cwd);
   if (!rootDir) {
-    p.log.error("No .oda/ project found. Run `oda init` first.");
+    p.log.error("No .dojops/ project found. Run `dojops init` first.");
     process.exit(1);
   }
 
@@ -81,7 +81,7 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     : pc.dim("auto-route");
   const msgCount = sessionState.messages.length;
 
-  p.intro(pc.bold(pc.cyan("ODA Interactive Chat")));
+  p.intro(pc.bold(pc.cyan("DojOps Interactive Chat")));
   p.log.info(
     [
       `Session: ${pc.cyan(session.id)}`,
@@ -163,8 +163,10 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
       if (result.agent === "bridge" && result.content.startsWith("__bridge__:")) {
         s.stop("Delegating to command...");
         const [, command, cmdArgs] = result.content.split(":");
-        p.log.info(`Bridging to ${pc.cyan(`oda ${command}`)}${cmdArgs ? ` with: ${cmdArgs}` : ""}`);
-        p.log.info(pc.dim(`Run: oda ${command} ${cmdArgs ?? ""}`.trim()));
+        p.log.info(
+          `Bridging to ${pc.cyan(`dojops ${command}`)}${cmdArgs ? ` with: ${cmdArgs}` : ""}`,
+        );
+        p.log.info(pc.dim(`Run: dojops ${command} ${cmdArgs ?? ""}`.trim()));
         continue;
       }
 

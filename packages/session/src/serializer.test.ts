@@ -29,8 +29,8 @@ describe("serializer", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-session-test-"));
-    fs.mkdirSync(path.join(tmpDir, ".oda"), { recursive: true });
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-session-test-"));
+    fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
   });
 
   afterEach(() => {
@@ -42,10 +42,10 @@ describe("serializer", () => {
     expect(id).toMatch(/^chat-[a-f0-9]{8}$/);
   });
 
-  it("saveSession writes to .oda/sessions/", () => {
+  it("saveSession writes to .dojops/sessions/", () => {
     const state = makeState("chat-abc12345");
     saveSession(tmpDir, state);
-    const file = path.join(tmpDir, ".oda", "sessions", "chat-abc12345.json");
+    const file = path.join(tmpDir, ".dojops", "sessions", "chat-abc12345.json");
     expect(fs.existsSync(file)).toBe(true);
   });
 
@@ -69,7 +69,7 @@ describe("serializer", () => {
     saveSession(tmpDir, s1);
 
     // Manually overwrite to set a known updatedAt in the past
-    const file1 = path.join(tmpDir, ".oda", "sessions", "chat-first000.json");
+    const file1 = path.join(tmpDir, ".dojops", "sessions", "chat-first000.json");
     const data1 = JSON.parse(fs.readFileSync(file1, "utf-8"));
     data1.updatedAt = "2024-01-01T00:00:00.000Z";
     fs.writeFileSync(file1, JSON.stringify(data1, null, 2) + "\n");
@@ -77,7 +77,7 @@ describe("serializer", () => {
     const s2 = makeState("chat-second00");
     saveSession(tmpDir, s2);
 
-    const file2 = path.join(tmpDir, ".oda", "sessions", "chat-second00.json");
+    const file2 = path.join(tmpDir, ".dojops", "sessions", "chat-second00.json");
     const data2 = JSON.parse(fs.readFileSync(file2, "utf-8"));
     data2.updatedAt = "2024-12-31T00:00:00.000Z";
     fs.writeFileSync(file2, JSON.stringify(data2, null, 2) + "\n");

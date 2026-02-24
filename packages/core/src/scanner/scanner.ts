@@ -666,7 +666,7 @@ export function collectDevopsFiles(
 const NOISE_DIRS = new Set([
   "node_modules",
   ".git",
-  ".oda",
+  ".dojops",
   "dist",
   "build",
   "__pycache__",
@@ -747,8 +747,8 @@ export async function enrichWithLLM(
   const system = [
     "You are a DevOps project analyzer.",
     "Given a repository scan result and directory tree, produce structured insights about the project.",
-    "Focus on actionable ODA CLI commands the user can run next.",
-    "For recommendedAgents, use ODA specialist agent names: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python.",
+    "Focus on actionable DojOps CLI commands the user can run next.",
+    "For recommendedAgents, use DojOps specialist agent names: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python.",
   ].join(" ");
 
   const prompt = [

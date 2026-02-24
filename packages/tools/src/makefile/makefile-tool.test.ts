@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { MakefileTool } from "./makefile-tool";
 import { MakefileConfig } from "./schemas";
 import { detectMakefileContext } from "./detector";
@@ -56,7 +56,7 @@ describe("MakefileTool", () => {
   let tmpDir: string;
 
   function makeTmpDir(): string {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-makefile-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-makefile-"));
     return tmpDir;
   }
 

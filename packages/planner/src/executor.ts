@@ -1,4 +1,4 @@
-import { DevOpsTool } from "@odaops/sdk";
+import { DevOpsTool } from "@dojops/sdk";
 import { TaskGraph, TaskNode, TaskResult, TaskStatus, PlannerResult } from "./types";
 
 export interface PlannerLogger {

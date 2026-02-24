@@ -1,6 +1,6 @@
 # Security Scanning
 
-ODA's `@odaops/scanner` package provides automated security scanning with 6 scanners covering vulnerabilities, dependency audits, infrastructure-as-code checks, and secret detection. Findings can be automatically remediated using LLM-powered fix generation.
+DojOps's `@dojops/scanner` package provides automated security scanning with 6 scanners covering vulnerabilities, dependency audits, infrastructure-as-code checks, and secret detection. Findings can be automatically remediated using LLM-powered fix generation.
 
 ---
 
@@ -67,7 +67,7 @@ The scanner system:
 ### Full Scan
 
 ```bash
-oda scan
+dojops scan
 ```
 
 Runs all applicable scanners against the current project. Output includes:
@@ -79,16 +79,16 @@ Runs all applicable scanners against the current project. Output includes:
 ### Targeted Scans
 
 ```bash
-oda scan --security       # trivy + gitleaks only
-oda scan --deps           # npm-audit + pip-audit only
-oda scan --iac            # checkov + hadolint only
+dojops scan --security       # trivy + gitleaks only
+dojops scan --deps           # npm-audit + pip-audit only
+dojops scan --iac            # checkov + hadolint only
 ```
 
 ### Auto-Remediation
 
 ```bash
-oda scan --fix            # Generate fixes, prompt for approval
-oda scan --fix --yes      # Generate and apply fixes automatically
+dojops scan --fix            # Generate fixes, prompt for approval
+dojops scan --fix --yes      # Generate and apply fixes automatically
 ```
 
 The `--fix` flag:
@@ -188,10 +188,10 @@ The **Security** tab in the web dashboard displays:
 - Scan history timeline
 - Top recurring issues
 
-Data is sourced from `.oda/scan-history/*.json` via the `MetricsAggregator`.
+Data is sourced from `.dojops/scan-history/*.json` via the `MetricsAggregator`.
 
 ---
 
 ## Monorepo Support
 
-The scanner's `discoverProjectDirs()` function searches up to 2 levels deep for sub-projects, enabling monorepo scanning. It skips common non-project directories: `node_modules`, `.git`, `.oda`, `dist`, `build`, `coverage`, `.next`, `.cache`, `.turbo`, `__pycache__`, `.venv`, `venv`, `.tox`, `target`.
+The scanner's `discoverProjectDirs()` function searches up to 2 levels deep for sub-projects, enabling monorepo scanning. It skips common non-project directories: `node_modules`, `.git`, `.dojops`, `dist`, `build`, `coverage`, `.next`, `.cache`, `.turbo`, `__pycache__`, `.venv`, `venv`, `.tox`, `target`.

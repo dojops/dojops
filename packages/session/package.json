@@ -1,11 +1,11 @@
 {
-  "name": "@odaops/session",
+  "name": "@dojops/session",
   "version": "1.0.0",
-  "description": "Interactive AI chat session management for ODA",
+  "description": "Interactive AI chat session management for DojOps",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oda-devops/oda.git",
+    "url": "https://github.com/dojops/dojops.git",
     "directory": "packages/session"
   },
   "keywords": [
@@ -32,7 +32,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@odaops/core": "workspace:*",
+    "@dojops/core": "workspace:*",
     "zod": "^3.23.0"
   }
 }

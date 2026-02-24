@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { PrometheusTool } from "./prometheus-tool";
 import { PrometheusResponse } from "./schemas";
 
@@ -55,7 +55,7 @@ describe("PrometheusTool", () => {
   let tmpDir: string;
 
   function makeTmpDir(): string {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-prometheus-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-prometheus-"));
     return tmpDir;
   }
 

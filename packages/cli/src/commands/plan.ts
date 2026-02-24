@@ -1,13 +1,13 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { decompose, PlannerExecutor } from "@odaops/planner";
+import { decompose, PlannerExecutor } from "@dojops/planner";
 import {
   SafeExecutor,
   AutoApproveHandler,
   CallbackApprovalHandler,
   ApprovalRequest,
-} from "@odaops/executor";
-import { createTools } from "@odaops/api";
+} from "@dojops/executor";
+import { createTools } from "@dojops/api";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
 import { statusIcon, statusText, formatOutput, getOutputFileName } from "../formatter";
@@ -56,7 +56,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
   if (!prompt) {
     p.log.error("No prompt provided.");
-    p.log.info(`  ${pc.dim("$")} oda plan <prompt>`);
+    p.log.info(`  ${pc.dim("$")} dojops plan <prompt>`);
     process.exit(ExitCode.VALIDATION_ERROR);
   }
 
@@ -81,7 +81,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   });
   p.note(taskLines.join("\n"), `${graph.goal} ${pc.dim(`(${graph.tasks.length} tasks)`)}`);
 
-  // Save plan to .oda/plans/
+  // Save plan to .dojops/plans/
   let root = findProjectRoot();
   if (!root) {
     root = ctx.cwd;

@@ -24,7 +24,7 @@ import type { LLMProvider } from "../llm/provider";
 let tmpDir: string;
 
 function makeTmpDir(): string {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-scanner-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-scanner-"));
   return tmpDir;
 }
 
@@ -1158,7 +1158,7 @@ describe("enrichWithLLM", () => {
       projectDescription: "A Node.js web application",
       techStack: ["Node.js", "TypeScript"],
       suggestedWorkflows: [
-        { command: 'oda plan "Set up CI/CD"', description: "Create CI pipeline" },
+        { command: 'dojops plan "Set up CI/CD"', description: "Create CI pipeline" },
       ],
       recommendedAgents: ["cicd", "docker"],
     };
@@ -1215,7 +1215,7 @@ describe("RepoContextSchema with llmInsights", () => {
       llmInsights: {
         projectDescription: "Test project",
         techStack: ["Node.js"],
-        suggestedWorkflows: [{ command: "oda plan", description: "Plan" }],
+        suggestedWorkflows: [{ command: "dojops plan", description: "Plan" }],
         recommendedAgents: ["cicd"],
         notes: "Some notes",
       },

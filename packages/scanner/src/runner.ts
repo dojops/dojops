@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-import type { RepoContext } from "@odaops/core";
+import type { RepoContext } from "@dojops/core";
 import { ScanType, ScanReport, ScannerResult, ScanFinding } from "./types";
 import { scanNpm } from "./scanners/npm";
 import { scanPip } from "./scanners/pip";

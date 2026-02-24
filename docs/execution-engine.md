@@ -1,6 +1,6 @@
 # Execution Engine
 
-The `@odaops/executor` package provides safe, auditable execution of generated DevOps configurations through policy enforcement, approval workflows, sandboxed file operations, and hash-chained audit logging.
+The `@dojops/executor` package provides safe, auditable execution of generated DevOps configurations through policy enforcement, approval workflows, sandboxed file operations, and hash-chained audit logging.
 
 ---
 
@@ -141,12 +141,12 @@ Audit entries form a hash chain:
 
 1. Each entry's `hash` is computed as `SHA-256(seq + timestamp + command + status + previousHash)`
 2. The `previousHash` links to the prior entry
-3. The chain can be verified end-to-end with `oda history verify`
+3. The chain can be verified end-to-end with `dojops history verify`
 4. Any tampering breaks the chain — the hash won't match
 
 ### Storage
 
-Audit entries are appended to `.oda/history/audit.jsonl` (one JSON object per line, append-only).
+Audit entries are appended to `.dojops/history/audit.jsonl` (one JSON object per line, append-only).
 
 ---
 
@@ -154,7 +154,7 @@ Audit entries are appended to `.oda/history/audit.jsonl` (one JSON object per li
 
 PID-based lock files prevent concurrent mutations:
 
-- Lock file: `.oda/lock.json` containing `{ pid, command, timestamp }`
+- Lock file: `.dojops/lock.json` containing `{ pid, command, timestamp }`
 - Before `apply`, `destroy`, or `rollback`, the executor checks for an existing lock
 - If a lock exists and the PID is alive, the operation is blocked (exit code 4)
 - If the PID is dead (stale lock), the lock is automatically cleaned up
@@ -178,25 +178,25 @@ The `withTimeout()` utility wraps execution with a configurable timeout:
 
 ```bash
 # Execute with default policy (interactive approval)
-oda apply
+dojops apply
 
 # Execute with verification
-oda apply --verify
+dojops apply --verify
 
 # Execute with auto-approval
-oda apply --yes
+dojops apply --yes
 
 # Dry run (auto-deny, no writes)
-oda apply --dry-run
+dojops apply --dry-run
 
 # Resume failed tasks
-oda apply --resume
+dojops apply --resume
 ```
 
 ### Programmatic
 
 ```typescript
-import { SafeExecutor, AutoApproveHandler } from "@odaops/executor";
+import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 
 const executor = new SafeExecutor(tool, policy, new AutoApproveHandler());
 const result = await executor.run(input);

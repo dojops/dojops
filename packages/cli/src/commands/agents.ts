@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createRouter } from "@odaops/api";
-import { getInstallCommand } from "@odaops/core";
+import { createRouter } from "@dojops/api";
+import { getInstallCommand } from "@dojops/core";
 import { CLIContext } from "../types";
 import { runPreflight } from "../preflight";
 
@@ -45,7 +45,7 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   const name = args[0];
   if (!name) {
     p.log.error("Agent name required.");
-    p.log.info(`  ${pc.dim("$")} oda agents info <name>`);
+    p.log.info(`  ${pc.dim("$")} dojops agents info <name>`);
     process.exit(1);
   }
 

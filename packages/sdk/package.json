@@ -1,11 +1,11 @@
 {
-  "name": "@odaops/sdk",
+  "name": "@dojops/sdk",
   "version": "1.0.0",
-  "description": "Base tool abstraction and Zod validation for ODA DevOps agents",
+  "description": "Base tool abstraction and Zod validation for DojOps DevOps agents",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oda-devops/oda.git",
+    "url": "https://github.com/dojops/dojops.git",
     "directory": "packages/sdk"
   },
   "keywords": [

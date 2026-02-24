@@ -7,11 +7,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@odaops/core": path.resolve(__dirname, "../core/src"),
-      "@odaops/sdk": path.resolve(__dirname, "../sdk/src"),
-      "@odaops/planner": path.resolve(__dirname, "../planner/src"),
-      "@odaops/tools": path.resolve(__dirname, "../tools/src"),
-      "@odaops/executor": path.resolve(__dirname, "../executor/src"),
+      "@dojops/core": path.resolve(__dirname, "../core/src"),
+      "@dojops/sdk": path.resolve(__dirname, "../sdk/src"),
+      "@dojops/planner": path.resolve(__dirname, "../planner/src"),
+      "@dojops/tools": path.resolve(__dirname, "../tools/src"),
+      "@dojops/executor": path.resolve(__dirname, "../executor/src"),
     },
   },
 });

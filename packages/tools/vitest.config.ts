@@ -7,8 +7,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@odaops/core": path.resolve(__dirname, "../core/src"),
-      "@odaops/sdk": path.resolve(__dirname, "../sdk/src"),
+      "@dojops/core": path.resolve(__dirname, "../core/src"),
+      "@dojops/sdk": path.resolve(__dirname, "../sdk/src"),
     },
   },
 });

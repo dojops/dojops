@@ -1,21 +1,21 @@
 {
-  "name": "oda",
+  "name": "dojops",
   "private": true,
-  "description": "ODA — AI-powered DevOps automation agent",
+  "description": "DojOps — AI DevOps Automation Engine",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oda-devops/oda.git"
+    "url": "https://github.com/dojops/dojops.git"
   },
   "packageManager": "pnpm@8.15.0",
   "engines": {
     "node": ">=18"
   },
   "bin": {
-    "oda": "packages/cli/dist/index.js"
+    "dojops": "packages/cli/dist/index.js"
   },
   "scripts": {
-    "oda": "node packages/cli/dist/index.js",
+    "dojops": "node packages/cli/dist/index.js",
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",

@@ -1,11 +1,11 @@
 {
-  "name": "@odaops/cli",
+  "name": "@dojops/cli",
   "version": "1.0.0",
-  "description": "CLI for ODA — AI-powered DevOps automation agent",
+  "description": "CLI for DojOps — AI DevOps Automation Engine",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oda-devops/oda.git",
+    "url": "https://github.com/dojops/dojops.git",
     "directory": "packages/cli"
   },
   "keywords": [
@@ -25,7 +25,7 @@
     "access": "public"
   },
   "bin": {
-    "oda": "dist/index.js"
+    "dojops": "dist/index.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -42,13 +42,13 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
-    "@odaops/api": "workspace:*",
-    "@odaops/core": "workspace:*",
-    "@odaops/executor": "workspace:*",
-    "@odaops/planner": "workspace:*",
-    "@odaops/scanner": "workspace:*",
-    "@odaops/session": "workspace:*",
-    "@odaops/tools": "workspace:*",
+    "@dojops/api": "workspace:*",
+    "@dojops/core": "workspace:*",
+    "@dojops/executor": "workspace:*",
+    "@dojops/planner": "workspace:*",
+    "@dojops/scanner": "workspace:*",
+    "@dojops/session": "workspace:*",
+    "@dojops/tools": "workspace:*",
     "dotenv": "^16.0.0",
     "picocolors": "^1.1.1"
   }

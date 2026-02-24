@@ -1,11 +1,11 @@
 {
-  "name": "@odaops/planner",
+  "name": "@dojops/planner",
   "version": "1.0.0",
-  "description": "LLM-powered task graph decomposition and topological executor for ODA",
+  "description": "LLM-powered task graph decomposition and topological executor for DojOps",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oda-devops/oda.git",
+    "url": "https://github.com/dojops/dojops.git",
     "directory": "packages/planner"
   },
   "keywords": [
@@ -31,8 +31,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@odaops/core": "workspace:*",
-    "@odaops/sdk": "workspace:*",
+    "@dojops/core": "workspace:*",
+    "@dojops/sdk": "workspace:*",
     "zod": "^3.23.0"
   }
 }

@@ -1,18 +1,18 @@
 # Configuration
 
-ODA supports 5 LLM providers with flexible configuration via CLI flags, environment variables, config files, and named profiles.
+DojOps supports 5 LLM providers with flexible configuration via CLI flags, environment variables, config files, and named profiles.
 
 ---
 
 ## Supported Providers
 
-| Provider  | `ODA_PROVIDER` | Required Env Var    | Default Model                | SDK                   |
-| --------- | -------------- | ------------------- | ---------------------------- | --------------------- |
-| OpenAI    | `openai`       | `OPENAI_API_KEY`    | `gpt-4o-mini`                | `openai`              |
-| Anthropic | `anthropic`    | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` | `@anthropic-ai/sdk`   |
-| Ollama    | `ollama`       | _(none -- local)_   | `llama3`                     | `ollama`              |
-| DeepSeek  | `deepseek`     | `DEEPSEEK_API_KEY`  | `deepseek-chat`              | `openai` (compatible) |
-| Gemini    | `gemini`       | `GEMINI_API_KEY`    | `gemini-2.5-flash`           | `@google/genai`       |
+| Provider  | `DOJOPS_PROVIDER` | Required Env Var    | Default Model                | SDK                   |
+| --------- | ----------------- | ------------------- | ---------------------------- | --------------------- |
+| OpenAI    | `openai`          | `OPENAI_API_KEY`    | `gpt-4o-mini`                | `openai`              |
+| Anthropic | `anthropic`       | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` | `@anthropic-ai/sdk`   |
+| Ollama    | `ollama`          | _(none -- local)_   | `llama3`                     | `ollama`              |
+| DeepSeek  | `deepseek`        | `DEEPSEEK_API_KEY`  | `deepseek-chat`              | `openai` (compatible) |
+| Gemini    | `gemini`          | `GEMINI_API_KEY`    | `gemini-2.5-flash`           | `@google/genai`       |
 
 ---
 
@@ -21,7 +21,7 @@ ODA supports 5 LLM providers with flexible configuration via CLI flags, environm
 ### Interactive Setup
 
 ```bash
-oda config
+dojops config
 ```
 
 The interactive wizard:
@@ -34,22 +34,22 @@ The interactive wizard:
 ### Environment Variables
 
 ```bash
-export ODA_PROVIDER=openai
+export DOJOPS_PROVIDER=openai
 export OPENAI_API_KEY=sk-...
-export ODA_MODEL=gpt-4o              # Optional model override
-export ODA_API_PORT=3000              # API server port (default: 3000)
+export DOJOPS_MODEL=gpt-4o              # Optional model override
+export DOJOPS_API_PORT=3000              # API server port (default: 3000)
 ```
 
 ### CLI Flags
 
 ```bash
-oda --provider=anthropic "Create a Terraform config"
-oda --model=gpt-4o "Create a Kubernetes deployment"
+dojops --provider=anthropic "Create a Terraform config"
+dojops --model=gpt-4o "Create a Kubernetes deployment"
 ```
 
 ### Config File
 
-ODA saves configuration to `~/.oda/config.json`:
+DojOps saves configuration to `~/.dojops/config.json`:
 
 ```json
 {
@@ -66,8 +66,8 @@ ODA saves configuration to `~/.oda/config.json`:
 Values are resolved in order (first match wins):
 
 ```
-Provider:  --provider flag  >  $ODA_PROVIDER  >  config file  >  "openai" (default)
-Model:     --model flag     >  $ODA_MODEL     >  config file  >  provider default
+Provider:  --provider flag  >  $DOJOPS_PROVIDER  >  config file  >  "openai" (default)
+Model:     --model flag     >  $DOJOPS_MODEL     >  config file  >  provider default
 Token:     $OPENAI_API_KEY (etc.)  >  config file token
 ```
 
@@ -79,18 +79,18 @@ Each provider ships with a sensible default, but you can choose any model your p
 
 ```bash
 # Interactive: fetches models from provider API, shows picker
-oda config
+dojops config
 
 # Set directly in config
-oda config --model=gpt-4o
+dojops config --model=gpt-4o
 
 # One-off override (doesn't change saved config)
-oda --model=deepseek-reasoner "Analyze this Terraform plan"
+dojops --model=deepseek-reasoner "Analyze this Terraform plan"
 ```
 
 ### Dynamic Model Discovery
 
-When running `oda config`, ODA calls the provider's `listModels()` API to fetch available models:
+When running `dojops config`, DojOps calls the provider's `listModels()` API to fetch available models:
 
 - **OpenAI** — Lists models from the OpenAI API
 - **Anthropic** — Lists supported Claude models
@@ -108,42 +108,42 @@ Named profiles let you switch between different provider/environment configurati
 
 ```bash
 # Save current config as a named profile
-oda config profile create staging
+dojops config profile create staging
 ```
 
 ### Use a Profile
 
 ```bash
 # Switch to a profile (updates active config)
-oda config profile use staging
+dojops config profile use staging
 
 # One-off profile override (doesn't change active config)
-oda --profile=staging "Create an S3 bucket"
+dojops --profile=staging "Create an S3 bucket"
 ```
 
 ### List Profiles
 
 ```bash
-oda config profile list
+dojops config profile list
 ```
 
 ### Example: Multi-Environment Setup
 
 ```bash
 # Set up development profile (local Ollama)
-export ODA_PROVIDER=ollama
-oda config
-oda config profile create dev
+export DOJOPS_PROVIDER=ollama
+dojops config
+dojops config profile create dev
 
 # Set up production profile (OpenAI)
-export ODA_PROVIDER=openai
+export DOJOPS_PROVIDER=openai
 export OPENAI_API_KEY=sk-prod-...
-oda config --model=gpt-4o
-oda config profile create prod
+dojops config --model=gpt-4o
+dojops config profile create prod
 
 # Switch between them
-oda config profile use dev    # Uses local Ollama
-oda config profile use prod   # Uses OpenAI GPT-4o
+dojops config profile use dev    # Uses local Ollama
+dojops config profile use prod   # Uses OpenAI GPT-4o
 ```
 
 ---
@@ -152,13 +152,13 @@ oda config profile use prod   # Uses OpenAI GPT-4o
 
 | Variable            | Description           | Default          |
 | ------------------- | --------------------- | ---------------- |
-| `ODA_PROVIDER`      | LLM provider name     | `openai`         |
-| `ODA_MODEL`         | Model override        | Provider default |
+| `DOJOPS_PROVIDER`   | LLM provider name     | `openai`         |
+| `DOJOPS_MODEL`      | Model override        | Provider default |
 | `OPENAI_API_KEY`    | OpenAI API key        | --               |
 | `ANTHROPIC_API_KEY` | Anthropic API key     | --               |
 | `DEEPSEEK_API_KEY`  | DeepSeek API key      | --               |
 | `GEMINI_API_KEY`    | Google Gemini API key | --               |
-| `ODA_API_PORT`      | API server port       | `3000`           |
+| `DOJOPS_API_PORT`   | API server port       | `3000`           |
 
 ### Ollama Setup
 
@@ -171,9 +171,9 @@ curl -fsSL https://ollama.com/install.sh | sh
 # Pull a model
 ollama pull llama3
 
-# Configure ODA
-export ODA_PROVIDER=ollama
-oda "Create a Dockerfile for Node.js"
+# Configure DojOps
+export DOJOPS_PROVIDER=ollama
+dojops "Create a Dockerfile for Node.js"
 ```
 
 Ollama must be running at `localhost:11434`.
@@ -184,13 +184,13 @@ Ollama must be running at `localhost:11434`.
 
 ```bash
 # Show current config
-oda config show
+dojops config show
 
 # Show system health and config
-oda doctor
+dojops doctor
 
 # Inspect detailed config state
-oda inspect config
+dojops inspect config
 ```
 
 ---
@@ -201,10 +201,10 @@ For development, create a `.env` file in the project root:
 
 ```bash
 # .env
-ODA_PROVIDER=openai
+DOJOPS_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-ODA_MODEL=gpt-4o-mini
-ODA_API_PORT=3000
+DOJOPS_MODEL=gpt-4o-mini
+DOJOPS_API_PORT=3000
 ```
 
 See `.env.example` in the repository for a template.

@@ -1,21 +1,21 @@
 # Web Dashboard
 
-ODA includes a web dashboard with a dark industrial terminal aesthetic for monitoring metrics, browsing agents, and reviewing execution history. Start it with `oda serve`.
+DojOps includes a web dashboard with a dark industrial terminal aesthetic for monitoring metrics, browsing agents, and reviewing execution history. Start it with `dojops serve`.
 
 ---
 
 ## Starting the Dashboard
 
 ```bash
-oda serve                    # http://localhost:3000
-oda serve --port=8080        # Custom port
+dojops serve                    # http://localhost:3000
+dojops serve --port=8080        # Custom port
 ```
 
 The serve command:
 
 1. Resolves provider configuration (CLI flags > env vars > config file)
 2. Creates all required dependencies (provider, tools, router, debugger, diff analyzer)
-3. Detects project root for metrics (`.oda/` directory)
+3. Detects project root for metrics (`.dojops/` directory)
 4. Starts the Express server with the web dashboard
 
 ---
@@ -47,7 +47,7 @@ The overview tab displays aggregated metrics:
 - **Most used commands** — Distribution of CLI/API commands
 - **Recent activity timeline** — Chronological list of recent operations
 
-Data source: `.oda/plans/`, `.oda/execution-logs/`, `.oda/scan-history/`
+Data source: `.dojops/plans/`, `.dojops/execution-logs/`, `.dojops/scan-history/`
 
 ### Security
 
@@ -59,7 +59,7 @@ The security tab provides visibility into scan findings:
 - **Scan history** — Timeline of past scans with summary stats
 - **Top recurring issues** — Most frequently appearing findings
 
-Data source: `.oda/scan-history/*.json`
+Data source: `.dojops/scan-history/*.json`
 
 ### Audit
 
@@ -70,7 +70,7 @@ The audit tab shows the hash-chained audit trail:
 - **Command distribution** — Which commands generated audit entries
 - **Hash chain entries** — Individual entries with seq, timestamp, command, status, hash
 
-Data source: `.oda/history/audit.jsonl`
+Data source: `.dojops/history/audit.jsonl`
 
 ### Agents
 
@@ -115,20 +115,20 @@ The sidebar footer shows the connected LLM provider with a status badge. Mobile 
 
 ## Metrics Data
 
-The dashboard pulls metrics from the `MetricsAggregator`, which reads `.oda/` project data on-demand:
+The dashboard pulls metrics from the `MetricsAggregator`, which reads `.dojops/` project data on-demand:
 
-| Metric Type | Data Sources                                                | Endpoint                    |
-| ----------- | ----------------------------------------------------------- | --------------------------- |
-| Overview    | `.oda/plans/`, `.oda/execution-logs/`, `.oda/scan-history/` | `GET /api/metrics/overview` |
-| Security    | `.oda/scan-history/*.json`                                  | `GET /api/metrics/security` |
-| Audit       | `.oda/history/audit.jsonl`                                  | `GET /api/metrics/audit`    |
+| Metric Type | Data Sources                                                         | Endpoint                    |
+| ----------- | -------------------------------------------------------------------- | --------------------------- |
+| Overview    | `.dojops/plans/`, `.dojops/execution-logs/`, `.dojops/scan-history/` | `GET /api/metrics/overview` |
+| Security    | `.dojops/scan-history/*.json`                                        | `GET /api/metrics/security` |
+| Audit       | `.dojops/history/audit.jsonl`                                        | `GET /api/metrics/audit`    |
 
-Metrics are disabled if no `.oda/` project directory is found. The dashboard gracefully shows empty states in this case.
+Metrics are disabled if no `.dojops/` project directory is found. The dashboard gracefully shows empty states in this case.
 
 ---
 
 ## Requirements
 
 - The dashboard requires a running LLM provider for generation features
-- Metrics tabs require `oda init` to have been run (creates `.oda/` directory)
+- Metrics tabs require `dojops init` to have been run (creates `.dojops/` directory)
 - No authentication required (local access only)

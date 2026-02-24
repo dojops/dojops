@@ -8,7 +8,7 @@ describe("detectProjectType", () => {
   let tmpDir: string;
 
   function makeTmpDir(): string {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-detect-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-detect-"));
     return tmpDir;
   }
 

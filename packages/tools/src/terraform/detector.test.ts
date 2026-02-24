@@ -8,7 +8,7 @@ describe("detectTerraformProject", () => {
   let tmpDir: string;
 
   function makeTmpDir(): string {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-tf-detect-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-tf-detect-"));
     return tmpDir;
   }
 

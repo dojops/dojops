@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@odaops/sdk";
-import { LLMProvider } from "@odaops/core";
+import { BaseTool, ToolOutput } from "@dojops/sdk";
+import { LLMProvider } from "@dojops/core";
 import { SystemdInputSchema, SystemdInput } from "./schemas";
 import { generateSystemdConfig, systemdConfigToString } from "./generator";
 

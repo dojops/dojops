@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { LLMProvider } from "@odaops/core";
-import { DevOpsTool } from "@odaops/sdk";
-import { decompose, PlannerExecutor } from "@odaops/planner";
-import { SafeExecutor, AutoApproveHandler } from "@odaops/executor";
+import { LLMProvider } from "@dojops/core";
+import { DevOpsTool } from "@dojops/sdk";
+import { decompose, PlannerExecutor } from "@dojops/planner";
+import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { HistoryStore } from "../store";
 import { PlanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";

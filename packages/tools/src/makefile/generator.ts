@@ -1,4 +1,4 @@
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { MakefileConfig, MakefileConfigSchema } from "./schemas";
 import { MakefileDetectionResult } from "./detector";
 

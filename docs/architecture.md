@@ -1,6 +1,6 @@
 # Architecture
 
-ODA is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
+DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 
@@ -29,39 +29,39 @@ Execution Engine (Sandboxed, policy-enforced, approval-gated, audit-logged)
 
 ## Package Architecture
 
-ODA is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, CommonJS). All packages use the `@odaops/*` scope.
+DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, CommonJS). All packages use the `@dojops/*` scope.
 
 ### 9 Packages
 
 ```
-@odaops/cli          CLI entry point + rich TUI (@clack/prompts)
-@odaops/api          REST API (Express) + web dashboard + factory functions
-@odaops/planner      TaskGraph decomposition + topological executor
-@odaops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
-@odaops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
+@dojops/cli          CLI entry point + rich TUI (@clack/prompts)
+@dojops/api          REST API (Express) + web dashboard + factory functions
+@dojops/planner      TaskGraph decomposition + topological executor
+@dojops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
+@dojops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                      Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@odaops/scanner      6 security scanners + remediation engine
-@odaops/session      Chat session management + memory + context injection
-@odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
-@odaops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
+@dojops/scanner      6 security scanners + remediation engine
+@dojops/session      Chat session management + memory + context injection
+@dojops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
 ```
 
 ### Dependency Flow
 
 ```
-@odaops/cli
-  +-- @odaops/api
-  |     +-- @odaops/planner
-  |     |     +-- @odaops/core
-  |     |           +-- @odaops/sdk (zod)
-  |     +-- @odaops/executor
-  |     |     +-- @odaops/sdk
-  |     +-- @odaops/tools
-  |     |     +-- @odaops/core
-  |     |     +-- @odaops/sdk
-  |     +-- @odaops/scanner
-  |     +-- @odaops/session
-  |           +-- @odaops/core
+@dojops/cli
+  +-- @dojops/api
+  |     +-- @dojops/planner
+  |     |     +-- @dojops/core
+  |     |           +-- @dojops/sdk (zod)
+  |     +-- @dojops/executor
+  |     |     +-- @dojops/sdk
+  |     +-- @dojops/tools
+  |     |     +-- @dojops/core
+  |     |     +-- @dojops/sdk
+  |     +-- @dojops/scanner
+  |     +-- @dojops/session
+  |           +-- @dojops/core
 ```
 
 **Simplified linear flow:**
@@ -76,7 +76,7 @@ cli -> api -> planner -> executor -> tools -> core -> sdk
 
 ## Layer Descriptions
 
-### 1. LLM Layer (`@odaops/core`)
+### 1. LLM Layer (`@dojops/core`)
 
 Abstraction over five LLM providers with structured JSON output:
 
@@ -100,7 +100,7 @@ interface LLMProvider {
 
 All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema.
 
-### 2. Multi-Agent System (`@odaops/core`)
+### 2. Multi-Agent System (`@dojops/core`)
 
 16 specialist agents with keyword-based routing and confidence scoring. The `AgentRouter` scores prompts against each agent's keyword list and routes to the highest-confidence match. If no agent exceeds the threshold, it falls back to the general-purpose `DevOpsAgent`.
 
@@ -112,49 +112,49 @@ Additionally, three specialized analyzers (not routed via `AgentRouter`) provide
 
 See [Specialist Agents](agents.md) for the full agent list.
 
-### 3. Task Planner (`@odaops/planner`)
+### 3. Task Planner (`@dojops/planner`)
 
 LLM-powered goal decomposition into structured, dependency-aware task graphs. Uses Kahn's algorithm for topological execution ordering, `$ref:<taskId>` for inter-task data wiring, and `completedTaskIds` for resume after partial failures.
 
 See [Task Planner](planner.md) for details.
 
-### 4. Tool SDK (`@odaops/sdk`)
+### 4. Tool SDK (`@dojops/sdk`)
 
 Abstract `BaseTool<T>` class with Zod input schema validation, abstract `generate()` for LLM generation, optional `execute()` for file writes, and optional `verify()` for external tool validation.
 
 See [DevOps Tools](tools.md) for the tool pattern.
 
-### 5. DevOps Tools (`@odaops/tools`)
+### 5. DevOps Tools (`@dojops/tools`)
 
 12 tools covering CI/CD, IaC, containers, monitoring, and system services. Each follows the same file pattern: `schemas.ts` -> `detector.ts` -> `generator.ts` -> `verifier.ts` -> `*-tool.ts`.
 
 See [DevOps Tools](tools.md) for the full tool list.
 
-### 6. Execution Engine (`@odaops/executor`)
+### 6. Execution Engine (`@dojops/executor`)
 
 Orchestrates generate -> verify -> approve -> execute with policy enforcement, sandboxed file operations, and audit logging.
 
 See [Execution Engine](execution-engine.md) for details.
 
-### 7. Security Scanner (`@odaops/scanner`)
+### 7. Security Scanner (`@dojops/scanner`)
 
 6 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) with LLM-powered remediation.
 
 See [Security Scanning](security-scanning.md) for details.
 
-### 8. Chat Sessions (`@odaops/session`)
+### 8. Chat Sessions (`@dojops/session`)
 
 Multi-turn conversation management with memory windowing, LLM-generated summaries, project context injection, and session persistence.
 
-### 9. REST API & Dashboard (`@odaops/api`)
+### 9. REST API & Dashboard (`@dojops/api`)
 
 Express-based API with dependency injection via `createApp(deps)`. 19 endpoints exposing all capabilities over HTTP. Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History).
 
 See [API Reference](api-reference.md) and [Web Dashboard](dashboard.md).
 
-### 10. CLI (`@odaops/cli`)
+### 10. CLI (`@dojops/cli`)
 
-Full-lifecycle CLI with rich TUI powered by `@clack/prompts`. Interactive prompts, spinners, styled panels, semantic log levels. Includes `oda init` (comprehensive repo scanner with 11 CI platforms, IaC, scripts, security detection) and `oda check` (LLM-powered DevOps config quality analysis).
+Full-lifecycle CLI with rich TUI powered by `@clack/prompts`. Interactive prompts, spinners, styled panels, semantic log levels. Includes `dojops init` (comprehensive repo scanner with 11 CI platforms, IaC, scripts, security detection) and `dojops check` (LLM-powered DevOps config quality analysis).
 
 See [CLI Reference](cli-reference.md).
 
@@ -173,10 +173,10 @@ See [CLI Reference](cli-reference.md).
 
 ## Data Storage
 
-ODA stores project state in the `.oda/` directory:
+DojOps stores project state in the `.dojops/` directory:
 
 ```
-.oda/
+.dojops/
   context.json           Project context v2 (languages, 11 CI platforms, IaC, containers,
                          monitoring/web servers, scripts, security configs, devopsFiles[])
   session.json           Current session state

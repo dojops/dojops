@@ -17,7 +17,7 @@ vi.mock("node:fs");
 vi.mock("node:os");
 
 const mockHome = "/home/testuser";
-const configDir = path.join(mockHome, ".oda");
+const configDir = path.join(mockHome, ".dojops");
 const configFile = path.join(configDir, "config.json");
 
 describe("config", () => {
@@ -27,8 +27,8 @@ describe("config", () => {
     vi.clearAllMocks();
     vi.mocked(os.homedir).mockReturnValue(mockHome);
     process.env = { ...originalEnv };
-    delete process.env.ODA_PROVIDER;
-    delete process.env.ODA_MODEL;
+    delete process.env.DOJOPS_PROVIDER;
+    delete process.env.DOJOPS_MODEL;
     delete process.env.OPENAI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
   });
@@ -111,13 +111,13 @@ describe("config", () => {
 
   describe("resolveProvider", () => {
     it("uses CLI flag first", () => {
-      process.env.ODA_PROVIDER = "ollama";
+      process.env.DOJOPS_PROVIDER = "ollama";
       const config = { defaultProvider: "anthropic" as const };
       expect(resolveProvider("openai", config)).toBe("openai");
     });
 
     it("uses env var when no CLI flag", () => {
-      process.env.ODA_PROVIDER = "anthropic";
+      process.env.DOJOPS_PROVIDER = "anthropic";
       expect(resolveProvider(undefined, {})).toBe("anthropic");
     });
 
@@ -136,14 +136,14 @@ describe("config", () => {
 
   describe("resolveModel", () => {
     it("uses CLI flag first", () => {
-      process.env.ODA_MODEL = "gpt-4o";
+      process.env.DOJOPS_MODEL = "gpt-4o";
       expect(resolveModel("claude-sonnet-4-5-20250929", { defaultModel: "llama3" })).toBe(
         "claude-sonnet-4-5-20250929",
       );
     });
 
     it("uses env var when no CLI flag", () => {
-      process.env.ODA_MODEL = "gpt-4o";
+      process.env.DOJOPS_MODEL = "gpt-4o";
       expect(resolveModel(undefined, {})).toBe("gpt-4o");
     });
 

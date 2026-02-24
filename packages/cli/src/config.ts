@@ -19,7 +19,7 @@ const TOKEN_ENV_MAP: Record<string, string> = {
 };
 
 function configDir(): string {
-  return path.join(os.homedir(), ".oda");
+  return path.join(os.homedir(), ".dojops");
 }
 
 function configFile(): string {
@@ -31,7 +31,7 @@ export function getConfigPath(): string {
   return configFile();
 }
 
-/** Loads config from ~/.oda/config.json. Returns empty config if missing or invalid. */
+/** Loads config from ~/.dojops/config.json. Returns empty config if missing or invalid. */
 export function loadConfig(): OdaConfig {
   try {
     const raw = fs.readFileSync(configFile(), "utf-8");
@@ -45,7 +45,7 @@ export function loadConfig(): OdaConfig {
   }
 }
 
-/** Writes config to ~/.oda/config.json. Creates directory with 0o700 and file with 0o600. */
+/** Writes config to ~/.dojops/config.json. Creates directory with 0o700 and file with 0o600. */
 export function saveConfig(config: OdaConfig): void {
   const dir = configDir();
   if (!fs.existsSync(dir)) {
@@ -67,19 +67,19 @@ export function validateProvider(name: string): Provider {
 
 /**
  * Resolves the LLM provider to use.
- * Priority: CLI flag > ODA_PROVIDER env > config defaultProvider > "openai"
+ * Priority: CLI flag > DOJOPS_PROVIDER env > config defaultProvider > "openai"
  */
 export function resolveProvider(cliFlag: string | undefined, config: OdaConfig): string {
-  const raw = cliFlag ?? process.env.ODA_PROVIDER ?? config.defaultProvider ?? "openai";
+  const raw = cliFlag ?? process.env.DOJOPS_PROVIDER ?? config.defaultProvider ?? "openai";
   return validateProvider(raw);
 }
 
 /**
  * Resolves the LLM model to use.
- * Priority: CLI flag > ODA_MODEL env > config defaultModel > undefined
+ * Priority: CLI flag > DOJOPS_MODEL env > config defaultModel > undefined
  */
 export function resolveModel(cliFlag: string | undefined, config: OdaConfig): string | undefined {
-  return cliFlag ?? process.env.ODA_MODEL ?? config.defaultModel ?? undefined;
+  return cliFlag ?? process.env.DOJOPS_MODEL ?? config.defaultModel ?? undefined;
 }
 
 /**

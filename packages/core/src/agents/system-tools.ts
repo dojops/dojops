@@ -2,7 +2,7 @@
  * System tool definitions and pure helper functions.
  *
  * Data-only — no I/O, no child_process, no TUI.
- * Runtime install/download lives in @odaops/cli (tool-sandbox.ts).
+ * Runtime install/download lives in @dojops/cli (tool-sandbox.ts).
  */
 
 import os from "node:os";

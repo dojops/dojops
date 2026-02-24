@@ -1,12 +1,12 @@
 ---
 name: format
-description: Format code in the ODA monorepo using Prettier. Format all files or check formatting without writing.
+description: Format code in the DojOps monorepo using Prettier. Format all files or check formatting without writing.
 argument-hint: "[check | filepath]"
 disable-model-invocation: false
 allowed-tools: Bash
 ---
 
-Format code in the ODA monorepo using Prettier.
+Format code in the DojOps monorepo using Prettier.
 
 ## Commands
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { SessionSummarizer } from "./summarizer";
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { ChatMessage } from "./types";
 
 function createMockProvider(response: string): LLMProvider {

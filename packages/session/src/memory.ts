@@ -1,5 +1,5 @@
 import { ChatMessage } from "./types";
-import { ChatMessage as CoreChatMessage } from "@odaops/core";
+import { ChatMessage as CoreChatMessage } from "@dojops/core";
 
 export class MemoryManager {
   constructor(private maxMessages: number = 20) {}

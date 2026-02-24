@@ -1,12 +1,12 @@
 # Specialist Agents
 
-ODA includes 16 specialist agents for intelligent prompt routing. Each agent is a domain expert with a tailored system prompt, keyword set, and optional tool dependencies.
+DojOps includes 16 specialist agents for intelligent prompt routing. Each agent is a domain expert with a tailored system prompt, keyword set, and optional tool dependencies.
 
 ---
 
 ## How Routing Works
 
-When you send a prompt to ODA, the `AgentRouter` scores it against each agent's keyword list:
+When you send a prompt to DojOps, the `AgentRouter` scores it against each agent's keyword list:
 
 1. **Keyword matching** — Each agent has a set of domain-specific keywords. The router counts how many keywords appear in the prompt.
 2. **Confidence scoring** — The score is normalized based on keyword match density. Higher scores indicate stronger domain relevance.
@@ -90,13 +90,13 @@ Some agents declare external tool dependencies that enhance their capabilities:
 
 ```bash
 # List all agents
-oda agents list
+dojops agents list
 
 # Show agent details
-oda agents info terraform-specialist
+dojops agents info terraform-specialist
 
 # Pin chat to an agent
-oda chat --agent=terraform
+dojops chat --agent=terraform
 ```
 
 ### API
@@ -112,16 +112,16 @@ Agents are selected automatically based on prompt content. No manual routing is 
 
 ```bash
 # Routes to terraform-specialist (matches: terraform, s3, iac)
-oda "Create a Terraform config for S3"
+dojops "Create a Terraform config for S3"
 
 # Routes to kubernetes-specialist (matches: kubernetes, deployment, nginx)
-oda "Write a Kubernetes deployment for nginx"
+dojops "Write a Kubernetes deployment for nginx"
 
 # Routes to cicd-specialist (matches: github actions, pipeline, ci)
-oda "Set up GitHub Actions CI pipeline"
+dojops "Set up GitHub Actions CI pipeline"
 
 # Routes to ops-cortex (matches: plan, multi-step, end-to-end)
-oda plan "Set up end-to-end CI/CD with Docker and Kubernetes"
+dojops plan "Set up end-to-end CI/CD with Docker and Kubernetes"
 ```
 
 ---
@@ -142,23 +142,23 @@ All agents include a `NO_FOLLOWUP_INSTRUCTION` suffix ensuring single-shot respo
 
 ## Specialized Analyzers
 
-In addition to the 16 routed agents, ODA provides three specialized analyzers that are invoked directly (not via `AgentRouter`):
+In addition to the 16 routed agents, DojOps provides three specialized analyzers that are invoked directly (not via `AgentRouter`):
 
-| Analyzer       | Class               | Input                | Output Schema             | CLI Command        |
-| -------------- | ------------------- | -------------------- | ------------------------- | ------------------ |
-| CI Debugger    | `CIDebugger`        | CI log content       | `CIDiagnosisSchema`       | `oda debug ci`     |
-| Infra Diff     | `InfraDiffAnalyzer` | Diff content         | `InfraDiffAnalysisSchema` | `oda analyze diff` |
-| DevOps Checker | `DevOpsChecker`     | context.json + files | `CheckReportSchema`       | `oda check`        |
+| Analyzer       | Class               | Input                | Output Schema             | CLI Command           |
+| -------------- | ------------------- | -------------------- | ------------------------- | --------------------- |
+| CI Debugger    | `CIDebugger`        | CI log content       | `CIDiagnosisSchema`       | `dojops debug ci`     |
+| Infra Diff     | `InfraDiffAnalyzer` | Diff content         | `InfraDiffAnalysisSchema` | `dojops analyze diff` |
+| DevOps Checker | `DevOpsChecker`     | context.json + files | `CheckReportSchema`       | `dojops check`        |
 
 ### DevOps Checker
 
-The `DevOpsChecker` (`packages/core/src/agents/devops-checker.ts`) analyzes DevOps files detected during `oda init` for quality, security, and best practices. It produces:
+The `DevOpsChecker` (`packages/core/src/agents/devops-checker.ts`) analyzes DevOps files detected during `dojops init` for quality, security, and best practices. It produces:
 
 - **Maturity score** (0-100) — Minimal (0-25), Basic (26-50), Good (51-75), Excellent (76-100)
 - **Findings** — Severity-ranked issues (`critical`, `error`, `warning`, `info`) categorized as security, quality, best-practice, performance, or reliability
 - **Missing files** — Important DevOps files the project should have but doesn't
 
 ```bash
-oda check                  # Display formatted report
-oda check --output json    # Machine-readable JSON output
+dojops check                  # Display formatted report
+dojops check --output json    # Machine-readable JSON output
 ```

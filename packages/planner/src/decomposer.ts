@@ -1,11 +1,11 @@
-import { LLMProvider } from "@odaops/core";
-import type { RepoContext } from "@odaops/core";
-import { DevOpsTool } from "@odaops/sdk";
+import { LLMProvider } from "@dojops/core";
+import type { RepoContext } from "@dojops/core";
+import { DevOpsTool } from "@dojops/sdk";
 import { TaskGraph, TaskGraphSchema } from "./types";
 import { zodSchemaToText } from "./schema-to-text";
 
 export interface DecomposeOptions {
-  /** Repo context from .oda/context.json — used for context-aware file placement */
+  /** Repo context from .dojops/context.json — used for context-aware file placement */
   repoContext?: RepoContext;
 }
 

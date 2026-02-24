@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { generateWorkflow, workflowToYaml } from "./generator";
 import { Workflow } from "./schemas";
 

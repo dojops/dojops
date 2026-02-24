@@ -5,7 +5,7 @@ import * as os from "node:os";
 import { discoverProjectDirs, listSubDirs } from "./discovery";
 
 function createTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "oda-discovery-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dojops-discovery-test-"));
 }
 
 describe("listSubDirs", () => {

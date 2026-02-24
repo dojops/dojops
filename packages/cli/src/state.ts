@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { RepoContextSchemaV1, RepoContextSchemaV2 } from "@odaops/core";
-import type { RepoContext } from "@odaops/core";
+import { RepoContextSchemaV1, RepoContextSchemaV2 } from "@dojops/core";
+import type { RepoContext } from "@dojops/core";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ export interface LockInfo {
 // ── Execution locking ─────────────────────────────────────────────
 
 export function acquireLock(rootDir: string, operation: string): boolean {
-  const lockFile = path.join(odaDir(rootDir), "lock.json");
+  const lockFile = path.join(dojopsDir(rootDir), "lock.json");
   const info: LockInfo = {
     pid: process.pid,
     operation,
@@ -105,7 +105,7 @@ export function acquireLock(rootDir: string, operation: string): boolean {
 }
 
 export function releaseLock(rootDir: string): void {
-  const lockFile = path.join(odaDir(rootDir), "lock.json");
+  const lockFile = path.join(dojopsDir(rootDir), "lock.json");
   try {
     fs.unlinkSync(lockFile);
   } catch {
@@ -114,7 +114,7 @@ export function releaseLock(rootDir: string): void {
 }
 
 export function isLocked(rootDir: string): { locked: boolean; info?: LockInfo } {
-  const lockFile = path.join(odaDir(rootDir), "lock.json");
+  const lockFile = path.join(dojopsDir(rootDir), "lock.json");
   try {
     const data = JSON.parse(fs.readFileSync(lockFile, "utf-8")) as LockInfo;
     // Check if the locking process is still alive
@@ -138,21 +138,21 @@ export function findProjectRoot(from?: string): string | null {
   const root = path.parse(dir).root;
 
   while (dir !== root) {
-    if (fs.existsSync(path.join(dir, ".oda"))) return dir;
+    if (fs.existsSync(path.join(dir, ".dojops"))) return dir;
     if (fs.existsSync(path.join(dir, ".git"))) return dir;
     dir = path.dirname(dir);
   }
   return null;
 }
 
-export function odaDir(rootDir: string): string {
-  return path.join(rootDir, ".oda");
+export function dojopsDir(rootDir: string): string {
+  return path.join(rootDir, ".dojops");
 }
 
 // ── Init ───────────────────────────────────────────────────────────
 
 export function initProject(rootDir: string): string[] {
-  const base = odaDir(rootDir);
+  const base = dojopsDir(rootDir);
   const dirs = [
     base,
     path.join(base, "plans"),
@@ -179,26 +179,26 @@ export function initProject(rootDir: string): string[] {
       updatedAt: new Date().toISOString(),
     };
     fs.writeFileSync(sessionFile, JSON.stringify(session, null, 2) + "\n");
-    created.push(".oda/session.json");
+    created.push(".dojops/session.json");
   }
 
-  // Init .gitignore for .oda/
+  // Init .gitignore for .dojops/
   const gitignore = path.join(base, ".gitignore");
   if (!fs.existsSync(gitignore)) {
     fs.writeFileSync(
       gitignore,
-      "# ODA project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\n",
+      "# DojOps project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\n",
     );
-    created.push(".oda/.gitignore");
+    created.push(".dojops/.gitignore");
   }
 
-  // Copy ODA icon into .oda/
-  const iconTarget = path.join(base, "oda-icon.png");
+  // Copy DojOps icon into .dojops/
+  const iconTarget = path.join(base, "dojops-icon.png");
   if (!fs.existsSync(iconTarget)) {
-    const iconSource = path.join(__dirname, "..", "assets", "oda-icon.png");
+    const iconSource = path.join(__dirname, "..", "assets", "dojops-icon.png");
     if (fs.existsSync(iconSource)) {
       fs.copyFileSync(iconSource, iconTarget);
-      created.push(".oda/oda-icon.png");
+      created.push(".dojops/dojops-icon.png");
     }
   }
 
@@ -208,7 +208,7 @@ export function initProject(rootDir: string): string[] {
 // ── Session ────────────────────────────────────────────────────────
 
 export function loadSession(rootDir: string): SessionState {
-  const file = path.join(odaDir(rootDir), "session.json");
+  const file = path.join(dojopsDir(rootDir), "session.json");
   try {
     return JSON.parse(fs.readFileSync(file, "utf-8")) as SessionState;
   } catch {
@@ -217,7 +217,7 @@ export function loadSession(rootDir: string): SessionState {
 }
 
 export function saveSession(rootDir: string, session: SessionState): void {
-  const file = path.join(odaDir(rootDir), "session.json");
+  const file = path.join(dojopsDir(rootDir), "session.json");
   session.updatedAt = new Date().toISOString();
   fs.writeFileSync(file, JSON.stringify(session, null, 2) + "\n");
 }
@@ -225,7 +225,7 @@ export function saveSession(rootDir: string, session: SessionState): void {
 // ── Plans ──────────────────────────────────────────────────────────
 
 function plansDir(rootDir: string): string {
-  return path.join(odaDir(rootDir), "plans");
+  return path.join(dojopsDir(rootDir), "plans");
 }
 
 export function generatePlanId(): string {
@@ -274,7 +274,7 @@ export function getLatestPlan(rootDir: string): PlanState | null {
 // ── Execution logs ─────────────────────────────────────────────────
 
 function execLogsDir(rootDir: string): string {
-  return path.join(odaDir(rootDir), "execution-logs");
+  return path.join(dojopsDir(rootDir), "execution-logs");
 }
 
 export function saveExecution(rootDir: string, record: ExecutionRecord): void {
@@ -304,7 +304,7 @@ export function listExecutions(rootDir: string): ExecutionRecord[] {
 // ── Audit ──────────────────────────────────────────────────────────
 
 function auditFile(rootDir: string): string {
-  return path.join(odaDir(rootDir), "history", "audit.jsonl");
+  return path.join(dojopsDir(rootDir), "history", "audit.jsonl");
 }
 
 function computeAuditHash(entry: AuditEntry): string {
@@ -446,7 +446,7 @@ export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
 // ── Scan history ──────────────────────────────────────────────────
 
 function scanHistoryDir(rootDir: string): string {
-  return path.join(odaDir(rootDir), "scan-history");
+  return path.join(dojopsDir(rootDir), "scan-history");
 }
 
 export function saveScanReport(rootDir: string, report: Record<string, unknown>): void {
@@ -490,7 +490,7 @@ export function listScanReports(rootDir: string): Array<Record<string, unknown>>
 // ── Repo context ──────────────────────────────────────────────────
 
 export function loadContext(rootDir: string): RepoContext | null {
-  const file = path.join(odaDir(rootDir), "context.json");
+  const file = path.join(dojopsDir(rootDir), "context.json");
   try {
     const data = JSON.parse(fs.readFileSync(file, "utf-8"));
 

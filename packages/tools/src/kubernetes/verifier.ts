@@ -2,11 +2,11 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { VerificationResult } from "@odaops/sdk";
+import { VerificationResult } from "@dojops/sdk";
 
 export async function verifyKubernetesYaml(yaml: string): Promise<VerificationResult> {
   const tmpFile = path.join(
-    fs.mkdtempSync(path.join(os.tmpdir(), "oda-kubectl-")),
+    fs.mkdtempSync(path.join(os.tmpdir(), "dojops-kubectl-")),
     "manifest.yaml",
   );
 

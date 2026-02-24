@@ -6,7 +6,7 @@ import {
   ToolDependency,
   SYSTEM_TOOLS,
   isToolSupportedOnCurrentPlatform,
-} from "@odaops/core";
+} from "@dojops/core";
 import { CLIContext } from "../types";
 import { getConfigPath } from "../config";
 import {
@@ -62,16 +62,16 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     });
   }
 
-  // .oda/ initialized
+  // .dojops/ initialized
   const root = findProjectRoot();
   checks.push({
-    name: "Project initialized (.oda/)",
-    status: root && fs.existsSync(`${root}/.oda`) ? "pass" : "warn",
-    detail: root ? `${root}/.oda/` : "Not initialized (run: oda init)",
+    name: "Project initialized (.dojops/)",
+    status: root && fs.existsSync(`${root}/.dojops`) ? "pass" : "warn",
+    detail: root ? `${root}/.dojops/` : "Not initialized (run: dojops init)",
   });
 
   // Ollama reachability
-  if (provider === "ollama" || process.env.ODA_PROVIDER === "ollama") {
+  if (provider === "ollama" || process.env.DOJOPS_PROVIDER === "ollama") {
     let ollamaOk = false;
     try {
       const resp = await fetch("http://localhost:11434/api/tags");
@@ -146,14 +146,14 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
       detail = "Unsupported on this platform";
     } else {
       status = "warn";
-      detail = `Not found — run: oda tools install ${tool.name}`;
+      detail = `Not found — run: dojops tools install ${tool.name}`;
     }
 
     checks.push({ name: `System: ${tool.name}`, status, detail });
   }
 
   // Project metrics summary
-  if (root && fs.existsSync(`${root}/.oda`)) {
+  if (root && fs.existsSync(`${root}/.dojops`)) {
     const plans = listPlans(root);
     const executions = listExecutions(root);
     const scanReports = listScanReports(root);

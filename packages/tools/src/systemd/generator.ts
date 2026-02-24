@@ -1,4 +1,4 @@
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { SystemdConfig, SystemdConfigSchema, SystemdInput } from "./schemas";
 
 export async function generateSystemdConfig(

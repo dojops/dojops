@@ -14,7 +14,7 @@ describe("createSandboxedFs", () => {
   let tmpDir: string;
 
   function makeTmpDir(): string {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-sandbox-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-sandbox-"));
     return tmpDir;
   }
 

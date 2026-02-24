@@ -1,4 +1,4 @@
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { TerraformConfig, TerraformConfigSchema } from "./schemas";
 
 export async function generateTerraformConfig(

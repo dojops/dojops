@@ -1,11 +1,11 @@
 {
-  "name": "@odaops/core",
+  "name": "@dojops/core",
   "version": "1.0.0",
-  "description": "LLM providers, multi-agent routing, CI debugger, and infra diff analysis for ODA",
+  "description": "LLM providers, multi-agent routing, CI debugger, and infra diff analysis for DojOps",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oda-devops/oda.git",
+    "url": "https://github.com/dojops/dojops.git",
     "directory": "packages/core"
   },
   "keywords": [

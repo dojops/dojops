@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createRouter } from "@odaops/api";
+import { createRouter } from "@dojops/api";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode } from "../exit-codes";
@@ -10,8 +10,8 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   if (!prompt) {
     p.log.error("No prompt provided.");
-    p.log.info(`  ${pc.dim("$")} oda generate <prompt>`);
-    p.log.info(`  ${pc.dim("$")} oda "your prompt here"`);
+    p.log.info(`  ${pc.dim("$")} dojops generate <prompt>`);
+    p.log.info(`  ${pc.dim("$")} dojops "your prompt here"`);
     process.exit(1);
   }
 

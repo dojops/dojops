@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, VerificationResult } from "@odaops/sdk";
-import { LLMProvider } from "@odaops/core";
+import { BaseTool, ToolOutput, VerificationResult } from "@dojops/sdk";
+import { LLMProvider } from "@dojops/core";
 import { DockerfileInputSchema, DockerfileInput } from "./schemas";
 import { detectDockerContext } from "./detector";
 import { generateDockerfileConfig, dockerfileToString, dockerignoreToString } from "./generator";

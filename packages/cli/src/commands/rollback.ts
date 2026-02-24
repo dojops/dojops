@@ -17,7 +17,7 @@ import { ExitCode } from "../exit-codes";
 export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
-    p.log.error("No .oda/ project found. Run `oda init` first.");
+    p.log.error("No .dojops/ project found. Run `dojops init` first.");
     process.exit(ExitCode.NO_PROJECT);
   }
 
@@ -25,7 +25,7 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
   const planId = args.find((a) => !a.startsWith("-"));
   if (!planId) {
     p.log.error("Plan ID required for rollback.");
-    p.log.info(`  ${pc.dim("$")} oda rollback <plan-id>`);
+    p.log.info(`  ${pc.dim("$")} dojops rollback <plan-id>`);
     process.exit(ExitCode.VALIDATION_ERROR);
   }
 

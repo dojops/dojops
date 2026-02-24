@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { generateTerraformConfig, configToHcl } from "./generator";
 import { TerraformConfig } from "./schemas";
 

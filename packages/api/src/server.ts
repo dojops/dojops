@@ -25,10 +25,10 @@ const app = createApp({
   store,
 });
 
-const port = parseInt(process.env.ODA_API_PORT ?? "3000", 10);
+const port = parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
 
 app.listen(port, () => {
-  console.log(`ODA API server running on http://localhost:${port}`);
+  console.log(`DojOps API server running on http://localhost:${port}`);
   console.log(`Provider: ${provider.name}`);
   console.log(`Tools: ${tools.map((t) => t.name).join(", ")}`);
   console.log(`Dashboard: http://localhost:${port}`);

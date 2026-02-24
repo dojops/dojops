@@ -1,11 +1,11 @@
 {
-  "name": "@odaops/tools",
+  "name": "@dojops/tools",
   "version": "1.0.0",
   "description": "DevOps tools for GitHub Actions, Terraform, Kubernetes, Helm, and Ansible",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oda-devops/oda.git",
+    "url": "https://github.com/dojops/dojops.git",
     "directory": "packages/tools"
   },
   "keywords": [
@@ -34,8 +34,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@odaops/core": "workspace:*",
-    "@odaops/sdk": "workspace:*",
+    "@dojops/core": "workspace:*",
+    "@dojops/sdk": "workspace:*",
     "zod": "^3.23.0",
     "js-yaml": "^4.1.0"
   },

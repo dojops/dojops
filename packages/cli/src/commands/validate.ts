@@ -7,7 +7,7 @@ import { ExitCode } from "../exit-codes";
 export async function validateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
-    p.log.error("No .oda/ project found. Run `oda init` first.");
+    p.log.error("No .dojops/ project found. Run `dojops init` first.");
     process.exit(ExitCode.NO_PROJECT);
   }
 
@@ -24,7 +24,7 @@ export async function validateCommand(args: string[], ctx: CLIContext): Promise<
     const session = loadSession(root);
     plan = session.currentPlan ? loadPlan(root, session.currentPlan) : getLatestPlan(root);
     if (!plan) {
-      p.log.error("No plan found. Run `oda plan <prompt>` first.");
+      p.log.error("No plan found. Run `dojops plan <prompt>` first.");
       process.exit(ExitCode.VALIDATION_ERROR);
     }
   }

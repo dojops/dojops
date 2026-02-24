@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import { vi } from "vitest";
-import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@odaops/core";
-import { DevOpsTool } from "@odaops/sdk";
+import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
+import { DevOpsTool } from "@dojops/sdk";
 import { createApp, AppDependencies } from "./app";
 import { HistoryStore } from "./store";
 

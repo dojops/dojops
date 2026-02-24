@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ToolDependency } from "@odaops/core";
+import { ToolDependency } from "@dojops/core";
 
 // Mock child_process before importing preflight
 vi.mock("node:child_process", () => ({

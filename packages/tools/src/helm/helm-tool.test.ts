@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { HelmTool } from "./helm-tool";
 import { HelmChartResponse } from "./schemas";
 
@@ -41,7 +41,7 @@ describe("HelmTool", () => {
   let tmpDir: string;
 
   function makeTmpDir(): string {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-helm-tool-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-helm-tool-"));
     return tmpDir;
   }
 

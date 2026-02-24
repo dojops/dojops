@@ -11,14 +11,14 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@odaops/core/*": ["packages/core/src/*"],
-      "@odaops/sdk/*": ["packages/sdk/src/*"],
-      "@odaops/planner/*": ["packages/planner/src/*"],
-      "@odaops/tools/*": ["packages/tools/src/*"],
-      "@odaops/executor/*": ["packages/executor/src/*"],
-      "@odaops/api/*": ["packages/api/src/*"],
-      "@odaops/scanner/*": ["packages/scanner/src/*"],
-      "@odaops/session/*": ["packages/session/src/*"]
+      "@dojops/core/*": ["packages/core/src/*"],
+      "@dojops/sdk/*": ["packages/sdk/src/*"],
+      "@dojops/planner/*": ["packages/planner/src/*"],
+      "@dojops/tools/*": ["packages/tools/src/*"],
+      "@dojops/executor/*": ["packages/executor/src/*"],
+      "@dojops/api/*": ["packages/api/src/*"],
+      "@dojops/scanner/*": ["packages/scanner/src/*"],
+      "@dojops/session/*": ["packages/session/src/*"]
     }
   }
 }

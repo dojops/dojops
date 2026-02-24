@@ -9,7 +9,7 @@ vi.mock("node:fs", async () => {
   const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
   return {
     ...actual,
-    mkdtempSync: vi.fn(() => "/tmp/oda-kubectl-mock"),
+    mkdtempSync: vi.fn(() => "/tmp/dojops-kubectl-mock"),
     writeFileSync: vi.fn(),
     rmSync: vi.fn(),
   };

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { VerificationResult, VerificationIssue } from "@odaops/sdk";
+import { VerificationResult, VerificationIssue } from "@dojops/sdk";
 
 interface HadolintResult {
   line: number;
@@ -14,7 +14,10 @@ interface HadolintResult {
 }
 
 export async function verifyDockerfile(dockerfile: string): Promise<VerificationResult> {
-  const tmpFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "oda-hadolint-")), "Dockerfile");
+  const tmpFile = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "dojops-hadolint-")),
+    "Dockerfile",
+  );
 
   try {
     fs.writeFileSync(tmpFile, dockerfile, "utf-8");

@@ -1,6 +1,6 @@
 # API Reference
 
-ODA exposes a REST API via Express with 19 endpoints covering generation, planning, diagnostics, scanning, chat, metrics, and history. Start the server with `oda serve`.
+DojOps exposes a REST API via Express with 19 endpoints covering generation, planning, diagnostics, scanning, chat, metrics, and history. Start the server with `dojops serve`.
 
 ---
 
@@ -10,7 +10,7 @@ ODA exposes a REST API via Express with 19 endpoints covering generation, planni
 http://localhost:3000/api
 ```
 
-The port is configurable via `--port` flag or `ODA_API_PORT` environment variable.
+The port is configurable via `--port` flag or `DOJOPS_API_PORT` environment variable.
 
 ---
 
@@ -46,7 +46,7 @@ Returns provider status, loaded tools, and metrics availability.
 
 #### `POST /api/generate`
 
-Agent-routed LLM generation. ODA routes the prompt to the most relevant specialist agent.
+Agent-routed LLM generation. DojOps routes the prompt to the most relevant specialist agent.
 
 **Request:**
 
@@ -496,7 +496,7 @@ curl -X DELETE http://localhost:3000/api/history
 
 ### Metrics
 
-Metrics endpoints are only available when the server has access to a `.oda/` project directory (auto-detected by the CLI `serve` command).
+Metrics endpoints are only available when the server has access to a `.dojops/` project directory (auto-detected by the CLI `serve` command).
 
 #### `GET /api/metrics`
 

@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide walks you through installing ODA, configuring an LLM provider, and generating your first DevOps configuration.
+This guide walks you through installing DojOps, configuring an LLM provider, and generating your first DevOps configuration.
 
 ---
 
@@ -15,26 +15,26 @@ This guide walks you through installing ODA, configuring an LLM provider, and ge
 ## Installation
 
 ```bash
-npm i -g @odaops/cli
+npm i -g @dojops/cli
 ```
 
 Verify the installation:
 
 ```bash
-oda --help
-oda doctor
+dojops --help
+dojops doctor
 ```
 
 ---
 
 ## Provider Setup
 
-ODA requires an LLM provider to generate configurations. You can configure one interactively or via environment variables.
+DojOps requires an LLM provider to generate configurations. You can configure one interactively or via environment variables.
 
 ### Interactive Setup
 
 ```bash
-oda config
+dojops config
 ```
 
 The interactive wizard will:
@@ -49,7 +49,7 @@ The interactive wizard will:
 Alternatively, set environment variables directly:
 
 ```bash
-export ODA_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini
+export DOJOPS_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini
 export OPENAI_API_KEY=sk-...        # your API key
 ```
 
@@ -62,10 +62,10 @@ See [Configuration](configuration.md) for the full list of providers, env vars, 
 Generate a DevOps configuration with a natural language prompt:
 
 ```bash
-oda "Create a Kubernetes deployment for nginx with 3 replicas"
+dojops "Create a Kubernetes deployment for nginx with 3 replicas"
 ```
 
-ODA will:
+DojOps will:
 
 1. Route your prompt to the most relevant specialist agent (in this case, `kubernetes-specialist`)
 2. Generate a structured JSON response via the LLM
@@ -75,10 +75,10 @@ ODA will:
 ### More Examples
 
 ```bash
-oda "Create a Terraform config for an S3 bucket with versioning"
-oda "Write a Dockerfile for a Node.js Express app"
-oda "Set up GitHub Actions CI for a TypeScript project"
-oda "Create a Prometheus monitoring config with alerting rules"
+dojops "Create a Terraform config for an S3 bucket with versioning"
+dojops "Write a Dockerfile for a Node.js Express app"
+dojops "Set up GitHub Actions CI for a TypeScript project"
+dojops "Create a Prometheus monitoring config with alerting rules"
 ```
 
 ---
@@ -88,10 +88,10 @@ oda "Create a Prometheus monitoring config with alerting rules"
 For enterprise features (planning, execution, audit trails, metrics), initialize a project:
 
 ```bash
-oda init
+dojops init
 ```
 
-This creates a `.oda/` directory in your project root with:
+This creates a `.dojops/` directory in your project root with:
 
 - `context.json` — Project context (v2 schema: languages, 11 CI platforms, IaC, containers, monitoring/web servers, scripts, security configs, and a flat list of all detected DevOps file paths)
 - `plans/` — Saved task graph plans
@@ -114,7 +114,7 @@ The `init` scanner detects:
 After initializing, run an LLM-powered quality check on your detected DevOps files:
 
 ```bash
-oda check
+dojops check
 ```
 
 This reads the DevOps files listed in `context.json` and sends them to the LLM for analysis. Returns:
@@ -132,16 +132,16 @@ Use `--output json` for machine-readable results.
 Decompose a complex goal into a dependency-aware task graph:
 
 ```bash
-oda plan "Set up CI/CD pipeline for a Node.js app with Docker and Kubernetes"
+dojops plan "Set up CI/CD pipeline for a Node.js app with Docker and Kubernetes"
 ```
 
 Execute the plan with an approval workflow:
 
 ```bash
-oda apply                 # Execute with interactive approval prompts
-oda apply --dry-run       # Preview changes without writing files
-oda apply --verify        # Run external validation (terraform validate, hadolint, etc.)
-oda apply --yes           # Auto-approve all operations
+dojops apply                 # Execute with interactive approval prompts
+dojops apply --dry-run       # Preview changes without writing files
+dojops apply --verify        # Run external validation (terraform validate, hadolint, etc.)
+dojops apply --yes           # Auto-approve all operations
 ```
 
 ---
@@ -151,10 +151,10 @@ oda apply --yes           # Auto-approve all operations
 Scan your project for vulnerabilities, dependency issues, and IaC misconfigurations:
 
 ```bash
-oda scan                  # Run all applicable scanners
-oda scan --security       # Security scanners only (trivy, gitleaks)
-oda scan --deps           # Dependency audit only (npm, pip)
-oda scan --fix            # Generate and apply LLM-powered remediation
+dojops scan                  # Run all applicable scanners
+dojops scan --security       # Security scanners only (trivy, gitleaks)
+dojops scan --deps           # Dependency audit only (npm, pip)
+dojops scan --fix            # Generate and apply LLM-powered remediation
 ```
 
 See [Security Scanning](security-scanning.md) for details on all 6 scanners.
@@ -166,9 +166,9 @@ See [Security Scanning](security-scanning.md) for details on all 6 scanners.
 Start a multi-turn AI DevOps conversation:
 
 ```bash
-oda chat                              # New interactive session
-oda chat --session=myproject          # Resume or create a named session
-oda chat --agent=terraform            # Pin to a specialist agent
+dojops chat                              # New interactive session
+dojops chat --session=myproject          # Resume or create a named session
+dojops chat --agent=terraform            # Pin to a specialist agent
 ```
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
@@ -180,8 +180,8 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 Start the API server and web dashboard:
 
 ```bash
-oda serve                             # Start at http://localhost:3000
-oda serve --port=8080                 # Custom port
+dojops serve                             # Start at http://localhost:3000
+dojops serve --port=8080                 # Custom port
 ```
 
 The dashboard provides 5 tabs for monitoring and operations:
@@ -198,7 +198,7 @@ See [Web Dashboard](dashboard.md) for the full guide.
 
 ## Next Steps
 
-- **[CLI Reference](cli-reference.md)** — Full command documentation (including `oda check`)
+- **[CLI Reference](cli-reference.md)** — Full command documentation (including `dojops check`)
 - **[API Reference](api-reference.md)** — REST API for programmatic access
 - **[Architecture](architecture.md)** — System design overview
 - **[Configuration](configuration.md)** — Advanced provider and profile setup

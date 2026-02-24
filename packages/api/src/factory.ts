@@ -8,15 +8,15 @@ import {
   AgentRouter,
   CIDebugger,
   InfraDiffAnalyzer,
-} from "@odaops/core";
+} from "@dojops/core";
 import {
   GitHubActionsTool,
   TerraformTool,
   KubernetesTool,
   HelmTool,
   AnsibleTool,
-} from "@odaops/tools";
-import { DevOpsTool } from "@odaops/sdk";
+} from "@dojops/tools";
+import { DevOpsTool } from "@dojops/sdk";
 
 export interface ProviderOptions {
   provider?: string;
@@ -25,8 +25,8 @@ export interface ProviderOptions {
 }
 
 export function createProvider(options?: ProviderOptions): LLMProvider {
-  const providerName = options?.provider ?? process.env.ODA_PROVIDER ?? "openai";
-  const model = options?.model ?? process.env.ODA_MODEL;
+  const providerName = options?.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+  const model = options?.model ?? process.env.DOJOPS_MODEL;
 
   if (providerName === "ollama") {
     return new OllamaProvider(undefined, model);
@@ -34,7 +34,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
     const key = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
     if (!key) {
       throw new Error(
-        "Anthropic API key is required. Set ANTHROPIC_API_KEY or run: oda login --token <KEY> --provider anthropic",
+        "Anthropic API key is required. Set ANTHROPIC_API_KEY or run: dojops login --token <KEY> --provider anthropic",
       );
     }
     return new AnthropicProvider(key, model);
@@ -42,7 +42,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
     const key = options?.apiKey ?? process.env.DEEPSEEK_API_KEY;
     if (!key) {
       throw new Error(
-        "DeepSeek API key is required. Set DEEPSEEK_API_KEY or run: oda login --token <KEY> --provider deepseek",
+        "DeepSeek API key is required. Set DEEPSEEK_API_KEY or run: dojops login --token <KEY> --provider deepseek",
       );
     }
     return new DeepSeekProvider(key, model);
@@ -50,7 +50,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
     const key = options?.apiKey ?? process.env.GEMINI_API_KEY;
     if (!key) {
       throw new Error(
-        "Gemini API key is required. Set GEMINI_API_KEY or run: oda login --token <KEY> --provider gemini",
+        "Gemini API key is required. Set GEMINI_API_KEY or run: dojops login --token <KEY> --provider gemini",
       );
     }
     return new GeminiProvider(key, model);
@@ -58,7 +58,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
     const key = options?.apiKey ?? process.env.OPENAI_API_KEY;
     if (!key) {
       throw new Error(
-        "OpenAI API key is required. Set OPENAI_API_KEY or run: oda login --token <KEY> --provider openai",
+        "OpenAI API key is required. Set OPENAI_API_KEY or run: dojops login --token <KEY> --provider openai",
       );
     }
     return new OpenAIProvider(key, model);

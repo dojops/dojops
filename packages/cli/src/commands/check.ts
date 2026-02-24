@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { DevOpsChecker } from "@odaops/core";
+import { DevOpsChecker } from "@dojops/core";
 import { CommandHandler } from "../types";
 import { findProjectRoot, loadContext, appendAudit } from "../state";
 
@@ -13,13 +13,13 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   const start = Date.now();
   const root = findProjectRoot();
   if (!root) {
-    p.log.error(`No .oda/ project found. Run ${pc.cyan("oda init")} first.`);
+    p.log.error(`No .dojops/ project found. Run ${pc.cyan("dojops init")} first.`);
     process.exit(1);
   }
 
   const ctx = loadContext(root);
   if (!ctx) {
-    p.log.error(`Could not load context.json. Run ${pc.cyan("oda init")} to regenerate.`);
+    p.log.error(`Could not load context.json. Run ${pc.cyan("dojops init")} to regenerate.`);
     process.exit(1);
   }
 
@@ -53,7 +53,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     provider = cliCtx.getProvider();
   } catch (err) {
     p.log.error(`LLM provider required. ${(err as Error).message}`);
-    p.log.info(`Run ${pc.cyan("oda config")} to configure a provider.`);
+    p.log.info(`Run ${pc.cyan("dojops config")} to configure a provider.`);
     process.exit(1);
   }
 

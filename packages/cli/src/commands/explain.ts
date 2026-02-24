@@ -5,7 +5,7 @@ import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state"
 export async function explainCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
-    p.log.error("No .oda/ project found. Run `oda init` first.");
+    p.log.error("No .dojops/ project found. Run `dojops init` first.");
     process.exit(1);
   }
 
@@ -20,7 +20,7 @@ export async function explainCommand(args: string[], ctx: CLIContext): Promise<v
   }
 
   if (!plan) {
-    p.log.error("No plan found. Run `oda plan <prompt>` first.");
+    p.log.error("No plan found. Run `dojops plan <prompt>` first.");
     process.exit(1);
   }
 

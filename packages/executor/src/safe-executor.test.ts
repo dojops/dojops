@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { BaseTool, ToolOutput, VerificationResult, z } from "@odaops/sdk";
+import { BaseTool, ToolOutput, VerificationResult, z } from "@dojops/sdk";
 import { SafeExecutor } from "./safe-executor";
 import { AutoApproveHandler, AutoDenyHandler, CallbackApprovalHandler } from "./approval";
 

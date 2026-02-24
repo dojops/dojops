@@ -4,7 +4,7 @@ import * as path from "node:path";
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
-  ".oda",
+  ".dojops",
   "dist",
   "build",
   "__pycache__",

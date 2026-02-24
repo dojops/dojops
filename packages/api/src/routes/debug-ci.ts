@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { CIDebugger } from "@odaops/core";
+import { CIDebugger } from "@dojops/core";
 import { HistoryStore } from "../store";
 import { DebugCIRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";

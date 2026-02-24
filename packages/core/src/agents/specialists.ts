@@ -3,7 +3,7 @@ import { ToolDependency } from "./tool-deps";
 
 /**
  * Shared suffix appended to all specialist system prompts.
- * ODA is a single-shot CLI — the LLM has no way to receive follow-up replies,
+ * DojOps is a single-shot CLI — the LLM has no way to receive follow-up replies,
  * so asking questions would confuse the user.
  */
 const NO_FOLLOWUP_INSTRUCTION = `
@@ -75,7 +75,7 @@ export const OPS_CORTEX_CONFIG: SpecialistConfig = {
   name: "ops-cortex",
   domain: "orchestration",
   description: "Central orchestrator that triages requests to specialist agents",
-  systemPrompt: `You are OpsCortex, the central orchestration agent for ODA (Open DevOps Agent).
+  systemPrompt: `You are OpsCortex, the central orchestration agent for DojOps (AI DevOps Automation Engine).
 Your role is to decompose high-level DevOps goals into concrete, ordered tasks and route work to the appropriate specialist domain.
 
 You have access to the following specialist domains:

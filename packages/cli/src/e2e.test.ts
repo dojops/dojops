@@ -26,7 +26,7 @@ function run(args: string, opts?: { cwd?: string; env?: Record<string, string> }
 }
 
 function makeTmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "oda-e2e-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-"));
 }
 
 function seedPlan(tmpDir: string): PlanState {
@@ -83,22 +83,22 @@ describe("CLI E2E — LLM-free", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("oda init creates .oda/ structure", () => {
+  it("dojops init creates .dojops/ structure", () => {
     const output = run("init", { cwd: tmpDir });
-    expect(output).toContain(".oda");
-    expect(fs.existsSync(path.join(tmpDir, ".oda"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".oda", "plans"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".oda", "history"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".oda", "session.json"))).toBe(true);
+    expect(output).toContain(".dojops");
+    expect(fs.existsSync(path.join(tmpDir, ".dojops"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, ".dojops", "plans"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, ".dojops", "history"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, ".dojops", "session.json"))).toBe(true);
   });
 
-  it("oda validate on a seeded plan succeeds", () => {
+  it("dojops validate on a seeded plan succeeds", () => {
     const plan = seedPlan(tmpDir);
     const output = run(`validate ${plan.id}`, { cwd: tmpDir });
     expect(output.toLowerCase()).not.toContain("error");
   });
 
-  it("oda validate on a plan with circular deps detects errors", () => {
+  it("dojops validate on a plan with circular deps detects errors", () => {
     initProject(tmpDir);
     const plan: PlanState = {
       id: "plan-circular",
@@ -128,21 +128,21 @@ describe("CLI E2E — LLM-free", () => {
     );
   });
 
-  it("oda apply --dry-run shows plan without executing", () => {
+  it("dojops apply --dry-run shows plan without executing", () => {
     seedPlan(tmpDir);
     const output = run("apply --dry-run", { cwd: tmpDir });
     const lower = output.toLowerCase();
     expect(lower.includes("dry") || lower.includes("plan") || lower.includes("task")).toBe(true);
   });
 
-  it("oda history list shows seeded plans", () => {
+  it("dojops history list shows seeded plans", () => {
     const plan = seedPlan(tmpDir);
     seedAudit(tmpDir, plan.id);
     const output = run("history list", { cwd: tmpDir });
     expect(output).toContain(plan.id);
   });
 
-  it("oda history show <plan-id> shows plan details", () => {
+  it("dojops history show <plan-id> shows plan details", () => {
     const plan = seedPlan(tmpDir);
     const output = run(`history show ${plan.id}`, { cwd: tmpDir });
     expect(output).toContain(plan.id);
@@ -165,8 +165,8 @@ describe.skipIf(!HAS_KEY)("CLI E2E — with Anthropic", () => {
   let tmpDir: string;
 
   const llmEnv = {
-    ODA_PROVIDER: "anthropic",
-    ODA_MODEL: "claude-haiku-4-5-20251001",
+    DOJOPS_PROVIDER: "anthropic",
+    DOJOPS_MODEL: "claude-haiku-4-5-20251001",
   };
 
   beforeEach(() => {
@@ -179,12 +179,12 @@ describe.skipIf(!HAS_KEY)("CLI E2E — with Anthropic", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("oda plan produces a plan file in .oda/plans/", async () => {
+  it("dojops plan produces a plan file in .dojops/plans/", async () => {
     run('plan --quiet --non-interactive "Create a GitHub Actions CI for Node.js"', {
       cwd: tmpDir,
       env: llmEnv,
     });
-    const plansDir = path.join(tmpDir, ".oda", "plans");
+    const plansDir = path.join(tmpDir, ".dojops", "plans");
     const files = fs.readdirSync(plansDir).filter((f) => f.endsWith(".json"));
     expect(files.length).toBeGreaterThan(0);
 
@@ -194,7 +194,7 @@ describe.skipIf(!HAS_KEY)("CLI E2E — with Anthropic", () => {
     expect(plan.tasks.length).toBeGreaterThan(0);
   }, 60_000);
 
-  it("oda plan --output json returns valid JSON", async () => {
+  it("dojops plan --output json returns valid JSON", async () => {
     const output = run(
       'plan --quiet --non-interactive --output json "Create CI for a Python project"',
       { cwd: tmpDir, env: llmEnv },
@@ -213,7 +213,7 @@ describe.skipIf(!HAS_KEY)("CLI E2E — with Anthropic", () => {
     });
 
     // Find the plan
-    const plansDir = path.join(tmpDir, ".oda", "plans");
+    const plansDir = path.join(tmpDir, ".dojops", "plans");
     const files = fs.readdirSync(plansDir).filter((f) => f.endsWith(".json"));
     expect(files.length).toBeGreaterThan(0);
     const planId = files[0].replace(".json", "");

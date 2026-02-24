@@ -57,7 +57,7 @@ export function resolveCommand(commandPath: string[], remaining: string[]): Reso
   }
 
   // If no subcommand match in nested, pass everything as remaining
-  // (this allows `oda debug` to show help)
+  // (this allows `dojops debug` to show help)
   const defaultSub = entry.values().next().value;
   if (defaultSub) {
     return { handler: defaultSub, remaining: [...commandPath.slice(1), ...remaining] };

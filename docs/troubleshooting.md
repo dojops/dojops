@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Common issues, debugging tips, and solutions for ODA.
+Common issues, debugging tips, and solutions for DojOps.
 
 ---
 
@@ -14,7 +14,7 @@ Common issues, debugging tips, and solutions for ODA.
 
 1. Verify your API key is set:
    ```bash
-   oda auth status
+   dojops auth status
    ```
 2. Check the correct environment variable is set for your provider:
    ```bash
@@ -25,7 +25,7 @@ Common issues, debugging tips, and solutions for ODA.
    ```
 3. Re-configure:
    ```bash
-   oda config
+   dojops config
    ```
 
 ### Provider Connection Failed
@@ -76,7 +76,7 @@ Common issues, debugging tips, and solutions for ODA.
 
 1. Verify the server is running:
    ```bash
-   oda serve
+   dojops serve
    ```
 2. Check the port isn't in use:
    ```bash
@@ -84,7 +84,7 @@ Common issues, debugging tips, and solutions for ODA.
    ```
 3. Try a different port:
    ```bash
-   oda serve --port=8080
+   dojops serve --port=8080
    ```
 
 ### Metrics Tabs Show Empty Data
@@ -93,14 +93,14 @@ Common issues, debugging tips, and solutions for ODA.
 
 **Solutions:**
 
-1. Initialize the project (creates `.oda/` directory):
+1. Initialize the project (creates `.dojops/` directory):
    ```bash
-   oda init
+   dojops init
    ```
 2. Run some operations to generate data:
    ```bash
-   oda "Create a Terraform config"
-   oda scan
+   dojops "Create a Terraform config"
+   dojops scan
    ```
 3. Check that the server detected the project root (look for "Metrics: enabled" in the startup output)
 
@@ -134,7 +134,7 @@ wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/h
 pip install pip-audit
 ```
 
-ODA gracefully skips unavailable scanners — they're not required for basic functionality.
+DojOps gracefully skips unavailable scanners — they're not required for basic functionality.
 
 ### Scanner Timeout
 
@@ -144,8 +144,8 @@ ODA gracefully skips unavailable scanners — they're not required for basic fun
 
 - Use targeted scans instead of full scans:
   ```bash
-  oda scan --security    # Faster than --all
-  oda scan --deps        # Only dependency audit
+  dojops scan --security    # Faster than --all
+  dojops scan --deps        # Only dependency audit
   ```
 - Large monorepos may take longer due to sub-project discovery
 
@@ -160,15 +160,15 @@ ODA gracefully skips unavailable scanners — they're not required for basic fun
 **Solutions:**
 
 1. Wait for the other operation to complete
-2. If the process is dead (stale lock), ODA should auto-clean it
+2. If the process is dead (stale lock), DojOps should auto-clean it
 3. Manually remove the lock (only if you're sure no operation is running):
    ```bash
-   rm .oda/lock.json
+   rm .dojops/lock.json
    ```
 
 ### Audit Chain Integrity Failure
 
-**Symptom:** `oda history verify` reports integrity failure
+**Symptom:** `dojops history verify` reports integrity failure
 
 **Causes:**
 
@@ -184,52 +184,52 @@ ODA gracefully skips unavailable scanners — they're not required for basic fun
 
 ### Resume Not Working
 
-**Symptom:** `oda apply --resume` re-executes completed tasks
+**Symptom:** `dojops apply --resume` re-executes completed tasks
 
 **Solution:**
 
 1. Verify the plan exists:
    ```bash
-   oda history list
+   dojops history list
    ```
 2. Check that execution logs were saved:
    ```bash
-   ls .oda/execution-logs/
+   ls .dojops/execution-logs/
    ```
 3. Ensure you're resuming the correct plan:
    ```bash
-   oda apply --resume <plan-id>
+   dojops apply --resume <plan-id>
    ```
 
 ---
 
 ## CLI Issues
 
-### No `.oda/` Project
+### No `.dojops/` Project
 
-**Symptom:** `Error: No .oda/ project found` (exit code 5)
+**Symptom:** `Error: No .dojops/ project found` (exit code 5)
 
 **Solution:**
 
 ```bash
-oda init
+dojops init
 ```
 
 This creates the project directory structure. Required for planning, execution, history, and metrics features.
 
 ### Command Not Found
 
-**Symptom:** `oda: command not found`
+**Symptom:** `dojops: command not found`
 
 **Solution:**
 
 1. Install globally:
    ```bash
-   npm i -g @odaops/cli
+   npm i -g @dojops/cli
    ```
 2. Or use the in-repo alternative:
    ```bash
-   pnpm oda -- "your prompt"
+   pnpm dojops -- "your prompt"
    ```
 
 ---
@@ -240,10 +240,10 @@ Enable verbose output for troubleshooting:
 
 ```bash
 # Verbose output
-oda --verbose "Create a Terraform config"
+dojops --verbose "Create a Terraform config"
 
 # Debug-level output with stack traces
-oda --debug "Create a Kubernetes deployment"
+dojops --debug "Create a Kubernetes deployment"
 ```
 
 Debug mode shows:
@@ -258,16 +258,16 @@ Debug mode shows:
 
 ## Exit Code Reference
 
-| Code | Meaning            | Common Cause                                                |
-| ---- | ------------------ | ----------------------------------------------------------- |
-| 0    | Success            | Operation completed normally                                |
-| 1    | General error      | LLM error, network issue, unexpected failure                |
-| 2    | Validation error   | Schema validation failed (invalid input or LLM output)      |
-| 3    | Approval required  | Operation needs user approval (use `--yes` to auto-approve) |
-| 4    | Lock conflict      | Another operation is running (PID-based lock)               |
-| 5    | No `.oda/` project | Run `oda init` to create the project directory              |
-| 6    | HIGH findings      | Security scan found HIGH severity issues                    |
-| 7    | CRITICAL findings  | Security scan found CRITICAL severity issues                |
+| Code | Meaning               | Common Cause                                                |
+| ---- | --------------------- | ----------------------------------------------------------- |
+| 0    | Success               | Operation completed normally                                |
+| 1    | General error         | LLM error, network issue, unexpected failure                |
+| 2    | Validation error      | Schema validation failed (invalid input or LLM output)      |
+| 3    | Approval required     | Operation needs user approval (use `--yes` to auto-approve) |
+| 4    | Lock conflict         | Another operation is running (PID-based lock)               |
+| 5    | No `.dojops/` project | Run `dojops init` to create the project directory           |
+| 6    | HIGH findings         | Security scan found HIGH severity issues                    |
+| 7    | CRITICAL findings     | Security scan found CRITICAL severity issues                |
 
 ---
 
@@ -275,15 +275,15 @@ Debug mode shows:
 
 ```bash
 # Show help
-oda --help
-oda <command> --help
+dojops --help
+dojops <command> --help
 
 # System diagnostics
-oda doctor
+dojops doctor
 
 # Inspect configuration
-oda config show
-oda inspect config
+dojops config show
+dojops inspect config
 ```
 
-If you encounter a bug, please report it at: https://github.com/oda-devops/oda/issues
+If you encounter a bug, please report it at: https://github.com/dojops/oda/issues

@@ -73,13 +73,13 @@ describe("filterEnvVars", () => {
   });
 
   it("filters to only allowed env vars", () => {
-    process.env.ODA_TEST_VAR = "test_value";
+    process.env.DOJOPS_TEST_VAR = "test_value";
     const policy: ExecutionPolicy = {
       ...DEFAULT_POLICY,
-      allowEnvVars: ["ODA_TEST_VAR", "NONEXISTENT"],
+      allowEnvVars: ["DOJOPS_TEST_VAR", "NONEXISTENT"],
     };
     const result = filterEnvVars(policy);
-    expect(result).toEqual({ ODA_TEST_VAR: "test_value" });
-    delete process.env.ODA_TEST_VAR;
+    expect(result).toEqual({ DOJOPS_TEST_VAR: "test_value" });
+    delete process.env.DOJOPS_TEST_VAR;
   });
 });

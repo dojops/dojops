@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { SYSTEM_TOOLS, findSystemTool, isToolSupportedOnCurrentPlatform } from "@odaops/core";
+import { SYSTEM_TOOLS, findSystemTool, isToolSupportedOnCurrentPlatform } from "@dojops/core";
 import { CommandHandler } from "../types";
 import {
   loadToolRegistry,
@@ -84,7 +84,7 @@ export const toolsInstallCommand: CommandHandler = async (args, ctx) => {
 
     if (ctx.globalOpts.nonInteractive) {
       p.log.error("Tool name required in non-interactive mode.");
-      p.log.info(`  ${pc.dim("$")} oda tools install <name>`);
+      p.log.info(`  ${pc.dim("$")} dojops tools install <name>`);
       process.exit(1);
     }
 
@@ -147,7 +147,7 @@ export const toolsRemoveCommand: CommandHandler = async (args) => {
   const name = args[0];
   if (!name) {
     p.log.error("Tool name required.");
-    p.log.info(`  ${pc.dim("$")} oda tools remove <name>`);
+    p.log.info(`  ${pc.dim("$")} dojops tools remove <name>`);
     process.exit(1);
   }
 

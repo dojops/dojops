@@ -18,7 +18,7 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       const name = args[1];
       if (!name) {
         p.log.error("Profile name required.");
-        p.log.info(`  ${pc.dim("$")} oda config profile create <name>`);
+        p.log.info(`  ${pc.dim("$")} dojops config profile create <name>`);
         process.exit(1);
       }
       const config = loadConfig();
@@ -30,7 +30,7 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       const name = args[1];
       if (!name) {
         p.log.error("Profile name required.");
-        p.log.info(`  ${pc.dim("$")} oda config profile use <name>`);
+        p.log.info(`  ${pc.dim("$")} dojops config profile use <name>`);
         process.exit(1);
       }
       const existing = loadProfile(name);
@@ -51,7 +51,7 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       const active = getActiveProfile();
       if (profiles.length === 0) {
         p.log.info("No profiles configured.");
-        p.log.info(`  ${pc.dim("$")} oda config profile create <name>`);
+        p.log.info(`  ${pc.dim("$")} dojops config profile create <name>`);
         return;
       }
       if (ctx.globalOpts.output === "json") {
@@ -67,9 +67,9 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
     }
     default:
       p.log.error(`Unknown profile subcommand: ${sub ?? "(none)"}`);
-      p.log.info(`  ${pc.dim("$")} oda config profile create <name>`);
-      p.log.info(`  ${pc.dim("$")} oda config profile use <name>`);
-      p.log.info(`  ${pc.dim("$")} oda config profile list`);
+      p.log.info(`  ${pc.dim("$")} dojops config profile create <name>`);
+      p.log.info(`  ${pc.dim("$")} dojops config profile use <name>`);
+      p.log.info(`  ${pc.dim("$")} dojops config profile list`);
       process.exit(1);
   }
 }

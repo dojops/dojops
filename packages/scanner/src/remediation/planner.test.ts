@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { LLMProvider } from "@odaops/core";
+import type { LLMProvider } from "@dojops/core";
 import { planRemediation } from "./planner";
 import type { ScanFinding } from "../types";
 

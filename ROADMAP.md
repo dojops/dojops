@@ -1,12 +1,12 @@
-# ODA – Roadmap
+# DojOps – Roadmap
 
-This document tracks ODA's development from initial scaffold to production-grade DevOps agent.
+This document tracks DojOps's development from initial scaffold to production-grade DevOps agent.
 
 ---
 
 # v1.0.0 — Shipped
 
-All seven phases are complete. ODA v1.0.0 ships with 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, observability metrics, and a rich terminal UI.
+All seven phases are complete. DojOps v1.0.0 ships with 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, observability metrics, and a rich terminal UI.
 
 ---
 
@@ -14,7 +14,7 @@ All seven phases are complete. ODA v1.0.0 ships with 12 DevOps tools, 16 special
 
 - **Structured output enforcement** — LLM responses constrained to JSON via provider-native modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, DeepSeek `response_format`, Gemini `responseMimeType`)
 - **5 LLM providers** — OpenAI, Anthropic, Ollama, DeepSeek (OpenAI-compatible), Google Gemini (`@google/genai`)
-- **Dynamic model selection** — `oda config` fetches available models from provider APIs via `listModels()` for interactive selection
+- **Dynamic model selection** — `dojops config` fetches available models from provider APIs via `listModels()` for interactive selection
 - **Zod schema validation** — Every tool input and LLM output validated with Zod schemas via `parseAndValidate()`
 - **Planner engine** — `TaskGraph` decomposition via LLM, `PlannerExecutor` with Kahn's topological sort, `$ref:<taskId>` input wiring, failure cascading, `completedTaskIds` for resume
 
@@ -49,8 +49,8 @@ All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (opti
 - **ExecutionPolicy** — write permissions, allowed/denied paths, env vars, timeout, file size limits
 - **ApprovalHandler** — auto-approve, auto-deny, or interactive callback with diff preview
 - **SandboxedFs** — path-restricted file operations with per-file audit logging
-- **Resume & recovery** — `oda apply --resume` skips completed tasks, retries failed ones
-- **Hash-chained audit trail** — SHA-256 hash-chained JSONL with tamper detection via `oda history verify`
+- **Resume & recovery** — `dojops apply --resume` skips completed tasks, retries failed ones
+- **Hash-chained audit trail** — SHA-256 hash-chained JSONL with tamper detection via `dojops history verify`
 - **Execution locking** — PID-based lock files prevent concurrent mutations
 
 ---
@@ -82,13 +82,13 @@ All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (opti
 
 ## Phase 7 — Observability & Metrics Dashboard (DONE)
 
-- **MetricsAggregator** — reads `.oda/` data on-demand: plans, execution logs, scan reports, audit JSONL
+- **MetricsAggregator** — reads `.dojops/` data on-demand: plans, execution logs, scan reports, audit JSONL
 - **4 metrics API endpoints** — `GET /api/metrics` (full), `/overview`, `/security`, `/audit`
 - **Overview tab** — total plans, success rate, avg execution time, critical issues, recent activity, most used commands, failure reasons
 - **Security tab** — severity breakdown bar, findings trend chart (CSS-only bars), top issues table, scan history
 - **Audit tab** — hash-chain integrity badge (valid/invalid), status breakdown, command distribution, timeline
 - **Auto-refresh** — observability tabs poll every 30 seconds with visual indicator
-- **Doctor enhancement** — `oda doctor` shows plans count, success rate, scan count, audit chain integrity
+- **Doctor enhancement** — `dojops doctor` shows plans count, success rate, scan count, audit chain integrity
 - **Health endpoint** — includes `metricsEnabled: boolean` flag
 - **25 new tests** — aggregator unit tests (17) + route integration tests (8)
 

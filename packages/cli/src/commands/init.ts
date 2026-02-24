@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { scanRepo, enrichWithLLM } from "@odaops/core";
-import type { RepoContext, LLMInsights } from "@odaops/core";
+import { scanRepo, enrichWithLLM } from "@dojops/core";
+import type { RepoContext, LLMInsights } from "@dojops/core";
 import { CommandHandler } from "../types";
 import { initProject, findProjectRoot } from "../state";
 import { offerToolInstall } from "../preflight";
@@ -158,14 +158,14 @@ function formatLLMInsights(insights: LLMInsights): string[] {
 
 export const initCommand: CommandHandler = async (_args, cliCtx) => {
   const root = findProjectRoot() ?? process.cwd();
-  const alreadyExists = fs.existsSync(path.join(root, ".oda"));
+  const alreadyExists = fs.existsSync(path.join(root, ".dojops"));
   const created = initProject(root);
 
   // Scan the repository
   const s = p.spinner();
   s.start("Scanning repository...");
   const ctx = scanRepo(root);
-  const contextPath = path.join(root, ".oda", "context.json");
+  const contextPath = path.join(root, ".dojops", "context.json");
   fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
   s.stop("Repository scanned.");
 
@@ -174,8 +174,8 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
     p.log.info(`  ${pc.dim(contextPath)}`);
   } else {
     const lines = created.map((f) => `  ${pc.green("+")} ${f}`);
-    lines.push(`  ${pc.green("+")} .oda/context.json`);
-    p.note(lines.join("\n"), `Initialized .oda/ in ${pc.dim(root)}`);
+    lines.push(`  ${pc.green("+")} .dojops/context.json`);
+    p.note(lines.join("\n"), `Initialized .dojops/ in ${pc.dim(root)}`);
     p.log.success("Project initialized.");
   }
 
@@ -210,7 +210,7 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
       p.log.warn(`LLM enrichment skipped: ${err instanceof Error ? err.message : String(err)}`);
     }
   } else {
-    p.log.info(`Run ${pc.cyan("oda config")} to enable LLM-powered project analysis.`);
+    p.log.info(`Run ${pc.cyan("dojops config")} to enable LLM-powered project analysis.`);
   }
 
   // Offer to install missing optional tool dependencies

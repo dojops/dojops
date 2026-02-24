@@ -6,9 +6,9 @@ import {
   AutoApproveHandler,
   CallbackApprovalHandler,
   ApprovalRequest,
-} from "@odaops/executor";
-import { createTools } from "@odaops/api";
-import { PlannerExecutor } from "@odaops/planner";
+} from "@dojops/executor";
+import { createTools } from "@dojops/api";
+import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag } from "../parser";
 import { statusIcon, statusText } from "../formatter";
@@ -56,7 +56,7 @@ function cliApprovalHandler(): CallbackApprovalHandler {
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
-    p.log.error("No .oda/ project found. Run `oda init` first.");
+    p.log.error("No .dojops/ project found. Run `dojops init` first.");
     process.exit(ExitCode.NO_PROJECT);
   }
 
@@ -83,7 +83,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       plan = getLatestPlan(root);
     }
     if (!plan) {
-      p.log.error("No plan found. Run `oda plan <prompt>` first.");
+      p.log.error("No plan found. Run `dojops plan <prompt>` first.");
       process.exit(ExitCode.VALIDATION_ERROR);
     }
   }
@@ -317,7 +317,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     if (allCompleted) {
       p.log.success(pc.bold("Plan applied successfully."));
     } else if (plan.approvalStatus === "PARTIAL") {
-      p.log.warn(pc.bold("Plan partially applied. Use `oda apply --resume` to continue."));
+      p.log.warn(pc.bold("Plan partially applied. Use `dojops apply --resume` to continue."));
     } else {
       p.log.error(pc.bold("Plan application failed."));
     }

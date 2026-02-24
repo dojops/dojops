@@ -27,7 +27,7 @@ import {
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-state-test-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-state-test-"));
 });
 
 afterEach(() => {
@@ -35,14 +35,14 @@ afterEach(() => {
 });
 
 describe("initProject", () => {
-  it("creates .oda directory structure", () => {
+  it("creates .dojops directory structure", () => {
     const created = initProject(tmpDir);
     expect(created.length).toBeGreaterThan(0);
-    expect(fs.existsSync(path.join(tmpDir, ".oda"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".oda", "plans"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".oda", "history"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".oda", "execution-logs"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".oda", "session.json"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, ".dojops"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, ".dojops", "plans"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, ".dojops", "history"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, ".dojops", "execution-logs"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, ".dojops", "session.json"))).toBe(true);
   });
 
   it("is idempotent", () => {
@@ -230,7 +230,7 @@ describe("execution locking", () => {
   it("stale lock from dead PID is auto-cleaned", () => {
     initProject(tmpDir);
     // Write a lock file with a PID that doesn't exist
-    const lockFile = path.join(tmpDir, ".oda", "lock.json");
+    const lockFile = path.join(tmpDir, ".dojops", "lock.json");
     fs.writeFileSync(
       lockFile,
       JSON.stringify({ pid: 999999, operation: "apply", acquiredAt: new Date().toISOString() }),
@@ -243,7 +243,7 @@ describe("execution locking", () => {
   it("acquireLock succeeds after stale lock cleanup", () => {
     initProject(tmpDir);
     // Write a stale lock
-    const lockFile = path.join(tmpDir, ".oda", "lock.json");
+    const lockFile = path.join(tmpDir, ".dojops", "lock.json");
     fs.writeFileSync(
       lockFile,
       JSON.stringify({ pid: 999999, operation: "apply", acquiredAt: new Date().toISOString() }),
@@ -255,7 +255,7 @@ describe("execution locking", () => {
 });
 
 describe("findProjectRoot", () => {
-  it("finds .oda directory", () => {
+  it("finds .dojops directory", () => {
     initProject(tmpDir);
     const subDir = path.join(tmpDir, "sub", "deep");
     fs.mkdirSync(subDir, { recursive: true });
@@ -312,7 +312,7 @@ describe("audit hash chain", () => {
     appendAudit(tmpDir, makeEntry("cmd2"));
 
     // Tamper with the audit file — change command text in first entry
-    const auditPath = path.join(tmpDir, ".oda", "history", "audit.jsonl");
+    const auditPath = path.join(tmpDir, ".dojops", "history", "audit.jsonl");
     const content = fs.readFileSync(auditPath, "utf-8");
     const lines = content.trimEnd().split("\n");
     const entry = JSON.parse(lines[0]);
@@ -337,7 +337,7 @@ describe("audit hash chain", () => {
     initProject(tmpDir);
 
     // Write a legacy entry directly (no hash fields)
-    const auditPath = path.join(tmpDir, ".oda", "history", "audit.jsonl");
+    const auditPath = path.join(tmpDir, ".dojops", "history", "audit.jsonl");
     const legacyEntry = {
       timestamp: new Date().toISOString(),
       user: "test",

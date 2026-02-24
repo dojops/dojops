@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { runScan } from "@odaops/scanner";
-import type { ScanType } from "@odaops/scanner";
+import { runScan } from "@dojops/scanner";
+import type { ScanType } from "@dojops/scanner";
 import { HistoryStore } from "../store";
 import { ScanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";

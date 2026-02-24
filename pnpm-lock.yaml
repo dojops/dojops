@@ -47,25 +47,25 @@ importers:
 
   packages/api:
     dependencies:
-      '@odaops/core':
+      '@dojops/core':
         specifier: workspace:*
         version: link:../core
-      '@odaops/executor':
+      '@dojops/executor':
         specifier: workspace:*
         version: link:../executor
-      '@odaops/planner':
+      '@dojops/planner':
         specifier: workspace:*
         version: link:../planner
-      '@odaops/scanner':
+      '@dojops/scanner':
         specifier: workspace:*
         version: link:../scanner
-      '@odaops/sdk':
+      '@dojops/sdk':
         specifier: workspace:*
         version: link:../sdk
-      '@odaops/session':
+      '@dojops/session':
         specifier: workspace:*
         version: link:../session
-      '@odaops/tools':
+      '@dojops/tools':
         specifier: workspace:*
         version: link:../tools
       cors:
@@ -99,25 +99,25 @@ importers:
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
-      '@odaops/api':
+      '@dojops/api':
         specifier: workspace:*
         version: link:../api
-      '@odaops/core':
+      '@dojops/core':
         specifier: workspace:*
         version: link:../core
-      '@odaops/executor':
+      '@dojops/executor':
         specifier: workspace:*
         version: link:../executor
-      '@odaops/planner':
+      '@dojops/planner':
         specifier: workspace:*
         version: link:../planner
-      '@odaops/scanner':
+      '@dojops/scanner':
         specifier: workspace:*
         version: link:../scanner
-      '@odaops/session':
+      '@dojops/session':
         specifier: workspace:*
         version: link:../session
-      '@odaops/tools':
+      '@dojops/tools':
         specifier: workspace:*
         version: link:../tools
       dotenv:
@@ -147,7 +147,7 @@ importers:
 
   packages/executor:
     dependencies:
-      '@odaops/sdk':
+      '@dojops/sdk':
         specifier: workspace:*
         version: link:../sdk
       zod:
@@ -156,10 +156,10 @@ importers:
 
   packages/planner:
     dependencies:
-      '@odaops/core':
+      '@dojops/core':
         specifier: workspace:*
         version: link:../core
-      '@odaops/sdk':
+      '@dojops/sdk':
         specifier: workspace:*
         version: link:../sdk
       zod:
@@ -168,10 +168,10 @@ importers:
 
   packages/scanner:
     dependencies:
-      '@odaops/core':
+      '@dojops/core':
         specifier: workspace:*
         version: link:../core
-      '@odaops/sdk':
+      '@dojops/sdk':
         specifier: workspace:*
         version: link:../sdk
       zod:
@@ -186,7 +186,7 @@ importers:
 
   packages/session:
     dependencies:
-      '@odaops/core':
+      '@dojops/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -195,10 +195,10 @@ importers:
 
   packages/tools:
     dependencies:
-      '@odaops/core':
+      '@dojops/core':
         specifier: workspace:*
         version: link:../core
-      '@odaops/sdk':
+      '@dojops/sdk':
         specifier: workspace:*
         version: link:../sdk
       js-yaml:

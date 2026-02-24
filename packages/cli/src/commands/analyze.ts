@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createDiffAnalyzer } from "@odaops/api";
+import { createDiffAnalyzer } from "@dojops/api";
 import { CLIContext } from "../types";
 import { formatConfidence, riskColor, changeColor } from "../formatter";
 
@@ -10,7 +10,7 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
 
   if (!content) {
     p.log.error("No diff content provided.");
-    p.log.info(`  ${pc.dim("$")} oda analyze diff <diff-content>`);
+    p.log.info(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
     process.exit(1);
   }
 

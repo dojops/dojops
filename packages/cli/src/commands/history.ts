@@ -30,7 +30,7 @@ export async function historyCommand(args: string[], ctx: CLIContext): Promise<v
 function historyList(ctx: CLIContext): void {
   const root = findProjectRoot();
   if (!root) {
-    p.log.info("No .oda/ project found. Run `oda init` first.");
+    p.log.info("No .dojops/ project found. Run `dojops init` first.");
     return;
   }
 
@@ -76,14 +76,14 @@ function historyList(ctx: CLIContext): void {
 function historyShow(args: string[], ctx: CLIContext): void {
   const root = findProjectRoot();
   if (!root) {
-    p.log.info("No .oda/ project found. Run `oda init` first.");
+    p.log.info("No .dojops/ project found. Run `dojops init` first.");
     return;
   }
 
   const planId = args[0];
   if (!planId) {
     p.log.error("Plan ID required.");
-    p.log.info(`  ${pc.dim("$")} oda history show <plan-id>`);
+    p.log.info(`  ${pc.dim("$")} dojops history show <plan-id>`);
     process.exit(1);
   }
 
@@ -154,7 +154,7 @@ function historyShow(args: string[], ctx: CLIContext): void {
 function historyVerify(ctx: CLIContext): void {
   const root = findProjectRoot();
   if (!root) {
-    p.log.info("No .oda/ project found. Run `oda init` first.");
+    p.log.info("No .dojops/ project found. Run `dojops init` first.");
     return;
   }
 

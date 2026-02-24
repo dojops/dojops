@@ -788,7 +788,7 @@ async function loadOverview() {
     if (err.message.includes("404") || err.message.includes("Cannot GET")) {
       container.innerHTML = renderMetricsEmpty(
         "No project data",
-        "Start the server from a project directory with .oda/ to see metrics.",
+        "Start the server from a project directory with .dojops/ to see metrics.",
       );
     } else {
       container.innerHTML = '<div class="empty-state">' + escapeHtml(err.message) + "</div>";
@@ -1264,7 +1264,7 @@ async function loadAudit() {
     if (err.message.includes("404") || err.message.includes("Cannot GET")) {
       container.innerHTML = renderMetricsEmpty(
         "No audit data",
-        "Start using ODA commands to build an audit trail.",
+        "Start using DojOps commands to build an audit trail.",
       );
     } else {
       container.innerHTML = '<div class="empty-state">' + escapeHtml(err.message) + "</div>";
@@ -1276,7 +1276,7 @@ function renderAudit(data) {
   if (data.totalEntries === 0) {
     return renderMetricsEmpty(
       "No audit entries",
-      "Execute ODA commands to populate the audit trail.",
+      "Execute DojOps commands to populate the audit trail.",
     );
   }
 

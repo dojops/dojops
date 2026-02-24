@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions to ODA are welcome. This guide covers development setup, coding standards, testing, and how to add new tools and agents.
+Contributions to DojOps are welcome. This guide covers development setup, coding standards, testing, and how to add new tools and agents.
 
 ---
 
@@ -16,8 +16,8 @@ Contributions to ODA are welcome. This guide covers development setup, coding st
 
 ```bash
 # Clone the repository
-git clone https://github.com/oda-devops/oda.git
-cd oda
+git clone https://github.com/dojops/oda.git
+cd dojops
 
 # Install dependencies
 pnpm install
@@ -49,7 +49,7 @@ packages/
   sdk/            BaseTool<T> abstract class + Zod re-export + verification types
 ```
 
-Package scope: `@odaops/*`
+Package scope: `@dojops/*`
 
 Dependency flow: `cli -> api -> planner -> executor -> tools -> core -> sdk`
 
@@ -68,8 +68,8 @@ pnpm dev
 pnpm test
 
 # Run tests for a specific package
-pnpm --filter @odaops/core test
-pnpm --filter @odaops/api test
+pnpm --filter @dojops/core test
+pnpm --filter @dojops/api test
 
 # ESLint across all packages
 pnpm lint
@@ -81,8 +81,8 @@ pnpm format
 pnpm format:check
 
 # Run CLI locally (no global install)
-pnpm oda -- "Create a Terraform config for S3"
-pnpm oda -- serve --port=8080
+pnpm dojops -- "Create a Terraform config for S3"
+pnpm dojops -- serve --port=8080
 ```
 
 ---
@@ -106,19 +106,19 @@ Key conventions:
 
 ## Testing
 
-ODA uses Vitest for testing. Current coverage:
+DojOps uses Vitest for testing. Current coverage:
 
 | Package            | Tests   |
 | ------------------ | ------- |
-| `@odaops/core`     | 208     |
-| `@odaops/cli`      | 144     |
-| `@odaops/tools`    | 111     |
-| `@odaops/api`      | 96      |
-| `@odaops/scanner`  | 43      |
-| `@odaops/executor` | 40      |
-| `@odaops/planner`  | 28      |
-| `@odaops/session`  | 28      |
-| `@odaops/sdk`      | 7       |
+| `@dojops/core`     | 208     |
+| `@dojops/cli`      | 144     |
+| `@dojops/tools`    | 111     |
+| `@dojops/api`      | 96      |
+| `@dojops/scanner`  | 43      |
+| `@dojops/executor` | 40      |
+| `@dojops/planner`  | 28      |
+| `@dojops/session`  | 28      |
+| `@dojops/sdk`      | 7       |
 | **Total**          | **685** |
 
 ### Writing Tests
@@ -141,7 +141,7 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
 2. **Define schemas** (`schemas.ts`):
 
    ```typescript
-   import { z } from "@odaops/sdk";
+   import { z } from "@dojops/sdk";
 
    export const MyToolInputSchema = z.object({
      name: z.string(),
@@ -159,7 +159,7 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
 3. **Implement generator** (`generator.ts`):
 
    ```typescript
-   import { parseAndValidate } from "@odaops/core";
+   import { parseAndValidate } from "@dojops/core";
 
    export async function generateMyTool(input: MyToolInput, provider: LLMProvider) {
      const response = await provider.generate({
@@ -173,7 +173,7 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
 4. **Create tool class** (`my-tool.ts`):
 
    ```typescript
-   import { BaseTool } from "@odaops/sdk";
+   import { BaseTool } from "@dojops/sdk";
 
    export class MyTool extends BaseTool<MyToolInput> {
      name = "my-tool";
@@ -220,7 +220,7 @@ Agents are defined in `packages/core/src/agents/specialists.ts`.
 
 2. The agent will automatically:
    - Be registered in the `AgentRouter`
-   - Appear in `oda agents list`
+   - Appear in `dojops agents list`
    - Be available in the API (`GET /api/agents`)
    - Be routable by keyword matching
 
@@ -256,4 +256,4 @@ Agents are defined in `packages/core/src/agents/specialists.ts`.
 
 ## License
 
-ODA is licensed under the [MIT License](../LICENSE).
+DojOps is licensed under the [MIT License](../LICENSE).

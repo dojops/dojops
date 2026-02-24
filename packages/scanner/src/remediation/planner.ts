@@ -1,4 +1,4 @@
-import type { LLMProvider } from "@odaops/core";
+import type { LLMProvider } from "@dojops/core";
 import { ScanFinding, RemediationPlan, RemediationPlanSchema } from "../types";
 
 export async function planRemediation(

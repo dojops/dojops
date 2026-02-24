@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createDebugger } from "@odaops/api";
+import { createDebugger } from "@dojops/api";
 import { CLIContext } from "../types";
 import { formatConfidence } from "../formatter";
 
@@ -11,7 +11,7 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
 
   if (!logContent) {
     p.log.error("No CI log content provided.");
-    p.log.info(`  ${pc.dim("$")} oda debug ci <log-content>`);
+    p.log.info(`  ${pc.dim("$")} dojops debug ci <log-content>`);
     process.exit(1);
   }
 

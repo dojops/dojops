@@ -2,7 +2,7 @@
  * Agent tool dependency declarations and pure helper functions.
  *
  * Data-only — no I/O, no child_process, no TUI.
- * Runtime checking lives in @odaops/cli (preflight.ts).
+ * Runtime checking lives in @dojops/cli (preflight.ts).
  */
 
 export interface ToolDependency {

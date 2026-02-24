@@ -57,17 +57,17 @@ describe("CLI Smoke Tests", () => {
     let tmpDir: string;
 
     beforeEach(() => {
-      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "oda-smoke-"));
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-smoke-"));
     });
 
     afterEach(() => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    it("init exits 0 and creates .oda/", () => {
+    it("init exits 0 and creates .dojops/", () => {
       const { exitCode } = run("init", { cwd: tmpDir });
       expect(exitCode).toBe(0);
-      expect(fs.existsSync(path.join(tmpDir, ".oda"))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, ".dojops"))).toBe(true);
     });
 
     it("init is idempotent", () => {

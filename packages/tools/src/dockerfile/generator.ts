@@ -1,4 +1,4 @@
-import { LLMProvider } from "@odaops/core";
+import { LLMProvider } from "@dojops/core";
 import { DockerfileConfig, DockerfileConfigSchema } from "./schemas";
 import { DockerDetectionResult } from "./detector";
 

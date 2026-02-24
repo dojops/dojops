@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { ChatSession } from "./session";
-import { LLMProvider, AgentRouter } from "@odaops/core";
+import { LLMProvider, AgentRouter } from "@dojops/core";
 import { ChatSessionState } from "./types";
 
 function createMockProvider(response = "Mock response"): LLMProvider {

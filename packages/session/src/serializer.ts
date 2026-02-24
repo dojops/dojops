@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { ChatSessionState } from "./types";
 
 function sessionsDir(rootDir: string): string {
-  return path.join(rootDir, ".oda", "sessions");
+  return path.join(rootDir, ".dojops", "sessions");
 }
 
 export function generateSessionId(): string {

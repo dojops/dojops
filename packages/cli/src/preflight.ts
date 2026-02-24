@@ -13,12 +13,12 @@ import {
   SYSTEM_TOOLS,
   findSystemTool,
   isToolSupportedOnCurrentPlatform,
-} from "@odaops/core";
+} from "@dojops/core";
 import { TOOLS_BIN_DIR, loadToolRegistry, installSystemTool, verifyTool } from "./tool-sandbox";
 
 /**
  * Attempt to resolve a binary on PATH.
- * Checks ~/.oda/tools/bin/ first (if it exists), then system PATH.
+ * Checks ~/.dojops/tools/bin/ first (if it exists), then system PATH.
  * Returns the absolute path if found, undefined otherwise.
  */
 export function resolveBinary(name: string): string | undefined {
@@ -301,7 +301,7 @@ export async function offerSystemToolInstall(options?: {
 
   const lines = missing.map(
     (tool) =>
-      `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${pc.dim(`oda tools install ${tool.name}`)}`,
+      `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${pc.dim(`dojops tools install ${tool.name}`)}`,
   );
   p.log.warn(`${missing.length} system tool(s) not found:\n${lines.join("\n")}`);
 
@@ -310,7 +310,7 @@ export async function offerSystemToolInstall(options?: {
   }
 
   const selected = await p.multiselect({
-    message: "Select system tools to install into sandbox (~/.oda/tools/):",
+    message: "Select system tools to install into sandbox (~/.dojops/tools/):",
     options: missing.map((tool) => ({
       value: tool.name,
       label: tool.name,
