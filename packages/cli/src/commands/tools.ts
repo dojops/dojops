@@ -66,10 +66,55 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
       statusLabel = pc.yellow("available");
     }
 
-    return `  ${pc.cyan(tool.name.padEnd(14))} ${statusLabel.padEnd(50)} ${pc.dim(tool.description)}`;
+    const cols = Math.min(process.stdout.columns || 80, 100);
+    const descMax = Math.max(10, cols - 50);
+    const desc =
+      tool.description.length > descMax
+        ? tool.description.slice(0, descMax - 1) + "…"
+        : tool.description;
+    return `  ${pc.cyan(tool.name.padEnd(14))} ${statusLabel}  ${pc.dim(desc)}`;
   });
 
   p.note(lines.join("\n"), "System Tools");
+};
+
+export const toolsLoadCommand: CommandHandler = async () => {
+  const s = p.spinner();
+  s.start("Scanning for system tools...");
+
+  const registry = loadToolRegistry();
+
+  // Touch each tool to populate PATH cache
+  for (const tool of SYSTEM_TOOLS) {
+    const alreadyInstalled = registry.tools.find((t) => t.name === tool.name);
+    if (!alreadyInstalled) {
+      resolveBinary(tool.binaryName);
+    }
+  }
+
+  s.stop("Scan complete.");
+
+  const installed = registry.tools.length;
+  const system = SYSTEM_TOOLS.filter(
+    (t) => !registry.tools.find((r) => r.name === t.name) && resolveBinary(t.binaryName),
+  ).length;
+  const missing = SYSTEM_TOOLS.length - installed - system;
+
+  const lines = [
+    `${pc.bold("Sandbox tools:")}  ${installed}`,
+    `${pc.bold("System tools:")}   ${system}`,
+    `${pc.bold("Not found:")}      ${missing}`,
+  ];
+
+  p.note(lines.join("\n"), "Tool Scan Results");
+
+  if (missing > 0) {
+    const missingNames = SYSTEM_TOOLS.filter(
+      (t) => !registry.tools.find((r) => r.name === t.name) && !resolveBinary(t.binaryName),
+    ).map((t) => t.name);
+    p.log.info(`Missing: ${pc.dim(missingNames.join(", "))}`);
+    p.log.info(`Install with: ${pc.cyan("dojops tools install <name>")}`);
+  }
 };
 
 export const toolsInstallCommand: CommandHandler = async (args, ctx) => {

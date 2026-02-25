@@ -77,16 +77,32 @@ export const MetadataSchema = z.object({
 
 // ── LLM Insights schema ─────────────────────────────────────────────
 
+const AgentEntrySchema = z.union([
+  z.string(),
+  z.record(z.unknown()).transform((o) => {
+    // Try common field names the LLM might use
+    for (const key of ["name", "agent", "agentName", "value", "id"]) {
+      if (typeof o[key] === "string") return o[key] as string;
+    }
+    // Fall back to first string value
+    const first = Object.values(o).find((v) => typeof v === "string");
+    return (first as string) ?? "unknown";
+  }),
+]);
+
 export const LLMInsightsSchema = z.object({
-  projectDescription: z.string(),
-  techStack: z.array(z.string()),
-  suggestedWorkflows: z.array(
-    z.object({
-      command: z.string(),
-      description: z.string(),
-    }),
-  ),
-  recommendedAgents: z.array(z.string()),
+  projectDescription: z.string().optional().default(""),
+  techStack: z.array(z.string()).optional().default([]),
+  suggestedWorkflows: z
+    .array(
+      z.object({
+        command: z.string(),
+        description: z.string(),
+      }),
+    )
+    .optional()
+    .default([]),
+  recommendedAgents: z.array(AgentEntrySchema).optional().default([]),
   notes: z.string().optional(),
 });
 

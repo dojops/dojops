@@ -34,6 +34,7 @@ import { historyCommand } from "./commands/history";
 import { statusCommand } from "./commands/doctor";
 import {
   toolsListCommand,
+  toolsLoadCommand,
   toolsInstallCommand,
   toolsRemoveCommand,
   toolsCleanCommand,
@@ -70,6 +71,7 @@ registerSubcommand("history", "verify", (args, ctx) => historyCommand(["verify",
 
 // Nested: tools <sub>
 registerSubcommand("tools", "list", toolsListCommand);
+registerSubcommand("tools", "load", toolsLoadCommand);
 registerSubcommand("tools", "install", toolsInstallCommand);
 registerSubcommand("tools", "remove", toolsRemoveCommand);
 registerSubcommand("tools", "clean", toolsCleanCommand);
@@ -155,6 +157,8 @@ async function main() {
     "scan",
     "chat",
     "check",
+    "agents",
+    "history",
   ]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 

@@ -1311,6 +1311,25 @@ describe("RepoContextSchema with llmInsights", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts recommendedAgents as objects with various field names", () => {
+    const data = {
+      projectDescription: "Test",
+      techStack: [],
+      suggestedWorkflows: [],
+      recommendedAgents: [
+        { agent: "terraform", reason: "uses HCL" },
+        { name: "cicd", description: "has workflows" },
+        { value: "docker" },
+        "kubernetes",
+      ],
+    };
+    const parsed = LLMInsightsSchema.safeParse(data);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.recommendedAgents).toEqual(["terraform", "cicd", "docker", "kubernetes"]);
+    }
+  });
+
   it("rejects invalid llmInsights shape", () => {
     const dir = makeTmpDir();
     const ctx = scanRepo(dir);

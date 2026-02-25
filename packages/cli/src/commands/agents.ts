@@ -216,15 +216,34 @@ Generate a complete agent definition with:
     keywords: string[];
   };
 
-  // Show preview
+  // Show preview — wrap long lines to terminal width
+  const cols = Math.min(process.stdout.columns || 80, 80) - 6;
+  const wrap = (text: string, indent: number): string => {
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let cur = "";
+    for (const w of words) {
+      if (cur && cur.length + 1 + w.length > cols - indent) {
+        lines.push(cur);
+        cur = " ".repeat(indent) + w;
+      } else {
+        cur = cur ? cur + " " + w : w;
+      }
+    }
+    if (cur) lines.push(cur);
+    return lines.join("\n");
+  };
+
   const previewLines = [
     `${pc.bold("Name:")}        ${agent.name}`,
     `${pc.bold("Domain:")}      ${agent.domain}`,
-    `${pc.bold("Description:")} ${agent.description}`,
-    `${pc.bold("Keywords:")}    ${agent.keywords.join(", ")}`,
+    `${pc.bold("Description:")} ${wrap(agent.description, 13)}`,
+    `${pc.bold("Keywords:")}    ${wrap(agent.keywords.join(", "), 13)}`,
     "",
     `${pc.bold("System Prompt:")}`,
-    pc.dim(agent.systemPrompt.slice(0, 200) + (agent.systemPrompt.length > 200 ? "..." : "")),
+    pc.dim(
+      wrap(agent.systemPrompt.slice(0, 300) + (agent.systemPrompt.length > 300 ? "..." : ""), 0),
+    ),
   ];
   p.note(previewLines.join("\n"), "Agent Preview");
 

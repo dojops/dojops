@@ -31,7 +31,8 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "assets"
+    "assets",
+    "img"
   ],
   "scripts": {
     "build": "tsc",

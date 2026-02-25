@@ -7,7 +7,7 @@ import { scanRepo, enrichWithLLM } from "@dojops/core";
 import type { RepoContext, LLMInsights } from "@dojops/core";
 import { CommandHandler } from "../types";
 import { initProject, findProjectRoot } from "../state";
-import { offerToolInstall } from "../preflight";
+import { offerToolInstall, offerSystemToolInstall } from "../preflight";
 
 function formatScanSummary(ctx: RepoContext): string[] {
   const lines: string[] = [];
@@ -446,4 +446,7 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
 
   // Offer to install missing optional tool dependencies
   await offerToolInstall({ nonInteractive: cliCtx.globalOpts.nonInteractive });
+
+  // Offer to install missing system tools (terraform, kubectl, etc.)
+  await offerSystemToolInstall({ nonInteractive: cliCtx.globalOpts.nonInteractive });
 };

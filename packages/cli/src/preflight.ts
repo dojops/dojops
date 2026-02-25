@@ -210,7 +210,10 @@ function npmInstallGlobal(pkg: string, useSudo: boolean): void {
  */
 export async function offerToolInstall(options?: { nonInteractive?: boolean }): Promise<string[]> {
   const missing = collectMissingTools();
-  if (missing.length === 0) return [];
+  if (missing.length === 0) {
+    p.log.success("All optional agent tools are installed.");
+    return [];
+  }
 
   const lines = missing.map(
     (dep) =>
@@ -297,7 +300,10 @@ export async function offerSystemToolInstall(options?: {
   nonInteractive?: boolean;
 }): Promise<string[]> {
   const missing = collectMissingSystemTools();
-  if (missing.length === 0) return [];
+  if (missing.length === 0) {
+    p.log.success("All system tools are installed.");
+    return [];
+  }
 
   const lines = missing.map(
     (tool) =>

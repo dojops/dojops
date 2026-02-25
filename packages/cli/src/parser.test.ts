@@ -115,6 +115,12 @@ describe("parseCommandPath", () => {
     expect(command).toEqual(["config", "show"]);
     expect(positional).toEqual([]);
   });
+
+  it("parses tools load", () => {
+    const { command, positional } = parseCommandPath(["tools", "load"]);
+    expect(command).toEqual(["tools", "load"]);
+    expect(positional).toEqual([]);
+  });
 });
 
 describe("extractFlagValue", () => {

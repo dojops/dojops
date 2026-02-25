@@ -99,6 +99,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "security",
     "show",
     "list",
+    "load",
     "info",
     "login",
     "status",

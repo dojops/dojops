@@ -1,32 +1,8 @@
 import pc from "picocolors";
+import { createBanner } from "./banner";
 
 function printBanner(): void {
-  const c = pc.cyan;
-  const d = pc.dim;
-  const bc = (s: string) => pc.bold(pc.cyan(s));
-
-  console.log();
-  console.log(d("  ╔════════════════════════════════════════════════════╗"));
-  console.log(d("  ║") + "                                                    " + d("║"));
-  console.log(d("  ║") + bc("   ██████╗   ██████╗    ██╗ ██████╗ ██████╗ ███████╗") + d("  ║"));
-  console.log(d("  ║") + bc("   ██╔══██╗ ██╔═══██╗   ██║██╔═══██╗██╔══██╗██╔════╝") + d(" ║"));
-  console.log(d("  ║") + bc("   ██║  ██║ ██║   ██║   ██║██║   ██║██████╔╝███████╗") + d("  ║"));
-  console.log(d("  ║") + bc("   ██║  ██║ ██║   ██║██ ██║██║   ██║██╔═══╝ ╚════██║") + d("  ║"));
-  console.log(d("  ║") + bc("   ██████╔╝ ╚██████╔╝╚███╔╝╚██████╔╝██║     ███████║") + d("  ║"));
-  console.log(d("  ║") + bc("   ╚═════╝   ╚═════╝  ╚══╝  ╚═════╝ ╚═╝     ╚══════╝") + d(" ║"));
-  console.log(d("  ║") + "                                                    " + d("║"));
-  console.log(
-    d("  ║") +
-      "  " +
-      c("▸") +
-      pc.bold(pc.white(" DojOps — AI DevOps Automation Engine")) +
-      d("  ·  v1.0.0  ") +
-      d("║"),
-  );
-  console.log(d("  ║") + "  " + d("  AI-powered DevOps automation engine           ") + d("║"));
-  console.log(d("  ║") + "                                                    " + d("║"));
-  console.log(d("  ╚════════════════════════════════════════════════════╝"));
-  console.log();
+  console.log(createBanner());
 }
 
 export { printBanner };
@@ -608,11 +584,12 @@ export function printCommandHelp(command: string): void {
     case "tools":
       console.log(`\n${pc.bold("dojops tools")} — Manage system tool sandbox`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops tools [list|install|remove|clean]`);
+      console.log(`  ${pc.dim("$")} dojops tools [list|load|install|remove|clean]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all system tools with status ${pc.dim("(default)")}`,
       );
+      console.log(`  ${pc.cyan("load")}              Re-scan and detect available tools`);
       console.log(`  ${pc.cyan("install <name>")}   Download and install a tool into sandbox`);
       console.log(`  ${pc.cyan("remove <name>")}    Remove a tool from sandbox`);
       console.log(`  ${pc.cyan("clean")}             Remove all sandbox tools`);
@@ -632,6 +609,7 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops tools`);
       console.log(`  ${pc.dim("$")} dojops tools list`);
+      console.log(`  ${pc.dim("$")} dojops tools load`);
       console.log(`  ${pc.dim("$")} dojops tools install terraform`);
       console.log(`  ${pc.dim("$")} dojops tools install kubectl`);
       console.log(`  ${pc.dim("$")} dojops tools remove terraform`);

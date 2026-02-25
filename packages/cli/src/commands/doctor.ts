@@ -170,8 +170,11 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     });
     checks.push({
       name: "Executions",
-      status: executions.length > 0 ? "pass" : "warn",
-      detail: executions.length > 0 ? `${executions.length} (${successRate}% success)` : "None",
+      status: "pass",
+      detail:
+        executions.length > 0
+          ? `${executions.length} execution(s) (${successRate}% success)`
+          : "0 execution(s)",
     });
     checks.push({
       name: "Security scans",
@@ -193,10 +196,16 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     return;
   }
 
+  const cols = Math.min(process.stdout.columns || 80, 100);
+  const nameWidth = 26;
+  const prefix = 4; // "  ✓ "
+  const maxDetail = Math.max(20, cols - prefix - nameWidth - 6);
+
   const lines = checks.map((c) => {
     const icon =
       c.status === "pass" ? pc.green("✓") : c.status === "fail" ? pc.red("✗") : pc.yellow("!");
-    return `  ${icon} ${pc.bold(c.name.padEnd(28))} ${c.detail}`;
+    const detail = c.detail.length > maxDetail ? c.detail.slice(0, maxDetail - 1) + "…" : c.detail;
+    return `  ${icon} ${pc.bold(c.name.padEnd(nameWidth))} ${detail}`;
   });
 
   p.note(lines.join("\n"), "System Diagnostics");
