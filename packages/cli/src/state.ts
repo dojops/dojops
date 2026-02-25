@@ -172,6 +172,7 @@ export function initProject(rootDir: string): string[] {
     path.join(base, "approvals"),
     path.join(base, "artifacts"),
     path.join(base, "sessions"),
+    path.join(base, "sbom"),
   ];
 
   const created: string[] = [];

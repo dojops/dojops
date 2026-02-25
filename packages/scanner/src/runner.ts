@@ -7,11 +7,13 @@ import { scanTrivy } from "./scanners/trivy";
 import { scanCheckov } from "./scanners/checkov";
 import { scanHadolint } from "./scanners/hadolint";
 import { scanGitleaks } from "./scanners/gitleaks";
+import { scanShellcheck } from "./scanners/shellcheck";
+import { scanTrivySbom } from "./scanners/trivy-sbom";
 
 interface ScannerEntry {
   name: string;
   fn: (projectPath: string) => Promise<ScannerResult>;
-  categories: Array<"deps" | "security" | "iac">;
+  categories: Array<"deps" | "security" | "iac" | "sbom">;
   /** Check if this scanner is applicable given the repo context */
   applicable: (ctx?: RepoContext) => boolean;
 }
@@ -69,6 +71,18 @@ const SCANNERS: ScannerEntry[] = [
     categories: ["iac", "security"],
     applicable: (ctx) => !ctx || ctx.container.hasDockerfile,
   },
+  {
+    name: "shellcheck",
+    fn: scanShellcheck,
+    categories: ["iac", "security"],
+    applicable: (ctx) => !ctx || (ctx.scripts?.shellScripts?.length ?? 0) > 0,
+  },
+  {
+    name: "trivy-sbom",
+    fn: scanTrivySbom,
+    categories: ["sbom"],
+    applicable: () => true,
+  },
 ];
 
 export async function runScan(
@@ -81,7 +95,10 @@ export async function runScan(
   // Select applicable scanners
   const selected = SCANNERS.filter((s) => {
     // Filter by scan type
-    if (scanType !== "all" && !s.categories.includes(scanType as "deps" | "security" | "iac")) {
+    if (
+      scanType !== "all" &&
+      !s.categories.includes(scanType as "deps" | "security" | "iac" | "sbom")
+    ) {
       return false;
     }
     // Filter by project context
@@ -95,6 +112,7 @@ export async function runScan(
   const allFindings: ScanFinding[] = [];
   const scannersRun: string[] = [];
   const scannersSkipped: string[] = [];
+  const sbomOutputs: string[] = [];
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
@@ -103,6 +121,9 @@ export async function runScan(
     } else {
       scannersRun.push(result.tool);
       allFindings.push(...result.findings);
+      if (result.sbomOutput) {
+        sbomOutputs.push(result.sbomOutput);
+      }
     }
   }
 
@@ -125,5 +146,6 @@ export async function runScan(
     scannersRun,
     scannersSkipped,
     durationMs: Date.now() - startTime,
+    ...(sbomOutputs.length > 0 ? { sbomOutputs } : {}),
   };
 }

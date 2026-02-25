@@ -134,6 +134,41 @@ export function detectCI(root: string): CIDetection[] {
           platform: "github-actions",
           configPath: `.github/workflows/${file}`,
         });
+        // Reusable workflows — check for workflow_call trigger
+        try {
+          const content = fs.readFileSync(path.join(workflowsDir, file), "utf-8");
+          if (/workflow_call/.test(content)) {
+            results.push({
+              platform: "github-reusable-workflow",
+              configPath: `.github/workflows/${file}`,
+            });
+          }
+        } catch {
+          /* unreadable */
+        }
+      }
+    } catch {
+      // Permission denied or other read error
+    }
+  }
+
+  // GitHub Composite Actions
+  const actionsDir = path.join(root, ".github", "actions");
+  if (fs.existsSync(actionsDir)) {
+    try {
+      const dirs = fs
+        .readdirSync(actionsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory());
+      for (const dir of dirs) {
+        for (const f of ["action.yml", "action.yaml"]) {
+          if (fs.existsSync(path.join(actionsDir, dir.name, f))) {
+            results.push({
+              platform: "github-composite-action",
+              configPath: `.github/actions/${dir.name}/${f}`,
+            });
+            break;
+          }
+        }
       }
     } catch {
       // Permission denied or other read error
@@ -228,7 +263,24 @@ export function detectContainer(root: string): ContainerDetection {
     }
   }
 
-  return { hasDockerfile, hasCompose, ...(composePath ? { composePath } : {}) };
+  // Docker Swarm
+  let hasSwarm = false;
+  for (const f of ["docker-stack.yml", "docker-stack.yaml"]) {
+    if (fs.existsSync(path.join(root, f))) {
+      hasSwarm = true;
+      break;
+    }
+  }
+  if (!hasSwarm && composePath) {
+    try {
+      const content = fs.readFileSync(path.join(root, composePath), "utf-8");
+      hasSwarm = /deploy:\s*\n\s+(mode:|placement:|replicas:)/m.test(content);
+    } catch {
+      /* unreadable */
+    }
+  }
+
+  return { hasDockerfile, hasCompose, ...(composePath ? { composePath } : {}), hasSwarm };
 }
 
 // ── Infrastructure detection ─────────────────────────────────────────
@@ -348,6 +400,17 @@ export function detectInfra(root: string): InfraDetection {
     }
   }
 
+  // Packer
+  let hasPacker = false;
+  try {
+    const entries = fs.readdirSync(root);
+    hasPacker =
+      entries.some((f) => f.endsWith(".pkr.hcl") || f.endsWith(".pkr.json")) ||
+      entries.includes("packer.json");
+  } catch {
+    /* unreadable */
+  }
+
   return {
     hasTerraform,
     tfProviders,
@@ -359,6 +422,7 @@ export function detectInfra(root: string): InfraDetection {
     hasVagrant,
     hasPulumi,
     hasCloudFormation,
+    hasPacker,
   };
 }
 
@@ -532,6 +596,8 @@ export function deriveRelevantDomains(
     domains.push("infrastructure");
     domains.push("cloud-architecture");
   }
+  if (infra.hasPacker) domains.push("infrastructure");
+  if (container.hasSwarm) domains.push("container-orchestration");
   if (monitoring.hasPrometheus) domains.push("observability");
   if (monitoring.hasNginx) domains.push("networking");
   if (monitoring.hasSystemd) domains.push("shell-scripting");
@@ -654,6 +720,25 @@ export function collectDevopsFiles(
   if (infra.hasHelm && fs.existsSync(path.join(root, "Chart.yaml"))) files.add("Chart.yaml");
   if (infra.hasAnsible) {
     for (const f of ANSIBLE_INDICATORS) {
+      if (fs.existsSync(path.join(root, f))) files.add(f);
+    }
+  }
+  if (infra.hasPacker) {
+    try {
+      const entries = fs.readdirSync(root);
+      for (const f of entries) {
+        if (f.endsWith(".pkr.hcl") || f.endsWith(".pkr.json") || f === "packer.json") {
+          files.add(f);
+        }
+      }
+    } catch {
+      // Unreadable
+    }
+  }
+
+  // Docker Swarm
+  if (container.hasSwarm) {
+    for (const f of ["docker-stack.yml", "docker-stack.yaml"]) {
       if (fs.existsSync(path.join(root, f))) files.add(f);
     }
   }

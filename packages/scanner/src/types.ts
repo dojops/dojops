@@ -4,7 +4,7 @@ import { z } from "zod";
 
 export type ScanSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type ScanCategory = "SECURITY" | "DEPENDENCY" | "IAC" | "SECRETS";
-export type ScanType = "all" | "security" | "deps" | "iac";
+export type ScanType = "all" | "security" | "deps" | "iac" | "sbom";
 
 // ── Finding ────────────────────────────────────────────────────────
 
@@ -38,6 +38,7 @@ export interface ScanReport {
   scannersRun: string[];
   scannersSkipped: string[];
   durationMs: number;
+  sbomOutputs?: string[];
 }
 
 // ── Scanner result ─────────────────────────────────────────────────
@@ -46,6 +47,7 @@ export interface ScannerResult {
   tool: string;
   findings: ScanFinding[];
   rawOutput?: string;
+  sbomOutput?: string;
   skipped?: boolean;
   skipReason?: string;
 }

@@ -311,6 +311,40 @@ describe("detectCI", () => {
     expect(result[0].platform).toBe("woodpecker");
     expect(result[0].configPath).toBe(".woodpecker/");
   });
+
+  it("detects GitHub composite actions", () => {
+    const dir = makeTmpDir();
+    const actionDir = path.join(dir, ".github", "actions", "setup");
+    fs.mkdirSync(actionDir, { recursive: true });
+    fs.writeFileSync(path.join(actionDir, "action.yml"), "name: setup\nruns:\n  using: composite");
+    const result = detectCI(dir);
+    expect(result.some((r) => r.platform === "github-composite-action")).toBe(true);
+    expect(result.find((r) => r.platform === "github-composite-action")?.configPath).toBe(
+      ".github/actions/setup/action.yml",
+    );
+  });
+
+  it("detects GitHub reusable workflows via workflow_call trigger", () => {
+    const dir = makeTmpDir();
+    const wfDir = path.join(dir, ".github", "workflows");
+    fs.mkdirSync(wfDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(wfDir, "reusable.yml"),
+      "on:\n  workflow_call:\n    inputs:\n      env:\n        type: string",
+    );
+    const result = detectCI(dir);
+    expect(result.some((r) => r.platform === "github-actions")).toBe(true);
+    expect(result.some((r) => r.platform === "github-reusable-workflow")).toBe(true);
+  });
+
+  it("does NOT flag normal workflow as reusable", () => {
+    const dir = makeTmpDir();
+    const wfDir = path.join(dir, ".github", "workflows");
+    fs.mkdirSync(wfDir, { recursive: true });
+    fs.writeFileSync(path.join(wfDir, "ci.yml"), "on:\n  push:\n    branches: [main]");
+    const result = detectCI(dir);
+    expect(result.some((r) => r.platform === "github-reusable-workflow")).toBe(false);
+  });
 });
 
 // ── detectContainer ──────────────────────────────────────────────────
@@ -354,6 +388,37 @@ describe("detectContainer", () => {
     fs.writeFileSync(path.join(dir, "backend", "Dockerfile"), "FROM node:20");
     const result = detectContainer(dir);
     expect(result.hasDockerfile).toBe(true);
+  });
+
+  it("detects Docker Swarm from docker-stack.yml", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(dir, "docker-stack.yml"),
+      "version: '3.8'\nservices:\n  web:\n    image: nginx",
+    );
+    const result = detectContainer(dir);
+    expect(result.hasSwarm).toBe(true);
+  });
+
+  it("detects Docker Swarm from compose file with deploy config", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(dir, "docker-compose.yml"),
+      "version: '3.8'\nservices:\n  web:\n    image: nginx\n    deploy:\n     replicas: 3",
+    );
+    const result = detectContainer(dir);
+    expect(result.hasSwarm).toBe(true);
+    expect(result.hasCompose).toBe(true);
+  });
+
+  it("does NOT detect Docker Swarm from plain compose file", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(dir, "docker-compose.yml"),
+      "version: '3'\nservices:\n  web:\n    image: nginx\n    ports:\n      - '80:80'",
+    );
+    const result = detectContainer(dir);
+    expect(result.hasSwarm).toBe(false);
   });
 });
 
@@ -452,6 +517,7 @@ describe("detectInfra", () => {
     expect(result.hasVagrant).toBe(false);
     expect(result.hasPulumi).toBe(false);
     expect(result.hasCloudFormation).toBe(false);
+    expect(result.hasPacker).toBe(false);
   });
 
   // New infra detections
@@ -512,6 +578,27 @@ describe("detectInfra", () => {
     fs.writeFileSync(path.join(dir, "template.yaml"), "key: value\nfoo: bar");
     const result = detectInfra(dir);
     expect(result.hasCloudFormation).toBe(false);
+  });
+
+  it("detects Packer from .pkr.hcl file", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "ubuntu.pkr.hcl"), 'source "amazon-ebs" "ubuntu" {}');
+    const result = detectInfra(dir);
+    expect(result.hasPacker).toBe(true);
+  });
+
+  it("detects Packer from packer.json", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "packer.json"), "{}");
+    const result = detectInfra(dir);
+    expect(result.hasPacker).toBe(true);
+  });
+
+  it("detects Packer from .pkr.json file", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "ubuntu.pkr.json"), "{}");
+    const result = detectInfra(dir);
+    expect(result.hasPacker).toBe(true);
   });
 });
 

@@ -552,3 +552,121 @@ describe("scanGitleaks", () => {
     expect(result.skipped).toBeUndefined();
   });
 });
+
+// ── shellcheck ────────────────────────────────────────────────────
+
+describe("scanShellcheck", () => {
+  it("skips when no shell scripts found", async () => {
+    const { scanShellcheck } = await import("./shellcheck");
+    mockExistsSync.mockReturnValue(false);
+    mockReaddirSync.mockImplementation(() => {
+      return [] as unknown as fs.Dirent[];
+    });
+    const result = await scanShellcheck("/project");
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toContain("No shell scripts");
+  });
+
+  it("skips when shellcheck not found (ENOENT)", async () => {
+    const { scanShellcheck } = await import("./shellcheck");
+    mockReaddirSync.mockImplementation((dir) => {
+      if (String(dir) === "/project") return ["deploy.sh"] as unknown as fs.Dirent[];
+      return [] as unknown as fs.Dirent[];
+    });
+    mockExistsSync.mockReturnValue(false);
+    const err = new Error("ENOENT") as NodeJS.ErrnoException;
+    err.code = "ENOENT";
+    mockExecFileSync.mockImplementation(() => {
+      throw err;
+    });
+    const result = await scanShellcheck("/project");
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toBe("shellcheck not found");
+  });
+
+  it("parses shellcheck JSON output", async () => {
+    const { scanShellcheck } = await import("./shellcheck");
+    mockReaddirSync.mockImplementation((dir) => {
+      if (String(dir) === "/project") return ["deploy.sh"] as unknown as fs.Dirent[];
+      return [] as unknown as fs.Dirent[];
+    });
+    mockExistsSync.mockReturnValue(false);
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify([
+        {
+          file: "/project/deploy.sh",
+          line: 5,
+          column: 1,
+          level: "warning",
+          code: 2086,
+          message: "Double quote to prevent globbing and word splitting.",
+        },
+        {
+          file: "/project/deploy.sh",
+          line: 10,
+          column: 3,
+          level: "error",
+          code: 2155,
+          message: "Declare and assign separately to avoid masking return values.",
+        },
+      ]),
+    );
+
+    const result = await scanShellcheck("/project");
+    expect(result.findings).toHaveLength(2);
+    expect(result.findings[0].severity).toBe("MEDIUM");
+    expect(result.findings[0].category).toBe("IAC");
+    expect(result.findings[0].message).toContain("SC2086");
+    expect(result.findings[1].severity).toBe("HIGH");
+    expect(result.findings[1].message).toContain("SC2155");
+  });
+});
+
+// ── trivy-sbom ──────────────────────────────────────────────────
+
+describe("scanTrivySbom", () => {
+  it("skips when trivy not found (ENOENT)", async () => {
+    const { scanTrivySbom } = await import("./trivy-sbom");
+    const err = new Error("ENOENT") as NodeJS.ErrnoException;
+    err.code = "ENOENT";
+    mockExecFileSync.mockImplementation(() => {
+      throw err;
+    });
+    const result = await scanTrivySbom("/project");
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toBe("trivy not found");
+  });
+
+  it("returns CycloneDX SBOM output with no findings", async () => {
+    const { scanTrivySbom } = await import("./trivy-sbom");
+    const cyclonedxJson = JSON.stringify({
+      bomFormat: "CycloneDX",
+      specVersion: "1.4",
+      components: [{ type: "library", name: "lodash", version: "4.17.21" }],
+    });
+    mockExecFileSync.mockReturnValue(cyclonedxJson);
+
+    const result = await scanTrivySbom("/project");
+    expect(result.findings).toHaveLength(0);
+    expect(result.sbomOutput).toBe(cyclonedxJson);
+    expect(result.tool).toBe("trivy-sbom");
+    expect(result.skipped).toBeUndefined();
+  });
+
+  it("returns sbomOutput even when trivy exits non-zero", async () => {
+    const { scanTrivySbom } = await import("./trivy-sbom");
+    const cyclonedxJson = '{"bomFormat":"CycloneDX"}';
+    const err = Object.assign(new Error("exit 1"), {
+      stdout: cyclonedxJson,
+      stderr: "",
+      status: 1,
+    });
+    mockExecFileSync.mockImplementation(() => {
+      throw err;
+    });
+
+    const result = await scanTrivySbom("/project");
+    expect(result.sbomOutput).toBe(cyclonedxJson);
+    expect(result.findings).toHaveLength(0);
+  });
+});

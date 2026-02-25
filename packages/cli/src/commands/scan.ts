@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { runScan, planRemediation, applyFixes } from "@dojops/scanner";
@@ -5,7 +7,14 @@ import type { ScanType, ScanReport, ScanFinding } from "@dojops/scanner";
 import { CLIContext } from "../types";
 import { hasFlag } from "../parser";
 import { ExitCode } from "../exit-codes";
-import { findProjectRoot, initProject, appendAudit, loadContext, saveScanReport } from "../state";
+import {
+  findProjectRoot,
+  initProject,
+  appendAudit,
+  loadContext,
+  saveScanReport,
+  dojopsDir,
+} from "../state";
 
 export async function scanCommand(args: string[], ctx: CLIContext): Promise<void> {
   const startTime = Date.now();
@@ -14,6 +23,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   const securityOnly = hasFlag(args, "--security");
   const depsOnly = hasFlag(args, "--deps");
   const iacOnly = hasFlag(args, "--iac");
+  const sbomMode = hasFlag(args, "--sbom");
   const fixMode = hasFlag(args, "--fix");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
 
@@ -22,6 +32,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   if (securityOnly) scanType = "security";
   else if (depsOnly) scanType = "deps";
   else if (iacOnly) scanType = "iac";
+  else if (sbomMode) scanType = "sbom";
 
   // Find or init project
   let root = findProjectRoot();
@@ -100,6 +111,18 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     p.log.info(`Report saved: ${pc.dim(report.id)}`);
   } catch {
     // Non-fatal
+  }
+
+  // Save SBOM outputs
+  if (report.sbomOutputs && report.sbomOutputs.length > 0) {
+    const sbomDir = path.join(dojopsDir(root), "sbom");
+    if (!fs.existsSync(sbomDir)) fs.mkdirSync(sbomDir, { recursive: true });
+    for (const sbom of report.sbomOutputs) {
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      const sbomPath = path.join(sbomDir, `sbom-${ts}.json`);
+      fs.writeFileSync(sbomPath, sbom);
+      p.log.success(`SBOM saved: ${pc.dim(sbomPath)}`);
+    }
   }
 
   // Audit log
@@ -201,6 +224,10 @@ function severityLabel(severity: ScanFinding["severity"]): string {
 }
 
 function exitWithCode(report: ScanReport): never {
+  // SBOM scans always exit 0 (no findings to assess)
+  if (report.scanType === "sbom") {
+    process.exit(ExitCode.SUCCESS);
+  }
   if (report.summary.critical > 0) {
     process.exit(ExitCode.CRITICAL_VULNERABILITIES);
   }

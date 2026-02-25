@@ -22,6 +22,7 @@ export const ContainerDetectionSchema = z.object({
   hasDockerfile: z.boolean(),
   hasCompose: z.boolean(),
   composePath: z.string().optional(),
+  hasSwarm: z.boolean().optional(),
 });
 
 export const InfraDetectionSchema = z.object({
@@ -35,6 +36,7 @@ export const InfraDetectionSchema = z.object({
   hasVagrant: z.boolean(),
   hasPulumi: z.boolean(),
   hasCloudFormation: z.boolean(),
+  hasPacker: z.boolean().optional(),
 });
 
 export const MonitoringDetectionSchema = z.object({
