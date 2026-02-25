@@ -24,13 +24,13 @@ The serve command:
 
 The dashboard has 5 tabs organized in a sidebar:
 
-| Tab      | Category   | Auto-Refresh | Description                                          |
-| -------- | ---------- | ------------ | ---------------------------------------------------- |
-| Overview | Metrics    | 30s          | Plan/execution/scan aggregates and activity timeline |
-| Security | Metrics    | 30s          | Scan findings, severity trends, category breakdown   |
-| Audit    | Metrics    | 30s          | Hash chain integrity, command distribution, timeline |
-| Agents   | Operations | --           | Browse and search all 16 specialist agents           |
-| History  | Operations | --           | Execution history with type filtering                |
+| Tab      | Category   | Auto-Refresh | Description                                                 |
+| -------- | ---------- | ------------ | ----------------------------------------------------------- |
+| Overview | Metrics    | 30s          | Plan/execution/scan aggregates and activity timeline        |
+| Security | Metrics    | 30s          | Scan findings, severity trends, category breakdown          |
+| Audit    | Metrics    | 30s          | Hash chain integrity, command distribution, timeline        |
+| Agents   | Operations | --           | Browse and search all specialist agents (built-in + custom) |
+| History  | Operations | --           | Execution history with type filtering                       |
 
 A visual divider separates the metrics tabs (Overview, Security, Audit) from the operational tabs (Agents, History).
 
@@ -74,11 +74,11 @@ Data source: `.dojops/history/audit.jsonl`
 
 ### Agents
 
-The agents tab lets you browse all 16 specialist agents:
+The agents tab lets you browse all specialist agents (built-in + custom):
 
 - **Search** — Live search by agent name or keyword
 - **Domain filters** — Click domain chips to filter agents by category
-- **Agent cards** — Each card shows name, domain, description, and keywords
+- **Agent cards** — Each card shows name, domain, description, keywords, and type (built-in or custom)
 
 No auto-refresh — agent data is static.
 

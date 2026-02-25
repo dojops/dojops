@@ -201,6 +201,32 @@ describe("API Integration", () => {
       expect(res.body.agents[0]).toHaveProperty("description");
       expect(res.body.agents[0]).toHaveProperty("keywords");
     });
+
+    it("includes type field indicating built-in agents", async () => {
+      const res = await request(app).get("/api/agents");
+      expect(res.status).toBe(200);
+      // All agents should be built-in since no custom agents are configured
+      for (const agent of res.body.agents) {
+        expect(agent.type).toBe("built-in");
+      }
+    });
+
+    it("marks custom agents with type custom", async () => {
+      const customDeps = createTestDeps();
+      customDeps.customAgentNames = new Set(["ops-cortex"]);
+      const customApp = createApp(customDeps);
+
+      const res = await request(customApp).get("/api/agents");
+      expect(res.status).toBe(200);
+      const opsCortex = res.body.agents.find((a: { name: string }) => a.name === "ops-cortex");
+      expect(opsCortex.type).toBe("custom");
+
+      // Other agents should still be built-in
+      const terraform = res.body.agents.find(
+        (a: { name: string }) => a.name === "terraform-specialist",
+      );
+      expect(terraform.type).toBe("built-in");
+    });
   });
 
   describe("History API", () => {

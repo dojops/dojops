@@ -45,7 +45,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("debug ci")}           Diagnose CI/CD log failures`);
   console.log(`  ${pc.cyan("analyze diff")}       Analyze infrastructure diff for risk`);
   console.log(`  ${pc.cyan("inspect")}            Inspect config and session state`);
-  console.log(`  ${pc.cyan("agents")}             List and inspect specialist agents`);
+  console.log(`  ${pc.cyan("agents")}             Manage specialist agents (built-in + custom)`);
   console.log(`  ${pc.cyan("history")}            View execution history`);
   console.log(`  ${pc.cyan("history verify")}     Verify audit log hash chain integrity`);
   console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
@@ -307,17 +307,34 @@ export function printCommandHelp(command: string): void {
       break;
 
     case "agents":
-      console.log(`\n${pc.bold("dojops agents")} — List and inspect specialist agents`);
+      console.log(`\n${pc.bold("dojops agents")} — Manage specialist agents (built-in + custom)`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops agents [list|info <name>]`);
+      console.log(`  ${pc.dim("$")} dojops agents [list|info|create|remove]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
-      console.log(`  ${pc.cyan("list")}         List all specialist agents ${pc.dim("(default)")}`);
-      console.log(`  ${pc.cyan("info <name>")}  Show details for a specific agent`);
+      console.log(
+        `  ${pc.cyan("list")}              List all agents (built-in + custom) ${pc.dim("(default)")}`,
+      );
+      console.log(`  ${pc.cyan("info <name>")}       Show detailed agent info`);
+      console.log(
+        `  ${pc.cyan("create <desc>")}     Create a custom agent (LLM-generated from description)`,
+      );
+      console.log(`  ${pc.cyan("create --manual")}   Create a custom agent interactively`);
+      console.log(`  ${pc.cyan("remove <name>")}     Remove a custom agent`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(
+        `  ${pc.cyan("--global")}          Create agent in global ~/.dojops/agents/ (create only)`,
+      );
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops agents`);
       console.log(`  ${pc.dim("$")} dojops agents list`);
       console.log(`  ${pc.dim("$")} dojops agents info ops-cortex`);
       console.log(`  ${pc.dim("$")} dojops agents list --output json`);
+      console.log(
+        `  ${pc.dim("$")} dojops agents create "an SRE specialist for incident response"`,
+      );
+      console.log(`  ${pc.dim("$")} dojops agents create --manual`);
+      console.log(`  ${pc.dim("$")} dojops agents create --global "a cost optimization expert"`);
+      console.log(`  ${pc.dim("$")} dojops agents remove sre-specialist`);
       console.log();
       break;
 

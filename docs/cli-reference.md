@@ -51,8 +51,11 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 | Command                                | Description                                   |
 | -------------------------------------- | --------------------------------------------- |
-| `dojops agents list`                   | List all 16 specialist agents                 |
+| `dojops agents list`                   | List all agents (built-in + custom)           |
 | `dojops agents info <name>`            | Show agent details and tool dependencies      |
+| `dojops agents create <desc>`          | Create a custom agent (LLM-generated)         |
+| `dojops agents create --manual`        | Create a custom agent interactively           |
+| `dojops agents remove <name>`          | Remove a custom agent                         |
 | `dojops tools list`                    | List system tools with install status         |
 | `dojops tools install <name>`          | Download tool into sandbox (~/.dojops/tools/) |
 | `dojops tools remove <name>`           | Remove a sandboxed tool                       |
@@ -249,6 +252,11 @@ dojops doctor
 # Browse agents
 dojops agents list
 dojops agents info terraform-specialist
+
+# Create custom agents
+dojops agents create "an SRE specialist for incident response"
+dojops agents create --manual
+dojops agents remove sre-specialist
 
 # Audit trail
 dojops history list

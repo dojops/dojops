@@ -233,6 +233,31 @@ See [DevOps Tools — Plugin System](tools.md#plugin-system) for the full guide.
 
 ---
 
+## Custom Agents
+
+DojOps supports custom specialist agents. Create an agent by placing a structured `README.md` in `.dojops/agents/<name>/` (project-scoped) or `~/.dojops/agents/<name>/` (global):
+
+```bash
+# LLM-generated (recommended) — describe what you want and the LLM creates the agent
+dojops agents create "an SRE specialist for incident response and reliability"
+
+# Manual creation via interactive prompts
+dojops agents create --manual
+
+# List all agents (built-in + custom)
+dojops agents list
+
+# View agent details
+dojops agents info sre-specialist
+
+# Remove a custom agent
+dojops agents remove sre-specialist
+```
+
+Custom agents are automatically discovered and routable — they participate in keyword-based routing just like built-in agents. Project agents override global agents with the same name.
+
+---
+
 ## Next Steps
 
 - **[CLI Reference](cli-reference.md)** — Full command documentation (including `dojops check`)

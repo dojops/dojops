@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation system. It generates, validates, and executes infrastructure and CI/CD configurations using LLM providers — with structured output enforcement, 12 built-in DevOps tools, a plugin system for custom tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, and a rich terminal UI (@clack/prompts).
+DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation system. It generates, validates, and executes infrastructure and CI/CD configurations using LLM providers — with structured output enforcement, 12 built-in DevOps tools, a plugin system for custom tools, 16 built-in specialist agents + custom agents (markdown README discovery from `.dojops/agents/`), sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, and a rich terminal UI (@clack/prompts).
 
 ## Commands
 
@@ -12,7 +12,7 @@ DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (863 tests)
+pnpm test               # Vitest across all packages (897 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -48,7 +48,7 @@ pnpm dojops -- serve                 # in-repo alternative
 ```
 @dojops/cli            → Entry point: `dojops "prompt"` and `dojops serve`, imports factories from @dojops/api
 @dojops/api            → REST API (Express) + web dashboard, factory functions, exposes all capabilities via HTTP
-@dojops/tool-registry  → Tool registry + plugin system: discovers built-in + plugin tools, unified getAll()/get(name)
+@dojops/tool-registry  → Tool registry + plugin system + custom agent discovery: discovers built-in + plugin tools, custom agents from .dojops/agents/
 @dojops/planner        → TaskGraph decomposition (LLM) + topological executor
 @dojops/executor       → SafeExecutor: sandbox + policy engine + approval workflows + audit log
 @dojops/tools          → 12 built-in DevOps tools: GitHub Actions, Terraform, K8s, Helm, Ansible,
@@ -81,14 +81,17 @@ pnpm dojops -- serve                 # in-repo alternative
 - `DeterministicProvider` (`packages/core/src/llm/deterministic-provider.ts`) — LLMProvider proxy that forces `temperature: 0` on every `generate()` call; used by `--replay` mode
 - `parseAndValidate()` (`packages/core/src/llm/json-validator.ts`) — strips markdown fences, JSON.parse, Zod safeParse; used by all 5 providers
 - `DevOpsAgent` (`packages/core/src/agent.ts`) — wraps an LLMProvider
-- `AgentRouter` (`packages/core/src/agents/router.ts`) — keyword-based routing to specialist agents with confidence scoring
-- `SpecialistAgent` (`packages/core/src/agents/specialist.ts`) — domain-specific LLM agent with system prompt (16 specialists: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python)
+- `AgentRouter` (`packages/core/src/agents/router.ts`) — keyword-based routing to specialist agents with confidence scoring; accepts any `SpecialistConfig[]` (built-in + custom)
+- `SpecialistAgent` (`packages/core/src/agents/specialist.ts`) — domain-specific LLM agent with system prompt (16 built-in specialists: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python + user-defined custom agents)
 - `CIDebugger` (`packages/core/src/agents/ci-debugger.ts`) — analyzes CI logs, produces structured `CIDiagnosis` (error type, root cause, fixes, confidence)
 - `InfraDiffAnalyzer` (`packages/core/src/agents/infra-diff.ts`) — analyzes infra diffs, produces `InfraDiffAnalysis` (risk level, cost impact, security impact, recommendations)
 - `BaseTool<TInput>` (`packages/sdk/src/tool.ts`) — abstract class with Zod `inputSchema`, auto `validate()`, abstract `generate()`, optional `execute()`, optional `verify()` for external tool validation
 - `VerificationResult` / `VerificationIssue` (`packages/sdk/src/tool.ts`) — structured verification output from external tools (terraform validate, hadolint, kubectl dry-run)
 - `readExistingConfig()` (`packages/sdk/src/file-reader.ts`) — reads existing config files (up to 50KB) for update/enhance workflows; returns `null` for missing or oversized files
 - `backupFile()` (`packages/sdk/src/file-reader.ts`) — creates `.bak` copy of existing config files before overwriting
+- `parseAgentReadme()` (`packages/tool-registry/src/agent-parser.ts`) — parses structured README.md into `CustomAgentConfig` (name, domain, description, systemPrompt, keywords)
+- `discoverCustomAgents()` (`packages/tool-registry/src/agent-loader.ts`) — discovers custom agents from `~/.dojops/agents/` (global) and `.dojops/agents/` (project); project overrides global by name
+- `GeneratedAgentSchema` / `formatAgentReadme()` (`packages/tool-registry/src/agent-schema.ts`) — Zod schema for LLM-generated agent output + README.md formatter
 - `ToolRegistry` (`packages/tool-registry/src/registry.ts`) — unified registry combining built-in + plugin tools with `getAll()` / `get(name)` / `has()` / `getToolMetadata(name)` interface
 - `PluginTool` (`packages/tool-registry/src/plugin-tool.ts`) — adapter converting declarative `plugin.yaml` manifests into `DevOpsTool`-compatible objects; `systemPromptHash` getter for reproducibility tracking
 - `ALLOWED_VERIFICATION_BINARIES` / `isVerificationCommandAllowed()` (`packages/tool-registry/src/plugin-tool.ts`) — whitelist of 16 allowed verification binaries enforced at runtime; `verify()` enforces 3-tier check: no command → pass, no `child_process` permission → pass (never execute), non-whitelisted → reject
@@ -125,12 +128,12 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 - `@dojops/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`, `VerificationResult`/`VerificationIssue` types, optional `verify()` interface, `readExistingConfig()`/`backupFile()` file-reader utilities for update workflows
 - `@dojops/planner` — TaskGraph/TaskNode Zod schemas (TaskNode extended with optional `toolType`/`pluginVersion`/`pluginHash`/`pluginSource`/`systemPromptHash` metadata), `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution + `completedTaskIds` skip for resume
 - `@dojops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, optional verifier, tool class, tests). All tools support updating existing configs via auto-detection + `existingContent` input field + `.bak` backup before overwrite. Terraform, Dockerfile, and Kubernetes tools implement `verify()` for external validation
-- `@dojops/tool-registry` — Unified tool registry combining 12 built-in tools + plugin tools discovered from `~/.dojops/plugins/` (global) and `.dojops/plugins/` (project). Plugin manifests (`plugin.yaml` + JSON Schema) converted to `DevOpsTool` at runtime. Plugin policy via `.dojops/policy.yaml`. Audit enrichment with `toolType`/`pluginSource`/`pluginVersion`/`pluginHash`/`systemPromptHash`. Plugin isolation: verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention on manifest file paths
+- `@dojops/tool-registry` — Unified tool registry combining 12 built-in tools + plugin tools discovered from `~/.dojops/plugins/` (global) and `.dojops/plugins/` (project). Plugin manifests (`plugin.yaml` + JSON Schema) converted to `DevOpsTool` at runtime. Plugin policy via `.dojops/policy.yaml`. Audit enrichment with `toolType`/`pluginSource`/`pluginVersion`/`pluginHash`/`systemPromptHash`. Plugin isolation: verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention on manifest file paths. Custom agent discovery: parses structured README.md from `.dojops/agents/` (project) and `~/.dojops/agents/` (global), converts to `SpecialistConfig` for `AgentRouter`
 - `@dojops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size/verification restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging with verification results + plugin metadata, `withTimeout()` for execution limits
-- `@dojops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--replay`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve`, `chat`, `check`, `scan`, `tools` (including `plugins list/validate/init`). `--temperature` global flag. Deterministic replay mode (`--replay`): wraps provider in `DeterministicProvider` (temperature=0), validates provider/model/systemPromptHash match via `validateReplayIntegrity()`. Execution locking, hash-chained audit logs, plan persistence with plugin version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, plugin integrity validation on resume (extracted to `checkPluginIntegrity()`), plugin metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
+- `@dojops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--replay`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`, `create`, `remove`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve`, `chat`, `check`, `scan`, `tools` (including `plugins list/validate/init`). `--temperature` global flag. Deterministic replay mode (`--replay`): wraps provider in `DeterministicProvider` (temperature=0), validates provider/model/systemPromptHash match via `validateReplayIntegrity()`. Execution locking, hash-chained audit logs, plan persistence with plugin version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, plugin integrity validation on resume (extracted to `checkPluginIntegrity()`), plugin metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
 - `@dojops/api` — REST API (Express + cors) exposing all capabilities via 13 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 9 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History, Overview, Security, Audit), 30s auto-refresh on metrics tabs, `supertest` integration tests
 - Specifications — `docs/PLUGIN_SPEC_v1.md` freezes the v1 plugin contract (manifest schema, discovery, security constraints, compatibility promise)
-- Dev tooling — Vitest (863 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (897 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap
 

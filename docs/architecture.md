@@ -110,7 +110,9 @@ All responses pass through `parseAndValidate()` — strips markdown fences, `JSO
 
 ### 2. Multi-Agent System (`@dojops/core`)
 
-16 specialist agents with keyword-based routing and confidence scoring. The `AgentRouter` scores prompts against each agent's keyword list and routes to the highest-confidence match. If no agent exceeds the threshold, it falls back to the general-purpose `DevOpsAgent`.
+16 built-in specialist agents with keyword-based routing and confidence scoring, plus support for custom agents. The `AgentRouter` scores prompts against each agent's keyword list and routes to the highest-confidence match. If no agent exceeds the threshold, it falls back to the general-purpose `DevOpsAgent`.
+
+Custom agents are defined as structured `README.md` files in `.dojops/agents/<name>/` (project) or `~/.dojops/agents/<name>/` (global). They can be created via LLM (`dojops agents create "description"`) or manually (`dojops agents create --manual`). Custom agents participate in the same keyword-based routing as built-in agents and can override built-in agents by name. Discovery is handled by `@dojops/tool-registry`.
 
 Additionally, three specialized analyzers (not routed via `AgentRouter`) provide structured analysis:
 
@@ -205,6 +207,7 @@ DojOps stores project state in the `.dojops/` directory:
   scan-history/          Security scan reports (*.json)
   sessions/              Chat session persistence (*.json)
   plugins/               Project-scoped plugin tools (plugin.yaml + input.schema.json)
+  agents/                Project-scoped custom agents (<name>/README.md)
   policy.yaml            Plugin policy (allowedPlugins / blockedPlugins)
   history/
     audit.jsonl          Hash-chained audit log (append-only)
@@ -212,4 +215,5 @@ DojOps stores project state in the `.dojops/` directory:
 
 ~/.dojops/
   plugins/               Global plugin tools (shared across projects)
+  agents/                Global custom agents (shared across projects)
 ```

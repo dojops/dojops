@@ -1,10 +1,18 @@
+import fs from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
 import { ALL_SPECIALIST_CONFIGS, getInstallCommand } from "@dojops/core";
+import {
+  discoverCustomAgents,
+  GeneratedAgentSchema,
+  formatAgentReadme,
+} from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { runPreflight } from "../preflight";
 import { ExitCode } from "../exit-codes";
+import { findProjectRoot } from "../state";
 
 export async function agentsCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -12,6 +20,10 @@ export async function agentsCommand(args: string[], ctx: CLIContext): Promise<vo
   switch (sub) {
     case "info":
       return agentInfo(args.slice(1), ctx);
+    case "create":
+      return agentCreate(args.slice(1), ctx);
+    case "remove":
+      return agentRemove(args.slice(1), ctx);
     case "list":
     default:
       return agentList(ctx);
@@ -19,8 +31,23 @@ export async function agentsCommand(args: string[], ctx: CLIContext): Promise<vo
 }
 
 function agentList(ctx: CLIContext): void {
-  // Agent listing uses static config — no LLM provider needed
-  const agents = ALL_SPECIALIST_CONFIGS;
+  const projectRoot = findProjectRoot() ?? undefined;
+  const customAgents = discoverCustomAgents(projectRoot);
+  const customNames = new Set(customAgents.map((a) => a.config.name));
+
+  // Merge: built-in + custom (custom can override by name)
+  const configMap = new Map<string, { name: string; domain: string; description?: string }>();
+  for (const a of ALL_SPECIALIST_CONFIGS) {
+    configMap.set(a.name, { name: a.name, domain: a.domain, description: a.description });
+  }
+  for (const a of customAgents) {
+    configMap.set(a.config.name, {
+      name: a.config.name,
+      domain: a.config.domain,
+      description: a.config.description,
+    });
+  }
+  const agents = Array.from(configMap.values());
 
   if (ctx.globalOpts.output === "json") {
     console.log(
@@ -29,6 +56,7 @@ function agentList(ctx: CLIContext): void {
           name: a.name,
           domain: a.domain,
           description: a.description ?? null,
+          type: customNames.has(a.name) ? "custom" : "built-in",
         })),
         null,
         2,
@@ -37,7 +65,10 @@ function agentList(ctx: CLIContext): void {
     return;
   }
 
-  const lines = agents.map((a) => `  ${pc.cyan(a.name.padEnd(28))} ${pc.dim(a.domain)}`);
+  const lines = agents.map((a) => {
+    const badge = customNames.has(a.name) ? ` ${pc.yellow("[custom]")}` : "";
+    return `  ${pc.cyan(a.name.padEnd(28))} ${pc.dim(a.domain)}${badge}`;
+  });
   p.note(lines.join("\n"), `Specialist Agents (${agents.length})`);
 }
 
@@ -50,7 +81,8 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   }
 
   const provider = ctx.getProvider();
-  const router = createRouter(provider);
+  const projectRoot = findProjectRoot() ?? undefined;
+  const { router, customAgentNames } = createRouter(provider, projectRoot);
   const agent = router.getAgents().find((a) => a.name.toLowerCase() === name.toLowerCase());
 
   if (!agent) {
@@ -63,8 +95,17 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     process.exit(ExitCode.VALIDATION_ERROR);
   }
 
+  const isCustom = customAgentNames.has(agent.name);
   const deps = agent.toolDependencies;
   const preflight = deps.length > 0 ? runPreflight(agent.name, deps) : null;
+
+  // Find source path for custom agents
+  let sourcePath: string | undefined;
+  if (isCustom) {
+    const customAgents = discoverCustomAgents(projectRoot);
+    const entry = customAgents.find((a) => a.config.name === agent.name);
+    if (entry) sourcePath = entry.agentDir;
+  }
 
   if (ctx.globalOpts.output === "json") {
     console.log(
@@ -73,6 +114,8 @@ function agentInfo(args: string[], ctx: CLIContext): void {
           name: agent.name,
           domain: agent.domain,
           description: agent.description ?? null,
+          type: isCustom ? "custom" : "built-in",
+          source: sourcePath ?? null,
           toolDependencies:
             deps.length > 0
               ? preflight!.checks.map((c) => ({
@@ -95,7 +138,12 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     `${pc.bold("Name:")}        ${agent.name}`,
     `${pc.bold("Domain:")}      ${agent.domain}`,
     `${pc.bold("Description:")} ${agent.description ?? pc.dim("(none)")}`,
+    `${pc.bold("Type:")}        ${isCustom ? pc.yellow("custom") : pc.dim("built-in")}`,
   ];
+
+  if (sourcePath) {
+    lines.push(`${pc.bold("Source:")}      ${pc.dim(sourcePath)}`);
+  }
 
   if (preflight && preflight.checks.length > 0) {
     lines.push("");
@@ -110,4 +158,197 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   }
 
   p.note(lines.join("\n"), `Agent: ${agent.name}`);
+}
+
+async function agentCreate(args: string[], ctx: CLIContext): Promise<void> {
+  const isManual = args.includes("--manual");
+  const isGlobal = args.includes("--global");
+  const description = args.filter((a) => !a.startsWith("-")).join(" ");
+
+  if (isManual) {
+    return agentCreateManual(ctx, isGlobal);
+  }
+
+  if (!description) {
+    p.log.error("Description required for LLM-generated agents.");
+    p.log.info(`  ${pc.dim("$")} dojops agents create "an SRE specialist for incident response"`);
+    p.log.info(`  ${pc.dim("$")} dojops agents create --manual`);
+    process.exit(ExitCode.VALIDATION_ERROR);
+  }
+
+  return agentCreateLLM(description, ctx, isGlobal);
+}
+
+async function agentCreateLLM(
+  description: string,
+  ctx: CLIContext,
+  isGlobal: boolean,
+): Promise<void> {
+  const provider = ctx.getProvider();
+
+  const s = p.spinner();
+  s.start("Generating custom agent...");
+
+  const result = await provider.generate({
+    prompt: `Create a DojOps specialist agent based on this description: "${description}"
+
+Generate a complete agent definition with:
+- name: a short kebab-case identifier (e.g. "sre-specialist", "cost-optimizer")
+- domain: one or two words describing the domain (e.g. "site-reliability", "cost-optimization")
+- description: one-sentence description of the agent's specialty
+- systemPrompt: a detailed system prompt (3-10 paragraphs) that defines the agent's personality, expertise areas, and instructions. Include bullet-pointed specialization areas.
+- keywords: 10-20 domain-specific keywords that would match user prompts to this agent`,
+    schema: GeneratedAgentSchema,
+  });
+
+  s.stop("Agent generated.");
+
+  if (!result.parsed) {
+    p.log.error("Failed to generate a valid agent definition from LLM.");
+    process.exit(ExitCode.GENERAL_ERROR);
+  }
+
+  const agent = result.parsed as {
+    name: string;
+    domain: string;
+    description: string;
+    systemPrompt: string;
+    keywords: string[];
+  };
+
+  // Show preview
+  const previewLines = [
+    `${pc.bold("Name:")}        ${agent.name}`,
+    `${pc.bold("Domain:")}      ${agent.domain}`,
+    `${pc.bold("Description:")} ${agent.description}`,
+    `${pc.bold("Keywords:")}    ${agent.keywords.join(", ")}`,
+    "",
+    `${pc.bold("System Prompt:")}`,
+    pc.dim(agent.systemPrompt.slice(0, 200) + (agent.systemPrompt.length > 200 ? "..." : "")),
+  ];
+  p.note(previewLines.join("\n"), "Agent Preview");
+
+  if (!ctx.globalOpts.nonInteractive) {
+    const confirmed = await p.confirm({ message: "Create this agent?" });
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.log.info("Cancelled.");
+      return;
+    }
+  }
+
+  writeAgentToDisk(agent.name, formatAgentReadme(agent), isGlobal);
+}
+
+async function agentCreateManual(ctx: CLIContext, isGlobal: boolean): Promise<void> {
+  const name = await p.text({
+    message: "Agent name (kebab-case, e.g. sre-specialist):",
+    validate(value) {
+      if (!value.trim()) return "Name is required";
+      if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(value)) {
+        return "Must be lowercase kebab-case (e.g. my-agent)";
+      }
+    },
+  });
+  if (p.isCancel(name)) return;
+
+  const domain = await p.text({
+    message: "Domain (e.g. site-reliability):",
+    validate(value) {
+      if (!value.trim()) return "Domain is required";
+    },
+  });
+  if (p.isCancel(domain)) return;
+
+  const description = await p.text({
+    message: "Description (one sentence):",
+    validate(value) {
+      if (!value.trim()) return "Description is required";
+    },
+  });
+  if (p.isCancel(description)) return;
+
+  const systemPrompt = await p.text({
+    message: "System prompt (agent instructions):",
+    validate(value) {
+      if (!value.trim()) return "System prompt is required";
+    },
+  });
+  if (p.isCancel(systemPrompt)) return;
+
+  const keywordsRaw = await p.text({
+    message: "Keywords (comma-separated):",
+    validate(value) {
+      if (!value.trim()) return "At least one keyword is required";
+    },
+  });
+  if (p.isCancel(keywordsRaw)) return;
+
+  const agent = {
+    name: name as string,
+    domain: domain as string,
+    description: description as string,
+    systemPrompt: systemPrompt as string,
+    keywords: (keywordsRaw as string)
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean),
+  };
+
+  writeAgentToDisk(agent.name, formatAgentReadme(agent), isGlobal);
+}
+
+function writeAgentToDisk(name: string, readme: string, isGlobal: boolean): void {
+  const base = isGlobal
+    ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? "", ".dojops", "agents", name)
+    : path.join(process.cwd(), ".dojops", "agents", name);
+
+  fs.mkdirSync(base, { recursive: true });
+  const readmePath = path.join(base, "README.md");
+  fs.writeFileSync(readmePath, readme, "utf-8");
+
+  p.log.success(`Custom agent created: ${pc.cyan(name)}`);
+  p.log.info(`  ${pc.dim(readmePath)}`);
+}
+
+async function agentRemove(args: string[], ctx: CLIContext): Promise<void> {
+  const name = args.filter((a) => !a.startsWith("-"))[0];
+  if (!name) {
+    p.log.error("Agent name required.");
+    p.log.info(`  ${pc.dim("$")} dojops agents remove <name>`);
+    process.exit(ExitCode.VALIDATION_ERROR);
+  }
+
+  // Check project dir first, then global
+  const projectDir = path.join(process.cwd(), ".dojops", "agents", name);
+  const globalDir = path.join(
+    process.env.HOME ?? process.env.USERPROFILE ?? "",
+    ".dojops",
+    "agents",
+    name,
+  );
+
+  let targetDir: string | null = null;
+  if (fs.existsSync(projectDir)) {
+    targetDir = projectDir;
+  } else if (fs.existsSync(globalDir)) {
+    targetDir = globalDir;
+  }
+
+  if (!targetDir) {
+    p.log.error(`Custom agent "${name}" not found.`);
+    process.exit(ExitCode.VALIDATION_ERROR);
+  }
+
+  if (!ctx.globalOpts.nonInteractive && !args.includes("--yes")) {
+    const confirmed = await p.confirm({
+      message: `Remove custom agent "${name}" from ${targetDir}?`,
+    });
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.log.info("Cancelled.");
+      return;
+    }
+  }
+
+  fs.rmSync(targetDir, { recursive: true });
+  p.log.success(`Removed custom agent: ${pc.cyan(name)}`);
 }

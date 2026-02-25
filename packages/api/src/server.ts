@@ -11,7 +11,7 @@ import {
 
 const provider = createProvider();
 const tools = createTools(provider);
-const router = createRouter(provider);
+const { router, customAgentNames } = createRouter(provider);
 const debugger_ = createDebugger(provider);
 const diffAnalyzer = createDiffAnalyzer(provider);
 const store = new HistoryStore();
@@ -23,6 +23,7 @@ const app = createApp({
   debugger: debugger_,
   diffAnalyzer,
   store,
+  customAgentNames,
 });
 
 const port = parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);

@@ -6,11 +6,13 @@ import {
   GeminiProvider,
   LLMProvider,
   AgentRouter,
+  ALL_SPECIALIST_CONFIGS,
+  SpecialistConfig,
   CIDebugger,
   InfraDiffAnalyzer,
 } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
-import { createToolRegistry, ToolRegistry } from "@dojops/tool-registry";
+import { createToolRegistry, ToolRegistry, discoverCustomAgents } from "@dojops/tool-registry";
 
 export { createToolRegistry, ToolRegistry };
 
@@ -72,8 +74,34 @@ export function createTools(provider: LLMProvider, projectPath?: string): DevOps
   return createToolRegistry(provider, projectPath).getAll();
 }
 
-export function createRouter(provider: LLMProvider): AgentRouter {
-  return new AgentRouter(provider);
+export interface CreateRouterResult {
+  router: AgentRouter;
+  customAgentNames: Set<string>;
+}
+
+export function createRouter(provider: LLMProvider, projectPath?: string): CreateRouterResult {
+  const customAgents = discoverCustomAgents(projectPath);
+  const customConfigs: SpecialistConfig[] = customAgents.map((entry) => ({
+    name: entry.config.name,
+    domain: entry.config.domain,
+    description: entry.config.description,
+    systemPrompt: entry.config.systemPrompt,
+    keywords: entry.config.keywords,
+  }));
+
+  // Merge: custom agents can override built-in by name
+  const configMap = new Map<string, SpecialistConfig>();
+  for (const config of ALL_SPECIALIST_CONFIGS) {
+    configMap.set(config.name, config);
+  }
+  const customAgentNames = new Set<string>();
+  for (const config of customConfigs) {
+    configMap.set(config.name, config);
+    customAgentNames.add(config.name);
+  }
+
+  const router = new AgentRouter(provider, Array.from(configMap.values()));
+  return { router, customAgentNames };
 }
 
 export function createDebugger(provider: LLMProvider): CIDebugger {

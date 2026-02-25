@@ -60,6 +60,8 @@ registerCommand("check", checkCommand);
 registerCommand("inspect", inspectCommand);
 registerSubcommand("agents", "list", agentsCommand);
 registerSubcommand("agents", "info", agentsCommand);
+registerSubcommand("agents", "create", agentsCommand);
+registerSubcommand("agents", "remove", agentsCommand);
 registerSubcommand("history", "list", historyCommand);
 registerSubcommand("history", "show", historyCommand);
 registerSubcommand("history", "verify", historyCommand);

@@ -35,7 +35,7 @@ Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps 
 
 | Document                                     | Description                                                                                             |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [Specialist Agents](agents.md)               | All 16 agents — routing, domains, keywords, confidence scoring                                          |
+| [Specialist Agents](agents.md)               | 16 built-in + custom agents — routing, domains, keywords, confidence scoring, custom agent creation     |
 | [DevOps Tools](tools.md)                     | All 12 built-in tools + plugin system — schemas, detectors, verifiers, auto-detection, plugin manifests |
 | [Plugin Specification v1](PLUGIN_SPEC_v1.md) | Frozen v1 plugin contract — manifest schema, discovery, security, compatibility promise                 |
 | [Security Scanning](security-scanning.md)    | 6 scanners, scan types, remediation, dashboard integration                                              |

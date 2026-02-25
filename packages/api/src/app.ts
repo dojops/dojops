@@ -28,6 +28,7 @@ export interface AppDependencies {
   publicDir?: string;
   rootDir?: string;
   pluginCount?: number;
+  customAgentNames?: Set<string>;
 }
 
 export function createApp(deps: AppDependencies): Express {
@@ -60,7 +61,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/plan", createPlanRouter(deps.provider, deps.tools, deps.store));
   app.use("/api/debug-ci", createDebugCIRouter(deps.debugger, deps.store));
   app.use("/api/diff", createDiffRouter(deps.diffAnalyzer, deps.store));
-  app.use("/api/agents", createAgentsRouter(deps.router));
+  app.use("/api/agents", createAgentsRouter(deps.router, deps.customAgentNames));
   app.use("/api/history", createHistoryRouter(deps.store));
   app.use("/api/scan", createScanRouter(deps.store));
   app.use("/api/chat", createChatRouter(deps.provider, deps.router, deps.store));

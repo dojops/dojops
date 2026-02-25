@@ -37,7 +37,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   const projectRoot = findProjectRoot() ?? undefined;
   const registry = createToolRegistry(provider, projectRoot);
   const tools = registry.getAll();
-  const router = createRouter(provider);
+  const { router, customAgentNames } = createRouter(provider, projectRoot);
   const debugger_ = createDebugger(provider);
   const diffAnalyzer = createDiffAnalyzer(provider);
   const store = new HistoryStore();
@@ -51,6 +51,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     store,
     rootDir: projectRoot,
     pluginCount: registry.getPlugins().length,
+    customAgentNames,
   });
 
   app.listen(port, () => {

@@ -110,8 +110,15 @@ describe("factory", () => {
     it("creates an AgentRouter with agents", () => {
       process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
-      const router = createRouter(provider);
+      const { router } = createRouter(provider);
       expect(router.getAgents().length).toBeGreaterThan(0);
+    });
+
+    it("returns empty customAgentNames when no custom agents exist", () => {
+      process.env.DOJOPS_PROVIDER = "ollama";
+      const provider = createProvider();
+      const { customAgentNames } = createRouter(provider);
+      expect(customAgentNames.size).toBe(0);
     });
   });
 

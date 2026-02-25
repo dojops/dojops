@@ -26,6 +26,9 @@ export * from "./policy";
 export * from "./json-schema-to-zod";
 export * from "./serializers";
 export * from "./manifest-schema";
+export * from "./agent-parser";
+export * from "./agent-loader";
+export * from "./agent-schema";
 
 /**
  * Creates all 12 built-in tool instances.

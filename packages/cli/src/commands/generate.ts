@@ -4,6 +4,7 @@ import { createRouter } from "@dojops/api";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode } from "../exit-codes";
+import { findProjectRoot } from "../state";
 
 export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const prompt = args.filter((a) => !a.startsWith("-")).join(" ");
@@ -16,7 +17,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   const provider = ctx.getProvider();
-  const router = createRouter(provider);
+  const { router } = createRouter(provider, findProjectRoot() ?? undefined);
 
   const s = p.spinner();
   s.start("Routing to specialist agent...");

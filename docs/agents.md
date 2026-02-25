@@ -1,6 +1,6 @@
 # Specialist Agents
 
-DojOps includes 16 specialist agents for intelligent prompt routing. Each agent is a domain expert with a tailored system prompt, keyword set, and optional tool dependencies.
+DojOps includes 16 built-in specialist agents for intelligent prompt routing, plus support for user-defined **custom agents**. Each agent is a domain expert with a tailored system prompt, keyword set, and optional tool dependencies.
 
 ---
 
@@ -126,9 +126,110 @@ dojops plan "Set up end-to-end CI/CD with Docker and Kubernetes"
 
 ---
 
-## Agent Configuration
+## Custom Agents
 
-Agents are defined in `packages/core/src/agents/specialists.ts`. Each agent specifies:
+In addition to the 16 built-in agents, you can create your own custom agents. Custom agents participate in the same keyword-based routing as built-in agents and can even override built-in agents by name.
+
+### Agent Definition Format
+
+Each custom agent is a directory with a structured `README.md`:
+
+```
+.dojops/agents/sre-specialist/README.md
+```
+
+```markdown
+# SRE Specialist
+
+## Domain
+
+site-reliability
+
+## Description
+
+SRE specialist for incident response, reliability engineering, and observability.
+
+## System Prompt
+
+You are an SRE specialist. You specialize in:
+
+- Incident response and post-mortems
+- SLO/SLI design and error budgets
+- Chaos engineering and resilience testing
+- On-call runbooks and escalation procedures
+- Capacity planning and performance optimization
+
+When asked about infrastructure, focus on reliability patterns...
+
+## Keywords
+
+sre, incident, reliability, error budget, slo, chaos, postmortem, runbook, on-call, resilience
+```
+
+Required sections: `## Domain`, `## Description`, `## System Prompt`, `## Keywords` (comma-separated).
+
+### Discovery Paths
+
+Custom agents are discovered from two locations:
+
+| Location | Path                                | Scope                      |
+| -------- | ----------------------------------- | -------------------------- |
+| Project  | `.dojops/agents/<name>/README.md`   | Current project only       |
+| Global   | `~/.dojops/agents/<name>/README.md` | Shared across all projects |
+
+Project agents override global agents with the same name.
+
+### Creating Custom Agents
+
+**LLM-generated** (recommended):
+
+```bash
+dojops agents create "an SRE specialist for incident response and reliability"
+```
+
+The LLM generates a complete agent definition (name, domain, description, system prompt, keywords) and writes the README.md to `.dojops/agents/<name>/`.
+
+**Manual creation**:
+
+```bash
+dojops agents create --manual
+```
+
+Interactive prompts guide you through defining name, domain, description, system prompt, and keywords.
+
+**Global agents** (shared across projects):
+
+```bash
+dojops agents create --global "a cost optimization specialist"
+```
+
+### Managing Custom Agents
+
+```bash
+# List all agents (built-in + custom)
+dojops agents list
+
+# Show agent details (includes source path for custom agents)
+dojops agents info sre-specialist
+
+# Remove a custom agent
+dojops agents remove sre-specialist
+```
+
+### Routing with Custom Agents
+
+Custom agents are routed exactly like built-in agents — by keyword matching. If a custom agent's keywords match the prompt with higher confidence than any built-in agent, the custom agent handles the request:
+
+```bash
+# Routes to custom sre-specialist (matches: sre, error budget, slo)
+dojops "Design SLOs and error budgets for our payment service"
+```
+
+---
+
+## Built-in Agent Configuration
+
+Built-in agents are defined in `packages/core/src/agents/specialists.ts`. Each agent specifies:
 
 - `name` — Unique identifier
 - `domain` — Category label

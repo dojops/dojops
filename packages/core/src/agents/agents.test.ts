@@ -259,4 +259,53 @@ describe("AgentRouter", () => {
     expect(result.agent.domain).toBe("python-scripting");
     expect(result.confidence).toBeGreaterThan(0);
   });
+
+  it("routes to custom agent by keyword match", () => {
+    const provider = mockProvider("ok");
+    const customConfig: SpecialistConfig = {
+      name: "sre-specialist",
+      domain: "site-reliability",
+      systemPrompt: "You are an SRE specialist.",
+      keywords: ["sre", "incident", "reliability", "error budget", "postmortem"],
+    };
+    const router = new AgentRouter(provider, [...ALL_SPECIALIST_CONFIGS, customConfig]);
+
+    const result = router.route("How to set up error budget tracking for SRE incident response");
+    expect(result.agent.name).toBe("sre-specialist");
+    expect(result.confidence).toBeGreaterThan(0);
+  });
+
+  it("custom agent can override built-in by name", () => {
+    const provider = mockProvider("ok");
+    const overrideConfig: SpecialistConfig = {
+      name: "terraform-specialist",
+      domain: "custom-infra",
+      systemPrompt: "You are a custom terraform specialist.",
+      keywords: ["terraform", "custom-infra"],
+    };
+    // Place override last so it replaces the built-in in the map
+    const configs = ALL_SPECIALIST_CONFIGS.filter((c) => c.name !== "terraform-specialist");
+    configs.push(overrideConfig);
+    const router = new AgentRouter(provider, configs);
+
+    const tfAgent = router.getAgents().find((a) => a.name === "terraform-specialist");
+    expect(tfAgent).toBeDefined();
+    expect(tfAgent!.domain).toBe("custom-infra");
+  });
+
+  it("mixes custom and built-in agents in getAgents()", () => {
+    const provider = mockProvider("ok");
+    const customConfig: SpecialistConfig = {
+      name: "custom-agent",
+      domain: "custom",
+      systemPrompt: "Custom agent.",
+      keywords: ["custom"],
+    };
+    const router = new AgentRouter(provider, [...ALL_SPECIALIST_CONFIGS, customConfig]);
+
+    const agents = router.getAgents();
+    expect(agents.length).toBe(ALL_SPECIALIST_CONFIGS.length + 1);
+    expect(agents.map((a) => a.name)).toContain("custom-agent");
+    expect(agents.map((a) => a.name)).toContain("ops-cortex");
+  });
 });

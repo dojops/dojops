@@ -421,7 +421,7 @@ curl -X DELETE http://localhost:3000/api/chat/sessions/chat-a1b2c3d4
 
 #### `GET /api/agents`
 
-List all 16 specialist agents with their domains, descriptions, and keywords.
+List all specialist agents (built-in + custom) with their domains, descriptions, keywords, and type.
 
 **Response:**
 
@@ -431,7 +431,15 @@ List all 16 specialist agents with their domains, descriptions, and keywords.
     "name": "terraform-specialist",
     "domain": "infrastructure",
     "description": "Expert in Terraform, HCL, modules, state management...",
-    "keywords": ["terraform", "infrastructure", "iac", "hcl", ...]
+    "keywords": ["terraform", "infrastructure", "iac", "hcl", ...],
+    "type": "built-in"
+  },
+  {
+    "name": "sre-specialist",
+    "domain": "site-reliability",
+    "description": "SRE specialist for incident response and reliability",
+    "keywords": ["sre", "incident", "reliability", ...],
+    "type": "custom"
   }
 ]
 ```

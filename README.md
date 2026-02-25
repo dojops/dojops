@@ -28,7 +28,7 @@
   <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/dojops/badges/coverage-badge.json&style=flat-square" alt="Coverage" />
   <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/dojops/badges/security-badge.json&style=flat-square" alt="Security" />
   <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
-  <img src="https://img.shields.io/badge/agents-16-8b5cf6?style=flat-square" alt="Agents" />
+  <img src="https://img.shields.io/badge/agents-16%2B_custom-8b5cf6?style=flat-square" alt="Agents" />
   <img src="https://img.shields.io/badge/providers-5-ef4444?style=flat-square" alt="Providers" />
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
 </p>
@@ -109,7 +109,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Intelligence
 
-- **16 specialist agents** — ops-cortex, terraform, kubernetes, CI/CD, security, Docker, cloud architecture, networking, database, GitOps, compliance, CI debugger, appsec, shell scripting, Python, and observability — with weighted keyword confidence scoring
+- **16 built-in specialist agents + custom agents** — ops-cortex, terraform, kubernetes, CI/CD, security, Docker, cloud architecture, networking, database, GitOps, compliance, CI debugger, appsec, shell scripting, Python, and observability — with weighted keyword confidence scoring. Create your own custom agents via `dojops agents create` (LLM-generated or manual)
 - **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, affected files, and suggested fixes with confidence scores
 - **Infra diff analysis** — Risk level, cost impact, security implications, rollback complexity, and actionable recommendations for infrastructure changes
 - **DevOps config checker** — LLM-powered quality analysis of detected DevOps files with maturity scoring (0-100), severity-ranked findings, and missing file recommendations
@@ -156,14 +156,14 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ```
 @dojops/cli            CLI entry point + rich TUI (@clack/prompts)
 @dojops/api            REST API (Express) + web dashboard + factory functions
-@dojops/tool-registry  Tool registry + plugin system (discovers built-in + plugin tools)
+@dojops/tool-registry  Tool registry + plugin system + custom agent discovery
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
 @dojops/tools          12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                        Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
 @dojops/scanner        6 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) + remediation
 @dojops/session        Chat session management + memory + context injection
-@dojops/core           LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/core           LLM abstraction + 5 providers + 16 built-in specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
 ```
 
@@ -228,8 +228,11 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 | Command                                | Description                                   |
 | -------------------------------------- | --------------------------------------------- |
-| `dojops agents list`                   | List all 16 specialist agents                 |
+| `dojops agents list`                   | List all agents (built-in + custom)           |
 | `dojops agents info <name>`            | Show agent details and tool dependencies      |
+| `dojops agents create <desc>`          | Create a custom agent (LLM-generated)         |
+| `dojops agents create --manual`        | Create a custom agent interactively           |
+| `dojops agents remove <name>`          | Remove a custom agent                         |
 | `dojops tools list`                    | List system tools with install status         |
 | `dojops tools install <name>`          | Download tool into sandbox (~/.dojops/tools/) |
 | `dojops tools remove <name>`           | Remove a sandboxed tool                       |
@@ -342,9 +345,15 @@ dojops tools plugins list
 dojops tools plugins init my-tool
 dojops tools plugins validate .dojops/plugins/my-tool/
 
+# Custom agents
+dojops agents create "an SRE specialist for incident response"
+dojops agents create --manual
+dojops agents list
+dojops agents info sre-specialist
+dojops agents remove sre-specialist
+
 # Administration
 dojops doctor
-dojops agents list
 dojops history list
 dojops history verify
 dojops serve --port=8080
@@ -393,6 +402,8 @@ All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (opti
 ---
 
 ## Specialist Agents
+
+DojOps includes 16 built-in agents plus support for user-defined custom agents. Custom agents are created via `dojops agents create` and stored as markdown README files — no source code changes needed.
 
 | Agent                    | Domain                  | Key Capabilities                                                    |
 | ------------------------ | ----------------------- | ------------------------------------------------------------------- |
@@ -531,7 +542,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 863 tests
+pnpm test               # Run all 897 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -552,8 +563,8 @@ pnpm dojops -- serve --port=8080
 packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
-  tool-registry/    Tool registry + plugin system (built-in + plugin discovery)
-  core/             LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
+  tool-registry/    Tool registry + plugin system + custom agent discovery
+  core/             LLM providers (5) + specialist agents (16 built-in) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
   tools/            12 built-in DevOps tools
@@ -566,17 +577,17 @@ packages/
 
 | Package                 | Tests   |
 | ----------------------- | ------- |
-| `@dojops/core`          | 225     |
+| `@dojops/core`          | 228     |
 | `@dojops/cli`           | 148     |
+| `@dojops/tool-registry` | 148     |
 | `@dojops/tools`         | 121     |
-| `@dojops/tool-registry` | 120     |
-| `@dojops/api`           | 96      |
+| `@dojops/api`           | 99      |
 | `@dojops/scanner`       | 43      |
 | `@dojops/executor`      | 40      |
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
 | `@dojops/sdk`           | 14      |
-| **Total**               | **863** |
+| **Total**               | **897** |
 
 ---
 

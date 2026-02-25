@@ -111,17 +111,17 @@ DojOps uses Vitest for testing. Current coverage:
 
 | Package                 | Tests   |
 | ----------------------- | ------- |
-| `@dojops/core`          | 225     |
+| `@dojops/core`          | 228     |
 | `@dojops/cli`           | 148     |
+| `@dojops/tool-registry` | 148     |
 | `@dojops/tools`         | 121     |
-| `@dojops/tool-registry` | 120     |
-| `@dojops/api`           | 96      |
+| `@dojops/api`           | 99      |
 | `@dojops/scanner`       | 43      |
 | `@dojops/executor`      | 40      |
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
 | `@dojops/sdk`           | 14      |
-| **Total**               | **863** |
+| **Total**               | **897** |
 
 ### Writing Tests
 
@@ -256,9 +256,27 @@ Plugins are automatically discovered and available to the Planner, Executor, and
 
 ## Adding a New Agent
 
-Agents are defined in `packages/core/src/agents/specialists.ts`.
+There are two ways to add agents: as a **custom agent** (no source code changes) or as a **built-in agent** (requires modifying the codebase).
 
-### Step-by-Step
+### Option 1: Custom Agent (Recommended for Most Cases)
+
+Create a custom agent without modifying DojOps source code:
+
+```bash
+# LLM-generated (recommended)
+dojops agents create "an SRE specialist for incident response and reliability"
+
+# Manual creation via interactive prompts
+dojops agents create --manual
+```
+
+Custom agents are stored as structured `README.md` files in `.dojops/agents/<name>/` (project) or `~/.dojops/agents/<name>/` (global). They participate in the same keyword-based routing as built-in agents and can override built-in agents by name.
+
+See [Specialist Agents — Custom Agents](agents.md#custom-agents) for the full README.md format and discovery rules.
+
+### Option 2: Built-in Agent (For Core Contributions)
+
+Built-in agents are defined in `packages/core/src/agents/specialists.ts`.
 
 1. Add a new entry to the specialists array:
 

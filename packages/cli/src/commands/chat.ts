@@ -27,7 +27,7 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   const provider = ctx.getProvider();
-  const router = createRouter(provider);
+  const { router } = createRouter(provider, rootDir);
 
   // Load or create session
   let state: ChatSessionState | undefined;
