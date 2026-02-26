@@ -74,7 +74,15 @@ export async function scanHadolint(projectPath: string): Promise<ScannerResult> 
         });
       }
     } catch {
-      // JSON parse failed
+      allFindings.push({
+        id: "hadolint-parse-error",
+        tool: "hadolint",
+        severity: "LOW",
+        category: "SECURITY",
+        message:
+          "Failed to parse hadolint output. The tool may have produced unexpected output format.",
+        autoFixAvailable: false,
+      });
     }
   }
 

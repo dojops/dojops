@@ -18,11 +18,14 @@ export function serialize(data: unknown, format: string): string {
       if (typeof data === "string") return data;
       return JSON.stringify(data, null, 2) + "\n";
 
-    // Placeholder formats — fall back to raw passthrough
+    // Placeholder formats — pass through strings, warn on structured data
     case "hcl":
     case "ini":
     case "toml":
       if (typeof data === "string") return data;
+      console.warn(
+        `[dojops] Warning: ${format} serializer received structured data but native ${format} serialization is not yet implemented. Falling back to JSON output.`,
+      );
       return JSON.stringify(data, null, 2) + "\n";
 
     default:

@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
 import { TaskGraph, TaskGraphSchema } from "./types";
@@ -98,5 +98,8 @@ Do NOT ask follow-up questions. Provide the complete task graph only.`,
     schema: TaskGraphSchema,
   });
 
-  return response.parsed as TaskGraph;
+  if (response.parsed) {
+    return response.parsed as TaskGraph;
+  }
+  return parseAndValidate(response.content, TaskGraphSchema) as TaskGraph;
 }

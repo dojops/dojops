@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { LLMWorkflowResponseSchema, Workflow } from "./schemas";
 import { ProjectTypeResult } from "./detector";
@@ -46,7 +46,10 @@ Include: checkout, setup, install dependencies, lint, test, build.`;
     schema: LLMWorkflowResponseSchema,
   });
 
-  return response.parsed as Workflow;
+  if (response.parsed) {
+    return response.parsed as Workflow;
+  }
+  return parseAndValidate(response.content, LLMWorkflowResponseSchema);
 }
 
 export function workflowToYaml(workflow: Workflow): string {

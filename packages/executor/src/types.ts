@@ -6,12 +6,14 @@ export const ExecutionPolicySchema = z.object({
   allowedWritePaths: z.array(z.string()).default([]),
   deniedWritePaths: z.array(z.string()).default([]),
   enforceDevOpsAllowlist: z.boolean().default(true),
+  /** @advisory Not enforced at runtime — reserved for future OS-level sandboxing. */
   allowNetwork: z.boolean().default(false),
+  /** @advisory Names of env vars to pass through. Use `filterEnvVars(policy)` to apply manually. */
   allowEnvVars: z.array(z.string()).default([]),
   timeoutMs: z.number().positive().default(30_000),
   maxFileSizeBytes: z.number().positive().default(1_048_576),
-  requireApproval: z.boolean().default(true),
-  skipVerification: z.boolean().default(true),
+  requireApproval: z.boolean().default(false),
+  skipVerification: z.boolean().default(false),
 });
 
 export type ExecutionPolicy = z.infer<typeof ExecutionPolicySchema>;

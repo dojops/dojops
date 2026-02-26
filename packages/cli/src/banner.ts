@@ -172,6 +172,15 @@ function stripAnsi(str: string): string {
   return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
+function getVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"));
+    return pkg.version ?? "1.0.0";
+  } catch {
+    return "1.0.0";
+  }
+}
+
 export function createBanner(): string {
   const svgPath = path.join(__dirname, "..", "img", "dojops-mascot-cli-header.svg");
 
@@ -181,7 +190,7 @@ export function createBanner(): string {
   } catch {
     const name = pc.bold(pc.cyan("Dojops"));
     const desc = pc.dim("AI DevOps Automation Engine");
-    const ver = pc.dim("v1.0.0");
+    const ver = pc.dim(`v${getVersion()}`);
     return `\n  ${name}  ${desc}  \u00b7  ${ver}\n`;
   }
 
@@ -200,7 +209,7 @@ export function createBanner(): string {
   const labels: Record<number, string> = {
     1: pc.bold(pc.cyan("Dojops")),
     2: pc.dim("AI DevOps Automation Engine"),
-    4: pc.dim("v1.0.0"),
+    4: pc.dim(`v${getVersion()}`),
   };
 
   const output: string[] = [""];

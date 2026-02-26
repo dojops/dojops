@@ -80,12 +80,22 @@ function loadPluginFromDir(pluginDir: string, location: "global" | "project"): P
   };
 }
 
+export interface PluginDiscoveryResult {
+  plugins: PluginEntry[];
+  warnings: string[];
+}
+
 /**
  * Discovers plugin manifests from global (~/.dojops/plugins/) and project (.dojops/plugins/) directories.
  * Project plugins override global plugins of the same name.
  */
 export function discoverPlugins(projectPath?: string): PluginEntry[] {
+  return discoverPluginsWithWarnings(projectPath).plugins;
+}
+
+export function discoverPluginsWithWarnings(projectPath?: string): PluginDiscoveryResult {
   const plugins = new Map<string, PluginEntry>();
+  const warnings: string[] = [];
 
   // 1. Global plugins
   const globalDir = getGlobalPluginsDir();
@@ -98,10 +108,16 @@ export function discoverPlugins(projectPath?: string): PluginEntry[] {
         const plugin = loadPluginFromDir(pluginDir, "global");
         if (plugin) {
           plugins.set(plugin.manifest.name, plugin);
+        } else {
+          warnings.push(
+            `Failed to load plugin from ${pluginDir} (invalid manifest or missing schema)`,
+          );
         }
       }
-    } catch {
-      // Silently skip unreadable global dir
+    } catch (err) {
+      warnings.push(
+        `Cannot read global plugins directory: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -117,13 +133,19 @@ export function discoverPlugins(projectPath?: string): PluginEntry[] {
           const plugin = loadPluginFromDir(pluginDir, "project");
           if (plugin) {
             plugins.set(plugin.manifest.name, plugin);
+          } else {
+            warnings.push(
+              `Failed to load plugin from ${pluginDir} (invalid manifest or missing schema)`,
+            );
           }
         }
-      } catch {
-        // Silently skip unreadable project dir
+      } catch (err) {
+        warnings.push(
+          `Cannot read project plugins directory: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   }
 
-  return Array.from(plugins.values());
+  return { plugins: Array.from(plugins.values()), warnings };
 }

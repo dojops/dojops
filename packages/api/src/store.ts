@@ -12,6 +12,11 @@ export interface HistoryEntry {
 export class HistoryStore {
   private entries: HistoryEntry[] = [];
   private nextId = 1;
+  private maxEntries: number;
+
+  constructor(maxEntries = 1000) {
+    this.maxEntries = maxEntries;
+  }
 
   add(entry: Omit<HistoryEntry, "id" | "timestamp">): HistoryEntry {
     const full: HistoryEntry = {
@@ -20,6 +25,10 @@ export class HistoryStore {
       timestamp: new Date().toISOString(),
     };
     this.entries.push(full);
+    // Evict oldest entries when at capacity
+    if (this.entries.length > this.maxEntries) {
+      this.entries = this.entries.slice(-this.maxEntries);
+    }
     return full;
   }
 

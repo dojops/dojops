@@ -1,5 +1,3 @@
-import * as fs from "fs";
-import * as path from "path";
 import * as crypto from "crypto";
 import { execSync } from "child_process";
 import { ZodTypeAny } from "zod";
@@ -10,6 +8,7 @@ import {
   VerificationIssue,
   readExistingConfig,
   backupFile,
+  atomicWriteFileSync,
 } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { PluginManifest, PluginSource } from "./types";
@@ -152,16 +151,13 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
     try {
       for (const file of this.manifest.files) {
         const filePath = this.resolveFilePath(file.path, input);
-        const dir = path.dirname(filePath);
 
         if (data.isUpdate) {
           backupFile(filePath);
         }
 
-        fs.mkdirSync(dir, { recursive: true });
-
         const content = serialize(data.generated, file.serializer);
-        fs.writeFileSync(filePath, content, "utf-8");
+        atomicWriteFileSync(filePath, content);
       }
 
       return result;
@@ -247,9 +243,23 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
     let resolved = templatePath;
     for (const [key, value] of Object.entries(input)) {
       if (typeof value === "string") {
-        resolved = resolved.replace(`{${key}}`, value);
+        resolved = resolved.replaceAll(`{${key}}`, value);
       }
     }
+
+    // Check for unresolved template variables
+    const unresolvedMatch = resolved.match(/\{[^}]+\}/);
+    if (unresolvedMatch) {
+      throw new Error(
+        `Unresolved template variable ${unresolvedMatch[0]} in file path "${templatePath}"`,
+      );
+    }
+
+    // Validate no path traversal in resolved path
+    if (resolved.split(/[/\\]/).includes("..")) {
+      throw new Error(`Path traversal detected in resolved file path "${resolved}"`);
+    }
+
     return resolved;
   }
 }

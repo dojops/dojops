@@ -88,7 +88,7 @@ async function main() {
   // No args → global help
   if (rawArgs.length === 0) {
     printHelp();
-    process.exit(1);
+    process.exit(0);
   }
 
   // Parse global options first

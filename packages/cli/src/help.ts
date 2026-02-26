@@ -43,6 +43,7 @@ export function printHelp(): void {
     `  ${pc.cyan("--provider=NAME")}    LLM provider: openai, anthropic, ollama, deepseek, gemini`,
   );
   console.log(`  ${pc.cyan("--model=NAME")}       LLM model override`);
+  console.log(`  ${pc.cyan("--temperature=N")}    LLM temperature (0-2)`);
   console.log(`  ${pc.cyan("--profile=NAME")}     Use named config profile`);
   console.log(
     `  ${pc.cyan("--output=FORMAT")}    Output: table ${pc.dim("(default)")}, json, yaml`,
@@ -111,6 +112,7 @@ export function printHelp(): void {
   console.log(pc.bold("CONFIGURATION PRECEDENCE"));
   console.log(`  Provider:  --provider  >  $DOJOPS_PROVIDER  >  config  >  openai`);
   console.log(`  Model:     --model     >  $DOJOPS_MODEL     >  config  >  provider default`);
+  console.log(`  Temp:      --temperature > $DOJOPS_TEMPERATURE > config > provider default`);
   console.log(
     `  Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / $DEEPSEEK_API_KEY / $GEMINI_API_KEY  >  config token`,
   );
@@ -525,6 +527,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--security")}     Run security scanners only (trivy, gitleaks)`);
       console.log(`  ${pc.cyan("--deps")}         Run dependency audit only (npm, pip)`);
       console.log(`  ${pc.cyan("--iac")}          Run IaC scanners only (checkov, hadolint)`);
+      console.log(`  ${pc.cyan("--sbom")}         Generate Software Bill of Materials (CycloneDX)`);
       console.log(`  ${pc.cyan("--fix")}          Generate and apply LLM-powered remediation`);
       console.log(
         `  ${pc.cyan("--yes")}          Auto-approve remediation ${pc.dim("(requires --fix)")}`,

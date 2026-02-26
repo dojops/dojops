@@ -286,4 +286,4 @@ dojops config show
 dojops inspect config
 ```
 
-If you encounter a bug, please report it at: https://github.com/MHChlagou/dojops/issues
+If you encounter a bug, please report it at: https://github.com/dojops/dojops/issues

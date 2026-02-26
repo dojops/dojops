@@ -26,9 +26,9 @@ export class AgentRouter {
       const matchedKeywords = agent.keywords.filter((kw) => lower.includes(kw));
       if (matchedKeywords.length === 0) continue;
 
-      // Weighted scoring: each keyword match contributes significant confidence,
-      // with a coverage bonus for hitting a larger fraction of the agent's keywords.
-      // 1 match ≈ 40%, 2 matches ≈ 65%, 3+ matches ≈ 85-100%
+      // Weighted scoring: each keyword match contributes 0.3, plus a coverage
+      // bonus (matchRatio * 0.1), capped at 1.0.
+      // 1 match ≈ 40%, 2 matches ≈ 70-80%, 3+ matches ≈ 90-100%
       const matchRatio = matchedKeywords.length / agent.keywords.length;
       const confidence = Math.min(matchedKeywords.length * 0.3 + matchRatio * 0.1, 1.0);
 

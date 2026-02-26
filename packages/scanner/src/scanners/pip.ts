@@ -13,6 +13,31 @@ interface PipAuditVuln {
   id: string;
   fix_versions?: string[];
   description?: string;
+  aliases?: string[];
+}
+
+function mapPipSeverity(vuln: PipAuditVuln): "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" {
+  const desc = (vuln.description ?? "").toLowerCase();
+  const id = vuln.id.toLowerCase();
+  // CVE-based heuristic: critical keywords → CRITICAL, otherwise HIGH for known vulns
+  if (
+    desc.includes("remote code execution") ||
+    desc.includes("rce") ||
+    desc.includes("arbitrary code")
+  ) {
+    return "CRITICAL";
+  }
+  if (desc.includes("denial of service") || desc.includes("dos")) {
+    return "MEDIUM";
+  }
+  if (desc.includes("information disclosure") || desc.includes("information leak")) {
+    return "MEDIUM";
+  }
+  // PYSEC and GHSA are known vulnerability databases — default to HIGH
+  if (id.startsWith("pysec-") || id.startsWith("ghsa-")) {
+    return "HIGH";
+  }
+  return "HIGH";
 }
 
 export async function scanPip(projectPath: string): Promise<ScannerResult> {
@@ -90,7 +115,7 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
       findings.push({
         id: `pip-${crypto.randomUUID().slice(0, 8)}`,
         tool: "pip-audit",
-        severity: "HIGH",
+        severity: mapPipSeverity(vuln),
         category: "DEPENDENCY",
         file: subProject
           ? `${subProject}/${hasRequirements ? "requirements.txt" : "pyproject.toml"}`
@@ -106,7 +131,15 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
       });
     }
   } catch {
-    // JSON parse failed
+    findings.push({
+      id: "pip-audit-parse-error",
+      tool: "pip-audit",
+      severity: "LOW",
+      category: "SECURITY",
+      message:
+        "Failed to parse pip-audit output. The tool may have produced unexpected output format.",
+      autoFixAvailable: false,
+    });
   }
 
   return { tool: "pip-audit", findings, rawOutput };

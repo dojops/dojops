@@ -8,8 +8,10 @@ export const WorkflowStepSchema = z.object({
 });
 
 export const WorkflowJobSchema = z.object({
-  "runs-on": z.string(),
-  steps: z.array(WorkflowStepSchema).min(1),
+  "runs-on": z.string().optional(),
+  uses: z.string().optional(),
+  with: z.record(z.unknown()).optional(),
+  steps: z.array(WorkflowStepSchema).optional(),
 });
 
 export const WorkflowSchema = z.object({

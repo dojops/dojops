@@ -77,7 +77,15 @@ export async function scanCheckov(projectPath: string): Promise<ScannerResult> {
       }
     }
   } catch {
-    // JSON parse failed
+    findings.push({
+      id: "checkov-parse-error",
+      tool: "checkov",
+      severity: "LOW",
+      category: "SECURITY",
+      message:
+        "Failed to parse checkov output. The tool may have produced unexpected output format.",
+      autoFixAvailable: false,
+    });
   }
 
   return { tool: "checkov", findings, rawOutput };

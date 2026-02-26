@@ -28,7 +28,12 @@ export function createPlanRouter(
 
         if (autoApprove) {
           const safeExecutor = new SafeExecutor({
-            policy: { allowWrite: true, requireApproval: false, timeoutMs: 60_000 },
+            policy: {
+              allowWrite: true,
+              requireApproval: false,
+              timeoutMs: 60_000,
+              enforceDevOpsAllowlist: true,
+            },
             approvalHandler: new AutoApproveHandler(),
           });
 

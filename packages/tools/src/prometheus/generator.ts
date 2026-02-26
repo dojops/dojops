@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { PrometheusResponse, PrometheusResponseSchema, PrometheusInput } from "./schemas";
 import { YAML_DUMP_OPTIONS } from "../yaml-options";
@@ -30,7 +30,10 @@ Include appropriate job names and labels for each target.`;
     schema: PrometheusResponseSchema,
   });
 
-  return response.parsed as PrometheusResponse;
+  if (response.parsed) {
+    return response.parsed as PrometheusResponse;
+  }
+  return parseAndValidate(response.content, PrometheusResponseSchema);
 }
 
 export function prometheusToYaml(config: PrometheusResponse): string {

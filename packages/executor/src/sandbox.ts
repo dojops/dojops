@@ -18,8 +18,17 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
       const dir = path.dirname(filePath);
       fs.mkdirSync(dir, { recursive: true });
       const tmpPath = `${filePath}.tmp`;
-      fs.writeFileSync(tmpPath, content, "utf-8");
-      fs.renameSync(tmpPath, filePath);
+      try {
+        fs.writeFileSync(tmpPath, content, "utf-8");
+        fs.renameSync(tmpPath, filePath);
+      } catch (err) {
+        try {
+          fs.unlinkSync(tmpPath);
+        } catch {
+          /* .tmp already gone */
+        }
+        throw err;
+      }
     },
 
     mkdirSync(dirPath: string): void {

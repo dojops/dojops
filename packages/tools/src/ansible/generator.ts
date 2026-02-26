@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { AnsiblePlaybook, AnsiblePlaybookSchema, AnsibleInput } from "./schemas";
 import { YAML_DUMP_OPTIONS } from "../yaml-options";
@@ -67,7 +67,10 @@ IMPORTANT:
     schema: AnsiblePlaybookSchema,
   });
 
-  return response.parsed as AnsiblePlaybook;
+  if (response.parsed) {
+    return response.parsed as AnsiblePlaybook;
+  }
+  return parseAndValidate(response.content, AnsiblePlaybookSchema);
 }
 
 export function playbookToYaml(playbook: AnsiblePlaybook, input: AnsibleInput): string {

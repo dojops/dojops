@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { HelmChartResponse, HelmChartResponseSchema, HelmInput } from "./schemas";
 import { YAML_DUMP_OPTIONS } from "../yaml-options";
@@ -63,7 +63,10 @@ IMPORTANT:
     schema: HelmChartResponseSchema,
   });
 
-  return response.parsed as HelmChartResponse;
+  if (response.parsed) {
+    return response.parsed as HelmChartResponse;
+  }
+  return parseAndValidate(response.content, HelmChartResponseSchema);
 }
 
 export function generateChartYaml(input: HelmInput): string {

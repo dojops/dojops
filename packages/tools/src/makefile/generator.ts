@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import { MakefileConfig, MakefileConfigSchema } from "./schemas";
 import { MakefileDetectionResult } from "./detector";
 
@@ -31,7 +31,10 @@ Mark all non-file targets as phony.`;
     schema: MakefileConfigSchema,
   });
 
-  return response.parsed as MakefileConfig;
+  if (response.parsed) {
+    return response.parsed as MakefileConfig;
+  }
+  return parseAndValidate(response.content, MakefileConfigSchema);
 }
 
 export function makefileToString(config: MakefileConfig): string {

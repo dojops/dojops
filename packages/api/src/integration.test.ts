@@ -138,10 +138,18 @@ describe("API integration", () => {
   });
 
   describe("CORS headers", () => {
-    it("includes CORS headers on responses", async () => {
+    it("includes CORS headers when Origin matches", async () => {
       const app = createApp(deps);
-      const res = await request(app).get("/api/health");
-      expect(res.headers["access-control-allow-origin"]).toBeDefined();
+      const res = await request(app).get("/api/health").set("Origin", "http://localhost:3000");
+      expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    });
+
+    it("uses custom corsOrigin when provided", async () => {
+      const customDeps = createMockDeps();
+      customDeps.corsOrigin = "https://example.com";
+      const app = createApp(customDeps);
+      const res = await request(app).get("/api/health").set("Origin", "https://example.com");
+      expect(res.headers["access-control-allow-origin"]).toBe("https://example.com");
     });
   });
 });

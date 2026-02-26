@@ -37,7 +37,11 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
 
   switch (schema.type) {
     case "string": {
-      let result: ZodTypeAny = z.string();
+      let s = z.string();
+      if (schema.minLength !== undefined) s = s.min(schema.minLength);
+      if (schema.maxLength !== undefined) s = s.max(schema.maxLength);
+      if (schema.pattern !== undefined) s = s.regex(new RegExp(schema.pattern));
+      let result: ZodTypeAny = s;
       if (schema.description) {
         result = result.describe(schema.description);
       }
@@ -49,10 +53,11 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
 
     case "number":
     case "integer": {
-      let result: ZodTypeAny = z.number();
-      if (schema.type === "integer") {
-        result = (result as z.ZodNumber).int();
-      }
+      let n = z.number();
+      if (schema.type === "integer") n = n.int();
+      if (schema.minimum !== undefined) n = n.min(schema.minimum);
+      if (schema.maximum !== undefined) n = n.max(schema.maximum);
+      let result: ZodTypeAny = n;
       if (schema.description) {
         result = result.describe(schema.description);
       }

@@ -36,12 +36,12 @@ describe("GitHub Actions schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("rejects job with empty steps", () => {
+    it("accepts reusable workflow job (uses without runs-on)", () => {
       const result = WorkflowJobSchema.safeParse({
-        "runs-on": "ubuntu-latest",
-        steps: [],
+        uses: "octo-org/this-repo/.github/workflows/workflow-1.yml@v1",
+        with: { config: "production" },
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
     });
   });
 

@@ -1,11 +1,12 @@
 import { Router } from "express";
+import path from "path";
 import { runScan } from "@dojops/scanner";
 import type { ScanType } from "@dojops/scanner";
 import { HistoryStore } from "../store";
 import { ScanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
-export function createScanRouter(store: HistoryStore): Router {
+export function createScanRouter(store: HistoryStore, rootDir?: string): Router {
   const router = Router();
 
   router.post("/", validateBody(ScanRequestSchema), async (req, res, next) => {
@@ -13,6 +14,12 @@ export function createScanRouter(store: HistoryStore): Router {
     try {
       const { target, scanType } = req.body as { target?: string; scanType: ScanType };
       const projectPath = target ?? process.cwd();
+      const resolved = path.resolve(projectPath);
+      const root = path.resolve(rootDir ?? process.cwd());
+      if (!resolved.startsWith(root)) {
+        res.status(400).json({ error: "Target path must be within the project directory" });
+        return;
+      }
 
       const report = await runScan(projectPath, scanType);
 

@@ -83,6 +83,12 @@ importers:
       express:
         specifier: ^4.21.0
         version: 4.22.1
+      express-rate-limit:
+        specifier: ^8.2.1
+        version: 8.2.1(express@4.22.1)
+      helmet:
+        specifier: ^8.1.0
+        version: 8.1.0
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -2346,6 +2352,16 @@ packages:
     engines: {node: '>=12.0.0'}
     dev: true
 
+  /express-rate-limit@8.2.1(express@4.22.1):
+    resolution: {integrity: sha512-PCZEIEIxqwhzw4KF0n7QF4QqruVTcF73O5kFKUnGOyjbCCgizBBiFaYpd/fnBLUMPw/BWw9OsiN7GgrNYr7j6g==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      express: '>= 4.11'
+    dependencies:
+      express: 4.22.1
+      ip-address: 10.0.1
+    dev: false
+
   /express@4.22.1:
     resolution: {integrity: sha512-F2X8g9P1X7uCPZMA3MVf9wcTqlyNp7IhH5qPCI0izhaOIYXaW9L535tGA3qmjRzpH+bZczqq7hVKxTR4NWnu+g==}
     engines: {node: '>= 0.10.0'}
@@ -2676,6 +2692,11 @@ packages:
     dependencies:
       function-bind: 1.1.2
 
+  /helmet@8.1.0:
+    resolution: {integrity: sha512-jOiHyAZsmnr8LqoPGmCjYAaiuWwjAPLgY8ZX2XrmHawt99/u1y6RgrZMTeoPfpUbV96HOalYgz1qzkRbw54Pmg==}
+    engines: {node: '>=18.0.0'}
+    dev: false
+
   /html-escaper@2.0.2:
     resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
     dev: true
@@ -2737,6 +2758,11 @@ packages:
 
   /inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+    dev: false
+
+  /ip-address@10.0.1:
+    resolution: {integrity: sha512-NWv9YLW4PoW2B7xtzaS3NCot75m6nK7Icdv0o3lfMceJVRfSoQwqD4wEH5rLwoKJwUiZ/rfpiVBhnaF0FK4HoA==}
+    engines: {node: '>= 12'}
     dev: false
 
   /ipaddr.js@1.9.1:

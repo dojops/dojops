@@ -87,7 +87,18 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
       });
     }
   } catch {
-    // JSON parse failed — could be empty output (no leaks)
+    // Only add parse warning if there was actual output to parse (not empty/no leaks)
+    if (rawOutput && rawOutput.trim().length > 0) {
+      findings.push({
+        id: "gitleaks-parse-error",
+        tool: "gitleaks",
+        severity: "LOW",
+        category: "SECRETS",
+        message:
+          "Failed to parse gitleaks output. The tool may have produced unexpected output format.",
+        autoFixAvailable: false,
+      });
+    }
   }
 
   return { tool: "gitleaks", findings, rawOutput };

@@ -7,8 +7,17 @@ export function atomicWriteFileSync(filePath: string, content: string): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
   const tmpPath = `${filePath}.tmp`;
-  fs.writeFileSync(tmpPath, content, "utf-8");
-  fs.renameSync(tmpPath, filePath);
+  try {
+    fs.writeFileSync(tmpPath, content, "utf-8");
+    fs.renameSync(tmpPath, filePath);
+  } catch (err) {
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch {
+      /* .tmp already gone */
+    }
+    throw err;
+  }
 }
 
 export function restoreBackup(filePath: string): boolean {
@@ -22,21 +31,15 @@ export function restoreBackup(filePath: string): boolean {
 
 export function readExistingConfig(filePath: string): string | null {
   try {
-    if (!fs.existsSync(filePath)) return null;
-    const stat = fs.statSync(filePath);
-    if (stat.size > MAX_CONTENT_SIZE) return null;
-    return fs.readFileSync(filePath, "utf-8");
+    const content = fs.readFileSync(filePath, "utf-8");
+    if (Buffer.byteLength(content, "utf-8") > MAX_CONTENT_SIZE) return null;
+    return content;
   } catch {
     return null;
   }
 }
 
 export function backupFile(filePath: string): void {
-  try {
-    if (fs.existsSync(filePath)) {
-      fs.copyFileSync(filePath, `${filePath}.bak`);
-    }
-  } catch {
-    /* best-effort */
-  }
+  if (!fs.existsSync(filePath)) return;
+  fs.copyFileSync(filePath, `${filePath}.bak`);
 }

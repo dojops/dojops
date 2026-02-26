@@ -1,5 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import axios from "axios";
 import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
 import { parseAndValidate } from "./json-validator";
 
@@ -8,10 +7,7 @@ export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
   private model: string;
 
-  private apiKey: string;
-
   constructor(apiKey: string, model = "claude-sonnet-4-5-20250929") {
-    this.apiKey = apiKey;
     this.client = new Anthropic({ apiKey });
     this.model = model;
   }
@@ -67,7 +63,8 @@ export class AnthropicProvider implements LLMProvider {
       }
     }
 
-    let content = message.content[0].type === "text" ? message.content[0].text : "";
+    const firstBlock = message.content[0];
+    let content = firstBlock?.type === "text" ? firstBlock.text : "";
 
     if (req.schema) {
       if (message.stop_reason === "max_tokens") {
@@ -86,16 +83,21 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async listModels(): Promise<string[]> {
-    const response = await axios.get("https://api.anthropic.com/v1/models", {
-      headers: {
-        "x-api-key": this.apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-    });
-    const models: string[] = (response.data.data ?? [])
-      .filter((m: { id: string }) => m.id.startsWith("claude-"))
-      .map((m: { id: string }) => m.id);
-    return models.sort();
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/models", {
+        headers: {
+          "x-api-key": this.client.apiKey ?? "",
+          "anthropic-version": "2023-06-01",
+        },
+      });
+      const data = await response.json();
+      const models: string[] = ((data as { data?: Array<{ id: string }> }).data ?? [])
+        .filter((m) => m.id.startsWith("claude-"))
+        .map((m) => m.id);
+      return models.sort();
+    } catch {
+      return [];
+    }
   }
 }
 

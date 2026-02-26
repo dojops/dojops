@@ -38,22 +38,24 @@
   },
   "dependencies": {
     "@dojops/core": "workspace:*",
-    "@dojops/sdk": "workspace:*",
-    "@dojops/planner": "workspace:*",
-    "@dojops/tools": "workspace:*",
     "@dojops/executor": "workspace:*",
+    "@dojops/planner": "workspace:*",
     "@dojops/scanner": "workspace:*",
+    "@dojops/sdk": "workspace:*",
     "@dojops/session": "workspace:*",
     "@dojops/tool-registry": "workspace:*",
-    "express": "^4.21.0",
+    "@dojops/tools": "workspace:*",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
-    "supertest": "^7.0.0",
-    "@types/supertest": "^6.0.2"
+    "@types/express": "^4.17.21",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0"
   }
 }

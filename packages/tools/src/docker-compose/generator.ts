@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { ComposeConfig, ComposeConfigSchema } from "./schemas";
 import { ComposeDetectionResult } from "./detector";
@@ -38,7 +38,10 @@ Use restart policy "unless-stopped" for production services.`;
     schema: ComposeConfigSchema,
   });
 
-  return response.parsed as ComposeConfig;
+  if (response.parsed) {
+    return response.parsed as ComposeConfig;
+  }
+  return parseAndValidate(response.content, ComposeConfigSchema);
 }
 
 export function composeToYaml(config: ComposeConfig): string {

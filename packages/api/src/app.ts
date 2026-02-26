@@ -1,5 +1,7 @@
 import express, { Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import path from "path";
 import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
@@ -29,13 +31,29 @@ export interface AppDependencies {
   rootDir?: string;
   pluginCount?: number;
   customAgentNames?: Set<string>;
+  corsOrigin?: string | string[];
 }
 
 export function createApp(deps: AppDependencies): Express {
   const app = express();
 
-  app.use(cors());
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // dashboard uses inline scripts
+    }),
+  );
+  app.use(cors({ origin: deps.corsOrigin ?? "http://localhost:3000" }));
   app.use(express.json({ limit: "1mb" }));
+
+  // Rate limiting for API routes
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 100, // 100 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later" },
+  });
+  app.use("/api/", apiLimiter);
 
   // Serve static dashboard files
   app.use(express.static(deps.publicDir ?? path.join(__dirname, "..", "public")));
@@ -63,7 +81,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/diff", createDiffRouter(deps.diffAnalyzer, deps.store));
   app.use("/api/agents", createAgentsRouter(deps.router, deps.customAgentNames));
   app.use("/api/history", createHistoryRouter(deps.store));
-  app.use("/api/scan", createScanRouter(deps.store));
+  app.use("/api/scan", createScanRouter(deps.store, deps.rootDir));
   app.use("/api/chat", createChatRouter(deps.provider, deps.router, deps.store));
   if (aggregator) {
     app.use("/api/metrics", createMetricsRouter(aggregator));

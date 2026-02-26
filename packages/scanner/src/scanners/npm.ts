@@ -107,7 +107,15 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
       }
     }
   } catch {
-    // JSON parse failed
+    findings.push({
+      id: "npm-audit-parse-error",
+      tool: "npm-audit",
+      severity: "LOW",
+      category: "SECURITY",
+      message:
+        "Failed to parse npm-audit output. The tool may have produced unexpected output format.",
+      autoFixAvailable: false,
+    });
   }
 
   return { tool: "npm-audit", findings, rawOutput };

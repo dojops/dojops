@@ -82,7 +82,11 @@ export class HelmTool extends BaseTool<HelmInput> {
     const templatesDir = path.join(chartDir, "templates");
 
     if (data.isUpdate) {
+      backupFile(path.join(chartDir, "Chart.yaml"));
       backupFile(path.join(chartDir, "values.yaml"));
+      backupFile(path.join(templatesDir, "deployment.yaml"));
+      backupFile(path.join(templatesDir, "service.yaml"));
+      backupFile(path.join(templatesDir, "_helpers.tpl"));
     }
 
     fs.mkdirSync(templatesDir, { recursive: true });
@@ -100,6 +104,6 @@ export class HelmTool extends BaseTool<HelmInput> {
     atomicWriteFileSync(helpersPath, data.templates.helpers);
 
     const filesWritten = [chartYamlPath, valuesYamlPath, deploymentPath, servicePath, helpersPath];
-    return { ...result, filesWritten, filesModified: data.isUpdate ? [valuesYamlPath] : [] };
+    return { ...result, filesWritten, filesModified: data.isUpdate ? filesWritten : [] };
   }
 }

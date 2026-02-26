@@ -75,11 +75,12 @@ export class CIDebugger {
       diagnosis: CIDiagnosis;
     }[]
   > {
-    const results = [];
-    for (const log of logs) {
-      const diagnosis = await this.diagnose(log.content);
-      results.push({ name: log.name, diagnosis });
-    }
+    const results = await Promise.all(
+      logs.map(async (log) => {
+        const diagnosis = await this.diagnose(log.content);
+        return { name: log.name, diagnosis };
+      }),
+    );
     return results;
   }
 }

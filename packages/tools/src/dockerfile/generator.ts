@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import { DockerfileConfig, DockerfileConfigSchema } from "./schemas";
 import { DockerDetectionResult } from "./detector";
 
@@ -37,7 +37,10 @@ Also include common .dockerignore patterns for ${detection.projectType}.`;
     schema: DockerfileConfigSchema,
   });
 
-  return response.parsed as DockerfileConfig;
+  if (response.parsed) {
+    return response.parsed as DockerfileConfig;
+  }
+  return parseAndValidate(response.content, DockerfileConfigSchema);
 }
 
 export function dockerfileToString(config: DockerfileConfig): string {

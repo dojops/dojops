@@ -537,7 +537,7 @@ dojops --profile=staging "Create S3..."  # One-off profile override
 ### Setup
 
 ```bash
-git clone https://github.com/MHChlagou/dojops.git
+git clone https://github.com/dojops/dojops.git
 cd dojops
 pnpm install
 pnpm build
@@ -548,7 +548,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 922 tests
+pnpm test               # Run all 973 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -593,7 +593,7 @@ packages/
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
 | `@dojops/sdk`           | 20      |
-| **Total**               | **922** |
+| **Total**               | **973** |
 
 ---
 

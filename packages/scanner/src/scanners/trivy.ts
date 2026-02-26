@@ -133,7 +133,14 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
       }
     }
   } catch {
-    // JSON parse failed
+    findings.push({
+      id: "trivy-parse-error",
+      tool: "trivy",
+      severity: "LOW",
+      category: "SECURITY",
+      message: "Failed to parse trivy output. The tool may have produced unexpected output format.",
+      autoFixAvailable: false,
+    });
   }
 
   return { tool: "trivy", findings, rawOutput };

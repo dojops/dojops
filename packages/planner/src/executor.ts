@@ -30,6 +30,16 @@ function resolveInputRefs(
 
 function topologicalSort(tasks: TaskNode[]): TaskNode[] {
   const taskMap = new Map(tasks.map((t) => [t.id, t]));
+
+  // Validate all dependsOn references point to existing task IDs
+  for (const task of tasks) {
+    for (const dep of task.dependsOn) {
+      if (!taskMap.has(dep)) {
+        throw new Error(`Unknown dependency "${dep}" in task "${task.id}"`);
+      }
+    }
+  }
+
   const inDegree = new Map<string, number>();
   const adjacency = new Map<string, string[]>();
 
@@ -171,10 +181,13 @@ export class PlannerExecutor {
     }
 
     const allResults = Array.from(results.values());
+    const hasRealFailure = allResults.some((r) => r.status === "failed");
     return {
       goal: graph.goal,
       results: allResults,
-      success: allResults.every((r) => r.status === "completed"),
+      success:
+        !hasRealFailure &&
+        allResults.every((r) => r.status === "completed" || r.status === "skipped"),
     };
   }
 }

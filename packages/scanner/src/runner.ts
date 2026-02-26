@@ -105,8 +105,24 @@ export async function runScan(
     return s.applicable(context);
   });
 
-  // Run all selected scanners concurrently
-  const results = await Promise.all(selected.map((s) => s.fn(projectPath)));
+  // Run all selected scanners concurrently (allSettled to avoid one failure killing the scan)
+  const settled = await Promise.allSettled(selected.map((s) => s.fn(projectPath)));
+  const results: ScannerResult[] = settled.map((outcome, i) => {
+    if (outcome.status === "fulfilled") return outcome.value;
+    return {
+      tool: selected[i].name,
+      findings: [
+        {
+          id: `${selected[i].name}-crash`,
+          tool: selected[i].name,
+          severity: "LOW" as const,
+          category: "SECURITY" as const,
+          message: `Scanner crashed: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`,
+          autoFixAvailable: false,
+        },
+      ],
+    };
+  });
 
   // Collect findings and track scanner status
   const allFindings: ScanFinding[] = [];

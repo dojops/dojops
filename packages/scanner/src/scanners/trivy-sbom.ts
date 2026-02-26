@@ -4,7 +4,7 @@ import { ScannerResult } from "../types";
 export async function scanTrivySbom(projectPath: string): Promise<ScannerResult> {
   let rawOutput: string;
   try {
-    rawOutput = execFileSync("trivy", ["sbom", "--format", "cyclonedx", projectPath], {
+    rawOutput = execFileSync("trivy", ["fs", "--format", "cyclonedx", projectPath], {
       encoding: "utf-8",
       timeout: 180_000,
       stdio: "pipe",
@@ -25,7 +25,7 @@ export async function scanTrivySbom(projectPath: string): Promise<ScannerResult>
         tool: "trivy-sbom",
         findings: [],
         skipped: true,
-        skipReason: `trivy sbom failed: ${execErr.stderr ?? "unknown error"}`,
+        skipReason: `trivy fs --format cyclonedx failed: ${execErr.stderr ?? "unknown error"}`,
       };
     }
   }

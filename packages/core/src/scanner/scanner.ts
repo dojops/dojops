@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { LLMProvider } from "../llm/provider";
+import { parseAndValidate } from "../llm/json-validator";
 import { LLMInsightsSchema } from "./types";
 import type {
   LanguageDetection,
@@ -852,7 +853,11 @@ export async function enrichWithLLM(
     schema: LLMInsightsSchema,
   });
 
-  return response.parsed as LLMInsights;
+  if (response.parsed) {
+    return response.parsed as LLMInsights;
+  }
+
+  return parseAndValidate(response.content, LLMInsightsSchema);
 }
 
 // ── Main scan orchestrator ───────────────────────────────────────────

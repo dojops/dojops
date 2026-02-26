@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import { TerraformConfig, TerraformConfigSchema } from "./schemas";
 
 export async function generateTerraformConfig(
@@ -69,7 +69,10 @@ IMPORTANT:
     schema: TerraformConfigSchema,
   });
 
-  return response.parsed as TerraformConfig;
+  if (response.parsed) {
+    return response.parsed as TerraformConfig;
+  }
+  return parseAndValidate(response.content, TerraformConfigSchema);
 }
 
 export function configToHcl(config: TerraformConfig): string {
@@ -143,8 +146,12 @@ function providerSource(name: string): string {
   return sources[name] ?? `hashicorp/${name}`;
 }
 
+function escapeHclString(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+}
+
 function hclValue(v: unknown): string {
-  if (typeof v === "string") return `"${v}"`;
+  if (typeof v === "string") return `"${escapeHclString(v)}"`;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   return JSON.stringify(v);
 }

@@ -186,10 +186,12 @@ export const DEFAULT_POLICY: ExecutionPolicy = {
   allowedWritePaths: [],
   deniedWritePaths: [],
   enforceDevOpsAllowlist: true,
+  /** @advisory Not enforced at runtime — reserved for future OS-level sandboxing. */
   allowNetwork: false,
+  /** @advisory Names of env vars to pass through. Use `filterEnvVars(policy)` to apply manually. */
   allowEnvVars: [],
   timeoutMs: 30_000,
   maxFileSizeBytes: 1_048_576,
-  requireApproval: true,
-  skipVerification: true,
+  requireApproval: false,
+  skipVerification: false,
 };

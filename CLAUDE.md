@@ -12,7 +12,7 @@ DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (912 tests)
+pnpm test               # Vitest across all packages (973 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -143,7 +143,7 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 - `@dojops/cli` — Full lifecycle: `init` (writes `context.json` + `context.md` + user review prompt), `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--replay`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`, `create`, `remove`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve`, `chat`, `check`, `scan` (`--security`, `--deps`, `--iac`, `--sbom`), `tools` (including `plugins list/validate/init`). `--temperature` global flag. Deterministic replay mode (`--replay`): wraps provider in `DeterministicProvider` (temperature=0), validates provider/model/systemPromptHash match via `validateReplayIntegrity()`. Execution locking, hash-chained audit logs, plan persistence with plugin version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, plugin integrity validation on resume (extracted to `checkPluginIntegrity()`), plugin metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
 - `@dojops/api` — REST API (Express + cors) exposing all capabilities via 19 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 5 tabs: Overview, Security, Audit, Agents, History), 30s auto-refresh on metrics tabs, `supertest` integration tests
 - Specifications — `docs/PLUGIN_SPEC_v1.md` freezes the v1 plugin contract (manifest schema, discovery, security constraints, compatibility promise)
-- Dev tooling — Vitest (912 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (973 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap
 

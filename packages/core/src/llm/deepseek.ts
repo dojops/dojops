@@ -45,7 +45,11 @@ export class DeepSeekProvider implements LLMProvider {
       throw new Error(extractApiError(err), { cause: err });
     }
 
-    const content = completion.choices[0].message.content ?? "";
+    const choice = completion.choices[0];
+    if (!choice) {
+      throw new Error(`DeepSeek returned empty choices array (model: ${this.model})`);
+    }
+    const content = choice.message.content ?? "";
 
     if (req.schema) {
       const parsed = parseAndValidate(content, req.schema);
@@ -56,12 +60,16 @@ export class DeepSeekProvider implements LLMProvider {
   }
 
   async listModels(): Promise<string[]> {
-    const list = await this.client.models.list();
-    const models: string[] = [];
-    for await (const model of list) {
-      models.push(model.id);
+    try {
+      const list = await this.client.models.list();
+      const models: string[] = [];
+      for await (const model of list) {
+        models.push(model.id);
+      }
+      return models.sort();
+    } catch {
+      return [];
     }
-    return models.sort();
   }
 }
 

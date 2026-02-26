@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { GitLabCIConfig, GitLabCIConfigSchema } from "./schemas";
 import { GitLabProjectTypeResult } from "./detector";
@@ -34,7 +34,10 @@ Include stages: lint, test, build. Each job should have stage, image, script, an
     schema: GitLabCIConfigSchema,
   });
 
-  return response.parsed as GitLabCIConfig;
+  if (response.parsed) {
+    return response.parsed as GitLabCIConfig;
+  }
+  return parseAndValidate(response.content, GitLabCIConfigSchema);
 }
 
 export function gitlabCIToYaml(config: GitLabCIConfig): string {

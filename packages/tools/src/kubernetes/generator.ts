@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { KubernetesManifest, KubernetesManifestSchema } from "./schemas";
 import { YAML_DUMP_OPTIONS } from "../yaml-options";
@@ -83,7 +83,10 @@ IMPORTANT:
     schema: KubernetesManifestSchema,
   });
 
-  return response.parsed as KubernetesManifest;
+  if (response.parsed) {
+    return response.parsed as KubernetesManifest;
+  }
+  return parseAndValidate(response.content, KubernetesManifestSchema);
 }
 
 export function manifestToYaml(

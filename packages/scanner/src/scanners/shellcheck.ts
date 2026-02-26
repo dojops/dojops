@@ -76,7 +76,15 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
         });
       }
     } catch {
-      // JSON parse failed
+      allFindings.push({
+        id: "shellcheck-parse-error",
+        tool: "shellcheck",
+        severity: "LOW",
+        category: "IAC",
+        message:
+          "Failed to parse shellcheck output. The tool may have produced unexpected output format.",
+        autoFixAvailable: false,
+      });
     }
   }
 
@@ -94,12 +102,29 @@ function findShellScripts(projectPath: string): string[] {
     }
   }
 
+  function hasShellShebang(filePath: string): boolean {
+    try {
+      const fd = fs.openSync(filePath, "r");
+      const buf = Buffer.alloc(64);
+      fs.readSync(fd, buf, 0, 64, 0);
+      fs.closeSync(fd);
+      const head = buf.toString("utf-8");
+      return /^#!\s*\/(?:usr\/)?(?:bin\/(?:env\s+)?)?(?:ba)?sh\b/.test(head);
+    } catch {
+      return false;
+    }
+  }
+
   function scanDir(dir: string): void {
     try {
-      const entries = fs.readdirSync(dir);
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.endsWith(".sh") || entry.endsWith(".bash")) {
-          addScript(path.join(dir, entry));
+        if (!entry.isFile()) continue;
+        const fullPath = path.join(dir, entry.name);
+        if (entry.name.endsWith(".sh") || entry.name.endsWith(".bash")) {
+          addScript(fullPath);
+        } else if (!entry.name.includes(".") && hasShellShebang(fullPath)) {
+          addScript(fullPath);
         }
       }
     } catch {
@@ -107,13 +132,18 @@ function findShellScripts(projectPath: string): string[] {
     }
   }
 
+  // Directories to scan for shell scripts
+  const scanDirs = ["scripts", "bin", "ci", path.join(".github", "scripts"), "hack"];
+
   // Scan root
   scanDir(projectPath);
 
-  // Scan scripts/ directory
-  const scriptsDir = path.join(projectPath, "scripts");
-  if (fs.existsSync(scriptsDir) && fs.statSync(scriptsDir).isDirectory()) {
-    scanDir(scriptsDir);
+  // Scan well-known script directories
+  for (const dir of scanDirs) {
+    const dirPath = path.join(projectPath, dir);
+    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+      scanDir(dirPath);
+    }
   }
 
   // Scan sub-project directories
@@ -121,10 +151,11 @@ function findShellScripts(projectPath: string): string[] {
     const childPath = path.join(projectPath, child);
     scanDir(childPath);
 
-    // Check scripts/ inside sub-projects
-    const childScriptsDir = path.join(childPath, "scripts");
-    if (fs.existsSync(childScriptsDir) && fs.statSync(childScriptsDir).isDirectory()) {
-      scanDir(childScriptsDir);
+    for (const dir of scanDirs) {
+      const childDirPath = path.join(childPath, dir);
+      if (fs.existsSync(childDirPath) && fs.statSync(childDirPath).isDirectory()) {
+        scanDir(childDirPath);
+      }
     }
   }
 

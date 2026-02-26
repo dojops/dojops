@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import { SystemdConfig, SystemdConfigSchema, SystemdInput } from "./schemas";
 
 export async function generateSystemdConfig(
@@ -30,7 +30,10 @@ Configure appropriate restart behavior, logging to journal, and standard depende
     schema: SystemdConfigSchema,
   });
 
-  return response.parsed as SystemdConfig;
+  if (response.parsed) {
+    return response.parsed as SystemdConfig;
+  }
+  return parseAndValidate(response.content, SystemdConfigSchema);
 }
 
 export function systemdConfigToString(config: SystemdConfig): string {

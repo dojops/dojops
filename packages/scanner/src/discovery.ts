@@ -34,32 +34,27 @@ export function listSubDirs(root: string): string[] {
 
 /**
  * Discover sub-project directories that contain any of the given indicator files.
- * Searches root directory + up to 2 levels deep (supports `packages/* /` patterns).
+ * Searches root directory + up to 3 levels deep (supports nested monorepos like
+ * `packages/core/`, `apps/web/`, or `services/api/modules/auth/`).
  * Returns absolute paths of directories containing at least one indicator file.
  */
-export function discoverProjectDirs(root: string, indicatorFiles: string[]): string[] {
+export function discoverProjectDirs(
+  root: string,
+  indicatorFiles: string[],
+  maxDepth = 3,
+): string[] {
   const results: string[] = [];
 
-  // Check root
-  if (indicatorFiles.some((f) => fs.existsSync(path.join(root, f)))) {
-    results.push(root);
-  }
-
-  // Check level 1 children (e.g., enhancetech-backend/, enhancetech-frontend/)
-  for (const child of listSubDirs(root)) {
-    const childPath = path.join(root, child);
-    if (indicatorFiles.some((f) => fs.existsSync(path.join(childPath, f)))) {
-      results.push(childPath);
+  function scanLevel(dir: string, depth: number): void {
+    if (indicatorFiles.some((f) => fs.existsSync(path.join(dir, f)))) {
+      results.push(dir);
     }
-
-    // Check level 2 children (e.g., packages/core/, apps/web/)
-    for (const grandchild of listSubDirs(childPath)) {
-      const gcPath = path.join(childPath, grandchild);
-      if (indicatorFiles.some((f) => fs.existsSync(path.join(gcPath, f)))) {
-        results.push(gcPath);
-      }
+    if (depth >= maxDepth) return;
+    for (const child of listSubDirs(dir)) {
+      scanLevel(path.join(dir, child), depth + 1);
     }
   }
 
+  scanLevel(root, 0);
   return results;
 }

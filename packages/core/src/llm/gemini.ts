@@ -43,6 +43,19 @@ export class GeminiProvider implements LLMProvider {
 
     const content = response.text ?? "";
 
+    // Check for truncation or safety blocks
+    const candidates = (response as unknown as { candidates?: Array<{ finishReason?: string }> })
+      .candidates;
+    const finishReason = candidates?.[0]?.finishReason;
+    if (req.schema && finishReason === "MAX_TOKENS") {
+      throw new Error(
+        "LLM response was truncated (hit max tokens limit). The generated JSON is incomplete.",
+      );
+    }
+    if (finishReason === "SAFETY") {
+      throw new Error("LLM response was blocked by safety filters.");
+    }
+
     if (req.schema) {
       const parsed = parseAndValidate(content, req.schema);
       return { content, parsed };
@@ -52,14 +65,18 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async listModels(): Promise<string[]> {
-    const pager = await this.client.models.list();
-    const models: string[] = [];
-    for (const model of pager.page) {
-      if (model.name?.startsWith("models/gemini-")) {
-        models.push(model.name.replace("models/", ""));
+    try {
+      const pager = await this.client.models.list();
+      const models: string[] = [];
+      for (const model of pager.page) {
+        if (model.name?.startsWith("models/gemini-")) {
+          models.push(model.name.replace("models/", ""));
+        }
       }
+      return models.sort();
+    } catch {
+      return [];
     }
-    return models.sort();
   }
 }
 

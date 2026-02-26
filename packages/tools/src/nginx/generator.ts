@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, parseAndValidate } from "@dojops/core";
 import { NginxConfig, NginxConfigSchema, NginxInput } from "./schemas";
 
 export async function generateNginxConfig(
@@ -34,7 +34,10 @@ Include appropriate proxy headers (X-Real-IP, X-Forwarded-For, Host).`;
     schema: NginxConfigSchema,
   });
 
-  return response.parsed as NginxConfig;
+  if (response.parsed) {
+    return response.parsed as NginxConfig;
+  }
+  return parseAndValidate(response.content, NginxConfigSchema);
 }
 
 export function nginxConfigToString(config: NginxConfig): string {
