@@ -114,6 +114,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
         id: coverage
         uses: codecov/codecov-action@v5
         with:

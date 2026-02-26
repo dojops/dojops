@@ -1,14 +1,6 @@
 import { defineConfig } from "vitest/config";
-import { codecovVitePlugin } from "@codecov/vite-plugin";
 
 export default defineConfig({
-  plugins: [
-    codecovVitePlugin({
-      enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
-      bundleName: "dojops",
-      uploadToken: process.env.CODECOV_TOKEN,
-    }),
-  ],
   test: {
     projects: ["packages/*"],
     reporters: ["default", "junit"],
