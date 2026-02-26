@@ -19,6 +19,8 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      build-status: ${{ steps.build.outcome }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,6 +40,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build all packages
+        id: build
         run: pnpm build
 
   lint:
@@ -45,6 +48,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      lint-status: ${{ steps.lint.outcome }}
+      format-status: ${{ steps.format.outcome }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,16 +70,21 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run ESLint
+        id: lint
         run: pnpm lint
 
       - name: Check formatting
+        id: format
         run: pnpm format:check
 
   test:
-    name: Test
+    name: Test & Coverage
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      test-status: ${{ steps.test.outcome }}
+      coverage-status: ${{ steps.coverage.outcome }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -95,15 +106,41 @@ jobs:
       - name: Build all packages
         run: pnpm build
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run tests with coverage
+        id: test
+        run: pnpm test:coverage
         env:
           CI: true
+
+      - name: Upload coverage to Codecov
+        id: coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            !coverage/node_modules/
+          retention-days: 7
 
   security:
     name: Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      audit-status: ${{ steps.audit.outputs.passed }}
+      trivy-critical: ${{ steps.trivy-summary.outputs.critical }}
+      trivy-high: ${{ steps.trivy-summary.outputs.high }}
+      trivy-medium: ${{ steps.trivy-summary.outputs.medium }}
+      trivy-low: ${{ steps.trivy-summary.outputs.low }}
+      trivy-total: ${{ steps.trivy-summary.outputs.total }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -122,25 +159,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-
       - name: Run pnpm audit
         id: audit
         run: |
-          echo "## pnpm audit" >> "$GITHUB_STEP_SUMMARY"
           if pnpm audit --audit-level=moderate 2>&1 | tee audit-output.txt; then
             echo "passed=true" >> "$GITHUB_OUTPUT"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "No vulnerabilities found." >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "passed=false" >> "$GITHUB_OUTPUT"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            cat audit-output.txt >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
         continue-on-error: true
 
@@ -162,15 +187,16 @@ jobs:
           output: "trivy-results.json"
           severity: "LOW,MEDIUM,HIGH,CRITICAL"
 
-      - name: Build security summary
+      - name: Build Trivy summary
+        id: trivy-summary
         if: always()
         run: |
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "## Trivy Filesystem Scan" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-
           if [ ! -s trivy-results.json ]; then
-            echo "No Trivy results found." >> "$GITHUB_STEP_SUMMARY"
+            echo "critical=0" >> "$GITHUB_OUTPUT"
+            echo "high=0" >> "$GITHUB_OUTPUT"
+            echo "medium=0" >> "$GITHUB_OUTPUT"
+            echo "low=0" >> "$GITHUB_OUTPUT"
+            echo "total=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -180,23 +206,11 @@ jobs:
           LOW=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW")] | length' trivy-results.json 2>/dev/null || echo 0)
           TOTAL=$((CRITICAL + HIGH + MEDIUM + LOW))
 
-          echo "| Severity | Count |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Critical | $CRITICAL |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| High     | $HIGH |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Medium   | $MEDIUM |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Low      | $LOW |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| **Total**| **$TOTAL** |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "$TOTAL" -gt 0 ]; then
-            echo "<details><summary>Trivy full report</summary>" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            cat trivy-results.txt >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+          echo "high=$HIGH" >> "$GITHUB_OUTPUT"
+          echo "medium=$MEDIUM" >> "$GITHUB_OUTPUT"
+          echo "low=$LOW" >> "$GITHUB_OUTPUT"
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
 
           if [ "$CRITICAL" -gt 0 ]; then
             echo "::error::$CRITICAL critical vulnerabilities found"
@@ -205,30 +219,165 @@ jobs:
             echo "::warning::$HIGH high vulnerabilities found"
           fi
 
-  status:
-    name: CI Status
+      - name: Upload security scan artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: |
+            trivy-results.txt
+            trivy-results.json
+            audit-output.txt
+          retention-days: 7
+
+  summary:
+    name: Build Summary
     needs: [build, lint, test, security]
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Check all jobs status
-        run: |
-          echo "## CI Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Job | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build | ${{ needs.build.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Lint & Format | ${{ needs.lint.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Test | ${{ needs.test.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Security Audit | ${{ needs.security.result }} |" >> "$GITHUB_STEP_SUMMARY"
+      - name: Generate Professional Build Summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { summary } = require('@actions/core');
 
-          if [[ "${{ needs.build.result }}" == "success" && \
-                "${{ needs.lint.result }}" == "success" && \
-                "${{ needs.test.result }}" == "success" && \
-                "${{ needs.security.result }}" == "success" ]]; then
-            echo "All checks passed." >> "$GITHUB_STEP_SUMMARY"
+            // Status emojis and colors
+            const statusEmoji = {
+              success: '✅',
+              failure: '❌',
+              cancelled: '🚫',
+              skipped: '⏭️'
+            };
+
+            const statusColor = {
+              success: 'good',
+              failure: 'critical',
+              cancelled: 'warning',
+              skipped: 'warning'
+            };
+
+            // Helper to get status display
+            const getStatus = (result) => statusEmoji[result] || '⚪';
+
+            // Job results
+            const jobs = {
+              'Build': '${{ needs.build.result }}',
+              'Lint & Format': '${{ needs.lint.result }}',
+              'Test & Coverage': '${{ needs.test.result }}',
+              'Security Audit': '${{ needs.security.result }}'
+            };
+
+            // Calculate overall status
+            const allSuccess = Object.values(jobs).every(r => r === 'success');
+            const overallStatus = allSuccess ? '✅ PASSED' : '❌ FAILED';
+
+            // Build summary header
+            let summaryContent = `## ${overallStatus} — DojOps CI Pipeline\n\n`;
+            summaryContent += `**Workflow:** \`${{ github.workflow }}\`  \n`;
+            summaryContent += `**Branch:** \`${{ github.ref_name }}\`  \n`;
+            summaryContent += `**Commit:** [\`${{ github.sha.substring(0, 7) }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})  \n`;
+            summaryContent += `**Triggered by:** @${{ github.actor }}  \n\n`;
+
+            // Pipeline status table
+            summaryContent += `### 📊 Pipeline Status\n\n`;
+            summaryContent += `| Job | Status | Duration |\n`;
+            summaryContent += `|-----|--------|----------|\n`;
+
+            for (const [jobName, result] of Object.entries(jobs)) {
+              const emoji = getStatus(result);
+              summaryContent += `| ${jobName} | ${emoji} ${result.toUpperCase()} | — |\n`;
+            }
+
+            summaryContent += `\n`;
+
+            // Security summary section
+            summaryContent += `### 🔒 Security Scan Results\n\n`;
+
+            const trivyCritical = parseInt('${{ needs.security.outputs.trivy-critical }}' || '0');
+            const trivyHigh = parseInt('${{ needs.security.outputs.trivy-high }}' || '0');
+            const trivyMedium = parseInt('${{ needs.security.outputs.trivy-medium }}' || '0');
+            const trivyLow = parseInt('${{ needs.security.outputs.trivy-low }}' || '0');
+            const trivyTotal = parseInt('${{ needs.security.outputs.trivy-total }}' || '0');
+            const auditPassed = '${{ needs.security.outputs.audit-status }}' === 'true';
+
+            summaryContent += `#### Trivy Filesystem Scan\n\n`;
+            summaryContent += `| Severity | Count | Status |\n`;
+            summaryContent += `|----------|-------|--------|\n`;
+            summaryContent += `| 🔴 Critical | ${trivyCritical} | ${trivyCritical > 0 ? '⚠️ Action Required' : '✅ Clear'} |\n`;
+            summaryContent += `| 🟠 High | ${trivyHigh} | ${trivyHigh > 0 ? '⚠️ Review Recommended' : '✅ Clear'} |\n`;
+            summaryContent += `| 🟡 Medium | ${trivyMedium} | ${trivyMedium > 0 ? 'ℹ️ Monitor' : '✅ Clear'} |\n`;
+            summaryContent += `| 🔵 Low | ${trivyLow} | ✅ Clear |\n`;
+            summaryContent += `| **Total** | **${trivyTotal}** | — |\n\n`;
+
+            summaryContent += `#### NPM Audit\n\n`;
+            summaryContent += auditPassed 
+              ? `✅ **No vulnerabilities found** — All dependencies pass security audit.\n\n`
+              : `⚠️ **Vulnerabilities detected** — Review \`pnpm audit\` output for details.\n\n`;
+
+            // Coverage summary (if available)
+            summaryContent += `### 📈 Coverage Report\n\n`;
+            summaryContent += `Coverage reports uploaded to [Codecov](https://codecov.io/gh/${{ github.repository }}) 📊\n\n`;
+
+            // Quick links
+            summaryContent += `### 🔗 Quick Links\n\n`;
+            summaryContent += `- [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            summaryContent += `- [View Commit](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})\n`;
+            summaryContent += `- [Codecov Dashboard](https://codecov.io/gh/${{ github.repository }})\n`;
+
+            // Footer
+            summaryContent += `\n---\n`;
+            summaryContent += `*Generated by DojOps CI Workflow* 🚀\n`;
+
+            // Write summary
+            await summary.addRaw(summaryContent).write();
+
+            // Set job output
+            if (!allSuccess) {
+              core.setFailed('One or more CI jobs failed');
+            }
+
+  status:
+    name: CI Status Gate
+    needs: [build, lint, test, security]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verify all checks passed
+        run: |
+          echo "Checking CI status..."
+
+          BUILD="${{ needs.build.result }}"
+          LINT="${{ needs.lint.result }}"
+          TEST="${{ needs.test.result }}"
+          SECURITY="${{ needs.security.result }}"
+
+          FAILED=0
+
+          if [ "$BUILD" != "success" ]; then
+            echo "❌ Build job failed or was cancelled"
+            FAILED=1
+          fi
+
+          if [ "$LINT" != "success" ]; then
+            echo "❌ Lint & Format job failed or was cancelled"
+            FAILED=1
+          fi
+
+          if [ "$TEST" != "success" ]; then
+            echo "❌ Test job failed or was cancelled"
+            FAILED=1
+          fi
+
+          if [ "$SECURITY" != "success" ]; then
+            echo "❌ Security Audit job failed or was cancelled"
+            FAILED=1
+          fi
+
+          if [ $FAILED -eq 0 ]; then
+            echo "✅ All CI checks passed!"
             exit 0
           else
-            echo "Some checks failed." >> "$GITHUB_STEP_SUMMARY"
+            echo "❌ Some CI checks failed"
             exit 1
           fi
