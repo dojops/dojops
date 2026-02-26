@@ -161,6 +161,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   });
 
   // Fix mode
+  let rescanReport: ScanReport | null = null;
   if (fixMode && report.findings.length > 0) {
     const criticalFindings = report.findings.filter(
       (f) => f.severity === "HIGH" || f.severity === "CRITICAL",
@@ -216,12 +217,12 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
 
             // Re-run scan to show delta
             p.log.step("Re-scanning to verify fixes...");
-            const rescan = await runScan(root, scanType, context);
-            const delta = report.summary.total - rescan.summary.total;
+            rescanReport = await runScan(root, scanType, context);
+            const delta = report.summary.total - rescanReport.summary.total;
             if (delta > 0) {
-              p.log.success(`Fixed ${delta} issue(s) (${rescan.summary.total} remaining)`);
+              p.log.success(`Fixed ${delta} issue(s) (${rescanReport.summary.total} remaining)`);
             } else {
-              p.log.info(`${rescan.summary.total} issue(s) remaining`);
+              p.log.info(`${rescanReport.summary.total} issue(s) remaining`);
             }
           }
         }
@@ -232,7 +233,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     }
   }
 
-  exitWithCode(report);
+  exitWithCode(rescanReport ?? report);
 }
 
 function severityLabel(severity: ScanFinding["severity"]): string {

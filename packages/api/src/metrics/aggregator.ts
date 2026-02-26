@@ -117,8 +117,7 @@ export class MetricsAggregator {
 
     for (const entry of entries) {
       if (entry.seq == null || entry.hash == null) {
-        expectedPreviousHash = "genesis";
-        expectedSeq = 1;
+        errorCount++;
         continue;
       }
 

@@ -8,8 +8,9 @@ import { PluginEntry, PluginManifest, PluginSource } from "./types";
 const PLUGIN_DIR_NAME = "plugins";
 const MANIFEST_FILE = "plugin.yaml";
 
-function getGlobalPluginsDir(): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+function getGlobalPluginsDir(): string | null {
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  if (!home) return null;
   return path.join(home, ".dojops", PLUGIN_DIR_NAME);
 }
 
@@ -28,6 +29,9 @@ function computeHash(dir: string): string {
 
 function loadJsonSchemaFile(dir: string, relativePath: string): Record<string, unknown> | null {
   const fullPath = path.resolve(dir, relativePath);
+  // Containment check: ensure the resolved path stays inside the plugin directory
+  const safeDir = dir.endsWith(path.sep) ? dir : dir + path.sep;
+  if (!fullPath.startsWith(safeDir)) return null;
   try {
     if (!fs.existsSync(fullPath)) return null;
     const content = fs.readFileSync(fullPath, "utf-8");
@@ -99,7 +103,7 @@ export function discoverPluginsWithWarnings(projectPath?: string): PluginDiscove
 
   // 1. Global plugins
   const globalDir = getGlobalPluginsDir();
-  if (fs.existsSync(globalDir)) {
+  if (globalDir && fs.existsSync(globalDir)) {
     try {
       const entries = fs.readdirSync(globalDir, { withFileTypes: true });
       for (const entry of entries) {

@@ -42,7 +42,7 @@ export function createApp(deps: AppDependencies): Express {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
           fontSrc: ["'self'", "https://fonts.gstatic.com"],
           connectSrc: ["'self'"],
@@ -94,6 +94,10 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/chat", createChatRouter(deps.provider, deps.router, deps.store));
   if (aggregator) {
     app.use("/api/metrics", createMetricsRouter(aggregator));
+  } else {
+    app.use("/api/metrics", (_req: express.Request, res: express.Response) => {
+      res.status(404).json({ error: "Metrics not available: no project root configured" });
+    });
   }
 
   // Error handler (must be last)

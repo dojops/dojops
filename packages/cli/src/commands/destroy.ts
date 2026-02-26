@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
@@ -79,6 +80,11 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
     let deleted = 0;
     for (const file of allFiles) {
       try {
+        const absFile = path.resolve(file);
+        if (!absFile.startsWith(root + path.sep)) {
+          p.log.warn(`Skipping out-of-project file: ${file}`);
+          continue;
+        }
         if (fs.existsSync(file)) {
           fs.unlinkSync(file);
           p.log.success(`Deleted: ${file}`);

@@ -82,9 +82,24 @@ export class SafeExecutor {
             metadata: meta,
           });
         }
-      } catch {
-        // Graceful degradation: verification errors don't block execution
-        verification = undefined;
+      } catch (verifyErr) {
+        verification = {
+          passed: false,
+          tool: tool.name,
+          issues: [
+            {
+              severity: "error",
+              message: `Verification threw unexpectedly: ${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}`,
+            },
+          ],
+        };
+        return this.buildResult(taskId, tool.name, "failed", startTime, {
+          error: `Verification error: ${verification.issues[0].message}`,
+          output: generateOutput.data,
+          verification,
+          filesWritten,
+          metadata: meta,
+        });
       }
     }
 

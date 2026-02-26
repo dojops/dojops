@@ -7,18 +7,22 @@ import { discoverProjectDirs } from "../discovery";
 
 const PIP_INDICATORS = ["requirements.txt", "Pipfile", "setup.py", "pyproject.toml"];
 
-interface PipAuditVuln {
+interface PipAuditPackage {
   name: string;
   version: string;
+  vulns: PipAuditVuln[];
+}
+
+interface PipAuditVuln {
   id: string;
   fix_versions?: string[];
   description?: string;
   aliases?: string[];
 }
 
-function mapPipSeverity(vuln: PipAuditVuln): "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" {
-  const desc = (vuln.description ?? "").toLowerCase();
-  const id = vuln.id.toLowerCase();
+function mapPipSeverity(id: string, description?: string): "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" {
+  const desc = (description ?? "").toLowerCase();
+  id = id.toLowerCase();
   // CVE-based heuristic: critical keywords → CRITICAL, otherwise HIGH for known vulns
   if (
     desc.includes("remote code execution") ||
@@ -109,26 +113,28 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
   const findings: ScanFinding[] = [];
 
   try {
-    const vulns: PipAuditVuln[] = JSON.parse(rawOutput);
-    for (const vuln of vulns) {
-      const prefix = subProject ? `${subProject}: ` : "";
-      findings.push({
-        id: `pip-${crypto.randomUUID().slice(0, 8)}`,
-        tool: "pip-audit",
-        severity: mapPipSeverity(vuln),
-        category: "DEPENDENCY",
-        file: subProject
-          ? `${subProject}/${hasRequirements ? "requirements.txt" : "pyproject.toml"}`
-          : hasRequirements
-            ? "requirements.txt"
-            : "pyproject.toml",
-        message: `${prefix}${vuln.name}@${vuln.version}: ${vuln.id}${vuln.description ? ` — ${vuln.description}` : ""}`,
-        recommendation:
-          vuln.fix_versions && vuln.fix_versions.length > 0
-            ? `Update to ${vuln.name}>=${vuln.fix_versions[vuln.fix_versions.length - 1]}`
-            : "No fix version available — review manually",
-        autoFixAvailable: !!(vuln.fix_versions && vuln.fix_versions.length > 0),
-      });
+    const packages: PipAuditPackage[] = JSON.parse(rawOutput);
+    for (const pkg of packages) {
+      for (const vuln of pkg.vulns) {
+        const prefix = subProject ? `${subProject}: ` : "";
+        findings.push({
+          id: `pip-${crypto.randomUUID().slice(0, 8)}`,
+          tool: "pip-audit",
+          severity: mapPipSeverity(vuln.id, vuln.description),
+          category: "DEPENDENCY",
+          file: subProject
+            ? `${subProject}/${hasRequirements ? "requirements.txt" : "pyproject.toml"}`
+            : hasRequirements
+              ? "requirements.txt"
+              : "pyproject.toml",
+          message: `${prefix}${pkg.name}@${pkg.version}: ${vuln.id}${vuln.description ? ` — ${vuln.description}` : ""}`,
+          recommendation:
+            vuln.fix_versions && vuln.fix_versions.length > 0
+              ? `Update to ${pkg.name}>=${vuln.fix_versions[vuln.fix_versions.length - 1]}`
+              : "No fix version available — review manually",
+          autoFixAvailable: !!(vuln.fix_versions && vuln.fix_versions.length > 0),
+        });
+      }
     }
   } catch {
     findings.push({

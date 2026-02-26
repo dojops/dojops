@@ -4,6 +4,7 @@ import { ToolDependency } from "@dojops/core";
 // Mock child_process before importing preflight
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 // Mock @clack/prompts to suppress TUI output in tests
@@ -11,10 +12,10 @@ vi.mock("@clack/prompts", () => ({
   log: { warn: vi.fn(), error: vi.fn() },
 }));
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { resolveBinary, runPreflight, preflightCheck } from "./preflight";
 
-const mockedExecSync = vi.mocked(execSync);
+const mockedExecFileSync = vi.mocked(execFileSync);
 
 const shellcheck: ToolDependency = {
   name: "ShellCheck",
@@ -46,13 +47,13 @@ beforeEach(() => {
 
 describe("resolveBinary", () => {
   it("returns path when binary is found", () => {
-    mockedExecSync.mockReturnValue(Buffer.from("/usr/bin/shellcheck\n"));
+    mockedExecFileSync.mockReturnValue(Buffer.from("/usr/bin/shellcheck\n"));
     const result = resolveBinary("shellcheck");
     expect(result).toBe("/usr/bin/shellcheck");
   });
 
   it("returns undefined when binary is not found", () => {
-    mockedExecSync.mockImplementation(() => {
+    mockedExecFileSync.mockImplementation(() => {
       throw new Error("not found");
     });
     const result = resolveBinary("nonexistent");
@@ -62,7 +63,7 @@ describe("resolveBinary", () => {
 
 describe("runPreflight", () => {
   it("detects available binaries", () => {
-    mockedExecSync.mockReturnValue(Buffer.from("/usr/bin/shellcheck\n"));
+    mockedExecFileSync.mockReturnValue(Buffer.from("/usr/bin/shellcheck\n"));
     const result = runPreflight("shell-specialist", [shellcheck]);
     expect(result.canProceed).toBe(true);
     expect(result.checks[0].available).toBe(true);
@@ -71,7 +72,7 @@ describe("runPreflight", () => {
   });
 
   it("detects missing binaries", () => {
-    mockedExecSync.mockImplementation(() => {
+    mockedExecFileSync.mockImplementation(() => {
       throw new Error("not found");
     });
     const result = runPreflight("shell-specialist", [shellcheck]);
@@ -81,7 +82,7 @@ describe("runPreflight", () => {
   });
 
   it("blocks on missing required tools", () => {
-    mockedExecSync.mockImplementation(() => {
+    mockedExecFileSync.mockImplementation(() => {
       throw new Error("not found");
     });
     const result = runPreflight("test-agent", [requiredTool]);
@@ -105,7 +106,7 @@ describe("preflightCheck", () => {
   });
 
   it("returns true for optional missing tools", () => {
-    mockedExecSync.mockImplementation(() => {
+    mockedExecFileSync.mockImplementation(() => {
       throw new Error("not found");
     });
     const result = preflightCheck("agent", [shellcheck, snyk]);
@@ -113,7 +114,7 @@ describe("preflightCheck", () => {
   });
 
   it("returns false when required tool is missing", () => {
-    mockedExecSync.mockImplementation(() => {
+    mockedExecFileSync.mockImplementation(() => {
       throw new Error("not found");
     });
     const result = preflightCheck("agent", [requiredTool]);
@@ -122,7 +123,7 @@ describe("preflightCheck", () => {
 
   it("outputs JSON when json option is set", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockedExecSync.mockReturnValue(Buffer.from("/usr/bin/shellcheck\n"));
+    mockedExecFileSync.mockReturnValue(Buffer.from("/usr/bin/shellcheck\n"));
     preflightCheck("agent", [shellcheck], { json: true });
     expect(spy).toHaveBeenCalled();
     const output = JSON.parse(spy.mock.calls[0][0] as string);
@@ -133,7 +134,7 @@ describe("preflightCheck", () => {
 
   it("skips output in quiet mode when all tools pass", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockedExecSync.mockReturnValue(Buffer.from("/usr/bin/shellcheck\n"));
+    mockedExecFileSync.mockReturnValue(Buffer.from("/usr/bin/shellcheck\n"));
     const result = preflightCheck("agent", [shellcheck], { quiet: true });
     expect(result).toBe(true);
     expect(spy).not.toHaveBeenCalled();

@@ -52,7 +52,13 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
 
   // API key present
   if (provider && provider !== "ollama") {
-    const envVar = provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+    const envVarMap: Record<string, string> = {
+      openai: "OPENAI_API_KEY",
+      anthropic: "ANTHROPIC_API_KEY",
+      deepseek: "DEEPSEEK_API_KEY",
+      gemini: "GEMINI_API_KEY",
+    };
+    const envVar = envVarMap[provider] ?? "OPENAI_API_KEY";
     const hasEnvKey = !!process.env[envVar];
     const hasConfigKey = !!ctx.config.tokens?.[provider];
     checks.push({

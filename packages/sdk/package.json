@@ -36,7 +36,7 @@
     "build": "tsc",
     "lint": "eslint src/",
     "test": "vitest run",
-    "prepublishOnly": "test -d dist"
+    "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
   },
   "dependencies": {
     "zod": "^3.23.0"

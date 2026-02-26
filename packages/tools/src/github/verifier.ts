@@ -12,9 +12,8 @@ export function verifyGitHubActions(yamlContent: string): VerificationResult {
       return { passed: false, tool: "github-actions-lint", issues };
     }
 
-    // Required: 'on' trigger
-    if (!doc.on && !doc.true) {
-      // YAML parses `on:` as `true:` key in some cases
+    // Required: 'on' trigger (js-yaml v4 uses YAML 1.2; 'on' is parsed as literal key, not boolean)
+    if (!doc["on"]) {
       issues.push({ severity: "error", message: "Missing required 'on' trigger" });
     }
 

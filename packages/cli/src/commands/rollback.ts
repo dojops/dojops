@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
@@ -82,7 +83,8 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   const totalActions = filesToDelete.length + filesToRestore.length;
-  if (!ctx.globalOpts.nonInteractive) {
+  const skipPrompt = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
+  if (!skipPrompt) {
     const confirm = await p.confirm({
       message: `Roll back ${totalActions} file(s)?`,
     });
@@ -103,6 +105,11 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
     let deleted = 0;
     for (const file of filesToDelete) {
       try {
+        const absFile = path.resolve(file);
+        if (!absFile.startsWith(root + path.sep)) {
+          p.log.warn(`Skipping out-of-project file: ${file}`);
+          continue;
+        }
         if (fs.existsSync(file)) {
           fs.unlinkSync(file);
           p.log.success(`Removed: ${file}`);

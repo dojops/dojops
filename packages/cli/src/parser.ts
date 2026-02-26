@@ -48,16 +48,24 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
     } else if (arg === "--temperature" && i + 1 < args.length) {
       const t = Number(args[++i]);
       if (isNaN(t)) throw new Error(`Invalid --temperature value: "${args[i]}"`);
+      if (t < 0 || t > 2) throw new Error(`--temperature must be between 0 and 2, got: ${t}`);
       globalOpts.temperature = t;
     } else if (arg.startsWith("--temperature=")) {
       const raw = arg.slice("--temperature=".length);
       const t = Number(raw);
       if (isNaN(t)) throw new Error(`Invalid --temperature value: "${raw}"`);
+      if (t < 0 || t > 2) throw new Error(`--temperature must be between 0 and 2, got: ${t}`);
       globalOpts.temperature = t;
     } else if (arg === "--output" && i + 1 < args.length) {
-      globalOpts.output = args[++i] as OutputFormat;
+      const fmt = args[++i];
+      if (!["table", "json", "yaml"].includes(fmt))
+        throw new Error(`Invalid --output value: "${fmt}". Valid: table, json, yaml`);
+      globalOpts.output = fmt as OutputFormat;
     } else if (arg.startsWith("--output=")) {
-      globalOpts.output = arg.slice("--output=".length) as OutputFormat;
+      const fmt = arg.slice("--output=".length);
+      if (!["table", "json", "yaml"].includes(fmt))
+        throw new Error(`Invalid --output value: "${fmt}". Valid: table, json, yaml`);
+      globalOpts.output = fmt as OutputFormat;
     } else {
       remaining.push(arg);
     }

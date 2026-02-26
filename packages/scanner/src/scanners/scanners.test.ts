@@ -176,9 +176,13 @@ describe("scanPip", () => {
         {
           name: "django",
           version: "3.2.0",
-          id: "CVE-2024-0001",
-          fix_versions: ["3.2.25"],
-          description: "SQL injection vulnerability",
+          vulns: [
+            {
+              id: "CVE-2024-0001",
+              fix_versions: ["3.2.25"],
+              description: "SQL injection vulnerability",
+            },
+          ],
         },
       ]),
     );
@@ -216,8 +220,12 @@ describe("scanPip", () => {
         {
           name: "flask",
           version: "2.0.0",
-          id: "CVE-2024-0002",
-          fix_versions: ["2.3.0"],
+          vulns: [
+            {
+              id: "CVE-2024-0002",
+              fix_versions: ["2.3.0"],
+            },
+          ],
         },
       ]),
     );

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { atomicWriteFileSync } from "@dojops/sdk";
 import { ChatSessionState } from "./types";
 
 function sessionsDir(rootDir: string): string {
@@ -15,8 +16,8 @@ export function saveSession(rootDir: string, session: ChatSessionState): void {
   const dir = sessionsDir(rootDir);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${session.id}.json`);
-  session.updatedAt = new Date().toISOString();
-  fs.writeFileSync(file, JSON.stringify(session, null, 2) + "\n");
+  const toSave = { ...session, updatedAt: new Date().toISOString() };
+  atomicWriteFileSync(file, JSON.stringify(toSave, null, 2) + "\n");
 }
 
 export function loadSession(rootDir: string, sessionId: string): ChatSessionState | null {

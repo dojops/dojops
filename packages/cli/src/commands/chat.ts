@@ -187,6 +187,9 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     }
   }
 
+  // Clean up SIGINT handler before normal exit
+  process.off("SIGINT", saveAndExit);
+
   // Save on exit
   saveChatSession(rootDir, session.getState());
   p.outro("Chat session ended.");

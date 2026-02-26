@@ -31,7 +31,7 @@ const checkIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 
 function wrapCodeBlock(preHtml, rawText, id) {
   return `<div class="code-block">
-    <button class="copy-btn" onclick="copyCode('${id}')" id="copy-${id}">
+    <button class="copy-btn" data-action="copyCode" data-id="${id}" id="copy-${id}">
       ${copyIcon}<span>Copy</span>
     </button>
     ${preHtml}
@@ -170,6 +170,10 @@ function navigateToTab(tab) {
 
 globalThis.navigateToTab = navigateToTab;
 
+// Logo click handlers (CSP-compliant, no inline onclick)
+if ($("sidebar-logo")) $("sidebar-logo").addEventListener("click", () => navigateToTab("overview"));
+if ($("topbar-logo")) $("topbar-logo").addEventListener("click", () => navigateToTab("overview"));
+
 document.querySelectorAll(".nav-item").forEach((item) => {
   item.addEventListener("click", () => {
     navigateToTab(item.dataset.tab);
@@ -220,7 +224,7 @@ function renderTaskGraph(graph, planResult) {
           ? resultInfo.output
           : JSON.stringify(resultInfo.output, null, 2);
       html += `
-        <button class="task-node__output-toggle" id="${toggleId}" onclick="toggleTaskOutput('${outputId}', '${toggleId}')">
+        <button class="task-node__output-toggle" id="${toggleId}" data-action="toggleTaskOutput" data-output-id="${outputId}" data-toggle-id="${toggleId}">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
           View output
         </button>
@@ -296,7 +300,7 @@ function renderDiagnosis(d) {
     .join("\n");
 
   let html = `<div class="result-card">
-    <button class="copy-btn" onclick="copyCode('${diagCid}')" id="copy-${diagCid}" style="position:absolute;top:12px;right:12px;opacity:1">
+    <button class="copy-btn" data-action="copyCode" data-id="${diagCid}" id="copy-${diagCid}" style="position:absolute;top:12px;right:12px;opacity:1">
       ${copyIcon}<span>Copy all</span>
     </button>
     <textarea id="raw-${diagCid}" style="display:none">${escapeHtml(fullDiag)}</textarea>
@@ -375,7 +379,7 @@ function renderAnalysis(a) {
     .join("\n");
 
   let html = `<div class="result-card" style="position:relative">
-    <button class="copy-btn" onclick="copyCode('${diffCid}')" id="copy-${diffCid}" style="position:absolute;top:12px;right:12px;opacity:1">
+    <button class="copy-btn" data-action="copyCode" data-id="${diffCid}" id="copy-${diffCid}" style="position:absolute;top:12px;right:12px;opacity:1">
       ${copyIcon}<span>Copy all</span>
     </button>
     <textarea id="raw-${diffCid}" style="display:none">${escapeHtml(fullAnalysis)}</textarea>`;
@@ -659,7 +663,7 @@ function renderHistory(entries) {
 
     html += `
       <div>
-        <div class="history-row" onclick="toggleDetail('detail-${e.id}')">
+        <div class="history-row" data-action="toggleDetail" data-detail-id="detail-${e.id}">
           <span class="history-row__id">${escapeHtml(e.id)}</span>
           <span class="chip chip--muted">${escapeHtml(e.type)}</span>
           <span class="history-row__time">${escapeHtml(time)}</span>
@@ -843,7 +847,7 @@ function renderOverview(data) {
     "</div>" +
     "</div>" +
     (healthLevel === "critical"
-      ? '<a class="health-banner__link" onclick="navigateToTab(\'security\')" style="margin-left:auto;cursor:pointer;color:var(--error);font-size:12px;font-weight:600;text-decoration:underline;white-space:nowrap">View Security &rarr;</a>'
+      ? '<a class="health-banner__link" data-action="navigateToTab" data-tab="security" style="margin-left:auto;cursor:pointer;color:var(--error);font-size:12px;font-weight:600;text-decoration:underline;white-space:nowrap">View Security &rarr;</a>'
       : "") +
     "</div>";
 
@@ -1575,17 +1579,17 @@ function renderPagination(currentPage, totalPages, totalItems, goFnName) {
   html += '<div class="pagination__btns">';
 
   html +=
-    '<button class="pagination__btn" onclick="' +
+    '<button class="pagination__btn" data-action="paginate" data-fn="' +
     goFnName +
-    '(1)"' +
+    '" data-page="1"' +
     (currentPage <= 1 ? " disabled" : "") +
     ">&laquo;</button>";
   html +=
-    '<button class="pagination__btn" onclick="' +
+    '<button class="pagination__btn" data-action="paginate" data-fn="' +
     goFnName +
-    "(" +
+    '" data-page="' +
     (currentPage - 1) +
-    ')"' +
+    '"' +
     (currentPage <= 1 ? " disabled" : "") +
     ">&lsaquo;</button>";
 
@@ -1598,29 +1602,29 @@ function renderPagination(currentPage, totalPages, totalItems, goFnName) {
     html +=
       '<button class="pagination__btn' +
       (p === currentPage ? " pagination__btn--active" : "") +
-      '" onclick="' +
+      '" data-action="paginate" data-fn="' +
       goFnName +
-      "(" +
+      '" data-page="' +
       p +
-      ')">' +
+      '">' +
       p +
       "</button>";
   }
 
   html +=
-    '<button class="pagination__btn" onclick="' +
+    '<button class="pagination__btn" data-action="paginate" data-fn="' +
     goFnName +
-    "(" +
+    '" data-page="' +
     (currentPage + 1) +
-    ')"' +
+    '"' +
     (currentPage >= totalPages ? " disabled" : "") +
     ">&rsaquo;</button>";
   html +=
-    '<button class="pagination__btn" onclick="' +
+    '<button class="pagination__btn" data-action="paginate" data-fn="' +
     goFnName +
-    "(" +
+    '" data-page="' +
     totalPages +
-    ')"' +
+    '"' +
     (currentPage >= totalPages ? " disabled" : "") +
     ">&raquo;</button>";
   html += "</div>";
@@ -1677,5 +1681,25 @@ async function init() {
     searchEl.addEventListener("input", renderAgentsFiltered);
   }
 }
+
+// ── CSP-safe event delegation ────────────────────────────
+// Replaces all inline onclick handlers with data-action attributes
+document.addEventListener("click", function (e) {
+  var target = e.target.closest("[data-action]");
+  if (!target) return;
+  var action = target.dataset.action;
+  if (action === "copyCode") {
+    copyCode(target.dataset.id);
+  } else if (action === "toggleTaskOutput") {
+    toggleTaskOutput(target.dataset.outputId, target.dataset.toggleId);
+  } else if (action === "toggleDetail") {
+    toggleDetail(target.dataset.detailId);
+  } else if (action === "navigateToTab") {
+    navigateToTab(target.dataset.tab);
+  } else if (action === "paginate") {
+    var fn = globalThis[target.dataset.fn];
+    if (typeof fn === "function") fn(parseInt(target.dataset.page, 10));
+  }
+});
 
 init();

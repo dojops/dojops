@@ -1,4 +1,6 @@
 import * as crypto from "crypto";
+import * as fs from "fs";
+import * as path from "path";
 import { execFileSync } from "child_process";
 import { ZodTypeAny } from "zod";
 import {
@@ -163,6 +165,7 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
         }
 
         const content = serialize(data.generated, file.serializer);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
         atomicWriteFileSync(filePath, content);
       }
 

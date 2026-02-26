@@ -95,12 +95,9 @@ export function createChatRouter(
       router: agentRouter,
       mode: mode ?? "INTERACTIVE",
     });
+    if (name) session.setName(name);
     sessions.set(session.id, session);
-    const state = session.getState();
-    if (name) {
-      (state as ChatSessionState).name = name;
-    }
-    res.status(201).json(state);
+    res.status(201).json(session.getState());
   });
 
   // GET /sessions — List all sessions

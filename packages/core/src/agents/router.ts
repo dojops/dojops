@@ -43,11 +43,14 @@ export class AgentRouter {
 
     if (bestMatch) return bestMatch;
 
+    if (this.agents.length === 0) {
+      throw new Error("AgentRouter has no agents configured");
+    }
     const fallback = this.agents.find((a) => a.domain === "orchestration") ?? this.agents[0];
     return {
       agent: fallback,
       confidence: 0,
-      reason: "No domain match, routing to OpsCortex",
+      reason: `No domain match, routing to ${fallback.name}`,
     };
   }
 

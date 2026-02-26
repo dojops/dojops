@@ -1,4 +1,5 @@
 import { defineConfig, defaultExclude } from "vitest/config";
+import path from "path";
 
 export default defineConfig({
   test: {
@@ -11,5 +12,12 @@ export default defineConfig({
       "**/*.smoke.test.ts",
     ],
     passWithNoTests: true,
+  },
+  resolve: {
+    alias: {
+      "@dojops/core": path.resolve(__dirname, "../core/src"),
+      "@dojops/tool-registry": path.resolve(__dirname, "../tool-registry/src"),
+      "@dojops/sdk": path.resolve(__dirname, "../sdk/src"),
+    },
   },
 });

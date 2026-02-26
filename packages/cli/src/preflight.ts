@@ -31,8 +31,11 @@ export function resolveBinary(name: string): string | undefined {
   }
 
   try {
-    const cmd = process.platform === "win32" ? `where ${name}` : `which ${name}`;
-    const result = execSync(cmd, { timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] });
+    const bin = process.platform === "win32" ? "where" : "which";
+    const result = execFileSync(bin, [name], {
+      timeout: 5_000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
     const resolved = result.toString().trim().split("\n")[0];
     return resolved || undefined;
   } catch {

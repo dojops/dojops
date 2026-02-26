@@ -128,6 +128,10 @@ export class ChatSession {
     return { content: response.content, agent: agent.name };
   }
 
+  setName(name: string): void {
+    this.state.name = name;
+  }
+
   pinAgent(agentName: string): void {
     this.state.pinnedAgent = agentName;
   }

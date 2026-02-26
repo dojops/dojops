@@ -51,13 +51,17 @@ export class AnthropicProvider implements LLMProvider {
         const messagesWithoutPrefill = messages.filter(
           (m) => !(m.role === "assistant" && m.content === "{"),
         );
-        message = await this.client.messages.create({
-          model: this.model,
-          max_tokens: req.maxTokens ?? 8192,
-          system,
-          messages: messagesWithoutPrefill,
-          ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
-        });
+        try {
+          message = await this.client.messages.create({
+            model: this.model,
+            max_tokens: req.maxTokens ?? 8192,
+            system,
+            messages: messagesWithoutPrefill,
+            ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+          });
+        } catch (retryErr: unknown) {
+          throw new Error(extractApiError(retryErr), { cause: retryErr });
+        }
       } else {
         throw new Error(errMsg, { cause: err });
       }

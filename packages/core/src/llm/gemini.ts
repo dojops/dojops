@@ -21,10 +21,10 @@ export class GeminiProvider implements LLMProvider {
       ? req.messages
           .filter((m) => m.role !== "system")
           .map((m) => ({
-            role: m.role === "assistant" ? "model" : "user",
+            role: m.role === "assistant" ? ("model" as const) : ("user" as const),
             parts: [{ text: m.content }],
           }))
-      : req.prompt;
+      : [{ role: "user" as const, parts: [{ text: req.prompt }] }];
 
     let response;
     try {

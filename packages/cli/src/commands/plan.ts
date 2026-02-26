@@ -18,8 +18,12 @@ import {
   loadSession,
   saveSession,
   appendAudit,
+  saveExecution,
   loadContext,
   getDojopsVersion,
+  acquireLock,
+  releaseLock,
+  isLocked,
   PlanState,
 } from "../state";
 
@@ -30,7 +34,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
   const prompt = stripFlags(
     args,
-    new Set(["--execute", "--yes", "--skip-verify"]),
+    new Set(["--execute", "--yes", "--skip-verify", "--force"]),
     new Set<string>(),
   ).join(" ");
 
@@ -145,6 +149,39 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   const startTime = Date.now();
 
   if (executeMode) {
+    // HIGH risk gate: always require explicit confirmation even with --yes
+    const force = hasFlag(args, "--force");
+    if ((savedPlan.risk === "HIGH" || savedPlan.risk === "CRITICAL") && !force) {
+      p.log.warn(pc.bold(pc.red(`This plan is classified as ${savedPlan.risk} risk.`)));
+      if (autoApprove) {
+        p.log.warn(
+          `${savedPlan.risk} risk plans require explicit confirmation. Use --force to bypass.`,
+        );
+      }
+      const highRiskConfirm = await p.confirm({
+        message: `This is a ${savedPlan.risk} risk plan. Are you sure you want to proceed?`,
+      });
+      if (p.isCancel(highRiskConfirm) || !highRiskConfirm) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+      }
+    }
+
+    if (!autoApprove) {
+      const confirm = await p.confirm({ message: "Execute this plan?" });
+      if (p.isCancel(confirm) || !confirm) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+      }
+    }
+
+    if (!acquireLock(root, "plan-execute")) {
+      const { info } = isLocked(root);
+      p.log.error(`Operation locked by PID ${info?.pid} (${info?.operation})`);
+      process.exit(ExitCode.LOCK_CONFLICT);
+    }
+    process.once("exit", () => releaseLock(root));
+
     const safeExecutor = new SafeExecutor({
       policy: {
         allowWrite: true,
@@ -173,6 +210,9 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     const planResult = await executor.execute(graph);
 
     p.log.step("Executing approved tasks...");
+    const allFilesCreated: string[] = [];
+    const allFilesModified: string[] = [];
+
     for (const taskResult of planResult.results) {
       if (taskResult.status !== "completed") continue;
 
@@ -197,6 +237,11 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
         Object.keys(metadata).length > 0 ? metadata : undefined,
       );
 
+      const taskFiles = execResult.auditLog?.filesWritten ?? [];
+      const taskModified = execResult.auditLog?.filesModified ?? [];
+      allFilesCreated.push(...taskFiles);
+      allFilesModified.push(...taskModified);
+
       const approval =
         execResult.approval === "approved"
           ? pc.green(execResult.approval)
@@ -214,6 +259,17 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     if (auditLog.length > 0) {
       p.log.info(pc.dim(`Audit log: ${auditLog.length} entries`));
     }
+
+    // Save execution record for rollback support
+    const durationMs = Date.now() - startTime;
+    saveExecution(root, {
+      planId,
+      executedAt: new Date().toISOString(),
+      status: planResult.success ? "SUCCESS" : "FAILURE",
+      filesCreated: allFilesCreated,
+      filesModified: allFilesModified,
+      durationMs,
+    });
 
     appendAudit(root, {
       timestamp: new Date().toISOString(),

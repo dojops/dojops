@@ -11,8 +11,9 @@ export interface CustomAgentEntry {
   location: "global" | "project";
 }
 
-function getGlobalAgentsDir(): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+function getGlobalAgentsDir(): string | null {
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  if (!home) return null;
   return path.join(home, ".dojops", AGENTS_DIR_NAME);
 }
 
@@ -50,7 +51,7 @@ export function discoverCustomAgents(projectPath?: string): CustomAgentEntry[] {
 
   // 1. Global agents
   const globalDir = getGlobalAgentsDir();
-  if (fs.existsSync(globalDir)) {
+  if (globalDir && fs.existsSync(globalDir)) {
     try {
       const entries = fs.readdirSync(globalDir, { withFileTypes: true });
       for (const entry of entries) {

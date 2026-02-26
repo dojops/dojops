@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 import {
   BaseTool,
@@ -84,6 +85,7 @@ export class GitLabCITool extends BaseTool<GitLabCIInput> {
       backupFile(filePath);
     }
 
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
     atomicWriteFileSync(filePath, data.yaml);
 
     const filesWritten = [filePath];

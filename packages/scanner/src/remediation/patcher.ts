@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { atomicWriteFileSync } from "@dojops/sdk";
 import { RemediationPlan, PatchResult } from "../types";
 
 export function applyFixes(plan: RemediationPlan, projectPath: string): PatchResult {
@@ -11,7 +12,7 @@ export function applyFixes(plan: RemediationPlan, projectPath: string): PatchRes
 
     try {
       // Safety: only modify files within the project directory
-      if (!filePath.startsWith(path.resolve(projectPath))) {
+      if (!filePath.startsWith(path.resolve(projectPath) + path.sep)) {
         errors.push(`${fix.findingId}: Path traversal blocked — ${fix.file}`);
         continue;
       }
@@ -30,7 +31,7 @@ export function applyFixes(plan: RemediationPlan, projectPath: string): PatchRes
           if (parts.length === 2) {
             const [oldStr, newStr] = parts;
             if (content.includes(oldStr)) {
-              fs.writeFileSync(filePath, content.replace(oldStr, newStr), "utf-8");
+              atomicWriteFileSync(filePath, content.replaceAll(oldStr, newStr));
               filesModified.push(fix.file);
             } else {
               errors.push(`${fix.findingId}: Pattern not found in ${fix.file}`);
@@ -53,7 +54,7 @@ export function applyFixes(plan: RemediationPlan, projectPath: string): PatchRes
                     pkg[section][depName] = newVersion;
                   }
                 }
-                fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+                atomicWriteFileSync(filePath, JSON.stringify(pkg, null, 2) + "\n");
                 filesModified.push(fix.file);
               }
             } catch {
@@ -67,7 +68,7 @@ export function applyFixes(plan: RemediationPlan, projectPath: string): PatchRes
                 new RegExp(`^${escapeRegex(pkgName.trim())}[><=!~].+$`, "m"),
                 `${pkgName.trim()}>=${newVersion}`,
               );
-              fs.writeFileSync(filePath, updated, "utf-8");
+              atomicWriteFileSync(filePath, updated);
               filesModified.push(fix.file);
             }
           }
@@ -76,7 +77,7 @@ export function applyFixes(plan: RemediationPlan, projectPath: string): PatchRes
 
         case "write": {
           // Overwrite file with patch content
-          fs.writeFileSync(filePath, fix.patch, "utf-8");
+          atomicWriteFileSync(filePath, fix.patch);
           filesModified.push(fix.file);
           break;
         }

@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 import {
   BaseTool,
@@ -73,6 +74,7 @@ export class DockerComposeTool extends BaseTool<DockerComposeInput> {
       backupFile(filePath);
     }
 
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
     atomicWriteFileSync(filePath, data.yaml);
 
     const filesWritten = [filePath];

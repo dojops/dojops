@@ -1,6 +1,8 @@
 import { z } from "zod";
+import * as path from "path";
 
 const noPathTraversal = (val: string) => !val.split(/[/\\]/).includes("..");
+const isRelativePath = (val: string) => !path.isAbsolute(val);
 
 const FileEntrySchema = z.object({
   path: z.string().min(1).refine(noPathTraversal, "Path must not contain '..' traversal segments"),
@@ -38,8 +40,19 @@ export const PluginManifestSchema = z.object({
   version: z.string().min(1),
   type: z.literal("tool"),
   description: z.string().min(1).max(500),
-  inputSchema: z.string().min(1),
-  outputSchema: z.string().optional(),
+  inputSchema: z
+    .string()
+    .min(1)
+    .refine(noPathTraversal, "inputSchema path must not contain '..' traversal segments")
+    .refine(isRelativePath, "inputSchema must be a relative path"),
+  outputSchema: z
+    .string()
+    .optional()
+    .refine(
+      (v) => v === undefined || noPathTraversal(v),
+      "outputSchema path must not contain '..' traversal segments",
+    )
+    .refine((v) => v === undefined || isRelativePath(v), "outputSchema must be a relative path"),
   tags: z.array(z.string()).optional(),
   generator: GeneratorSchema,
   files: z.array(FileEntrySchema).min(1),

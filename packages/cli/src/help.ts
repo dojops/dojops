@@ -65,7 +65,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--resume")}               Resume a partially-applied plan`);
   console.log(`  ${pc.cyan("--yes")}                  Auto-approve all executions`);
   console.log(
-    `  ${pc.cyan("--skip-verify")}          Skip external config validation (on by default)`,
+    `  ${pc.cyan("--skip-verify")}          Skip external config validation (verification runs by default)`,
   );
   console.log(`  ${pc.cyan("--force")}                Skip git dirty working tree check`);
   console.log(`  ${pc.cyan("--allow-all-paths")}      Bypass DevOps file write allowlist`);

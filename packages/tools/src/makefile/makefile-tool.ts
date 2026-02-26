@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 import {
   BaseTool,
@@ -72,6 +73,7 @@ export class MakefileTool extends BaseTool<MakefileInput> {
       backupFile(filePath);
     }
 
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
     atomicWriteFileSync(filePath, data.makefile);
 
     const filesWritten = [filePath];

@@ -1,12 +1,13 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 
 const MAX_CONTENT_SIZE = 50 * 1024; // 50 KB
 
 export function atomicWriteFileSync(filePath: string, content: string): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
-  const tmpPath = `${filePath}.tmp`;
+  const tmpPath = `${filePath}.${crypto.randomBytes(4).toString("hex")}.tmp`;
   try {
     fs.writeFileSync(tmpPath, content, "utf-8");
     fs.renameSync(tmpPath, filePath);
@@ -22,11 +23,18 @@ export function atomicWriteFileSync(filePath: string, content: string): void {
 
 export function restoreBackup(filePath: string): boolean {
   const bakPath = `${filePath}.bak`;
-  if (fs.existsSync(bakPath)) {
+  if (!fs.existsSync(bakPath)) return false;
+  try {
     fs.renameSync(bakPath, filePath);
-    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EXDEV") {
+      fs.copyFileSync(bakPath, filePath);
+      fs.unlinkSync(bakPath);
+    } else {
+      throw err;
+    }
   }
-  return false;
+  return true;
 }
 
 export function readExistingConfig(filePath: string): string | null {

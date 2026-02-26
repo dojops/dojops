@@ -216,6 +216,12 @@ Generate a complete agent definition with:
     keywords: string[];
   };
 
+  // Validate name format (LLM output is untrusted)
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(agent.name)) {
+    p.log.error(`LLM returned an invalid agent name: "${agent.name}". Must be kebab-case.`);
+    process.exit(ExitCode.VALIDATION_ERROR);
+  }
+
   // Show preview — wrap long lines to terminal width
   const cols = Math.min(process.stdout.columns || 80, 80) - 6;
   const wrap = (text: string, indent: number): string => {
@@ -319,7 +325,7 @@ async function agentCreateManual(ctx: CLIContext, isGlobal: boolean): Promise<vo
 function writeAgentToDisk(name: string, readme: string, isGlobal: boolean): void {
   const base = isGlobal
     ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? "", ".dojops", "agents", name)
-    : path.join(process.cwd(), ".dojops", "agents", name);
+    : path.join(findProjectRoot() ?? process.cwd(), ".dojops", "agents", name);
 
   fs.mkdirSync(base, { recursive: true });
   const readmePath = path.join(base, "README.md");

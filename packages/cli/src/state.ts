@@ -256,7 +256,12 @@ export function savePlan(rootDir: string, plan: PlanState): string {
   return plan.id;
 }
 
+export function isValidPlanId(planId: string): boolean {
+  return /^plan-[a-z0-9-]+$/.test(planId);
+}
+
 export function loadPlan(rootDir: string, planId: string): PlanState | null {
+  if (!isValidPlanId(planId)) return null;
   const file = path.join(plansDir(rootDir), `${planId}.json`);
   try {
     return JSON.parse(fs.readFileSync(file, "utf-8")) as PlanState;

@@ -65,7 +65,9 @@ export function nginxConfigToString(config: NginxConfig): string {
     if (server.ssl_certificate) {
       lines.push("");
       lines.push(`    ssl_certificate ${server.ssl_certificate};`);
-      lines.push(`    ssl_certificate_key ${server.ssl_certificate_key};`);
+      if (server.ssl_certificate_key) {
+        lines.push(`    ssl_certificate_key ${server.ssl_certificate_key};`);
+      }
     }
 
     for (const location of server.locations) {

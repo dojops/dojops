@@ -51,7 +51,17 @@ export async function verifyDockerfile(dockerfile: string): Promise<Verification
       }
     }
 
-    const results: HadolintResult[] = JSON.parse(rawOutput);
+    let results: HadolintResult[];
+    try {
+      results = JSON.parse(rawOutput);
+    } catch {
+      return {
+        passed: false,
+        tool: "hadolint",
+        issues: [{ severity: "error", message: "Failed to parse hadolint JSON output" }],
+        rawOutput,
+      };
+    }
 
     const issues: VerificationIssue[] = results.map((r) => ({
       severity: mapLevel(r.level),

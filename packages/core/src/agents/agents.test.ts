@@ -125,7 +125,7 @@ describe("AgentRouter", () => {
     const result = router.route("Do something completely unrelated to anything");
     expect(result.agent.domain).toBe("orchestration");
     expect(result.confidence).toBe(0);
-    expect(result.reason).toContain("OpsCortex");
+    expect(result.reason).toContain("ops-cortex");
   });
 
   it("picks the highest-confidence match when multiple specialists match", () => {

@@ -72,7 +72,17 @@ export async function verifyTerraformHcl(hcl: string): Promise<VerificationResul
       }
     }
 
-    const parsed: TerraformValidateOutput = JSON.parse(rawOutput);
+    let parsed: TerraformValidateOutput;
+    try {
+      parsed = JSON.parse(rawOutput);
+    } catch {
+      return {
+        passed: false,
+        tool: "terraform validate",
+        issues: [{ severity: "error", message: "Failed to parse terraform validate JSON output" }],
+        rawOutput,
+      };
+    }
 
     const issues = (parsed.diagnostics ?? []).map((d) => ({
       severity: d.severity === "error" ? ("error" as const) : ("warning" as const),
