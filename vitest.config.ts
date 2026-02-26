@@ -19,6 +19,13 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary", "lcov"],
       reportsDirectory: "coverage",
+      exclude: [
+        "**/*.test.ts",
+        "**/*.e2e.test.ts",
+        "**/*.smoke.test.ts",
+        "**/dist/**",
+        "**/node_modules/**",
+      ],
       thresholds: {
         lines: 75,
         functions: 70,
