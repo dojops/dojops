@@ -1,6 +1,6 @@
 # Security Scanning
 
-DojOps's `@dojops/scanner` package provides automated security scanning with 6 scanners covering vulnerabilities, dependency audits, infrastructure-as-code checks, and secret detection. Findings can be automatically remediated using LLM-powered fix generation.
+DojOps's `@dojops/scanner` package provides automated security scanning with 8 scanners covering vulnerabilities, dependency audits, infrastructure-as-code checks, secret detection, shell script analysis, and SBOM generation. Findings can be automatically remediated using LLM-powered fix generation.
 
 ---
 

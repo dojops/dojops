@@ -98,7 +98,7 @@ Optional external tool validation. Three tools implement verification:
 | Dockerfile | `hadolint`      | `hadolint Dockerfile`      |
 | Kubernetes | `kubectl`       | `kubectl --dry-run=client` |
 
-Verification is opt-in via `--verify` and gracefully skips if the external binary is not installed.
+Verification runs by default in CLI commands. Use `--skip-verify` to disable. Gracefully skips if the external binary is not installed.
 
 ### Existing Config Auto-Detection
 
@@ -126,6 +126,10 @@ All 12 tools auto-detect existing config files and switch to update mode when fo
 3. Files larger than 50KB are skipped (returns `null`)
 4. The `generate()` output includes `isUpdate: boolean` so callers (CLI, planner) can distinguish create vs update
 
+### Atomic File Writes
+
+All tool `execute()` methods use `atomicWriteFileSync()` from `@dojops/sdk`. This writes to a temporary file first, then atomically renames it to the target path using `fs.renameSync` (POSIX atomic rename). This prevents corrupted or partial files if the process crashes mid-write.
+
 ### Backup Before Overwrite
 
 When `execute()` writes to a file that already exists, it creates a `.bak` backup first using `backupFile()` from `@dojops/sdk`. For example:
@@ -133,7 +137,22 @@ When `execute()` writes to a file that already exists, it creates a `.bak` backu
 - `main.tf` → `main.tf.bak`
 - `.github/workflows/ci.yml` → `.github/workflows/ci.yml.bak`
 
-Backups are only created when updating existing files, not when creating new ones.
+Backups are only created when updating existing files, not when creating new ones. The `.bak` files are used by `dojops rollback` to restore the original content.
+
+### File Tracking
+
+All tool `execute()` methods return `filesWritten` and `filesModified` arrays in the `ToolOutput`:
+
+- `filesWritten` — All files written during execution (both new and updated)
+- `filesModified` — Files that existed before and were overwritten (have `.bak` backups)
+
+This metadata flows through the executor into audit entries and execution logs, enabling precise rollback (delete new files, restore `.bak` for modified files).
+
+### Idempotent YAML Output
+
+All YAML generators use shared dump options with `sortKeys: true` for deterministic output. Running the same generation twice produces identical YAML, eliminating diff noise from key reordering.
+
+GitHub Actions uses a custom key sort function that preserves the conventional top-level key order (`name` → `on` → `permissions` → `env` → `jobs`) while sorting all other keys alphabetically.
 
 **VerificationResult:**
 
@@ -293,7 +312,7 @@ To add a new tool to DojOps:
 4. **Create the tool class** (`my-tool.ts`):
 
    ```typescript
-   import { BaseTool, readExistingConfig, backupFile } from "@dojops/sdk";
+   import { BaseTool, readExistingConfig, backupFile, atomicWriteFileSync } from "@dojops/sdk";
    export class MyTool extends BaseTool<MyToolInput> {
      name = "my-tool";
      inputSchema = MyToolInputSchema;
@@ -306,7 +325,12 @@ To add a new tool to DojOps:
      async execute(input) {
        const result = await this.generate(input);
        if (result.data.isUpdate) backupFile(outputPath);
-       // Write files to disk
+       atomicWriteFileSync(outputPath, result.data.content);
+       return {
+         ...result,
+         filesWritten: [outputPath],
+         filesModified: result.data.isUpdate ? [outputPath] : [],
+       };
      }
    }
    ```

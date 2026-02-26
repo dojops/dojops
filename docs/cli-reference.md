@@ -8,19 +8,19 @@ Complete reference for the `dojops` command-line interface.
 
 ### Generation & Planning
 
-| Command                          | Description                                      |
-| -------------------------------- | ------------------------------------------------ |
-| `dojops <prompt>`                | Generate DevOps config (default command)         |
-| `dojops generate <prompt>`       | Explicit generation (same as default)            |
-| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph  |
-| `dojops plan --execute <prompt>` | Plan + execute with approval workflow            |
-| `dojops apply [<plan-id>]`       | Execute a saved plan                             |
-| `dojops apply --verify`          | Execute with external config verification        |
-| `dojops apply --resume`          | Resume a partially-failed plan                   |
-| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match |
-| `dojops apply --dry-run`         | Preview changes without writing files            |
-| `dojops validate [<plan-id>]`    | Validate plan against schemas                    |
-| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language            |
+| Command                          | Description                                       |
+| -------------------------------- | ------------------------------------------------- |
+| `dojops <prompt>`                | Generate DevOps config (default command)          |
+| `dojops generate <prompt>`       | Explicit generation (same as default)             |
+| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph   |
+| `dojops plan --execute <prompt>` | Plan + execute with approval workflow             |
+| `dojops apply [<plan-id>]`       | Execute a saved plan                              |
+| `dojops apply --skip-verify`     | Skip external config verification (on by default) |
+| `dojops apply --resume`          | Resume a partially-failed plan                    |
+| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match  |
+| `dojops apply --dry-run`         | Preview changes without writing files             |
+| `dojops validate [<plan-id>]`    | Validate plan against schemas                     |
+| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language             |
 
 ### Diagnostics & Analysis
 
@@ -67,13 +67,13 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### History & Audit
 
-| Command                         | Description                            |
-| ------------------------------- | -------------------------------------- |
-| `dojops history list`           | View execution history                 |
-| `dojops history show <plan-id>` | Show plan details and per-task results |
-| `dojops history verify`         | Verify audit log hash chain integrity  |
-| `dojops destroy <plan-id>`      | Remove generated artifacts from a plan |
-| `dojops rollback <plan-id>`     | Reverse an applied plan (file cleanup) |
+| Command                         | Description                                                           |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `dojops history list`           | View execution history                                                |
+| `dojops history show <plan-id>` | Show plan details and per-task results                                |
+| `dojops history verify`         | Verify audit log hash chain integrity                                 |
+| `dojops destroy <plan-id>`      | Remove generated artifacts from a plan                                |
+| `dojops rollback <plan-id>`     | Reverse an applied plan (delete created files + restore .bak backups) |
 
 ### Configuration & Server
 
@@ -159,7 +159,8 @@ dojops plan --execute --yes "Create CI pipeline for a Python project"
 # Execute a saved plan
 dojops apply
 dojops apply --dry-run          # preview only
-dojops apply --verify           # with external validation
+dojops apply --skip-verify      # skip external validation (on by default)
+dojops apply --force            # skip git dirty working tree check
 dojops apply --resume --yes     # resume failed tasks, auto-approve
 dojops apply --replay           # deterministic: temp=0, validate env match
 dojops apply --replay --yes     # force replay despite mismatches

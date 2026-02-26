@@ -49,15 +49,15 @@ And produces audit entries for every operation, whether successful, failed, or d
 
 The `ExecutionPolicy` controls what the executor is allowed to do:
 
-| Field              | Type                   | Default   | Description                                      |
-| ------------------ | ---------------------- | --------- | ------------------------------------------------ |
-| `allowWrite`       | boolean                | `false`   | Whether file writes are permitted                |
-| `allowedPaths`     | string[]               | `[]`      | Paths the executor may write to (glob patterns)  |
-| `deniedPaths`      | string[]               | `[]`      | Paths the executor must not write to             |
-| `envVars`          | Record<string, string> | `{}`      | Environment variables available during execution |
-| `timeoutMs`        | number                 | `30000`   | Maximum execution time (milliseconds)            |
-| `maxFileSize`      | number                 | `1048576` | Maximum file size in bytes (1MB default)         |
-| `skipVerification` | boolean                | `true`    | Skip the verify step (opt-in via `--verify`)     |
+| Field              | Type                   | Default   | Description                                                  |
+| ------------------ | ---------------------- | --------- | ------------------------------------------------------------ |
+| `allowWrite`       | boolean                | `false`   | Whether file writes are permitted                            |
+| `allowedPaths`     | string[]               | `[]`      | Paths the executor may write to (glob patterns)              |
+| `deniedPaths`      | string[]               | `[]`      | Paths the executor must not write to                         |
+| `envVars`          | Record<string, string> | `{}`      | Environment variables available during execution             |
+| `timeoutMs`        | number                 | `30000`   | Maximum execution time (milliseconds)                        |
+| `maxFileSize`      | number                 | `1048576` | Maximum file size in bytes (1MB default)                     |
+| `skipVerification` | boolean                | `true`    | Skip the verify step (SDK default; CLI overrides to `false`) |
 
 ### Path Resolution
 
@@ -107,7 +107,7 @@ When a tool updates an existing config file (detected via `isUpdate` flag in the
 - **Path restriction** — Only writes to paths allowed by the `ExecutionPolicy`
 - **Size limits** — Rejects files exceeding `maxFileSize`
 - **Per-file audit** — Each file operation is logged with path, size, and timestamp
-- **Atomic writes** — Files are written atomically to prevent partial writes on failure
+- **Atomic writes** — Files are written via temp-file + `fs.renameSync` (POSIX atomic rename) to prevent partial writes on crash or failure
 
 ---
 
@@ -123,7 +123,7 @@ Tools that implement `verify()` can validate their generated output with externa
 
 ### Verification Behavior
 
-1. **Opt-in** — Verification runs only when `skipVerification=false` (enabled via `--verify`)
+1. **Default on** — Verification runs by default in CLI commands (`apply`, `plan --execute`). Use `--skip-verify` to disable. The SDK default (`DEFAULT_POLICY.skipVerification = true`) remains unchanged for programmatic callers
 2. **Tool check** — If the tool doesn't implement `verify()`, the step is skipped
 3. **Binary check** — If the external binary isn't installed, verification is skipped with a warning
 4. **Blocking** — Failed verification blocks execution (returns `VerificationResult.valid=false`)
@@ -143,6 +143,8 @@ interface AuditEntry {
   tool?: string; // Tool name if applicable
   status: "success" | "failure" | "cancelled";
   details: Record<string, unknown>;
+  filesWritten?: string[]; // Files created during execution
+  filesModified?: string[]; // Pre-existing files that were overwritten (have .bak backups)
   verificationResult?: VerificationResult;
   previousHash: string; // Hash of the previous entry
   hash: string; // SHA-256 of this entry
@@ -161,6 +163,41 @@ Audit entries form a hash chain:
 ### Storage
 
 Audit entries are appended to `.dojops/history/audit.jsonl` (one JSON object per line, append-only).
+
+---
+
+## Git Dirty Working Tree Check
+
+Before executing a plan, `apply` checks for uncommitted changes in the git working tree:
+
+- Runs `git status --porcelain` with a 5-second timeout
+- If uncommitted changes exist and `--force` is not set: displays the modified files and prompts the user to continue
+- If `--yes` is set: warns but proceeds automatically
+- If the directory is not a git repo or `git` is not available: silently skips the check
+- The check runs after lock acquisition but before any tool execution
+
+```bash
+dojops apply                # warns if dirty tree, prompts to continue
+dojops apply --force        # skips the git dirty check entirely
+dojops apply --yes          # warns but auto-continues
+```
+
+---
+
+## Rollback
+
+`dojops rollback <plan-id>` reverses an applied plan by performing two operations:
+
+1. **Delete created files** — Removes files listed in `filesWritten` that were newly created (not updates)
+2. **Restore .bak backups** — For files listed in `filesModified` (pre-existing files that were overwritten), restores from the `.bak` backup
+
+The `--dry-run` flag previews what would be deleted and restored without making changes.
+
+```bash
+dojops rollback <plan-id>            # interactive confirmation
+dojops rollback <plan-id> --dry-run  # preview only
+dojops rollback <plan-id> --yes      # auto-confirm
+```
 
 ---
 
@@ -191,14 +228,17 @@ The `withTimeout()` utility wraps execution with a configurable timeout:
 ### CLI
 
 ```bash
-# Execute with default policy (interactive approval)
+# Execute with default policy (interactive approval, verification enabled)
 dojops apply
 
-# Execute with verification
-dojops apply --verify
+# Skip verification (verification runs by default)
+dojops apply --skip-verify
 
 # Execute with auto-approval
 dojops apply --yes
+
+# Skip git dirty working tree check
+dojops apply --force
 
 # Dry run (auto-deny, no writes)
 dojops apply --dry-run

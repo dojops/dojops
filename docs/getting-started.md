@@ -153,9 +153,10 @@ dojops plan "Set up CI/CD pipeline for a Node.js app with Docker and Kubernetes"
 Execute the plan with an approval workflow:
 
 ```bash
-dojops apply                 # Execute with interactive approval prompts
+dojops apply                 # Execute with interactive approval + verification
 dojops apply --dry-run       # Preview changes without writing files
-dojops apply --verify        # Run external validation (terraform validate, hadolint, etc.)
+dojops apply --skip-verify   # Skip external validation (runs by default)
+dojops apply --force         # Skip git dirty working tree check
 dojops apply --yes           # Auto-approve all operations
 dojops apply --replay        # Deterministic replay: temp=0, validate environment match
 ```
@@ -173,7 +174,7 @@ dojops scan --deps           # Dependency audit only (npm, pip)
 dojops scan --fix            # Generate and apply LLM-powered remediation
 ```
 
-See [Security Scanning](security-scanning.md) for details on all 6 scanners.
+See [Security Scanning](security-scanning.md) for details on all 8 scanners.
 
 ---
 

@@ -121,14 +121,17 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **Plugin system** — Extend DojOps with custom tools via declarative `plugin.yaml` manifests + JSON Schema. Drop a plugin into `~/.dojops/plugins/` or `.dojops/plugins/` and it's automatically available to all commands. Scaffold new plugins with `dojops tools plugins init <name>`. Plugin isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
 - **Schema-validated** — Every tool input and LLM output is validated against Zod schemas before execution
-- **Deep verification** — Optional `--verify` runs generated configs through external validators (terraform validate, hadolint, kubectl dry-run) before writing files
+- **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Use `--skip-verify` to disable
+- **Idempotent YAML output** — YAML keys are sorted alphabetically (GitHub Actions uses conventional key ordering) for deterministic, diff-friendly output
 - **Structured output** — Provider-native JSON modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, Gemini `responseMimeType`)
 
 ### Execution
 
 - **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution (Kahn's algorithm)
-- **Verification pipeline** — Optional `verify()` step between generate and execute validates output with external tools (terraform validate, hadolint, kubectl --dry-run=client). Graceful fallback when tools are missing
-- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths
+- **Verification pipeline** — `verify()` step between generate and execute validates output with external tools (terraform validate, hadolint, kubectl --dry-run=client). Enabled by default; use `--skip-verify` to skip. Graceful fallback when tools are missing
+- **Git dirty check** — `apply` warns when uncommitted changes exist in the working tree. Use `--force` to skip
+- **Atomic file writes** — All file writes use temp-file + rename for crash safety (no partial writes)
+- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with atomic writes
 - **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, file size limits, and verification toggle
 - **Approval workflows** — Auto-approve, auto-deny, or interactive callback with diff preview before any write operation
 - **Resume on failure** — `dojops apply --resume` skips completed tasks and retries failed ones
@@ -161,10 +164,12 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
 @dojops/tools          12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                        Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@dojops/scanner        6 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) + remediation
+@dojops/scanner        8 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint,
+                       shellcheck, trivy-sbom) + remediation
 @dojops/session        Chat session management + memory + context injection
 @dojops/core           LLM abstraction + 5 providers + 16 built-in specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
+                       + atomicWriteFileSync + restoreBackup
 ```
 
 ### Package Dependency Flow
@@ -186,19 +191,19 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 
 #### Generation & Planning
 
-| Command                          | Description                                      |
-| -------------------------------- | ------------------------------------------------ |
-| `dojops <prompt>`                | Generate DevOps config (default command)         |
-| `dojops generate <prompt>`       | Explicit generation (same as default)            |
-| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph  |
-| `dojops plan --execute <prompt>` | Plan + execute with approval workflow            |
-| `dojops apply [<plan-id>]`       | Execute a saved plan                             |
-| `dojops apply --verify`          | Execute with external config verification        |
-| `dojops apply --resume`          | Resume a partially-failed plan                   |
-| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match |
-| `dojops apply --dry-run`         | Preview changes without writing files            |
-| `dojops validate [<plan-id>]`    | Validate plan against schemas                    |
-| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language            |
+| Command                          | Description                                       |
+| -------------------------------- | ------------------------------------------------- |
+| `dojops <prompt>`                | Generate DevOps config (default command)          |
+| `dojops generate <prompt>`       | Explicit generation (same as default)             |
+| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph   |
+| `dojops plan --execute <prompt>` | Plan + execute with approval workflow             |
+| `dojops apply [<plan-id>]`       | Execute a saved plan                              |
+| `dojops apply --skip-verify`     | Skip external config verification (on by default) |
+| `dojops apply --resume`          | Resume a partially-failed plan                    |
+| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match  |
+| `dojops apply --dry-run`         | Preview changes without writing files             |
+| `dojops validate [<plan-id>]`    | Validate plan against schemas                     |
+| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language             |
 
 #### Diagnostics & Analysis
 
@@ -244,13 +249,13 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 #### History & Audit
 
-| Command                         | Description                            |
-| ------------------------------- | -------------------------------------- |
-| `dojops history list`           | View execution history                 |
-| `dojops history show <plan-id>` | Show plan details and per-task results |
-| `dojops history verify`         | Verify audit log hash chain integrity  |
-| `dojops destroy <plan-id>`      | Remove generated artifacts from a plan |
-| `dojops rollback <plan-id>`     | Reverse an applied plan (file cleanup) |
+| Command                         | Description                                                           |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `dojops history list`           | View execution history                                                |
+| `dojops history show <plan-id>` | Show plan details and per-task results                                |
+| `dojops history verify`         | Verify audit log hash chain integrity                                 |
+| `dojops destroy <plan-id>`      | Remove generated artifacts from a plan                                |
+| `dojops rollback <plan-id>`     | Reverse an applied plan (delete created files + restore .bak backups) |
 
 #### Configuration & Server
 
@@ -313,7 +318,7 @@ dojops "Add S3 bucket to the existing Terraform config"
 # Plan and execute
 dojops plan "Set up CI/CD for a Node.js app"
 dojops plan --execute --yes "Create CI for Node app"
-dojops apply --verify
+dojops apply --skip-verify       # skip external validation (on by default)
 dojops apply --dry-run
 dojops apply --resume --yes
 dojops apply --replay                    # Deterministic replay (temp=0, validate env)
@@ -366,17 +371,17 @@ dojops config profile create staging
 
 DojOps implements defense-in-depth for AI-driven infrastructure changes:
 
-| Layer                   | Mechanism                                                                                                              |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                                |
-| **Plugin isolation**    | Verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention        |
-| **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                         |
-| **Deep verification**   | Optional external tool validation: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write    |
-| **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits               |
-| **Approval workflows**  | Configurable handlers: auto-approve, auto-deny, or interactive callback with diff preview                              |
-| **Sandboxed execution** | `SandboxedFs` restricts file operations to policy-allowed paths with audit logging                                     |
-| **Audit trail**         | Append-only JSONL with SHA-256 hash chaining (seq + previousHash + hash). Tamper detection via `dojops history verify` |
-| **Execution locking**   | PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup                                    |
+| Layer                   | Mechanism                                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                                                           |
+| **Plugin isolation**    | Verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention                                   |
+| **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                                                    |
+| **Deep verification**   | External tool validation by default: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write. `--skip-verify` to disable |
+| **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits                                          |
+| **Approval workflows**  | Configurable handlers: auto-approve, auto-deny, or interactive callback with diff preview                                                         |
+| **Sandboxed execution** | `SandboxedFs` restricts file operations to policy-allowed paths with atomic writes and audit logging                                              |
+| **Audit trail**         | Append-only JSONL with SHA-256 hash chaining (seq + previousHash + hash). Tamper detection via `dojops history verify`                            |
+| **Execution locking**   | PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup                                                               |
 
 ---
 
@@ -397,7 +402,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | —                    |
 | Systemd        | INI                | `{name}.service`                    | —                    |
 
-All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `verifier.ts` (optional) → `*-tool.ts` → tests. Tools auto-detect and update existing config files with `.bak` backup.
+All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `verifier.ts` (optional) → `*-tool.ts` → tests. Tools auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename). YAML tools produce sorted keys for idempotent output.
 
 ---
 
@@ -542,7 +547,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 897 tests
+pnpm test               # Run all 922 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -586,8 +591,8 @@ packages/
 | `@dojops/executor`      | 40      |
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
-| `@dojops/sdk`           | 14      |
-| **Total**               | **897** |
+| `@dojops/sdk`           | 20      |
+| **Total**               | **922** |
 
 ---
 

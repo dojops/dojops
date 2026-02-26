@@ -20,7 +20,7 @@ DojOps implements defense-in-depth with seven layers between LLM output and infr
   +----+------+
        |
   +----v------+
-  |   Deep    |  Layer 3: Optional external tool verification (--verify):
+  |   Deep    |  Layer 3: External tool verification (on by default, --skip-verify):
   |Verification| terraform validate, hadolint, kubectl dry-run
   +----+------+
        |
@@ -80,7 +80,7 @@ If validation fails, the response is rejected before any execution occurs. This 
 
 ### Layer 3: Deep Verification
 
-Optional external tool validation (`--verify` flag):
+External tool validation (enabled by default in CLI; `--skip-verify` to disable):
 
 | Tool       | Verifier                   | What It Checks                                       |
 | ---------- | -------------------------- | ---------------------------------------------------- |
@@ -88,7 +88,7 @@ Optional external tool validation (`--verify` flag):
 | Dockerfile | `hadolint`                 | Dockerfile best practices, security issues           |
 | Kubernetes | `kubectl --dry-run=client` | Manifest structure, API version compatibility        |
 
-Verification is opt-in and gracefully skips if external tools are not installed. Failed verification blocks execution.
+Verification runs by default for CLI commands (`apply`, `plan --execute`). It gracefully skips if external tools are not installed. Failed verification blocks execution. The SDK default (`skipVerification: true`) remains unchanged for programmatic callers.
 
 ### Layer 4: Policy Engine
 
@@ -117,8 +117,10 @@ The approval context includes file paths, content preview, and tool name.
 
 - Path validation against the execution policy
 - File size validation before writes
-- Atomic write operations
+- Atomic write operations (temp-file + `fs.renameSync` — POSIX atomic rename prevents partial writes on crash)
 - Per-file audit logging (path, size, timestamp, operation)
+
+All 12 built-in tools and plugin tools also use `atomicWriteFileSync()` from `@dojops/sdk` for direct file writes outside the sandbox.
 
 ### Layer 7: Immutable Audit Log
 
@@ -160,7 +162,7 @@ PID-based execution locking prevents concurrent mutations:
 
 Beyond the execution pipeline, DojOps provides proactive security scanning via `@dojops/scanner`:
 
-- 6 scanners covering vulnerabilities, dependencies, IaC issues, and secrets
+- 8 scanners covering vulnerabilities, dependencies, IaC issues, secrets, shell scripts, and SBOM generation
 - Exit codes 6 (HIGH) and 7 (CRITICAL) for CI/CD integration
 - LLM-powered remediation with path-traversal protection
 
@@ -218,7 +220,7 @@ If any check fails, replay is aborted unless `--yes` forces continuation.
 
 ## Best Practices
 
-1. **Always use `--verify`** in production for Terraform, Dockerfile, and Kubernetes tools
+1. **Keep verification enabled** (the default) in production for Terraform, Dockerfile, and Kubernetes tools. Only use `--skip-verify` for speed during development
 2. **Review diffs** before approving write operations in interactive mode
 3. **Run `dojops history verify`** periodically to check audit trail integrity
 4. **Use `--dry-run`** to preview changes before applying

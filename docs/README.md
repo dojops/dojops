@@ -38,7 +38,7 @@ Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps 
 | [Specialist Agents](agents.md)               | 16 built-in + custom agents — routing, domains, keywords, confidence scoring, custom agent creation     |
 | [DevOps Tools](tools.md)                     | All 12 built-in tools + plugin system — schemas, detectors, verifiers, auto-detection, plugin manifests |
 | [Plugin Specification v1](PLUGIN_SPEC_v1.md) | Frozen v1 plugin contract — manifest schema, discovery, security, compatibility promise                 |
-| [Security Scanning](security-scanning.md)    | 6 scanners, scan types, remediation, dashboard integration                                              |
+| [Security Scanning](security-scanning.md)    | 8 scanners, scan types, remediation, SBOM, dashboard integration                                        |
 | [Execution Engine](execution-engine.md)      | SafeExecutor, policies, approval workflows, sandboxed fs, audit trail                                   |
 | [Task Planner](planner.md)                   | Goal decomposition, task graphs, topological execution, resume                                          |
 

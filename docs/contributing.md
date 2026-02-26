@@ -120,8 +120,8 @@ DojOps uses Vitest for testing. Current coverage:
 | `@dojops/executor`      | 40      |
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
-| `@dojops/sdk`           | 14      |
-| **Total**               | **897** |
+| `@dojops/sdk`           | 20      |
+| **Total**               | **922** |
 
 ### Writing Tests
 
@@ -189,7 +189,7 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
 4. **Create tool class** (`my-tool.ts`):
 
    ```typescript
-   import { BaseTool, readExistingConfig, backupFile } from "@dojops/sdk";
+   import { BaseTool, readExistingConfig, backupFile, atomicWriteFileSync } from "@dojops/sdk";
 
    export class MyTool extends BaseTool<MyToolInput> {
      name = "my-tool";
@@ -205,7 +205,12 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
      async execute(input: MyToolInput) {
        const result = await this.generate(input);
        if (result.data.isUpdate) backupFile(outputPath);
-       // Write files to disk
+       atomicWriteFileSync(outputPath, result.data.content);
+       return {
+         ...result,
+         filesWritten: [outputPath],
+         filesModified: result.data.isUpdate ? [outputPath] : [],
+       };
      }
    }
    ```

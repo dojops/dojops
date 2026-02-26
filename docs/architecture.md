@@ -44,7 +44,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
 @dojops/tools          12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                        Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@dojops/scanner        6 security scanners + remediation engine
+@dojops/scanner        8 security scanners + remediation engine
 @dojops/session        Chat session management + memory + context injection
 @dojops/core           LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
@@ -130,13 +130,13 @@ See [Task Planner](planner.md) for details.
 
 ### 4. Tool SDK (`@dojops/sdk`)
 
-Abstract `BaseTool<T>` class with Zod input schema validation, abstract `generate()` for LLM generation, optional `execute()` for file writes, and optional `verify()` for external tool validation. Also provides `readExistingConfig()` and `backupFile()` utilities for update workflows.
+Abstract `BaseTool<T>` class with Zod input schema validation, abstract `generate()` for LLM generation, optional `execute()` for file writes, and optional `verify()` for external tool validation. Also provides `readExistingConfig()`, `backupFile()`, `atomicWriteFileSync()` (temp + rename for crash-safe writes), and `restoreBackup()` utilities.
 
 See [DevOps Tools](tools.md) for the tool pattern.
 
 ### 5. DevOps Tools (`@dojops/tools`)
 
-12 built-in tools covering CI/CD, IaC, containers, monitoring, and system services. Each follows the same file pattern: `schemas.ts` -> `detector.ts` -> `generator.ts` -> `verifier.ts` -> `*-tool.ts`. All tools support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite.
+12 built-in tools covering CI/CD, IaC, containers, monitoring, and system services. Each follows the same file pattern: `schemas.ts` -> `detector.ts` -> `generator.ts` -> `verifier.ts` -> `*-tool.ts`. All tools support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. YAML generators use sorted keys for idempotent output. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
 
 See [DevOps Tools](tools.md) for the full tool list.
 
@@ -160,7 +160,7 @@ See [Execution Engine](execution-engine.md) for details.
 
 ### 7. Security Scanner (`@dojops/scanner`)
 
-6 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) with LLM-powered remediation.
+8 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom) with LLM-powered remediation.
 
 See [Security Scanning](security-scanning.md) for details.
 
@@ -187,7 +187,7 @@ See [CLI Reference](cli-reference.md).
 1. **No blind execution** — Every LLM output is validated before use.
 2. **Structured JSON outputs** — Provider-native JSON modes + Zod schemas on all LLM responses.
 3. **Schema validation everywhere** — Tool inputs, LLM responses, plan structures, API requests.
-4. **Idempotent operations** — Generated configs produce the same result on re-execution.
+4. **Idempotent operations** — Generated configs produce the same result on re-execution. YAML keys are sorted for deterministic output.
 5. **Clear separation of concerns** — Orchestration, generation, validation, execution, and auditing are independent layers.
 6. **Extensibility** — New tools follow the `BaseTool<T>` pattern. New agents are registered in the specialist list.
 
