@@ -8,7 +8,7 @@ DojOps includes 12 built-in DevOps tools covering CI/CD, infrastructure-as-code,
 
 | Tool           | Serialization      | Output Files                        | Detector | Verifier             |
 | -------------- | ------------------ | ----------------------------------- | -------- | -------------------- |
-| GitHub Actions | YAML               | `.github/workflows/ci.yml`          | Yes      | --                   |
+| GitHub Actions | YAML               | `.github/workflows/ci.yml`          | Yes      | Structure lint       |
 | Terraform      | HCL                | `main.tf`, `variables.tf`           | Yes      | `terraform validate` |
 | Kubernetes     | YAML               | K8s manifests                       | --       | `kubectl --dry-run`  |
 | Helm           | YAML               | `Chart.yaml`, `values.yaml`         | --       | --                   |
@@ -17,7 +17,7 @@ DojOps includes 12 built-in DevOps tools covering CI/CD, infrastructure-as-code,
 | Dockerfile     | Dockerfile syntax  | `Dockerfile`, `.dockerignore`       | Yes      | `hadolint`           |
 | Nginx          | Nginx conf         | `nginx.conf`                        | --       | --                   |
 | Makefile       | Make syntax (tabs) | `Makefile`                          | Yes      | --                   |
-| GitLab CI      | YAML               | `.gitlab-ci.yml`                    | Yes      | --                   |
+| GitLab CI      | YAML               | `.gitlab-ci.yml`                    | Yes      | Structure lint       |
 | Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | --       | --                   |
 | Systemd        | INI                | `{name}.service`                    | --       | --                   |
 
@@ -90,15 +90,17 @@ All generators accept an optional `existingContent?: string` parameter. When pro
 
 ### Verifier (`verifier.ts`)
 
-Optional external tool validation. Three tools implement verification:
+Optional validation of generated output. Five tools implement verification:
 
-| Tool       | External Binary | Verification Command       |
-| ---------- | --------------- | -------------------------- |
-| Terraform  | `terraform`     | `terraform validate`       |
-| Dockerfile | `hadolint`      | `hadolint Dockerfile`      |
-| Kubernetes | `kubectl`       | `kubectl --dry-run=client` |
+| Tool           | Verification Method           | Verification Command / Check                              |
+| -------------- | ----------------------------- | --------------------------------------------------------- |
+| Terraform      | External binary (`terraform`) | `terraform validate`                                      |
+| Dockerfile     | External binary (`hadolint`)  | `hadolint Dockerfile`                                     |
+| Kubernetes     | External binary (`kubectl`)   | `kubectl --dry-run=client`                                |
+| GitHub Actions | Built-in structure lint       | Checks `on` trigger, `jobs`, `runs-on`, step `run`/`uses` |
+| GitLab CI      | Built-in structure lint       | Checks job `script`, `stages` array, stage references     |
 
-Verification runs by default in CLI commands. Use `--skip-verify` to disable. Gracefully skips if the external binary is not installed.
+Verification runs by default in CLI commands. Use `--skip-verify` to disable. External binary checks gracefully skip if the binary is not installed. Built-in verifiers always run.
 
 ### Existing Config Auto-Detection
 
@@ -180,6 +182,7 @@ Generates GitHub Actions workflow files (`.github/workflows/ci.yml`).
 
 - **Serialization:** `js-yaml`
 - **Detector:** Finds existing workflow files in `.github/workflows/`
+- **Verifier:** Built-in structure lint — validates `on` trigger, `jobs` section, `runs-on` per job (skipped for reusable workflow jobs with `uses`), step `run`/`uses` presence
 - **Output:** Complete workflow YAML with jobs, steps, triggers
 
 ### Terraform
@@ -251,6 +254,7 @@ Generates GitLab CI pipeline configurations.
 
 - **Serialization:** `js-yaml`
 - **Detector:** Checks for existing `.gitlab-ci.yml`
+- **Verifier:** Built-in structure lint — validates `stages` is an array, jobs have `script` (or `trigger`/`extends`), stage references are declared, hidden jobs (`.prefix`) are skipped
 - **Output:** `.gitlab-ci.yml`
 
 ### Prometheus

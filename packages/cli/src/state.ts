@@ -47,6 +47,9 @@ export interface PlanState {
     provider: string;
     model?: string;
     temperature?: number;
+    dojopsVersion?: string;
+    policySnapshot?: string;
+    toolVersions?: Record<string, string>;
   };
 }
 
@@ -518,6 +521,18 @@ export function checkGitDirty(cwd: string): { dirty: boolean; files: string[] } 
   } catch {
     // Not a git repo or git not available — skip check
     return { dirty: false, files: [] };
+  }
+}
+
+// ── Package version ───────────────────────────────────────────────
+
+export function getDojopsVersion(): string {
+  try {
+    const pkgPath = path.join(__dirname, "..", "package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
   }
 }
 

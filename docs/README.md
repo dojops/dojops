@@ -48,3 +48,9 @@ Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps 
 | ------------------------------------- | ---------------------------------------------------------------------- |
 | [Contributing](contributing.md)       | Dev setup, coding standards, testing, adding tools/agents, PR workflow |
 | [Troubleshooting](troubleshooting.md) | Common issues, FAQ, error codes, debugging tips                        |
+
+---
+
+## Privacy & Telemetry
+
+DojOps does not collect telemetry. No project data leaves your machine except to your configured LLM provider. All generated configs, audit logs, and scan reports are stored locally in your `.dojops/` directory.

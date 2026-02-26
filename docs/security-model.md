@@ -82,11 +82,13 @@ If validation fails, the response is rejected before any execution occurs. This 
 
 External tool validation (enabled by default in CLI; `--skip-verify` to disable):
 
-| Tool       | Verifier                   | What It Checks                                       |
-| ---------- | -------------------------- | ---------------------------------------------------- |
-| Terraform  | `terraform validate`       | HCL syntax, provider requirements, resource validity |
-| Dockerfile | `hadolint`                 | Dockerfile best practices, security issues           |
-| Kubernetes | `kubectl --dry-run=client` | Manifest structure, API version compatibility        |
+| Tool           | Verifier                   | What It Checks                                         |
+| -------------- | -------------------------- | ------------------------------------------------------ |
+| Terraform      | `terraform validate`       | HCL syntax, provider requirements, resource validity   |
+| Dockerfile     | `hadolint`                 | Dockerfile best practices, security issues             |
+| Kubernetes     | `kubectl --dry-run=client` | Manifest structure, API version compatibility          |
+| GitHub Actions | Structure lint (built-in)  | `on` trigger, `jobs` section, `runs-on`, step validity |
+| GitLab CI      | Structure lint (built-in)  | Job `script` fields, `stages` array, stage references  |
 
 Verification runs by default for CLI commands (`apply`, `plan --execute`). It gracefully skips if external tools are not installed. Failed verification blocks execution. The SDK default (`skipVerification: true`) remains unchanged for programmatic callers.
 
@@ -95,8 +97,9 @@ Verification runs by default for CLI commands (`apply`, `plan --execute`). It gr
 `ExecutionPolicy` provides fine-grained control:
 
 - **Write permissions** — `allowWrite` must be `true` for any file operations
-- **Path allowlists** — `allowedPaths` restricts where files can be written
-- **Path denylists** — `deniedPaths` blocks specific paths (takes precedence)
+- **DevOps write allowlist** — When no explicit `allowedPaths` are set, only DevOps files (CI configs, Dockerfiles, Terraform, Kubernetes manifests, etc.) can be written. This prevents LLM-generated code from mutating application source files. Bypass with `--allow-all-paths`
+- **Path allowlists** — `allowedPaths` restricts where files can be written (takes precedence over DevOps allowlist)
+- **Path denylists** — `deniedPaths` blocks specific paths (takes precedence over everything)
 - **Environment isolation** — `envVars` controls available environment variables
 - **Timeouts** — `timeoutMs` prevents runaway operations
 - **Size limits** — `maxFileSize` prevents oversized file writes
@@ -215,6 +218,36 @@ Each plugin has a SHA-256 hash computed from its `plugin.yaml` content. This has
 3. Validating `systemPromptHash` for plugin tasks to detect prompt drift
 
 If any check fails, replay is aborted unless `--yes` forces continuation.
+
+---
+
+## Plan Risk Classification
+
+Plans are automatically classified into risk levels based on tool types and keyword analysis:
+
+- **LOW** — CI/CD and monitoring tools (GitHub Actions, GitLab CI, Makefile, Prometheus)
+- **MEDIUM** — Infrastructure tools (Terraform, Dockerfile, Kubernetes, Helm, Docker Compose, Ansible, Nginx, Systemd)
+- **HIGH** — Any task mentioning IAM, security groups, production, secrets, credentials, RBAC, roles, or permissions
+
+HIGH risk plans require explicit confirmation even with `--yes` (unless `--force` is also set), adding a safety gate before potentially dangerous operations.
+
+---
+
+## Drift Awareness
+
+Before execution, `apply` displays informational warnings for stateful tools (Terraform, Kubernetes, Helm, Ansible) reminding users that DojOps validates local config files but does not inspect remote state. Users are advised to run the appropriate tool-native drift check (e.g., `terraform plan`, `kubectl diff`) before applying.
+
+---
+
+## Plan Snapshot Freezing
+
+Plans capture an execution context snapshot at creation time:
+
+- **DojOps version** — Detects version mismatches between plan creation and execution
+- **Policy hash** — SHA-256 of the execution policy, detecting policy changes
+- **Tool versions** — Per-tool version metadata for reproducibility
+
+In `--replay` mode, version mismatches are blocking errors. In normal `apply` mode, mismatches produce informational warnings.
 
 ---
 

@@ -39,6 +39,8 @@ export interface ScanReport {
   scannersSkipped: string[];
   durationMs: number;
   sbomOutputs?: string[];
+  sbomHash?: string;
+  sbomPath?: string;
 }
 
 // ── Scanner result ─────────────────────────────────────────────────

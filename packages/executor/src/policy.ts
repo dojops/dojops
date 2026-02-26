@@ -11,6 +11,113 @@ export class PolicyViolationError extends Error {
   }
 }
 
+/**
+ * DevOps file write allowlist — glob-like patterns for files that DojOps tools
+ * are expected to create or modify. When `enforceDevOpsAllowlist` is true and
+ * no explicit `allowedWritePaths` are set, only these patterns are permitted.
+ */
+export const DEVOPS_WRITE_ALLOWLIST: string[] = [
+  ".github/workflows/**",
+  ".gitlab-ci.yml",
+  "Jenkinsfile",
+  "Dockerfile",
+  "Dockerfile.*",
+  "docker-compose*.yml",
+  "docker-compose*.yaml",
+  "helm/**",
+  "k8s/**",
+  "kubernetes/**",
+  "manifests/**",
+  "*.tf",
+  "*.tfvars",
+  "ansible/**",
+  "playbook*.yml",
+  "playbook*.yaml",
+  "nginx/**",
+  "nginx.conf",
+  "prometheus/**",
+  "alertmanager/**",
+  "Makefile",
+  "makefile",
+  "systemd/**",
+  "*.service",
+  "*.timer",
+];
+
+/**
+ * Tests whether a file path matches a DevOps allowlist pattern.
+ * Supports simple glob matching: `*` (single segment wildcard) and `**` (recursive).
+ */
+export function matchesAllowlistPattern(filePath: string, pattern: string): boolean {
+  // Normalize to forward slashes for matching
+  const normalized = filePath.replace(/\\/g, "/");
+
+  // Handle ** (recursive directory match)
+  if (pattern.endsWith("/**")) {
+    const prefix = pattern.slice(0, -3);
+    return normalized.startsWith(prefix + "/") || normalized === prefix;
+  }
+
+  // Handle * in filename (e.g. "Dockerfile.*", "docker-compose*.yml")
+  if (pattern.includes("*")) {
+    const regexStr =
+      "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$";
+    const regex = new RegExp(regexStr);
+    // Match against the full relative path or just the basename for simple patterns
+    if (!pattern.includes("/")) {
+      const basename = normalized.includes("/") ? normalized.split("/").pop()! : normalized;
+      return regex.test(basename);
+    }
+    return regex.test(normalized);
+  }
+
+  // Exact match (or basename match for simple filenames)
+  if (!pattern.includes("/")) {
+    const basename = normalized.includes("/") ? normalized.split("/").pop()! : normalized;
+    return basename === pattern;
+  }
+  return normalized === pattern;
+}
+
+/**
+ * Checks if a file path matches any pattern in the DevOps allowlist.
+ */
+export function isDevOpsFile(filePath: string): boolean {
+  // Extract a relative path: strip leading ./ and any absolute prefix
+  let relative = filePath.replace(/\\/g, "/");
+  if (path.isAbsolute(relative)) {
+    relative = path.basename(relative);
+    // For paths like /project/.github/workflows/ci.yml, we need the relative part
+    // Use the original filePath with path operations
+    const segments = filePath.replace(/\\/g, "/").split("/");
+    // Find the first segment that matches a known DevOps root
+    const devopsRoots = [
+      ".github",
+      ".gitlab-ci.yml",
+      "helm",
+      "k8s",
+      "kubernetes",
+      "manifests",
+      "ansible",
+      "nginx",
+      "prometheus",
+      "alertmanager",
+      "systemd",
+    ];
+    const rootIdx = segments.findIndex((s) => devopsRoots.includes(s));
+    if (rootIdx >= 0) {
+      relative = segments.slice(rootIdx).join("/");
+    } else {
+      // Just use the basename for matching
+      relative = segments[segments.length - 1];
+    }
+  }
+  // Strip leading ./
+  if (relative.startsWith("./")) relative = relative.slice(2);
+
+  return DEVOPS_WRITE_ALLOWLIST.some((pattern) => matchesAllowlistPattern(relative, pattern));
+}
+
 export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy): void {
   if (!policy.allowWrite) {
     throw new PolicyViolationError(`Write operations are not allowed by policy`, "allowWrite");
@@ -37,6 +144,17 @@ export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy): vo
       throw new PolicyViolationError(
         `Write to ${resolved} is not in allowed paths`,
         "allowedWritePaths",
+      );
+    }
+    return; // Explicit allowedWritePaths takes precedence over DevOps allowlist
+  }
+
+  // Enforce DevOps allowlist when no explicit allowedWritePaths are set
+  if (policy.enforceDevOpsAllowlist) {
+    if (!isDevOpsFile(filePath)) {
+      throw new PolicyViolationError(
+        `Write to ${resolved} is not a recognized DevOps file. Use --allow-all-paths to bypass.`,
+        "enforceDevOpsAllowlist",
       );
     }
   }
@@ -67,6 +185,7 @@ export const DEFAULT_POLICY: ExecutionPolicy = {
   allowWrite: false,
   allowedWritePaths: [],
   deniedWritePaths: [],
+  enforceDevOpsAllowlist: true,
   allowNetwork: false,
   allowEnvVars: [],
   timeoutMs: 30_000,

@@ -7,7 +7,7 @@ import { PolicyViolationError, DEFAULT_POLICY } from "./policy";
 import { ExecutionPolicy } from "./types";
 
 function policy(overrides: Partial<ExecutionPolicy> = {}): ExecutionPolicy {
-  return { ...DEFAULT_POLICY, ...overrides };
+  return { ...DEFAULT_POLICY, enforceDevOpsAllowlist: false, ...overrides };
 }
 
 describe("createSandboxedFs", () => {

@@ -7,7 +7,7 @@ import { createToolRegistry } from "@dojops/tool-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag } from "../parser";
-import { statusIcon, statusText } from "../formatter";
+import { statusIcon, statusText, riskColor } from "../formatter";
 import {
   findProjectRoot,
   loadPlan,
@@ -26,6 +26,8 @@ import {
 } from "../state";
 import { ExitCode } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
+import { getDojopsVersion } from "../state";
+import { getDriftWarnings } from "../drift-warning";
 import { validateReplayIntegrity, checkPluginIntegrity } from "./replay-validator";
 
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {
@@ -42,6 +44,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const installPackages = hasFlag(args, "--install-packages");
   const skipVerify = hasFlag(args, "--skip-verify");
   const force = hasFlag(args, "--force");
+  const allowAllPaths = hasFlag(args, "--allow-all-paths");
   const planId = args.find((a) => !a.startsWith("-"));
 
   let plan: PlanState | null;
@@ -112,9 +115,63 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     resume && completedTaskIds.size > 0 ? "Pre-flight: Resume" : "Pre-flight Summary",
   );
 
+  // Context drift warning (informational, non-blocking)
+  if (plan.executionContext?.dojopsVersion) {
+    const currentVersion = getDojopsVersion();
+    if (plan.executionContext.dojopsVersion !== currentVersion) {
+      p.log.warn(
+        `Plan was created with DojOps v${plan.executionContext.dojopsVersion}, ` +
+          `current is v${currentVersion}.`,
+      );
+    }
+  }
+
+  // Drift awareness warnings
+  const driftWarnings = getDriftWarnings(toolsUsed);
+  if (driftWarnings.length > 0) {
+    for (const dw of driftWarnings) {
+      p.log.warn(`${pc.yellow(dw.tool)}: ${dw.message}`);
+    }
+  }
+
+  // Change impact summary
+  const remainingTasks = plan.tasks.filter((t) => !completedTaskIds.has(t.id));
+  const estimatedFiles = remainingTasks.length;
+  const verificationTools = [
+    ...new Set(
+      remainingTasks
+        .map((t) => t.tool)
+        .filter((tool) =>
+          ["terraform", "dockerfile", "kubernetes", "github-actions", "gitlab-ci"].includes(tool),
+        ),
+    ),
+  ];
+
+  const impactLines = [
+    `${pc.bold("Files to write:")}    ~${estimatedFiles}`,
+    `${pc.bold("Verification:")}     ${verificationTools.length > 0 ? verificationTools.join(", ") : pc.dim("none")}`,
+    `${pc.bold("Risk level:")}       ${riskColor(plan.risk || "unknown")}`,
+  ];
+  p.note(impactLines.join("\n"), "Impact Summary");
+
   if (dryRun) {
     p.log.info(pc.dim("Dry run — no changes will be made."));
     return;
+  }
+
+  // HIGH risk gate: always require explicit confirmation even with --yes
+  if (plan.risk === "HIGH" && !force) {
+    p.log.warn(pc.bold(pc.red("This plan is classified as HIGH risk.")));
+    if (autoApprove) {
+      p.log.warn("HIGH risk plans require explicit confirmation. Use --force to bypass.");
+      const highRiskConfirm = await p.confirm({
+        message: "This is a HIGH risk plan. Are you sure you want to proceed?",
+      });
+      if (p.isCancel(highRiskConfirm) || !highRiskConfirm) {
+        p.cancel("Cancelled.");
+        process.exit(0);
+      }
+    }
   }
 
   if (!autoApprove) {
@@ -221,6 +278,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         requireApproval: !autoApprove,
         timeoutMs: 60_000,
         skipVerification: skipVerify,
+        enforceDevOpsAllowlist: !allowAllPaths,
       },
       approvalHandler: autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
     });

@@ -149,7 +149,31 @@ Plans are saved to `.dojops/plans/<plan-id>.json` containing:
 - The full `TaskGraph`
 - Metadata (goal, timestamp, provider, model, temperature)
 - Plugin metadata per task (`toolType`, `pluginVersion`, `pluginHash`, `pluginSource`, `systemPromptHash`)
+- Execution context snapshot (`dojopsVersion`, `policySnapshot`, `toolVersions`)
+- Risk classification (`LOW`, `MEDIUM`, or `HIGH`)
 - Execution state (per-task status, outputs)
+
+### Risk Classification
+
+Plans are automatically assigned a risk level based on their content:
+
+| Level    | Criteria                                                                  |
+| -------- | ------------------------------------------------------------------------- |
+| `LOW`    | CI/CD and monitoring tools only                                           |
+| `MEDIUM` | Infrastructure tools (Terraform, Dockerfile, Kubernetes, Helm, etc.)      |
+| `HIGH`   | Keywords: IAM, security group, production, secret, credential, RBAC, etc. |
+
+HIGH risk plans always require explicit user confirmation during `apply`, even with `--yes`.
+
+### Execution Context Snapshot
+
+At plan creation, the following context is captured:
+
+- **`dojopsVersion`** — Current DojOps version from `package.json`
+- **`policySnapshot`** — SHA-256 hash of the execution policy
+- **`toolVersions`** — Version metadata for each tool used in the plan
+
+This snapshot enables drift detection: if the DojOps version or policy changes between plan creation and execution, `apply` shows a warning (or blocks in `--replay` mode).
 
 ### Plan Lifecycle
 

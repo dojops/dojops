@@ -5,6 +5,7 @@ export const ExecutionPolicySchema = z.object({
   allowWrite: z.boolean().default(false),
   allowedWritePaths: z.array(z.string()).default([]),
   deniedWritePaths: z.array(z.string()).default([]),
+  enforceDevOpsAllowlist: z.boolean().default(true),
   allowNetwork: z.boolean().default(false),
   allowEnvVars: z.array(z.string()).default([]),
   timeoutMs: z.number().positive().default(30_000),

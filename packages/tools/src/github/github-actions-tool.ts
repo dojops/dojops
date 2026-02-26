@@ -8,9 +8,11 @@ import {
   atomicWriteFileSync,
 } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
+import type { VerificationResult } from "@dojops/sdk";
 import { GitHubActionsInputSchema, GitHubActionsInput } from "./schemas";
 import { detectProjectType } from "./detector";
 import { generateWorkflow, workflowToYaml } from "./generator";
+import { verifyGitHubActions } from "./verifier";
 
 export class GitHubActionsTool extends BaseTool<GitHubActionsInput> {
   name = "github-actions";
@@ -62,6 +64,15 @@ export class GitHubActionsTool extends BaseTool<GitHubActionsInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const record = data as Record<string, unknown>;
+    const yamlContent = record.yaml as string;
+    if (!yamlContent) {
+      return { passed: true, tool: "github-actions-lint", issues: [] };
+    }
+    return verifyGitHubActions(yamlContent);
   }
 
   async execute(input: GitHubActionsInput): Promise<ToolOutput> {

@@ -609,6 +609,14 @@ Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `to
 
 ---
 
+## Privacy & Telemetry
+
+DojOps does not collect telemetry. No project data leaves your machine
+except to your configured LLM provider. All generated configs, audit logs,
+and scan reports are stored locally in your `.dojops/` directory.
+
+---
+
 ## Contributing
 
 Contributions are welcome! Please see the [contributing guide](docs/contributing.md) for development setup, coding standards, and how to add new tools and agents. See [docs/architecture.md](docs/architecture.md) for system design patterns.

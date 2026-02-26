@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { runScan, planRemediation, applyFixes } from "@dojops/scanner";
@@ -13,6 +14,7 @@ import {
   appendAudit,
   loadContext,
   saveScanReport,
+  listScanReports,
   dojopsDir,
 } from "../state";
 
@@ -113,15 +115,38 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     // Non-fatal
   }
 
-  // Save SBOM outputs
+  // Save SBOM outputs with hash tracking
   if (report.sbomOutputs && report.sbomOutputs.length > 0) {
     const sbomDir = path.join(dojopsDir(root), "sbom");
     if (!fs.existsSync(sbomDir)) fs.mkdirSync(sbomDir, { recursive: true });
+
+    const combinedSbom = report.sbomOutputs.join("\n");
+    const currentHash = crypto.createHash("sha256").update(combinedSbom).digest("hex");
+
     for (const sbom of report.sbomOutputs) {
       const ts = new Date().toISOString().replace(/[:.]/g, "-");
-      const sbomPath = path.join(sbomDir, `sbom-${ts}.json`);
-      fs.writeFileSync(sbomPath, sbom);
-      p.log.success(`SBOM saved: ${pc.dim(sbomPath)}`);
+      const sbomFilePath = path.join(sbomDir, `sbom-${ts}.json`);
+      fs.writeFileSync(sbomFilePath, sbom);
+      p.log.success(`SBOM saved: ${pc.dim(sbomFilePath)}`);
+      report.sbomPath = sbomFilePath;
+    }
+
+    report.sbomHash = currentHash;
+
+    // Compare with previous scan's SBOM hash
+    const previousReports = listScanReports(root);
+    const previousWithSbom = previousReports.find(
+      (r) =>
+        (r as Record<string, unknown>).sbomHash && (r as Record<string, unknown>).id !== report.id,
+    );
+    if (previousWithSbom) {
+      const prevHash = (previousWithSbom as Record<string, unknown>).sbomHash as string;
+      if (prevHash !== currentHash) {
+        p.log.warn(
+          `SBOM changed since last scan (previous: ${pc.dim(prevHash.slice(0, 12))}, ` +
+            `current: ${pc.dim(currentHash.slice(0, 12))})`,
+        );
+      }
     }
   }
 

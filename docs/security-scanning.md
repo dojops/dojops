@@ -31,12 +31,13 @@ The scanner system:
 
 ## Scan Types
 
-| Type       | Scanners Run         | Description                                   |
-| ---------- | -------------------- | --------------------------------------------- |
-| `all`      | All applicable       | Full project scan (default)                   |
-| `security` | trivy, gitleaks      | Security vulnerabilities and secret detection |
-| `deps`     | npm-audit, pip-audit | Dependency vulnerability audit                |
-| `iac`      | checkov, hadolint    | Infrastructure-as-code linting and validation |
+| Type       | Scanners Run         | Description                                    |
+| ---------- | -------------------- | ---------------------------------------------- |
+| `all`      | All applicable       | Full project scan (default)                    |
+| `security` | trivy, gitleaks      | Security vulnerabilities and secret detection  |
+| `deps`     | npm-audit, pip-audit | Dependency vulnerability audit                 |
+| `iac`      | checkov, hadolint    | Infrastructure-as-code linting and validation  |
+| `sbom`     | trivy-sbom           | SBOM generation (CycloneDX) with hash tracking |
 
 ---
 
@@ -141,6 +142,8 @@ interface ScanReport {
   scannersRun: string[];
   scannersSkipped: string[]; // format: "toolname: reason"
   durationMs: number;
+  sbomHash?: string; // SHA-256 hash of SBOM content (when --sbom is used)
+  sbomPath?: string; // Path where SBOM was saved
 }
 
 interface ScanFinding {
@@ -175,6 +178,21 @@ interface ScanFinding {
 - Path-traversal protection prevents fixes from modifying files outside the project directory
 - All fixes are shown for approval before application (unless `--yes` is used)
 - Applied fixes are logged in the scan report
+
+---
+
+## SBOM Persistence & Versioning
+
+When running `dojops scan --sbom`, the SBOM output is saved to `.dojops/sbom/` and its SHA-256 hash is computed and stored in the scan report:
+
+- **Hash tracking** — Each SBOM's content hash (`sbomHash`) is stored in the scan report, enabling integrity verification
+- **Change detection** — On subsequent scans, the current SBOM hash is compared against the previous scan's hash. If the SBOM has changed, a warning is displayed:
+  ```
+  SBOM changed since last scan (previous: abc123..., current: def456...)
+  ```
+- **Audit trail** — SBOM hashes are included in the scan history, providing a versioned record of dependency composition over time
+
+This enables compliance workflows that require tracking dependency changes across releases.
 
 ---
 

@@ -8,6 +8,8 @@ import { hasFlag, stripFlags } from "../parser";
 import { statusIcon, statusText, formatOutput, getOutputFileName } from "../formatter";
 import { ExitCode } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
+import { classifyPlanRisk } from "../risk-classifier";
+import crypto from "node:crypto";
 import {
   findProjectRoot,
   initProject,
@@ -17,6 +19,7 @@ import {
   saveSession,
   appendAudit,
   loadContext,
+  getDojopsVersion,
   PlanState,
 } from "../state";
 
@@ -85,7 +88,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     id: planId,
     goal: graph.goal,
     createdAt: new Date().toISOString(),
-    risk: "LOW",
+    risk: classifyPlanRisk(graph.tasks),
     tasks: graph.tasks.map((t) => ({
       id: t.id,
       tool: t.tool,
@@ -104,6 +107,18 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       provider: provider.name,
       model: ctx.globalOpts.model,
       temperature: ctx.globalOpts.temperature,
+      dojopsVersion: getDojopsVersion(),
+      policySnapshot: crypto
+        .createHash("sha256")
+        .update(JSON.stringify({ skipVerification: skipVerify }))
+        .digest("hex")
+        .slice(0, 16),
+      toolVersions: Object.fromEntries(
+        graph.tasks.map((t) => {
+          const meta = registry.getToolMetadata(t.tool);
+          return [t.tool, meta?.pluginVersion ?? "built-in"];
+        }),
+      ),
     },
   };
   savePlan(root, savedPlan);

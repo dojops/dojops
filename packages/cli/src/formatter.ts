@@ -59,7 +59,7 @@ export function formatConfidence(confidence: number): string {
 }
 
 export function riskColor(level: string): string {
-  switch (level) {
+  switch (level.toLowerCase()) {
     case "low":
       return pc.green(level);
     case "medium":

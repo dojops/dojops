@@ -16,6 +16,7 @@ Complete reference for the `dojops` command-line interface.
 | `dojops plan --execute <prompt>` | Plan + execute with approval workflow             |
 | `dojops apply [<plan-id>]`       | Execute a saved plan                              |
 | `dojops apply --skip-verify`     | Skip external config verification (on by default) |
+| `dojops apply --allow-all-paths` | Bypass DevOps file write allowlist                |
 | `dojops apply --resume`          | Resume a partially-failed plan                    |
 | `dojops apply --replay`          | Deterministic replay: temp=0, validate env match  |
 | `dojops apply --dry-run`         | Preview changes without writing files             |
@@ -34,6 +35,7 @@ Complete reference for the `dojops` command-line interface.
 | `dojops scan --security`     | Run security scanners only (trivy, gitleaks)          |
 | `dojops scan --deps`         | Run dependency audit only (npm, pip)                  |
 | `dojops scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
+| `dojops scan --sbom`         | Generate SBOM (CycloneDX) with hash tracking          |
 | `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
 
 ### Interactive
@@ -161,6 +163,7 @@ dojops apply
 dojops apply --dry-run          # preview only
 dojops apply --skip-verify      # skip external validation (on by default)
 dojops apply --force            # skip git dirty working tree check
+dojops apply --allow-all-paths  # bypass DevOps file write allowlist
 dojops apply --resume --yes     # resume failed tasks, auto-approve
 dojops apply --replay           # deterministic: temp=0, validate env match
 dojops apply --replay --yes     # force replay despite mismatches
@@ -198,6 +201,7 @@ dojops scan
 dojops scan --security          # trivy + gitleaks
 dojops scan --deps              # npm-audit + pip-audit
 dojops scan --iac               # checkov + hadolint
+dojops scan --sbom              # generate SBOM with hash tracking
 
 # Auto-remediation
 dojops scan --fix --yes

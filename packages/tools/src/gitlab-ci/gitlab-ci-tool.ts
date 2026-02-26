@@ -7,9 +7,11 @@ import {
   atomicWriteFileSync,
 } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
+import type { VerificationResult } from "@dojops/sdk";
 import { GitLabCIInputSchema, GitLabCIInput } from "./schemas";
 import { detectGitLabProjectType } from "./detector";
 import { generateGitLabCI, gitlabCIToYaml } from "./generator";
+import { verifyGitLabCI } from "./verifier";
 
 export class GitLabCITool extends BaseTool<GitLabCIInput> {
   name = "gitlab-ci";
@@ -60,6 +62,15 @@ export class GitLabCITool extends BaseTool<GitLabCIInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const record = data as Record<string, unknown>;
+    const yamlContent = record.yaml as string;
+    if (!yamlContent) {
+      return { passed: true, tool: "gitlab-ci-lint", issues: [] };
+    }
+    return verifyGitLabCI(yamlContent);
   }
 
   async execute(input: GitLabCIInput): Promise<ToolOutput> {

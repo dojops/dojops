@@ -67,6 +67,7 @@ export function printHelp(): void {
     `  ${pc.cyan("--skip-verify")}          Skip external config validation (on by default)`,
   );
   console.log(`  ${pc.cyan("--force")}                Skip git dirty working tree check`);
+  console.log(`  ${pc.cyan("--allow-all-paths")}      Bypass DevOps file write allowlist`);
   console.log(`  ${pc.cyan("--install-packages")}     Run package install after apply`);
   console.log(
     `  ${pc.cyan("--replay")}               Deterministic mode: temp=0, validate provider/model/prompts`,
@@ -190,6 +191,7 @@ export function printCommandHelp(command: string): void {
         `  ${pc.cyan("--skip-verify")}       Skip external config validation (verification on by default)`,
       );
       console.log(`  ${pc.cyan("--force")}              Skip git dirty working tree check`);
+      console.log(`  ${pc.cyan("--allow-all-paths")}   Bypass DevOps file write allowlist`);
       console.log(`  ${pc.cyan("--install-packages")}  Run package install after successful apply`);
       console.log(
         `  ${pc.cyan("--replay")}            Deterministic replay: force temp=0, validate environment match`,

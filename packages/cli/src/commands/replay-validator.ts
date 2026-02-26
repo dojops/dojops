@@ -1,5 +1,5 @@
 import { ToolRegistry, PluginTool } from "@dojops/tool-registry";
-import { PlanState } from "../state";
+import { PlanState, getDojopsVersion } from "../state";
 
 export interface ReplayMismatch {
   field: string;
@@ -54,6 +54,18 @@ export function validateReplayIntegrity(
       expected: plan.executionContext.model,
       actual: currentModel,
     });
+  }
+
+  // Check dojopsVersion in replay mode
+  if (plan.executionContext.dojopsVersion) {
+    const currentVersion = getDojopsVersion();
+    if (plan.executionContext.dojopsVersion !== currentVersion) {
+      mismatches.push({
+        field: "dojopsVersion",
+        expected: plan.executionContext.dojopsVersion,
+        actual: currentVersion,
+      });
+    }
   }
 
   for (const task of plan.tasks) {
