@@ -1,0 +1,341 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: helm
+  version: 1.0.0
+  description: "Generate Helm chart scaffolding with values and templates"
+  author: dojops
+  license: MIT
+  tags: [helm, kubernetes, k8s, chart, package]
+
+input:
+  fields:
+    chartName:
+      type: string
+      required: true
+      description: "Name of the Helm chart (e.g. 'my-app')"
+      pattern: "^[a-z][a-z0-9-]*$"
+    appVersion:
+      type: string
+      default: "1.0.0"
+    description:
+      type: string
+      default: "A Helm chart for Kubernetes"
+    outputPath:
+      type: string
+      required: true
+      description: "Base directory to write the chart to (e.g. './charts')"
+    image:
+      type: string
+      required: true
+      description: "Container image (e.g. 'nginx:1.25')"
+    port:
+      type: integer
+      required: true
+      min: 1
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [values]
+  properties:
+    values:
+      type: object
+      description: "Helm values.yaml content as a structured object"
+      properties:
+        replicaCount:
+          type: number
+        image:
+          type: object
+          properties:
+            repository:
+              type: string
+            tag:
+              type: string
+            pullPolicy:
+              type: string
+        service:
+          type: object
+          properties:
+            type:
+              type: string
+            port:
+              type: number
+        ingress:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            className:
+              type: string
+            hosts:
+              type: array
+        resources:
+          type: object
+          properties:
+            limits:
+              type: object
+            requests:
+              type: object
+        autoscaling:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            minReplicas:
+              type: number
+            maxReplicas:
+              type: number
+        serviceAccount:
+          type: object
+          properties:
+            create:
+              type: boolean
+            name:
+              type: string
+        nodeSelector:
+          type: object
+        tolerations:
+          type: array
+        affinity:
+          type: object
+
+files:
+  - path: "{outputPath}/{chartName}/Chart.yaml"
+    format: raw
+    source: template
+    content: |
+      apiVersion: v2
+      name: {{ .Values.chartName }}
+      description: {{ .Values.description }}
+      type: application
+      version: 0.1.0
+      appVersion: {{ .Values.appVersion }}
+
+  - path: "{outputPath}/{chartName}/values.yaml"
+    format: yaml
+    source: llm
+    dataPath: values
+    options:
+      sortKeys: true
+      lineWidth: 120
+
+  - path: "{outputPath}/{chartName}/templates/deployment.yaml"
+    format: raw
+    source: template
+    content: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: {{ include "{{ .Values.chartName }}.fullname" . }}
+        labels:
+          {{- include "{{ .Values.chartName }}.labels" . | nindent 4 }}
+      spec:
+        {{- if not .Values.autoscaling.enabled }}
+        replicas: {{ .Values.replicaCount }}
+        {{- end }}
+        selector:
+          matchLabels:
+            {{- include "{{ .Values.chartName }}.selectorLabels" . | nindent 6 }}
+        template:
+          metadata:
+            labels:
+              {{- include "{{ .Values.chartName }}.selectorLabels" . | nindent 8 }}
+          spec:
+            containers:
+              - name: {{ .Chart.Name }}
+                image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+                imagePullPolicy: {{ .Values.image.pullPolicy }}
+                ports:
+                  - name: http
+                    containerPort: {{ .Values.service.port }}
+                    protocol: TCP
+                livenessProbe:
+                  httpGet:
+                    path: /
+                    port: http
+                readinessProbe:
+                  httpGet:
+                    path: /
+                    port: http
+                resources:
+                  {{- toYaml .Values.resources | nindent 12 }}
+
+  - path: "{outputPath}/{chartName}/templates/service.yaml"
+    format: raw
+    source: template
+    content: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: {{ include "{{ .Values.chartName }}.fullname" . }}
+        labels:
+          {{- include "{{ .Values.chartName }}.labels" . | nindent 4 }}
+      spec:
+        type: {{ .Values.service.type }}
+        ports:
+          - port: {{ .Values.service.port }}
+            targetPort: http
+            protocol: TCP
+            name: http
+        selector:
+          {{- include "{{ .Values.chartName }}.selectorLabels" . | nindent 4 }}
+
+  - path: "{outputPath}/{chartName}/templates/_helpers.tpl"
+    format: raw
+    source: template
+    content: |
+      {{/*
+      Expand the name of the chart.
+      */}}
+      {{- define "{{ .Values.chartName }}.name" -}}
+      {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+      {{- end }}
+
+      {{/*
+      Create a default fully qualified app name.
+      */}}
+      {{- define "{{ .Values.chartName }}.fullname" -}}
+      {{- if .Values.fullnameOverride }}
+      {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+      {{- else }}
+      {{- $name := default .Chart.Name .Values.nameOverride }}
+      {{- if contains $name .Release.Name }}
+      {{- .Release.Name | trunc 63 | trimSuffix "-" }}
+      {{- else }}
+      {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+      {{- end }}
+      {{- end }}
+      {{- end }}
+
+      {{/*
+      Common labels
+      */}}
+      {{- define "{{ .Values.chartName }}.labels" -}}
+      helm.sh/chart: {{ include "{{ .Values.chartName }}.name" . }}-{{ .Chart.Version | replace "+" "_" }}
+      {{ include "{{ .Values.chartName }}.selectorLabels" . }}
+      app.kubernetes.io/managed-by: {{ .Release.Service }}
+      {{- end }}
+
+      {{/*
+      Selector labels
+      */}}
+      {{- define "{{ .Values.chartName }}.selectorLabels" -}}
+      app.kubernetes.io/name: {{ include "{{ .Values.chartName }}.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- end }}
+
+detection:
+  paths: ["{outputPath}/{chartName}/values.yaml", "*/values.yaml", "*/Chart.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "values"
+      required: true
+      message: "Values object is required"
+    - path: "values.image"
+      required: true
+      message: "Image configuration is required in values"
+    - path: "values.service"
+      required: true
+      message: "Service configuration is required in values"
+
+  binary:
+    command: "helm lint ."
+    parser: helm-lint
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Helm
+
+## Prompt
+
+You are a Helm chart expert. Generate Helm chart values as a structured JSON object.
+
+The values object will be used as values.yaml for a Helm chart. It should define all configurable parameters for the application deployment.
+
+Respond with valid JSON matching this structure:
+{
+  "values": {
+    "replicaCount": 1,
+    "image": { "repository": "nginx", "tag": "1.25", "pullPolicy": "IfNotPresent" },
+    "service": { "type": "ClusterIP", "port": 80 },
+    "ingress": { "enabled": false, "className": "", "hosts": [] },
+    "resources": {
+      "limits": { "cpu": "500m", "memory": "256Mi" },
+      "requests": { "cpu": "100m", "memory": "128Mi" }
+    },
+    "autoscaling": { "enabled": false, "minReplicas": 1, "maxReplicas": 10 },
+    "serviceAccount": { "create": true, "name": "" },
+    "nodeSelector": {},
+    "tolerations": [],
+    "affinity": {}
+  }
+}
+
+IMPORTANT:
+- The root object MUST contain a "values" key
+- "image" must include "repository", "tag", and "pullPolicy"
+- "service" must include "type" and "port"
+- Include sensible resource limits and requests
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a Helm chart expert. Update the existing Helm chart values.
+Preserve existing configuration. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with valid JSON containing the updated values object.
+
+IMPORTANT:
+- Preserve ALL existing values unless explicitly asked to change them
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "Helm chart for nginx with 3 replicas on port 80"
+
+```json
+{
+  "values": {
+    "replicaCount": 3,
+    "image": { "repository": "nginx", "tag": "1.25", "pullPolicy": "IfNotPresent" },
+    "service": { "type": "ClusterIP", "port": 80 },
+    "ingress": { "enabled": false, "className": "", "hosts": [] },
+    "resources": {
+      "limits": { "cpu": "500m", "memory": "256Mi" },
+      "requests": { "cpu": "100m", "memory": "128Mi" }
+    },
+    "autoscaling": { "enabled": false, "minReplicas": 1, "maxReplicas": 10 },
+    "serviceAccount": { "create": true, "name": "" },
+    "nodeSelector": {},
+    "tolerations": [],
+    "affinity": {}
+  }
+}
+```
+
+## Constraints
+
+- Image tags should be specific versions, not :latest
+- Resource limits must be defined for production readiness
+- Service port must be a valid port number (1-65535)
+- Chart name must be lowercase alphanumeric with hyphens
+
+## Keywords
+
+helm, chart, values, kubernetes, k8s, package, template,
+deployment, service, ingress, values.yaml, release

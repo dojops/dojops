@@ -1,0 +1,157 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: prometheus
+  version: 1.0.0
+  description: "Generate Prometheus monitoring configurations and alert rules"
+  author: dojops
+  license: MIT
+  tags: [prometheus, monitoring, alerting, metrics, observability]
+
+input:
+  fields:
+    targets:
+      type: array
+      required: true
+      description: "List of scrape target descriptions"
+      items:
+        type: string
+    scrapeInterval:
+      type: string
+      default: "15s"
+    alertRules:
+      type: string
+      description: "Description of alert rules to create"
+    outputPath:
+      type: string
+      required: true
+      description: "Directory to write config files to"
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [prometheusYaml]
+  properties:
+    prometheusYaml:
+      type: string
+      description: "Complete prometheus.yml content as YAML text"
+    alertRulesYaml:
+      type: string
+      description: "Complete alert-rules.yml content as YAML text (optional)"
+    alertmanagerYaml:
+      type: string
+      description: "Complete alertmanager.yml content as YAML text (optional)"
+
+files:
+  - path: "{outputPath}/prometheus.yml"
+    format: raw
+    source: llm
+    dataPath: prometheusYaml
+
+  - path: "{outputPath}/alert-rules.yml"
+    format: raw
+    source: llm
+    dataPath: alertRulesYaml
+    conditional: true
+
+  - path: "{outputPath}/alertmanager.yml"
+    format: raw
+    source: llm
+    dataPath: alertmanagerYaml
+    conditional: true
+
+detection:
+  paths: ["prometheus.yml", "prometheus.yaml", "*/prometheus.yml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "prometheusYaml"
+      required: true
+      type: string
+      message: "Prometheus configuration content is required"
+
+  binary:
+    command: "promtool check config prometheus.yml"
+    parser: promtool
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Prometheus
+
+## Prompt
+
+You are a Prometheus monitoring expert. Generate Prometheus configuration files as YAML text strings.
+
+You MUST respond with a JSON object containing:
+- "prometheusYaml": (required) complete prometheus.yml content as a YAML string
+- "alertRulesYaml": (optional) alert rules file content as a YAML string
+- "alertmanagerYaml": (optional) alertmanager configuration as a YAML string
+
+The prometheus.yml should include:
+- global scrape_interval and evaluation_interval
+- rule_files reference (if alert rules provided)
+- scrape_configs for each target
+- alerting configuration (if alertmanager provided)
+
+Response format:
+{
+  "prometheusYaml": "global:\n  scrape_interval: 15s\n  evaluation_interval: 15s\n\nscrape_configs:\n  - job_name: 'prometheus'\n    static_configs:\n      - targets: ['localhost:9090']\n",
+  "alertRulesYaml": "groups:\n  - name: example\n    rules:\n      - alert: HighCPU\n        expr: cpu_usage > 80\n        for: 5m\n        labels:\n          severity: warning\n        annotations:\n          summary: High CPU usage\n",
+  "alertmanagerYaml": ""
+}
+
+IMPORTANT:
+- "prometheusYaml" is required and must be valid Prometheus YAML
+- Alert rules should follow the groups/rules structure
+- Include proper labels and annotations on alerts
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a Prometheus monitoring expert. Update the existing Prometheus configuration.
+Preserve existing scrape configs and alert rules. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with valid JSON containing the updated configuration strings.
+
+IMPORTANT:
+- Preserve ALL existing scrape configs unless explicitly asked to remove them
+- Maintain existing alert rules
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "Monitor a Node.js app on port 3000 and a PostgreSQL exporter on port 9187"
+
+```json
+{
+  "prometheusYaml": "global:\n  scrape_interval: 15s\n  evaluation_interval: 15s\n\nrule_files:\n  - 'alert-rules.yml'\n\nscrape_configs:\n  - job_name: 'prometheus'\n    static_configs:\n      - targets: ['localhost:9090']\n\n  - job_name: 'node-app'\n    static_configs:\n      - targets: ['localhost:3000']\n    metrics_path: '/metrics'\n\n  - job_name: 'postgres'\n    static_configs:\n      - targets: ['localhost:9187']\n",
+  "alertRulesYaml": "groups:\n  - name: app_alerts\n    rules:\n      - alert: HighRequestLatency\n        expr: http_request_duration_seconds{quantile=\"0.99\"} > 1\n        for: 5m\n        labels:\n          severity: warning\n        annotations:\n          summary: \"High request latency on {{ $labels.instance }}\"\n      - alert: HighErrorRate\n        expr: rate(http_requests_total{status=~\"5..\"}[5m]) > 0.1\n        for: 5m\n        labels:\n          severity: critical\n        annotations:\n          summary: \"High error rate on {{ $labels.instance }}\"\n"
+}
+```
+
+## Constraints
+
+- Always include a self-monitoring scrape config for Prometheus itself
+- Use meaningful job names
+- Include proper for/labels/annotations on alert rules
+- Alert severity should be one of: info, warning, critical
+- Scrape interval should not be less than 5s
+- Maximum 20 scrape configs per file
+
+## Keywords
+
+prometheus, monitoring, metrics, alerting, alert, scrape,
+grafana, observability, exporter, targets, rules, alertmanager

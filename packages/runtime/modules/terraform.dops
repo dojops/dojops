@@ -1,0 +1,257 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: terraform
+  version: 1.0.0
+  description: "Generate Terraform infrastructure-as-code configurations"
+  author: dojops
+  license: MIT
+  tags: [iac, cloud, aws, gcp, azure]
+
+input:
+  fields:
+    projectPath:
+      type: string
+      required: true
+      description: "Directory to write Terraform files to (e.g. './infra' or './terraform')"
+    provider:
+      type: enum
+      values: [aws, gcp, azure]
+      required: true
+    resources:
+      type: string
+      required: true
+      description: "Description of infrastructure resources to provision"
+    backendType:
+      type: enum
+      values: [local, s3, gcs, azurerm]
+      default: local
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [provider, resources]
+  properties:
+    provider:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        region:
+          type: string
+        config:
+          type: object
+    backend:
+      type: object
+      properties:
+        type:
+          type: string
+        config:
+          type: object
+    variables:
+      type: array
+      items:
+        type: object
+        required: [name, type, description]
+        properties:
+          name:
+            type: string
+          type:
+            type: string
+          description:
+            type: string
+          default: {}
+    resources:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required: [type, name, config]
+        properties:
+          type:
+            type: string
+          name:
+            type: string
+          config:
+            type: object
+    outputs:
+      type: array
+      items:
+        type: object
+        required: [name, value]
+        properties:
+          name:
+            type: string
+          value:
+            type: string
+          description:
+            type: string
+    locals:
+      type: array
+      items:
+        type: object
+        required: [name, value]
+        properties:
+          name:
+            type: string
+          value: {}
+    dataSources:
+      type: array
+      items:
+        type: object
+        required: [type, name, config]
+        properties:
+          type:
+            type: string
+          name:
+            type: string
+          config:
+            type: object
+    modules:
+      type: array
+      items:
+        type: object
+        required: [name, source]
+        properties:
+          name:
+            type: string
+          source:
+            type: string
+          config:
+            type: object
+
+files:
+  - path: "{projectPath}/main.tf"
+    format: hcl
+    source: llm
+    options:
+      mapAttributes: [tags, labels, annotations, metadata, variables, environment, default_tags]
+
+detection:
+  paths: ["main.tf", "*.tf", "terraform.tfstate"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "resources"
+      type: array
+      minItems: 1
+      message: "Must define at least one resource"
+    - path: "resources.*.type"
+      required: true
+      message: "Each resource must have a type"
+    - path: "resources.*.name"
+      required: true
+      message: "Each resource must have a name"
+    - path: "provider"
+      required: true
+      message: "Provider block is required"
+    - path: "provider.name"
+      required: true
+      message: "Provider must have a name"
+
+  binary:
+    command: "terraform init -backend=false -input=false && terraform validate -json"
+    parser: terraform-json
+    timeout: 60000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Terraform
+
+## Prompt
+
+You are a Terraform expert. Generate Terraform configuration as structured JSON.
+
+You MUST respond with a JSON object matching this exact structure:
+{
+  "provider": { "name": "<provider>", "region": "us-east-1", "config": {} },
+  "backend": { "type": "<backendType>", "config": {} },
+  "variables": [
+    { "name": "var_name", "type": "string", "description": "desc", "default": "value" }
+  ],
+  "resources": [
+    { "type": "aws_instance", "name": "web", "config": { "ami": "ami-xxx", "instance_type": "t2.micro" } }
+  ],
+  "outputs": [
+    { "name": "output_name", "value": "aws_instance.web.public_ip", "description": "desc" }
+  ]
+}
+
+IMPORTANT:
+- "provider" must be an object with "name" (string), optional "region", and "config" (object)
+- "variables", "resources", and "outputs" must be ARRAYS of objects, not objects/maps
+- Each resource must have "type", "name", and "config" fields
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a Terraform expert. Update the existing Terraform configuration as structured JSON.
+Preserve existing resources and settings. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+You MUST respond with a JSON object matching this exact structure:
+{
+  "provider": { "name": "<provider>", "region": "us-east-1", "config": {} },
+  "backend": { "type": "<backendType>", "config": {} },
+  "variables": [
+    { "name": "var_name", "type": "string", "description": "desc", "default": "value" }
+  ],
+  "resources": [
+    { "type": "aws_instance", "name": "web", "config": { "ami": "ami-xxx", "instance_type": "t2.micro" } }
+  ],
+  "outputs": [
+    { "name": "output_name", "value": "aws_instance.web.public_ip", "description": "desc" }
+  ]
+}
+
+IMPORTANT:
+- "provider" must be an object with "name" (string), optional "region", and "config" (object)
+- "variables", "resources", and "outputs" must be ARRAYS of objects, not objects/maps
+- Each resource must have "type", "name", and "config" fields
+- Preserve ALL existing resources unless explicitly asked to remove them
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "S3 bucket with versioning for provider aws"
+
+```json
+{
+  "provider": { "name": "aws", "region": "us-east-1", "config": {} },
+  "resources": [
+    { "type": "aws_s3_bucket", "name": "main", "config": { "bucket": "my-app" } },
+    { "type": "aws_s3_bucket_versioning", "name": "main", "config": {
+      "bucket": "${aws_s3_bucket.main.id}",
+      "versioning_configuration": { "status": "Enabled" }
+    }}
+  ],
+  "variables": [],
+  "outputs": []
+}
+```
+
+## Constraints
+
+- Maximum 50 resources per generation
+- Variable names must match: ^[a-z][a-z0-9_]*$
+- Resource names must match: ^[a-z][a-z0-9_]*$
+- No hardcoded credentials (AWS keys, passwords, tokens)
+- Backend configuration must match the requested backendType
+- Use snake_case for all resource names
+
+## Keywords
+
+terraform, tf, infrastructure, iac, cloud, aws, gcp, azure, hcl,
+provider, resource, module, state, backend, s3, ec2, vpc, rds, lambda

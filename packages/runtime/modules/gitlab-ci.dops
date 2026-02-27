@@ -1,0 +1,174 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: gitlab-ci
+  version: 1.0.0
+  description: "Generate GitLab CI/CD pipeline configurations"
+  author: dojops
+  license: MIT
+  tags: [gitlab, ci, cd, pipeline, devops]
+
+input:
+  fields:
+    projectPath:
+      type: string
+      required: true
+      description: "Root directory of the project"
+    defaultBranch:
+      type: string
+      default: "main"
+    nodeVersion:
+      type: string
+      default: "20"
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [stages]
+  properties:
+    stages:
+      type: array
+      minItems: 1
+      items:
+        type: string
+    variables:
+      type: object
+    default:
+      type: object
+    include:
+      type: array
+      items:
+        type: object
+
+files:
+  - path: "{projectPath}/.gitlab-ci.yml"
+    format: yaml
+    source: llm
+    options:
+      sortKeys: false
+      lineWidth: 120
+
+detection:
+  paths: [".gitlab-ci.yml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "stages"
+      required: true
+      type: array
+      minItems: 1
+      message: "Pipeline must define at least one stage"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+---
+# GitLab CI
+
+## Prompt
+
+You are a CI/CD expert. Generate a GitLab CI/CD pipeline configuration as structured JSON.
+
+Respond with valid JSON matching the GitLab CI structure. The object should contain "stages" as a top-level array, plus job definitions as top-level keys.
+
+{
+  "stages": ["build", "test", "deploy"],
+  "variables": { "NODE_VERSION": "20" },
+  "default": { "image": "node:20-alpine" },
+  "build": {
+    "stage": "build",
+    "script": ["npm ci", "npm run build"],
+    "artifacts": { "paths": ["dist/"] }
+  },
+  "test": {
+    "stage": "test",
+    "script": ["npm ci", "npm test"]
+  },
+  "deploy": {
+    "stage": "deploy",
+    "script": ["echo 'Deploying...'"],
+    "only": ["main"]
+  }
+}
+
+IMPORTANT:
+- "stages" is required and must be an array
+- Each job must have "stage" and "script" fields
+- "script" must be an array of strings
+- Use "only"/"except" or "rules" for conditional jobs
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a CI/CD expert. Update the existing GitLab CI pipeline configuration.
+Preserve existing jobs and stages. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with valid JSON containing the complete GitLab CI configuration.
+
+IMPORTANT:
+- Preserve ALL existing stages and jobs unless explicitly asked to remove them
+- Maintain existing variable definitions
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "GitLab CI for a Node.js project with build, test, and deploy stages"
+
+```json
+{
+  "stages": ["build", "test", "deploy"],
+  "variables": {
+    "NODE_VERSION": "20"
+  },
+  "default": {
+    "image": "node:20-alpine",
+    "cache": {
+      "paths": ["node_modules/"]
+    }
+  },
+  "build": {
+    "stage": "build",
+    "script": ["npm ci", "npm run build"],
+    "artifacts": {
+      "paths": ["dist/"],
+      "expire_in": "1 hour"
+    }
+  },
+  "test": {
+    "stage": "test",
+    "script": ["npm ci", "npm test"],
+    "coverage": "/All files[^|]*\\|[^|]*\\s+([\\d\\.]+)/"
+  },
+  "deploy_staging": {
+    "stage": "deploy",
+    "script": ["echo 'Deploying to staging...'"],
+    "environment": {
+      "name": "staging"
+    },
+    "rules": [{ "if": "$CI_COMMIT_BRANCH == \"main\"" }]
+  }
+}
+```
+
+## Constraints
+
+- Every job must have "stage" and "script"
+- Script entries must be strings
+- Use caching for dependency directories
+- Use artifacts for build outputs
+- Define environments for deploy jobs
+- Maximum 20 jobs per pipeline
+
+## Keywords
+
+gitlab, gitlab-ci, ci, cd, pipeline, job, stage, runner,
+deploy, build, test, artifact, cache, environment, gitlab-ci.yml

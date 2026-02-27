@@ -1,21 +1,11 @@
 import { LLMProvider } from "@dojops/core";
-import {
-  GitHubActionsTool,
-  TerraformTool,
-  KubernetesTool,
-  HelmTool,
-  AnsibleTool,
-  DockerComposeTool,
-  DockerfileTool,
-  NginxTool,
-  MakefileTool,
-  GitLabCITool,
-  PrometheusTool,
-  SystemdTool,
-} from "@dojops/tools";
+import { DevOpsTool } from "@dojops/sdk";
+import { DopsRuntime, parseDopsFile, validateDopsModule } from "@dojops/runtime";
+import * as fs from "fs";
+import * as path from "path";
 import { ToolRegistry } from "./registry";
 import { CustomTool } from "./custom-tool";
-import { discoverTools } from "./tool-loader";
+import { discoverTools, discoverUserDopsFiles } from "./tool-loader";
 import { loadToolPolicy, isToolAllowed } from "./policy";
 
 export * from "./types";
@@ -31,40 +21,84 @@ export * from "./agent-loader";
 export * from "./agent-schema";
 
 /**
- * Creates all 12 built-in tool instances.
+ * Load built-in .dops modules from @dojops/runtime/modules/.
+ * Returns DopsRuntime instances for each valid module.
  */
-export function createBuiltInTools(provider: LLMProvider) {
-  return [
-    new GitHubActionsTool(provider),
-    new TerraformTool(provider),
-    new KubernetesTool(provider),
-    new HelmTool(provider),
-    new AnsibleTool(provider),
-    new DockerComposeTool(provider),
-    new DockerfileTool(provider),
-    new NginxTool(provider),
-    new MakefileTool(provider),
-    new GitLabCITool(provider),
-    new PrometheusTool(provider),
-    new SystemdTool(provider),
-  ];
+export function loadBuiltInDopsModules(provider: LLMProvider): DopsRuntime[] {
+  const modulesDir = path.join(__dirname, "../../runtime/modules");
+  const runtimes: DopsRuntime[] = [];
+
+  try {
+    if (!fs.existsSync(modulesDir)) return runtimes;
+
+    const files = fs.readdirSync(modulesDir) as string[];
+    for (const file of files) {
+      if (!file.endsWith(".dops")) continue;
+      try {
+        const module = parseDopsFile(path.join(modulesDir, file));
+        const validation = validateDopsModule(module);
+        if (validation.valid) {
+          runtimes.push(new DopsRuntime(module, provider));
+        }
+      } catch {
+        // Skip invalid modules silently
+      }
+    }
+  } catch {
+    // modules dir not found — not an error in dev/test
+  }
+
+  return runtimes;
 }
 
 /**
- * Convenience factory: builds a ToolRegistry with all 12 built-in tools
- * plus any valid, policy-allowed custom tools discovered from disk.
+ * Load user .dops files from global/project directories.
+ */
+export function loadUserDopsModules(
+  provider: LLMProvider,
+  projectPath?: string,
+): { runtimes: DopsRuntime[]; warnings: string[] } {
+  const dopsFiles = discoverUserDopsFiles(projectPath);
+  const runtimes: DopsRuntime[] = [];
+  const warnings: string[] = [];
+
+  for (const entry of dopsFiles) {
+    try {
+      const module = parseDopsFile(entry.filePath);
+      const validation = validateDopsModule(module);
+      if (validation.valid) {
+        runtimes.push(new DopsRuntime(module, provider));
+      } else {
+        warnings.push(
+          `Invalid .dops file ${entry.filePath}: ${(validation.errors ?? []).join(", ")}`,
+        );
+      }
+    } catch (err) {
+      warnings.push(
+        `Failed to load .dops file ${entry.filePath}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  return { runtimes, warnings };
+}
+
+/**
+ * Convenience factory: builds a ToolRegistry with all built-in .dops modules
+ * plus any valid, policy-allowed custom tools.
  */
 export function createToolRegistry(provider: LLMProvider, projectPath?: string): ToolRegistry {
-  const builtInTools = createBuiltInTools(provider);
+  // 1. Built-in .dops modules (sole built-in tool source)
+  const builtInTools: DevOpsTool[] = loadBuiltInDopsModules(provider);
 
-  // Discover tool manifests
+  // 2. Discover legacy custom tools (tool.yaml manifests)
   const toolEntries = discoverTools(projectPath);
 
-  // Apply policy filter
+  // 3. Apply policy filter
   const policy = loadToolPolicy(projectPath);
   const allowedEntries = toolEntries.filter((entry) => isToolAllowed(entry.manifest.name, policy));
 
-  // Create CustomTool instances
+  // 4. Create CustomTool instances from legacy manifests
   const customTools: CustomTool[] = allowedEntries.map(
     (entry) =>
       new CustomTool(
@@ -76,6 +110,13 @@ export function createToolRegistry(provider: LLMProvider, projectPath?: string):
         entry.outputSchemaRaw,
       ),
   );
+
+  // 5. Load user .dops files (treated as custom tools, can override built-in)
+  const { runtimes: userDopsRuntimes } = loadUserDopsModules(provider, projectPath);
+  const allowedDops = userDopsRuntimes.filter((rt) => isToolAllowed(rt.name, policy));
+
+  // Add user .dops runtimes as built-in tools (they'll override by name in registry)
+  builtInTools.push(...allowedDops);
 
   return new ToolRegistry(builtInTools, customTools);
 }

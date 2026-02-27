@@ -14,12 +14,12 @@
       "@dojops/core/*": ["packages/core/src/*"],
       "@dojops/sdk/*": ["packages/sdk/src/*"],
       "@dojops/planner/*": ["packages/planner/src/*"],
-      "@dojops/tools/*": ["packages/tools/src/*"],
       "@dojops/executor/*": ["packages/executor/src/*"],
       "@dojops/api/*": ["packages/api/src/*"],
       "@dojops/scanner/*": ["packages/scanner/src/*"],
       "@dojops/session/*": ["packages/session/src/*"],
-      "@dojops/tool-registry/*": ["packages/tool-registry/src/*"]
+      "@dojops/tool-registry/*": ["packages/tool-registry/src/*"],
+      "@dojops/runtime/*": ["packages/runtime/src/*"]
     }
   }
 }

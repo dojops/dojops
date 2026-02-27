@@ -1,0 +1,141 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: systemd
+  version: 1.0.0
+  description: "Generate systemd service unit files"
+  author: dojops
+  license: MIT
+  tags: [systemd, service, daemon, linux, init]
+
+input:
+  fields:
+    serviceName:
+      type: string
+      required: true
+      description: "Name of the systemd service (e.g. 'my-app')"
+      pattern: "^[a-z][a-z0-9-]*$"
+    execStart:
+      type: string
+      required: true
+      description: "Command to start the service"
+    user:
+      type: string
+      default: "root"
+    workingDirectory:
+      type: string
+      description: "Working directory for the service"
+    description:
+      type: string
+      default: "Custom service"
+    outputPath:
+      type: string
+      required: true
+      description: "Directory to write the unit file to"
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [content]
+  properties:
+    content:
+      type: string
+      description: "Complete systemd unit file content as INI-format text"
+
+files:
+  - path: "{outputPath}/{serviceName}.service"
+    format: raw
+    source: llm
+    dataPath: content
+
+detection:
+  paths: ["{serviceName}.service", "*.service", "/etc/systemd/system/{serviceName}.service"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "content"
+      required: true
+      type: string
+      message: "Service unit content is required"
+
+  binary:
+    command: "systemd-analyze verify service.service"
+    parser: systemd-analyze
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Systemd
+
+## Prompt
+
+You are a Linux systems expert. Generate a systemd service unit file as text.
+
+You MUST respond with a JSON object containing a "content" field with the complete systemd unit file as a string.
+
+The unit file should include:
+- [Unit] section with Description and After directives
+- [Service] section with ExecStart, User, WorkingDirectory, Restart policy
+- [Install] section with WantedBy directive
+- Environment variables if needed
+- Security hardening directives
+
+Response format:
+{
+  "content": "[Unit]\nDescription=My Application Service\nAfter=network.target\n\n[Service]\nType=simple\nUser=appuser\nWorkingDirectory=/opt/myapp\nExecStart=/usr/bin/node /opt/myapp/index.js\nRestart=on-failure\nRestartSec=5\nEnvironment=NODE_ENV=production\n\n[Install]\nWantedBy=multi-user.target\n"
+}
+
+IMPORTANT:
+- "content" must contain the COMPLETE unit file as a string
+- Include [Unit], [Service], and [Install] sections
+- Use Restart=on-failure or Restart=always
+- Include security directives (NoNewPrivileges, ProtectSystem)
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a Linux systems expert. Update the existing systemd unit file.
+Preserve existing settings. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with a JSON object containing a "content" field with the complete updated unit file.
+
+IMPORTANT:
+- Preserve existing directives unless explicitly asked to change them
+- Maintain existing security settings
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "Systemd service for a Node.js app running on port 3000"
+
+```json
+{
+  "content": "[Unit]\nDescription=Node.js Application\nAfter=network.target\nWants=network-online.target\n\n[Service]\nType=simple\nUser=nodeapp\nGroup=nodeapp\nWorkingDirectory=/opt/nodeapp\nExecStart=/usr/bin/node /opt/nodeapp/server.js\nRestart=on-failure\nRestartSec=10\nStandardOutput=journal\nStandardError=journal\nSyslogIdentifier=nodeapp\nEnvironment=NODE_ENV=production\nEnvironment=PORT=3000\n\n# Security hardening\nNoNewPrivileges=true\nProtectSystem=strict\nProtectHome=true\nReadWritePaths=/opt/nodeapp/data\nPrivateTmp=true\n\n[Install]\nWantedBy=multi-user.target\n"
+}
+```
+
+## Constraints
+
+- Always include [Unit], [Service], and [Install] sections
+- Use Restart=on-failure with RestartSec
+- Include security hardening directives
+- Use journal for logging (StandardOutput/StandardError)
+- Run as non-root user when possible
+- No hardcoded secrets in Environment directives
+
+## Keywords
+
+systemd, service, unit, daemon, linux, systemctl, init,
+enable, start, stop, restart, journal, socket

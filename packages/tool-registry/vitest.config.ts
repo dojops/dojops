@@ -9,7 +9,6 @@ export default defineConfig({
     alias: {
       "@dojops/sdk": path.resolve(__dirname, "../sdk/src"),
       "@dojops/core": path.resolve(__dirname, "../core/src"),
-      "@dojops/tools": path.resolve(__dirname, "../tools/src"),
     },
   },
 });

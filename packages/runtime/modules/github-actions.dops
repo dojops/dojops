@@ -1,0 +1,159 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: github-actions
+  version: 1.0.0
+  description: "Generate GitHub Actions CI/CD workflow configurations"
+  author: dojops
+  license: MIT
+  tags: [ci, cd, github, workflow, actions]
+
+input:
+  fields:
+    projectPath:
+      type: string
+      required: true
+      description: "Root directory of the project (e.g. '.' or './my-app')"
+    nodeVersion:
+      type: string
+      default: "20"
+    defaultBranch:
+      type: string
+      default: "main"
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [name, on, jobs]
+  properties:
+    name:
+      type: string
+    on:
+      type: object
+    permissions:
+      type: object
+    env:
+      type: object
+    jobs:
+      type: object
+
+files:
+  - path: "{projectPath}/.github/workflows/ci.yml"
+    format: yaml
+    source: llm
+    options:
+      keyOrder: [name, on, permissions, env, jobs]
+      sortKeys: true
+      lineWidth: 120
+
+detection:
+  paths: [".github/workflows/*.yml", ".github/workflows/*.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "on"
+      required: true
+      message: "Missing required 'on' trigger"
+    - path: "jobs"
+      required: true
+      message: "Missing required 'jobs' section"
+    - path: "name"
+      required: true
+      message: "Workflow must have a name"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+---
+# GitHub Actions
+
+## Prompt
+
+You are a CI/CD expert. Generate a GitHub Actions workflow as structured JSON.
+The workflow should include linting, testing, and building steps appropriate for the project type.
+
+Respond with valid JSON matching the GitHub Actions workflow structure:
+{
+  "name": "CI",
+  "on": { "push": { "branches": ["main"] }, "pull_request": { "branches": ["main"] } },
+  "jobs": {
+    "build": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        { "name": "Checkout", "uses": "actions/checkout@v4" },
+        { "name": "Setup Node", "uses": "actions/setup-node@v4", "with": { "node-version": "20" } },
+        { "name": "Install", "run": "npm ci" },
+        { "name": "Lint", "run": "npm run lint" },
+        { "name": "Test", "run": "npm test" },
+        { "name": "Build", "run": "npm run build" }
+      ]
+    }
+  }
+}
+
+IMPORTANT:
+- "on" must be present (trigger configuration)
+- "jobs" must be present with at least one job
+- Each job must have "runs-on" (unless it's a reusable workflow with "uses")
+- Each step should have "name" and either "run" or "uses"
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a CI/CD expert. Update the existing GitHub Actions workflow.
+Preserve existing structure and settings. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with valid JSON matching the GitHub Actions workflow structure.
+
+IMPORTANT:
+- Preserve ALL existing jobs and steps unless explicitly asked to remove them
+- Maintain existing trigger configuration
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "CI workflow for a Node.js project"
+
+```json
+{
+  "name": "CI",
+  "on": {
+    "push": { "branches": ["main"] },
+    "pull_request": { "branches": ["main"] }
+  },
+  "jobs": {
+    "build": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        { "name": "Checkout", "uses": "actions/checkout@v4" },
+        { "name": "Setup Node.js", "uses": "actions/setup-node@v4", "with": { "node-version": "20" } },
+        { "name": "Install dependencies", "run": "npm ci" },
+        { "name": "Lint", "run": "npm run lint" },
+        { "name": "Test", "run": "npm test" },
+        { "name": "Build", "run": "npm run build" }
+      ]
+    }
+  }
+}
+```
+
+## Constraints
+
+- Use latest stable action versions (actions/checkout@v4, actions/setup-node@v4)
+- Each job must specify runs-on
+- Steps should have descriptive names
+- Use npm ci instead of npm install for CI environments
+
+## Keywords
+
+github, actions, workflow, ci, cd, pipeline, build, test, deploy,
+continuous-integration, continuous-deployment, github-actions, gha

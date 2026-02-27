@@ -1,0 +1,128 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: makefile
+  version: 1.0.0
+  description: "Generate Makefiles for build automation"
+  author: dojops
+  license: MIT
+  tags: [make, makefile, build, automation, compile]
+
+input:
+  fields:
+    projectPath:
+      type: string
+      required: true
+      description: "Root directory of the project"
+    targets:
+      type: string
+      required: true
+      description: "Description of build targets to create"
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [content]
+  properties:
+    content:
+      type: string
+      description: "Complete Makefile content as text"
+
+files:
+  - path: "{projectPath}/Makefile"
+    format: raw
+    source: llm
+    dataPath: content
+
+detection:
+  paths: ["Makefile", "makefile", "GNUmakefile"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "content"
+      required: true
+      type: string
+      message: "Makefile content is required"
+
+  binary:
+    command: "make -n -f Makefile"
+    parser: make-dryrun
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Makefile
+
+## Prompt
+
+You are a build automation expert. Generate a Makefile as text.
+
+You MUST respond with a JSON object containing a "content" field with the complete Makefile as a string.
+
+The Makefile should:
+- Use tab indentation for commands (CRITICAL — Makefiles require tabs, not spaces)
+- Include .PHONY declarations for non-file targets
+- Set .DEFAULT_GOAL for the main target
+- Include common targets (build, test, clean, lint, help)
+- Use variables for configurable values
+
+Response format:
+{
+  "content": ".DEFAULT_GOAL := help\n\n.PHONY: build test clean lint help\n\nbuild:\n\tnpm run build\n\ntest:\n\tnpm test\n\nclean:\n\trm -rf dist node_modules\n\nlint:\n\tnpm run lint\n\nhelp:\n\t@echo \"Available targets:\"\n\t@echo \"  build  - Build the project\"\n\t@echo \"  test   - Run tests\"\n\t@echo \"  clean  - Clean build artifacts\"\n\t@echo \"  lint   - Run linter\"\n\t@echo \"  help   - Show this help\"\n"
+}
+
+IMPORTANT:
+- "content" must contain the COMPLETE Makefile as a string
+- Commands MUST be indented with TABS (\t), not spaces
+- Include .PHONY for all non-file targets
+- Include a help target
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a build automation expert. Update the existing Makefile.
+Preserve existing targets and settings. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with a JSON object containing a "content" field with the complete updated Makefile.
+
+IMPORTANT:
+- Preserve ALL existing targets unless explicitly asked to remove them
+- Maintain existing variables and .PHONY declarations
+- Use tab indentation for commands
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "Makefile for a Go project with build, test, and docker targets"
+
+```json
+{
+  "content": "BINARY_NAME := myapp\nGO := go\nDOCKER := docker\n\n.DEFAULT_GOAL := help\n\n.PHONY: build test clean lint docker-build docker-push help\n\nbuild:\n\t$(GO) build -o bin/$(BINARY_NAME) ./cmd/$(BINARY_NAME)\n\ntest:\n\t$(GO) test ./...\n\nclean:\n\trm -rf bin/\n\nlint:\n\tgolangci-lint run\n\ndocker-build:\n\t$(DOCKER) build -t $(BINARY_NAME):latest .\n\ndocker-push:\n\t$(DOCKER) push $(BINARY_NAME):latest\n\nhelp:\n\t@echo \"Available targets:\"\n\t@echo \"  build        - Build the binary\"\n\t@echo \"  test         - Run tests\"\n\t@echo \"  clean        - Clean build artifacts\"\n\t@echo \"  lint         - Run linter\"\n\t@echo \"  docker-build - Build Docker image\"\n\t@echo \"  docker-push  - Push Docker image\"\n\t@echo \"  help         - Show this help\"\n"
+}
+```
+
+## Constraints
+
+- Commands MUST use tab indentation (not spaces)
+- Include .PHONY for all non-file targets
+- Include a help target with descriptions
+- Use variables for repeated values
+- Maximum 30 targets per Makefile
+- No hardcoded secrets or credentials
+
+## Keywords
+
+make, makefile, build, compile, automation, gnumake,
+target, recipe, phony, clean, install, deploy

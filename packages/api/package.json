@@ -51,7 +51,6 @@
     "@dojops/sdk": "workspace:*",
     "@dojops/session": "workspace:*",
     "@dojops/tool-registry": "workspace:*",
-    "@dojops/tools": "workspace:*",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
     "express": "^4.21.0",

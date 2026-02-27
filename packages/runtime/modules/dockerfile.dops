@@ -1,0 +1,143 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: dockerfile
+  version: 1.0.0
+  description: "Generate multi-stage Dockerfiles and .dockerignore files"
+  author: dojops
+  license: MIT
+  tags: [docker, dockerfile, container, build, image]
+
+input:
+  fields:
+    projectPath:
+      type: string
+      required: true
+      description: "Root directory of the project"
+    baseImage:
+      type: string
+      required: true
+      description: "Base Docker image (e.g. 'node:20-alpine')"
+    outputPath:
+      type: string
+      required: true
+      description: "Directory to write the Dockerfile to"
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [content]
+  properties:
+    content:
+      type: string
+      description: "Complete Dockerfile content as text"
+    dockerignoreContent:
+      type: string
+      description: "Complete .dockerignore content as text"
+
+files:
+  - path: "{outputPath}/Dockerfile"
+    format: raw
+    source: llm
+    dataPath: content
+
+  - path: "{outputPath}/.dockerignore"
+    format: raw
+    source: llm
+    dataPath: dockerignoreContent
+    conditional: true
+
+detection:
+  paths: ["Dockerfile", "dockerfile", "Containerfile"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "content"
+      required: true
+      type: string
+      message: "Dockerfile content is required"
+
+  binary:
+    command: "hadolint --format json Dockerfile"
+    parser: hadolint-json
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Dockerfile
+
+## Prompt
+
+You are a Docker expert. Generate a production-ready Dockerfile and optional .dockerignore as text.
+
+You MUST respond with a JSON object containing:
+- "content": the complete Dockerfile as a string
+- "dockerignoreContent": (optional) the .dockerignore file as a string
+
+The Dockerfile should:
+- Use multi-stage builds when appropriate
+- Follow Docker best practices (minimal layers, non-root user, specific tags)
+- Include proper LABEL, EXPOSE, HEALTHCHECK directives
+- Order instructions for optimal layer caching
+
+Response format:
+{
+  "content": "FROM node:20-alpine AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\n\nFROM node:20-alpine\nWORKDIR /app\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nEXPOSE 3000\nUSER node\nCMD [\"node\", \"dist/index.js\"]\n",
+  "dockerignoreContent": "node_modules\n.git\n.env\n*.md\ndist\n"
+}
+
+IMPORTANT:
+- "content" must contain the COMPLETE Dockerfile as a string
+- Use multi-stage builds for compiled languages
+- Run as non-root user
+- Pin base image versions (no :latest)
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a Docker expert. Update the existing Dockerfile.
+Preserve existing structure. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with a JSON object containing a "content" field with the complete updated Dockerfile.
+
+IMPORTANT:
+- Preserve existing build stages
+- Maintain existing EXPOSE and CMD directives unless asked to change
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "Dockerfile for a Node.js application with multi-stage build"
+
+```json
+{
+  "content": "FROM node:20-alpine AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --only=production\nCOPY . .\nRUN npm run build\n\nFROM node:20-alpine\nRUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup\nWORKDIR /app\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nCOPY --from=builder /app/package.json ./\nEXPOSE 3000\nHEALTHCHECK CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1\nUSER appuser\nCMD [\"node\", \"dist/index.js\"]\n",
+  "dockerignoreContent": "node_modules\n.git\n.env*\n*.md\nDockerfile\n.dockerignore\ndist\ncoverage\n.nyc_output\n"
+}
+```
+
+## Constraints
+
+- Use specific base image tags (no :latest)
+- Include HEALTHCHECK for production images
+- Run as non-root user
+- Minimize number of layers (combine RUN commands)
+- Copy dependency files before source for layer caching
+- No secrets or credentials in the image
+
+## Keywords
+
+docker, dockerfile, container, image, build, multi-stage,
+containerize, containerfile, docker-build, registry, push

@@ -1,0 +1,143 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: ansible
+  version: 1.0.0
+  description: "Generate Ansible playbooks for configuration management"
+  author: dojops
+  license: MIT
+  tags: [ansible, automation, configuration, playbook, devops]
+
+input:
+  fields:
+    playbookName:
+      type: string
+      required: true
+      description: "Name of the playbook (e.g. 'setup-webserver')"
+      pattern: "^[a-z][a-z0-9-]*$"
+    targetOS:
+      type: enum
+      values: [ubuntu, debian, centos, rhel, amazon-linux, alpine]
+      default: ubuntu
+    tasks:
+      type: string
+      required: true
+      description: "Description of tasks to automate"
+    outputPath:
+      type: string
+      required: true
+      description: "Directory to write the playbook to"
+    hosts:
+      type: string
+      default: "all"
+    becomeRoot:
+      type: boolean
+      default: true
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [content]
+  properties:
+    content:
+      type: string
+      description: "Complete Ansible playbook as a YAML string"
+
+files:
+  - path: "{outputPath}/{playbookName}.yml"
+    format: raw
+    source: llm
+    dataPath: content
+
+detection:
+  paths: ["{outputPath}/{playbookName}.yml", "*.yml", "playbooks/*.yml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "content"
+      required: true
+      type: string
+      message: "Playbook content is required"
+
+  binary:
+    command: "ansible-playbook --syntax-check playbook.yml"
+    parser: ansible-syntax
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Ansible
+
+## Prompt
+
+You are an Ansible expert. Generate a complete Ansible playbook as YAML text.
+
+You MUST respond with a JSON object containing a "content" field with the complete YAML playbook as a string.
+
+The playbook should:
+- Be a valid YAML list with one or more plays
+- Start with `---`
+- Include proper play structure (name, hosts, become, tasks)
+- Use appropriate Ansible modules for the target OS
+- Include handlers when services need to be restarted
+- Use variables for configurable values
+
+Response format:
+{
+  "content": "---\n- name: Setup Webserver\n  hosts: all\n  become: true\n  tasks:\n    - name: Install nginx\n      apt:\n        name: nginx\n        state: present\n"
+}
+
+IMPORTANT:
+- The "content" field must contain the COMPLETE playbook YAML as a string
+- Use proper YAML indentation (2 spaces)
+- Include `---` at the start
+- Use `become: true` for tasks requiring root
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are an Ansible expert. Update the existing Ansible playbook.
+Preserve existing tasks and handlers. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with a JSON object containing a "content" field with the complete updated YAML playbook.
+
+IMPORTANT:
+- Preserve ALL existing tasks unless explicitly asked to remove them
+- Maintain existing variable definitions
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "Install and configure nginx on Ubuntu"
+
+```json
+{
+  "content": "---\n- name: Install and Configure Nginx\n  hosts: all\n  become: true\n  vars:\n    nginx_port: 80\n  tasks:\n    - name: Update apt cache\n      apt:\n        update_cache: yes\n        cache_valid_time: 3600\n    - name: Install nginx\n      apt:\n        name: nginx\n        state: present\n    - name: Start nginx service\n      service:\n        name: nginx\n        state: started\n        enabled: yes\n  handlers:\n    - name: Restart nginx\n      service:\n        name: nginx\n        state: restarted\n"
+}
+```
+
+## Constraints
+
+- Always include a play name
+- Use FQCN (Fully Qualified Collection Name) when possible (e.g. ansible.builtin.apt)
+- Include handlers for service restarts
+- Use variables instead of hardcoded values where appropriate
+- Maximum 50 tasks per playbook
+- No hardcoded passwords or secrets
+
+## Keywords
+
+ansible, playbook, automation, configuration, management, tasks,
+handlers, roles, inventory, provision, setup, deploy, devops

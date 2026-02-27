@@ -39,8 +39,8 @@
   },
   "dependencies": {
     "@dojops/core": "workspace:*",
+    "@dojops/runtime": "workspace:*",
     "@dojops/sdk": "workspace:*",
-    "@dojops/tools": "workspace:*",
     "js-yaml": "^4.1.0",
     "zod": "^3.23.0"
   },

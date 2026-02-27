@@ -1,0 +1,175 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: docker-compose
+  version: 1.0.0
+  description: "Generate Docker Compose service definitions"
+  author: dojops
+  license: MIT
+  tags: [docker, compose, container, service, orchestration]
+
+input:
+  fields:
+    projectPath:
+      type: string
+      required: true
+      description: "Root directory of the project"
+    services:
+      type: string
+      required: true
+      description: "Description of services to define"
+    networkMode:
+      type: enum
+      values: [bridge, host, none]
+      default: bridge
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [services]
+  properties:
+    services:
+      type: object
+      description: "Service definitions"
+    networks:
+      type: object
+      description: "Network definitions"
+    volumes:
+      type: object
+      description: "Volume definitions"
+
+files:
+  - path: "{projectPath}/docker-compose.yml"
+    format: yaml
+    source: llm
+    options:
+      sortKeys: false
+      lineWidth: 120
+
+detection:
+  paths: ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "services"
+      required: true
+      type: object
+      message: "Services section is required"
+
+  binary:
+    command: "docker compose -f docker-compose.yml config"
+    parser: docker-compose-config
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Docker Compose
+
+## Prompt
+
+You are a Docker Compose expert. Generate Docker Compose service definitions as structured JSON.
+
+Respond with a JSON object matching the Docker Compose structure:
+{
+  "services": {
+    "web": {
+      "image": "nginx:1.25",
+      "ports": ["80:80"],
+      "volumes": ["./html:/usr/share/nginx/html"],
+      "restart": "unless-stopped"
+    },
+    "db": {
+      "image": "postgres:16",
+      "environment": { "POSTGRES_PASSWORD": "changeme" },
+      "volumes": ["db-data:/var/lib/postgresql/data"]
+    }
+  },
+  "networks": {
+    "default": { "driver": "bridge" }
+  },
+  "volumes": {
+    "db-data": {}
+  }
+}
+
+IMPORTANT:
+- "services" is required with at least one service
+- Each service should have "image" at minimum
+- Use named volumes for data persistence
+- Include "restart" policies for production services
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are a Docker Compose expert. Update the existing Docker Compose configuration.
+Preserve existing services and settings. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with valid JSON containing the complete Docker Compose structure.
+
+IMPORTANT:
+- Preserve ALL existing services unless explicitly asked to remove them
+- Maintain existing volume and network definitions
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "Web app with nginx, postgres database, and redis cache"
+
+```json
+{
+  "services": {
+    "web": {
+      "image": "nginx:1.25",
+      "ports": ["80:80"],
+      "depends_on": ["app"],
+      "restart": "unless-stopped"
+    },
+    "app": {
+      "build": ".",
+      "environment": {
+        "DATABASE_URL": "postgres://user:pass@db:5432/app",
+        "REDIS_URL": "redis://redis:6379"
+      },
+      "depends_on": ["db", "redis"]
+    },
+    "db": {
+      "image": "postgres:16",
+      "environment": { "POSTGRES_PASSWORD": "changeme" },
+      "volumes": ["db-data:/var/lib/postgresql/data"]
+    },
+    "redis": {
+      "image": "redis:7-alpine",
+      "restart": "unless-stopped"
+    }
+  },
+  "volumes": {
+    "db-data": {}
+  }
+}
+```
+
+## Constraints
+
+- Use specific image tags, not :latest
+- Always include restart policies for production services
+- Use named volumes for persistent data
+- Define health checks for critical services
+- Do not hardcode secrets — use environment variables
+- Maximum 20 services per composition
+
+## Keywords
+
+docker, compose, docker-compose, container, service, microservice,
+orchestration, multi-container, volume, network, build, deploy

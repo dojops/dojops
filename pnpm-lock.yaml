@@ -68,9 +68,6 @@ importers:
       '@dojops/tool-registry':
         specifier: workspace:*
         version: link:../tool-registry
-      '@dojops/tools':
-        specifier: workspace:*
-        version: link:../tools
       cors:
         specifier: ^2.8.5
         version: 2.8.6
@@ -120,6 +117,9 @@ importers:
       '@dojops/planner':
         specifier: workspace:*
         version: link:../planner
+      '@dojops/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@dojops/scanner':
         specifier: workspace:*
         version: link:../scanner
@@ -129,9 +129,6 @@ importers:
       '@dojops/tool-registry':
         specifier: workspace:*
         version: link:../tool-registry
-      '@dojops/tools':
-        specifier: workspace:*
-        version: link:../tools
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -185,6 +182,25 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  packages/runtime:
+    dependencies:
+      '@dojops/core':
+        specifier: workspace:*
+        version: link:../core
+      '@dojops/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.1.1
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+
   packages/scanner:
     dependencies:
       '@dojops/core':
@@ -220,28 +236,9 @@ importers:
       '@dojops/core':
         specifier: workspace:*
         version: link:../core
-      '@dojops/sdk':
+      '@dojops/runtime':
         specifier: workspace:*
-        version: link:../sdk
-      '@dojops/tools':
-        specifier: workspace:*
-        version: link:../tools
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.1.1
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-    devDependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-
-  packages/tools:
-    dependencies:
-      '@dojops/core':
-        specifier: workspace:*
-        version: link:../core
+        version: link:../runtime
       '@dojops/sdk':
         specifier: workspace:*
         version: link:../sdk

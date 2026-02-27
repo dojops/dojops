@@ -1,0 +1,137 @@
+---
+dops: v1
+kind: tool
+
+meta:
+  name: nginx
+  version: 1.0.0
+  description: "Generate Nginx reverse proxy and server configurations"
+  author: dojops
+  license: MIT
+  tags: [nginx, proxy, reverse-proxy, web-server, load-balancer]
+
+input:
+  fields:
+    serverName:
+      type: string
+      required: true
+      description: "Server name / domain (e.g. 'example.com')"
+    upstreams:
+      type: string
+      description: "Upstream backend servers description"
+    sslEnabled:
+      type: boolean
+      default: false
+    outputPath:
+      type: string
+      required: true
+      description: "Directory to write the config to"
+    fullConfig:
+      type: boolean
+      default: false
+      description: "Generate a full nginx.conf instead of a site config"
+    environment:
+      type: string
+
+output:
+  type: object
+  required: [content]
+  properties:
+    content:
+      type: string
+      description: "Complete Nginx configuration as text"
+
+files:
+  - path: "{outputPath}/nginx.conf"
+    format: raw
+    source: llm
+    dataPath: content
+
+detection:
+  paths: ["nginx.conf", "nginx/*.conf", "conf.d/*.conf", "sites-available/*"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "content"
+      required: true
+      type: string
+      message: "Nginx configuration content is required"
+
+  binary:
+    command: "nginx -t -c nginx.conf"
+    parser: nginx-stderr
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+---
+# Nginx
+
+## Prompt
+
+You are an Nginx expert. Generate an Nginx configuration as text.
+
+You MUST respond with a JSON object containing a "content" field with the complete Nginx configuration as a string.
+
+The configuration should include:
+- Upstream blocks for backend servers (if applicable)
+- Server blocks with proper listen directives
+- Location blocks for routing
+- SSL configuration if enabled
+- Security headers
+- Logging configuration
+
+Response format:
+{
+  "content": "upstream backend {\n    server 127.0.0.1:3000;\n}\n\nserver {\n    listen 80;\n    server_name example.com;\n\n    location / {\n        proxy_pass http://backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n    }\n}\n"
+}
+
+IMPORTANT:
+- "content" must contain the COMPLETE Nginx configuration as a string
+- Include proper proxy headers for reverse proxy setups
+- Use proper indentation (4 spaces)
+- Respond with valid JSON only, no markdown
+
+## Update Prompt
+
+You are an Nginx expert. Update the existing Nginx configuration.
+Preserve existing server blocks and settings. Only add/modify what is requested.
+
+--- EXISTING CONFIGURATION ---
+{existingContent}
+--- END EXISTING CONFIGURATION ---
+
+Respond with a JSON object containing a "content" field with the complete updated Nginx config.
+
+IMPORTANT:
+- Preserve ALL existing server blocks unless explicitly asked to remove them
+- Maintain existing upstream and location configurations
+- Respond with valid JSON only, no markdown
+
+## Examples
+
+Given: "Reverse proxy for Node.js app on port 3000 with SSL"
+
+```json
+{
+  "content": "upstream app_backend {\n    server 127.0.0.1:3000;\n    keepalive 32;\n}\n\nserver {\n    listen 80;\n    server_name example.com;\n    return 301 https://$host$request_uri;\n}\n\nserver {\n    listen 443 ssl http2;\n    server_name example.com;\n\n    ssl_certificate /etc/ssl/certs/example.com.pem;\n    ssl_certificate_key /etc/ssl/private/example.com.key;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers HIGH:!aNULL:!MD5;\n\n    add_header X-Frame-Options DENY;\n    add_header X-Content-Type-Options nosniff;\n    add_header X-XSS-Protection \"1; mode=block\";\n\n    location / {\n        proxy_pass http://app_backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\n"
+}
+```
+
+## Constraints
+
+- Use HTTP/2 when SSL is enabled
+- Include security headers (X-Frame-Options, X-Content-Type-Options)
+- Set proper proxy headers for reverse proxy
+- Use keepalive connections for upstreams
+- Include access and error log paths
+- No hardcoded IP addresses for production
+
+## Keywords
+
+nginx, reverse-proxy, proxy, web-server, load-balancer, server,
+upstream, ssl, tls, https, location, conf, vhost, site

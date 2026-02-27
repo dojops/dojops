@@ -105,6 +105,62 @@ function loadToolFromDir(toolDir: string, location: "global" | "project"): ToolE
   };
 }
 
+/**
+ * Discovered .dops file path entry.
+ */
+export interface DopsFileEntry {
+  filePath: string;
+  location: "global" | "project";
+}
+
+/**
+ * Discover .dops files from a directory.
+ * Returns file paths for .dops files found in the directory.
+ */
+export function discoverDopsFiles(dir: string, location: "global" | "project"): DopsFileEntry[] {
+  const entries: DopsFileEntry[] = [];
+  if (!fs.existsSync(dir)) return entries;
+  try {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      if (file.endsWith(".dops")) {
+        entries.push({ filePath: path.join(dir, file), location });
+      }
+    }
+  } catch {
+    // Directory not readable
+  }
+  return entries;
+}
+
+/**
+ * Discover all user .dops files from global and project directories.
+ * Project .dops files override global by name.
+ */
+export function discoverUserDopsFiles(projectPath?: string): DopsFileEntry[] {
+  const byName = new Map<string, DopsFileEntry>();
+
+  // Global
+  const globalDir = getGlobalToolsDir();
+  if (globalDir) {
+    for (const entry of discoverDopsFiles(globalDir, "global")) {
+      const name = path.basename(entry.filePath, ".dops");
+      byName.set(name, entry);
+    }
+  }
+
+  // Project (overrides global)
+  if (projectPath) {
+    const projectDir = getProjectToolsDir(projectPath);
+    for (const entry of discoverDopsFiles(projectDir, "project")) {
+      const name = path.basename(entry.filePath, ".dops");
+      byName.set(name, entry);
+    }
+  }
+
+  return Array.from(byName.values());
+}
+
 export interface ToolDiscoveryResult {
   tools: ToolEntry[];
   warnings: string[];

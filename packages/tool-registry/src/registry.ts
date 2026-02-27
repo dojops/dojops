@@ -2,6 +2,30 @@ import { DevOpsTool } from "@dojops/sdk";
 import { CustomTool } from "./custom-tool";
 
 /**
+ * Interface for DopsRuntime metadata access.
+ * Avoids direct dependency on @dojops/runtime from tool-registry.
+ */
+export interface DopsRuntimeLike extends DevOpsTool {
+  readonly systemPromptHash: string;
+  readonly moduleHash: string;
+  readonly metadata: {
+    toolType: "built-in" | "custom";
+    toolVersion: string;
+    toolHash: string;
+    toolSource: string;
+    systemPromptHash: string;
+  };
+}
+
+function isDopsRuntime(tool: DevOpsTool): tool is DopsRuntimeLike {
+  return (
+    "moduleHash" in tool &&
+    "metadata" in tool &&
+    typeof (tool as DopsRuntimeLike).metadata === "object"
+  );
+}
+
+/**
  * Central registry combining built-in and custom tools.
  * Provides a unified getAll() / get(name) interface for Planner, Executor, CLI, and API.
  */
@@ -68,6 +92,11 @@ export class ToolRegistry {
     | undefined {
     const tool = this.toolMap.get(name);
     if (!tool) return undefined;
+
+    // Check if it's a DopsRuntime instance (has metadata property)
+    if (isDopsRuntime(tool)) {
+      return tool.metadata;
+    }
 
     const custom = this.customTools.find((t) => t.name === name);
     if (custom) {
