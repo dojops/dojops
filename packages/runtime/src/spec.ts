@@ -152,6 +152,12 @@ export const MetaSchema = z.object({
   license: z.string().optional(),
   tags: z.array(z.string()).optional(),
   repository: z.string().optional(),
+  icon: z
+    .string()
+    .url()
+    .max(2048)
+    .refine((url) => url.startsWith("https://"), { message: "Icon URL must use HTTPS" })
+    .optional(),
 });
 
 // ── Scope ───────────────────────────────────────────

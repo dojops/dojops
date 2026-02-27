@@ -383,4 +383,58 @@ test
     expect(module.frontmatter.execution).toBeUndefined();
     expect(module.frontmatter.update).toBeUndefined();
   });
+
+  it("parses meta.icon as HTTPS URL", () => {
+    const dops = `---
+dops: v1
+meta:
+  name: icon-tool
+  version: 1.0.0
+  description: "Tool with icon"
+  icon: "https://registry.dojops.ai/icons/terraform.svg"
+output:
+  type: object
+files:
+  - path: "out.yaml"
+---
+## Prompt
+
+Prompt.
+
+## Keywords
+
+test
+`;
+    const module = parseDopsString(dops);
+    expect(module.frontmatter.meta.icon).toBe("https://registry.dojops.ai/icons/terraform.svg");
+  });
+
+  it("rejects non-HTTPS icon URL", () => {
+    const dops = `---
+dops: v1
+meta:
+  name: bad-icon
+  version: 1.0.0
+  description: "Bad icon"
+  icon: "http://example.com/icon.png"
+output:
+  type: object
+files:
+  - path: "out.yaml"
+---
+## Prompt
+
+Prompt.
+
+## Keywords
+
+test
+`;
+    expect(() => parseDopsString(dops)).toThrow("Invalid DOPS frontmatter");
+  });
+
+  it("meta.icon is optional", () => {
+    const module = parseDopsString(MINIMAL_DOPS);
+    expect(module.frontmatter.meta.icon).toBeUndefined();
+  });
 });

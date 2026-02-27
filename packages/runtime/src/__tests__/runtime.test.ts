@@ -159,6 +159,38 @@ describe("DopsRuntime", () => {
     expect(meta.toolVersion).toBe("1.0.0");
     expect(meta.toolSource).toBe("dops");
     expect(meta.systemPromptHash).toBeDefined();
+    expect(meta.icon).toBeUndefined();
+  });
+
+  it("includes icon in metadata when declared", () => {
+    const dops = `---
+dops: v1
+meta:
+  name: icon-tool
+  version: 1.0.0
+  description: "Tool with icon"
+  icon: "https://registry.dojops.ai/icons/my-tool.svg"
+output:
+  type: object
+  properties:
+    result:
+      type: string
+files:
+  - path: "out.yaml"
+---
+## Prompt
+
+Generate.
+
+## Keywords
+
+test
+`;
+    const module = parseDopsString(dops);
+    const provider = createMockProvider({});
+    const runtime = new DopsRuntime(module, provider);
+
+    expect(runtime.metadata.icon).toBe("https://registry.dojops.ai/icons/my-tool.svg");
   });
 
   it("extracts keywords", () => {

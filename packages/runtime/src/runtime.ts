@@ -21,6 +21,7 @@ export interface ToolMetadata {
   toolSource: string;
   systemPromptHash: string;
   riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  icon?: string;
 }
 
 /**
@@ -208,6 +209,7 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
       toolSource: "dops",
       systemPromptHash: this._systemPromptHash,
       riskLevel: this.risk.level,
+      icon: this.module.frontmatter.meta.icon,
     };
   }
 
