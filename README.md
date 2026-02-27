@@ -46,8 +46,9 @@
 # 1. Install globally
 npm i -g @dojops/cli
 
-# 2. Configure your provider (interactive wizard)
-dojops config
+# 2. Configure your provider
+dojops config                                  # Interactive wizard
+# or: dojops provider add openai --token sk-...  # Direct setup
 
 # 3. Generate your first config
 dojops "Create a Kubernetes deployment for nginx with 3 replicas"
@@ -260,6 +261,17 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops destroy <plan-id>`      | Remove generated artifacts from a plan                                |
 | `dojops rollback <plan-id>`     | Reverse an applied plan (delete created files + restore .bak backups) |
 
+#### Provider Management
+
+| Command                                    | Description                                    |
+| ------------------------------------------ | ---------------------------------------------- |
+| `dojops provider`                          | List all providers with status (alias: `list`) |
+| `dojops provider add <name> [--token KEY]` | Add/configure a provider token                 |
+| `dojops provider remove <name>`            | Remove a provider token                        |
+| `dojops provider default <name>`           | Set the default provider                       |
+| `dojops provider switch`                   | Interactive picker to switch default provider  |
+| `dojops provider --as-default <name>`      | Set default provider (shortcut)                |
+
 #### Configuration & Server
 
 | Command                             | Description                                                                               |
@@ -359,6 +371,13 @@ dojops agents create --manual
 dojops agents list
 dojops agents info sre-specialist
 dojops agents remove sre-specialist
+
+# Provider management
+dojops provider                                # List all providers
+dojops provider add openai --token sk-...      # Add a provider
+dojops provider add anthropic --token sk-ant-... # Add another
+dojops provider switch                         # Interactive picker
+dojops provider default anthropic              # Set default directly
 
 # Administration
 dojops doctor
@@ -583,19 +602,19 @@ packages/
 
 ### Test Coverage
 
-| Package                 | Tests   |
-| ----------------------- | ------- |
-| `@dojops/core`          | 238     |
-| `@dojops/cli`           | 174     |
-| `@dojops/tool-registry` | 148     |
-| `@dojops/tools`         | 139     |
-| `@dojops/api`           | 118     |
-| `@dojops/executor`      | 50      |
-| `@dojops/scanner`       | 49      |
-| `@dojops/planner`       | 28      |
-| `@dojops/session`       | 28      |
-| `@dojops/sdk`           | 20      |
-| **Total**               | **992** |
+| Package                 | Tests    |
+| ----------------------- | -------- |
+| `@dojops/core`          | 238      |
+| `@dojops/cli`           | 197      |
+| `@dojops/tool-registry` | 148      |
+| `@dojops/tools`         | 139      |
+| `@dojops/api`           | 118      |
+| `@dojops/executor`      | 50       |
+| `@dojops/scanner`       | 49       |
+| `@dojops/planner`       | 28       |
+| `@dojops/session`       | 28       |
+| `@dojops/sdk`           | 20       |
+| **Total**               | **1015** |
 
 ---
 

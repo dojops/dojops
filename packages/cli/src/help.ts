@@ -27,6 +27,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("history verify")}     Verify audit log hash chain integrity`);
   console.log(`  ${pc.cyan("history audit")}      View audit log entries`);
   console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
+  console.log(`  ${pc.cyan("provider")}           Manage LLM providers (list/add/remove/default)`);
   console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
   console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);
   console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
@@ -420,6 +421,37 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops config profile create staging`);
       console.log(`  ${pc.dim("$")} dojops config profile use staging`);
       console.log(`  ${pc.dim("$")} dojops config profile list`);
+      console.log();
+      break;
+
+    case "provider":
+      console.log(`\n${pc.bold("dojops provider")} — Manage LLM providers`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops provider [list|add|remove|default]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(
+        `  ${pc.cyan("list")}              List all providers with status ${pc.dim("(default)")}`,
+      );
+      console.log(`  ${pc.cyan("add <name>")}       Add/configure a provider token`);
+      console.log(`  ${pc.cyan("remove <name>")}    Remove a provider token`);
+      console.log(`  ${pc.cyan("default <name>")}   Set the default provider`);
+      console.log(
+        `  ${pc.cyan("switch")}            Interactive picker to switch default provider`,
+      );
+      console.log(`\n${pc.bold("FLAGS")}`);
+      console.log(`  ${pc.cyan("--token=KEY")}       API token (for add)`);
+      console.log(`  ${pc.cyan("--as-default=NAME")} Set default provider (shortcut)`);
+      console.log(`  ${pc.cyan("--output=json")}     Output list as JSON`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops provider`);
+      console.log(`  ${pc.dim("$")} dojops provider list`);
+      console.log(`  ${pc.dim("$")} dojops provider add openai --token sk-...`);
+      console.log(`  ${pc.dim("$")} dojops provider add anthropic --token sk-ant-...`);
+      console.log(`  ${pc.dim("$")} dojops provider default anthropic`);
+      console.log(`  ${pc.dim("$")} dojops provider switch`);
+      console.log(`  ${pc.dim("$")} dojops provider --as-default openai`);
+      console.log(`  ${pc.dim("$")} dojops provider remove openai`);
+      console.log(`  ${pc.dim("$")} dojops provider list --output json`);
       console.log();
       break;
 

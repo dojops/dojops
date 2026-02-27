@@ -201,16 +201,64 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     },
   );
 
-  config.defaultProvider = answers.provider as string;
+  const chosenProvider = answers.provider as string;
   if (answers.token) {
     config.tokens = config.tokens ?? {};
-    config.tokens[answers.provider as string] = answers.token as string;
+    config.tokens[chosenProvider] = answers.token as string;
   }
   if (answers.model) {
     config.defaultModel = answers.model as string;
   }
 
+  // Smart default handling: don't blindly overwrite existing default
+  const hadDefault = !!config.defaultProvider;
+  if (!hadDefault) {
+    // No existing default — set to chosen provider
+    config.defaultProvider = chosenProvider;
+  } else if (config.defaultProvider === chosenProvider) {
+    // Same provider — no change needed
+  } else if (!ctx.globalOpts.nonInteractive) {
+    // Different provider selected — ask whether to switch default
+    const switchDefault = await p.confirm({
+      message: `Default provider is currently ${pc.bold(config.defaultProvider)}. Switch default to ${pc.bold(chosenProvider)}?`,
+      initialValue: false,
+    });
+    if (!p.isCancel(switchDefault) && switchDefault) {
+      config.defaultProvider = chosenProvider;
+    }
+  }
+
   saveConfig(config);
   p.log.success("Configuration saved.");
   showConfig(config);
+
+  // Offer to configure another provider (interactive only)
+  if (!ctx.globalOpts.nonInteractive) {
+    const unconfigured = VALID_PROVIDERS.filter(
+      (prov) => prov !== "ollama" && prov !== chosenProvider && !config.tokens?.[prov],
+    );
+    if (unconfigured.length > 0) {
+      const addAnother = await p.confirm({
+        message: "Configure another provider?",
+        initialValue: false,
+      });
+      if (!p.isCancel(addAnother) && addAnother) {
+        const nextProvider = await p.select({
+          message: "Select provider:",
+          options: unconfigured.map((v) => ({ value: v, label: v })),
+        });
+        if (!p.isCancel(nextProvider)) {
+          const nextToken = await p.password({
+            message: `API key for ${nextProvider}:`,
+          });
+          if (!p.isCancel(nextToken) && nextToken) {
+            config.tokens = config.tokens ?? {};
+            config.tokens[nextProvider as string] = nextToken as string;
+            saveConfig(config);
+            p.log.success(`Token saved for ${pc.bold(nextProvider as string)}.`);
+          }
+        }
+      }
+    }
+  }
 }

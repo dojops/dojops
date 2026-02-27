@@ -16,13 +16,14 @@ Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps 
 
 ### Core Guides
 
-| Document                              | Description                                                          |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| [Getting Started](getting-started.md) | Prerequisites, installation, provider setup, first run               |
-| [Configuration](configuration.md)     | Providers, models, env vars, profiles, precedence                    |
-| [CLI Reference](cli-reference.md)     | All commands, flags, exit codes, examples                            |
-| [API Reference](api-reference.md)     | REST endpoints, request/response schemas, curl examples              |
-| [Web Dashboard](dashboard.md)         | 5-tab metrics dashboard — Overview, Security, Audit, Agents, History |
+| Document                                      | Description                                                          |
+| --------------------------------------------- | -------------------------------------------------------------------- |
+| [Getting Started](getting-started.md)         | Prerequisites, installation, provider setup, first run               |
+| [Provider Management](provider-management.md) | Add, remove, switch, and list LLM providers                          |
+| [Configuration](configuration.md)             | Providers, models, env vars, profiles, precedence                    |
+| [CLI Reference](cli-reference.md)             | All commands, flags, exit codes, examples                            |
+| [API Reference](api-reference.md)             | REST endpoints, request/response schemas, curl examples              |
+| [Web Dashboard](dashboard.md)                 | 5-tab metrics dashboard — Overview, Security, Audit, Agents, History |
 
 ### Architecture & Design
 

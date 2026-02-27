@@ -46,6 +46,7 @@ import { scanCommand } from "./commands/scan";
 import { chatCommand } from "./commands/chat";
 import { checkCommand } from "./commands/check";
 import { verifyCommand } from "./commands/verify";
+import { providerCommand } from "./commands/provider";
 import { prependToolsBinToPath } from "./tool-sandbox";
 
 registerCommand("init", initCommand);
@@ -83,6 +84,7 @@ registerSubcommand("history", "list", (args, ctx) => historyCommand(["list", ...
 registerSubcommand("history", "show", (args, ctx) => historyCommand(["show", ...args], ctx));
 registerSubcommand("history", "verify", (args, ctx) => historyCommand(["verify", ...args], ctx));
 registerSubcommand("history", "audit", (args, ctx) => historyCommand(["audit", ...args], ctx));
+registerCommand("provider", providerCommand);
 
 // Nested: tools <sub>
 registerSubcommand("tools", "list", toolsListCommand);
@@ -193,6 +195,7 @@ async function main() {
   const quietCommands = new Set([
     "config",
     "auth",
+    "provider",
     "init",
     "doctor",
     "status",

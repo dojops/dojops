@@ -77,6 +77,18 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops destroy <plan-id>`      | Remove generated artifacts from a plan                                |
 | `dojops rollback <plan-id>`     | Reverse an applied plan (delete created files + restore .bak backups) |
 
+### Provider Management
+
+| Command                                    | Description                                    |
+| ------------------------------------------ | ---------------------------------------------- |
+| `dojops provider`                          | List all providers with status (alias: `list`) |
+| `dojops provider add <name> [--token KEY]` | Add/configure a provider token                 |
+| `dojops provider remove <name>`            | Remove a provider token                        |
+| `dojops provider default <name>`           | Set the default provider                       |
+| `dojops provider switch`                   | Interactive picker to switch default provider  |
+| `dojops provider --as-default <name>`      | Set default provider (shortcut)                |
+| `dojops provider list --output json`       | List providers as JSON                         |
+
 ### Configuration & Server
 
 | Command                             | Description                                                                     |
@@ -246,6 +258,26 @@ dojops tools plugins init my-tool
 
 # Validate a plugin manifest
 dojops tools plugins validate .dojops/plugins/my-tool/
+```
+
+### Provider Management
+
+```bash
+# List all providers with status
+dojops provider
+dojops provider list --output json
+
+# Add providers
+dojops provider add openai --token sk-...
+dojops provider add anthropic --token sk-ant-...
+
+# Switch default provider
+dojops provider switch                 # interactive picker
+dojops provider default anthropic      # direct
+dojops provider --as-default openai    # shortcut flag
+
+# Remove a provider
+dojops provider remove deepseek
 ```
 
 ### Administration

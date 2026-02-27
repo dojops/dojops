@@ -29,9 +29,16 @@ dojops doctor
 
 ## Provider Setup
 
-DojOps requires an LLM provider to generate configurations. You can configure one interactively or via environment variables.
+DojOps requires an LLM provider to generate configurations. You have three options:
 
-### Interactive Setup
+### Quick Setup (recommended)
+
+```bash
+# Add your first provider — automatically becomes the default
+dojops provider add openai --token sk-...
+```
+
+### Interactive Wizard
 
 ```bash
 dojops config
@@ -43,6 +50,7 @@ The interactive wizard will:
 2. Prompt for your API key
 3. Fetch available models from the provider's API
 4. Let you pick a model with an interactive selector
+5. Offer to configure additional providers
 
 ### Environment Variables
 
@@ -51,6 +59,23 @@ Alternatively, set environment variables directly:
 ```bash
 export DOJOPS_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini
 export OPENAI_API_KEY=sk-...        # your API key
+```
+
+### Multi-Provider Setup
+
+You can configure multiple providers and switch between them:
+
+```bash
+# Add providers
+dojops provider add openai --token sk-...
+dojops provider add anthropic --token sk-ant-...
+
+# Switch between them
+dojops provider switch                 # Interactive picker
+dojops provider default anthropic      # Direct switch
+
+# List all providers
+dojops provider
 ```
 
 See [Configuration](configuration.md) for the full list of providers, env vars, and precedence rules.

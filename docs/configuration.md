@@ -16,6 +16,68 @@ DojOps supports 5 LLM providers with flexible configuration via CLI flags, envir
 
 ---
 
+## Provider Management
+
+DojOps includes a dedicated `provider` command for managing LLM providers — adding, removing, switching, and listing them.
+
+### Adding Providers
+
+```bash
+# Add your first provider (auto-set as default)
+dojops provider add openai --token sk-...
+
+# Add a second provider (preserves existing default)
+dojops provider add anthropic --token sk-ant-...
+
+# Ollama (local, no token needed)
+dojops provider add ollama
+```
+
+### Switching Providers
+
+```bash
+# Interactive picker — shows only configured providers
+dojops provider switch
+
+# Direct — set by name
+dojops provider default anthropic
+
+# Shortcut flag
+dojops provider --as-default openai
+```
+
+### Listing Providers
+
+```bash
+# Table view (default)
+dojops provider
+
+# JSON output
+dojops provider list --output json
+```
+
+Output shows configured (`*`) vs unconfigured (`o`) providers, with the default marked:
+
+```
+┌ Providers ──────────────────────────────────────┐
+│  * anthropic         sk-***ntx                  │
+│  * openai (default)  sk-***ojx  model: gpt-4o   │
+│  o deepseek          (not set)                  │
+│  o gemini            (not set)                  │
+│  * ollama            (local)                    │
+└─────────────────────────────────────────────────┘
+```
+
+### Removing Providers
+
+```bash
+dojops provider remove openai
+```
+
+If the removed provider was the default, DojOps clears the default and suggests an alternative.
+
+---
+
 ## Configuration Methods
 
 ### Interactive Setup
@@ -30,6 +92,8 @@ The interactive wizard:
 2. Prompts for the API key
 3. Fetches available models from the provider's API via `listModels()`
 4. Shows an interactive model picker
+5. Asks whether to switch default provider (if one already exists)
+6. Offers to configure another provider
 
 ### Environment Variables
 

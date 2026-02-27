@@ -64,12 +64,24 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
 
   p.log.success("Token saved successfully.");
 
+  const isDefault = config.defaultProvider === provider;
+  const defaultNote = isDefault
+    ? `${pc.bold("Default:")}  ${pc.cyan("yes")}${!providerFlag ? " (first configured provider)" : ""}`
+    : `${pc.bold("Default:")}  no (default is ${pc.bold(config.defaultProvider!)})`;
+
   const noteLines = [
     `${pc.bold("Provider:")} ${provider}`,
     `${pc.bold("Config:")}   ${pc.dim(getConfigPath())}`,
-    ...(config.defaultProvider === provider ? [`${pc.bold("Default:")}  ${pc.cyan("yes")}`] : []),
+    defaultNote,
   ];
   p.note(noteLines.join("\n"), "Saved");
+
+  if (!isDefault) {
+    p.log.info(
+      pc.dim(`Use ${pc.cyan(`dojops provider default ${provider}`)} to make it the default.`),
+    );
+  }
+
   p.log.warn(
     `Token stored in plaintext at ${getConfigPath()}. Ensure this file has restricted permissions.`,
   );

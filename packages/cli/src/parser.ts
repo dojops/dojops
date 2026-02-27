@@ -123,6 +123,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "chat",
     "check",
     "verify",
+    "provider",
     "help",
   ]);
 
@@ -153,6 +154,9 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "reset",
     "delete",
     "logout",
+    "default",
+    "add",
+    "switch",
   ]);
 
   const command: string[] = [];

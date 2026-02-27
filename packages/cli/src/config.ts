@@ -204,6 +204,20 @@ export function setActiveProfile(name: string): void {
 }
 
 /**
+ * Returns provider names that have tokens configured (+ always includes "ollama").
+ */
+export function getConfiguredProviders(config: DojOpsConfig): string[] {
+  const set = new Set<string>();
+  if (config.tokens) {
+    for (const [name, token] of Object.entries(config.tokens)) {
+      if (token) set.add(name);
+    }
+  }
+  set.add("ollama");
+  return [...set];
+}
+
+/**
  * Loads config with profile support.
  * Priority: explicit profile > active profile > default config
  */
