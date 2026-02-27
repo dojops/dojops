@@ -152,20 +152,15 @@ describe("External Tool Integration: Full Lifecycle", () => {
   let projectDir: string;
   let origHome: string | undefined;
 
-  let origCwd: string;
-
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-ext-tool-"));
     projectDir = path.join(tmpDir, "project");
     fs.mkdirSync(projectDir, { recursive: true });
     origHome = process.env.HOME;
     process.env.HOME = tmpDir;
-    origCwd = process.cwd();
-    process.chdir(tmpDir);
   });
 
   afterEach(() => {
-    process.chdir(origCwd);
     process.env.HOME = origHome;
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -475,8 +470,8 @@ save 300 10
 
       expect(result.success).toBe(true);
 
-      // File should exist on disk
-      const filePath = path.join(outputDir, "traefik.yaml");
+      // File should exist on disk — resolveFilePath now anchors to toolDir
+      const filePath = path.join(entry.toolDir, outputDir, "traefik.yaml");
       expect(fs.existsSync(filePath)).toBe(true);
 
       // Content should be valid YAML
@@ -519,7 +514,7 @@ save 300 10
 
       expect(result.success).toBe(true);
 
-      const filePath = path.join(outputDir, "redis.conf");
+      const filePath = path.join(entry.toolDir, outputDir, "redis.conf");
       expect(fs.existsSync(filePath)).toBe(true);
       expect(fs.readFileSync(filePath, "utf-8")).toBe(redisConf);
     });
@@ -534,8 +529,10 @@ save 300 10
       const entry = discoverTools(projectDir)[0];
 
       const outputDir = "output";
-      fs.mkdirSync(outputDir, { recursive: true });
-      const filePath = path.join(outputDir, "traefik.yaml");
+      // Create existing file under toolDir since resolveFilePath anchors to it
+      const absOutputDir = path.join(entry.toolDir, outputDir);
+      fs.mkdirSync(absOutputDir, { recursive: true });
+      const filePath = path.join(absOutputDir, "traefik.yaml");
       fs.writeFileSync(filePath, "original: content\n", "utf-8");
 
       const tool = new CustomTool(

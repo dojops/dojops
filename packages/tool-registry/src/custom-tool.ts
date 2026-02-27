@@ -12,7 +12,7 @@ import {
   backupFile,
   atomicWriteFileSync,
 } from "@dojops/sdk";
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, sanitizeSystemPrompt } from "@dojops/core";
 import { ToolManifest, ToolSource } from "./types";
 import { jsonSchemaToZod, JSONSchemaObject } from "./json-schema-to-zod";
 import { serialize } from "./serializers";
@@ -115,7 +115,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       // Build the LLM prompt
       let systemPrompt = this.manifest.generator.systemPrompt;
       if (isUpdate && existingContent) {
-        systemPrompt += `\n\nYou are UPDATING an existing configuration. Here is the current content:\n\`\`\`\n${existingContent}\n\`\`\`\n\nPreserve existing settings and make minimal, targeted changes.`;
+        systemPrompt = sanitizeSystemPrompt(systemPrompt, existingContent);
       }
 
       const userPrompt = this.buildUserPrompt(input);
@@ -291,7 +291,17 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       throw new Error(`Path traversal detected in resolved file path "${resolved}"`);
     }
 
-    return resolved;
+    // Anchor resolved path to toolDir to prevent escape
+    const anchored = path.join(this.toolDir, resolved);
+    const realBase = path.resolve(this.toolDir);
+    if (
+      path.resolve(anchored) !== realBase &&
+      !path.resolve(anchored).startsWith(realBase + path.sep)
+    ) {
+      throw new Error(`Resolved path escapes tool directory`);
+    }
+
+    return anchored;
   }
 }
 

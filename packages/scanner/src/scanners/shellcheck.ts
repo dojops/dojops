@@ -23,15 +23,23 @@ interface ShellCheckResult {
  * (not a real binary). Reads the first line and checks for node shebang.
  */
 function isNodeWrapper(binPath: string): boolean {
+  let fd: number | undefined;
   try {
-    const fd = fs.openSync(binPath, "r");
+    fd = fs.openSync(binPath, "r");
     const buf = Buffer.alloc(128);
     fs.readSync(fd, buf, 0, 128, 0);
-    fs.closeSync(fd);
     const head = buf.toString("utf-8").split("\n")[0];
     return /node|env\s+node/.test(head);
   } catch {
     return false;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 
@@ -142,15 +150,23 @@ function findShellScripts(projectPath: string): string[] {
   }
 
   function hasShellShebang(filePath: string): boolean {
+    let fd: number | undefined;
     try {
-      const fd = fs.openSync(filePath, "r");
+      fd = fs.openSync(filePath, "r");
       const buf = Buffer.alloc(64);
       fs.readSync(fd, buf, 0, 64, 0);
-      fs.closeSync(fd);
       const head = buf.toString("utf-8");
       return /^#!\s*\/(?:usr\/)?(?:bin\/(?:env\s+)?)?(?:ba)?sh\b/.test(head);
     } catch {
       return false;
+    } finally {
+      if (fd !== undefined) {
+        try {
+          fs.closeSync(fd);
+        } catch {
+          /* ignore */
+        }
+      }
     }
   }
 
@@ -158,7 +174,7 @@ function findShellScripts(projectPath: string): string[] {
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
-        if (!entry.isFile()) continue;
+        if (!entry.isFile() && !entry.isSymbolicLink()) continue;
         const fullPath = path.join(dir, entry.name);
         if (entry.name.endsWith(".sh") || entry.name.endsWith(".bash")) {
           addScript(fullPath);

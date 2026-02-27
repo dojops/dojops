@@ -1543,3 +1543,188 @@ describe("TF provider patterns — expanded", () => {
     expect(result.tfProviders).toContain("hetzner");
   });
 });
+
+// ── B1: detectScripts skips "scripts" in child loop ──────────────
+describe("detectScripts — B1 dedup fix", () => {
+  it("does not duplicate scripts/ entries via child loop", () => {
+    const dir = makeTmpDir();
+    const scriptsDir = path.join(dir, "scripts");
+    fs.mkdirSync(scriptsDir);
+    fs.writeFileSync(path.join(scriptsDir, "deploy.sh"), "#!/bin/bash");
+    const result = detectScripts(dir);
+    const deployEntries = result.shellScripts.filter((s) => s === "scripts/deploy.sh");
+    expect(deployEntries).toHaveLength(1);
+  });
+});
+
+// ── S1: listChildDirs ignores symlinks ───────────────────────────
+describe("detectInfra — S1 symlink safety", () => {
+  it("ignores symlinked child directories", () => {
+    const dir = makeTmpDir();
+    const realDir = path.join(dir, "real-tf");
+    fs.mkdirSync(realDir);
+    fs.writeFileSync(path.join(realDir, "main.tf"), 'provider "aws" {}');
+    // Create symlink child pointing to real-tf
+    fs.symlinkSync(realDir, path.join(dir, "link-tf"));
+    const result = detectInfra(dir);
+    // Should only detect from real-tf, not from link-tf
+    expect(result.hasTerraform).toBe(true);
+    // The symlinked dir should be ignored by listChildDirs
+    expect(result.tfProviders.filter((p) => p === "aws")).toHaveLength(1);
+  });
+});
+
+// ── S6: TF provider does not match comments ──────────────────────
+describe("scanTfDir — S6 comment stripping", () => {
+  it("ignores provider declarations in HCL comments", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(dir, "main.tf"),
+      '# provider "aws" {}\n// provider "gcp" {}\nresource "null_resource" "x" {}',
+    );
+    const result = detectInfra(dir);
+    expect(result.hasTerraform).toBe(true);
+    expect(result.tfProviders).not.toContain("aws");
+    expect(result.tfProviders).not.toContain("gcp");
+  });
+});
+
+// ── F3-F4: CDK and Skaffold detection ────────────────────────────
+describe("detectInfra — CDK and Skaffold", () => {
+  it("detects CDK from cdk.json at root", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "cdk.json"), '{"app":"npx ts-node"}');
+    const result = detectInfra(dir);
+    expect(result.hasCdk).toBe(true);
+  });
+
+  it("detects CDK from cdk.json in subdirectory", () => {
+    const dir = makeTmpDir();
+    const cdkDir = path.join(dir, "infra");
+    fs.mkdirSync(cdkDir);
+    fs.writeFileSync(path.join(cdkDir, "cdk.json"), "{}");
+    const result = detectInfra(dir);
+    expect(result.hasCdk).toBe(true);
+  });
+
+  it("detects Skaffold from skaffold.yaml at root", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "skaffold.yaml"), "apiVersion: skaffold/v2");
+    const result = detectInfra(dir);
+    expect(result.hasSkaffold).toBe(true);
+  });
+
+  it("returns false when neither CDK nor Skaffold present", () => {
+    const dir = makeTmpDir();
+    const result = detectInfra(dir);
+    expect(result.hasCdk).toBe(false);
+    expect(result.hasSkaffold).toBe(false);
+  });
+});
+
+// ── F5-F6: New language detection ────────────────────────────────
+describe("detectLanguages — expanded indicators", () => {
+  it("detects C/C++ from CMakeLists.txt", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.10)");
+    const result = detectLanguages(dir);
+    expect(result.some((l) => l.name === "c-cpp")).toBe(true);
+  });
+
+  it("detects Scala from build.sbt", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "build.sbt"), 'name := "hello"');
+    const result = detectLanguages(dir);
+    expect(result.some((l) => l.name === "scala")).toBe(true);
+  });
+
+  it("detects Haskell from stack.yaml", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "stack.yaml"), "resolver: lts-20.0");
+    const result = detectLanguages(dir);
+    expect(result.some((l) => l.name === "haskell")).toBe(true);
+  });
+
+  it("detects Zig from build.zig", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "build.zig"), 'const std = @import("std");');
+    const result = detectLanguages(dir);
+    expect(result.some((l) => l.name === "zig")).toBe(true);
+  });
+});
+
+// ── F7-F8: ArgoCD and Tiltfile detection ─────────────────────────
+describe("detectInfra — ArgoCD and Tiltfile", () => {
+  it("detects ArgoCD from .argocd/ directory", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".argocd"));
+    const result = detectInfra(dir);
+    expect(result.hasArgoCD).toBe(true);
+  });
+
+  it("detects Tiltfile at root", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "Tiltfile"), "k8s_yaml('deploy.yaml')");
+    const result = detectInfra(dir);
+    expect(result.hasTiltfile).toBe(true);
+  });
+
+  it("returns false when neither ArgoCD nor Tiltfile present", () => {
+    const dir = makeTmpDir();
+    const result = detectInfra(dir);
+    expect(result.hasArgoCD).toBe(false);
+    expect(result.hasTiltfile).toBe(false);
+  });
+});
+
+// ── F10: .bash extension detection ───────────────────────────────
+describe("detectScripts — F10 .bash extension", () => {
+  it("detects .bash files as shell scripts", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "setup.bash"), "#!/bin/bash");
+    const result = detectScripts(dir);
+    expect(result.shellScripts).toContain("setup.bash");
+  });
+});
+
+// ── F11: Helmfile detection ──────────────────────────────────────
+describe("detectInfra — Helmfile", () => {
+  it("detects helmfile.yaml at root", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "helmfile.yaml"), "releases: []");
+    const result = detectInfra(dir);
+    expect(result.hasHelmfile).toBe(true);
+  });
+
+  it("detects helmfile.yml in subdirectory", () => {
+    const dir = makeTmpDir();
+    const helmDir = path.join(dir, "deploy");
+    fs.mkdirSync(helmDir);
+    fs.writeFileSync(path.join(helmDir, "helmfile.yml"), "releases: []");
+    const result = detectInfra(dir);
+    expect(result.hasHelmfile).toBe(true);
+  });
+
+  it("returns false when no helmfile present", () => {
+    const dir = makeTmpDir();
+    const result = detectInfra(dir);
+    expect(result.hasHelmfile).toBe(false);
+  });
+});
+
+// ── F12: Concourse CI and TeamCity detection ─────────────────────
+describe("detectCI — Concourse and TeamCity", () => {
+  it("detects Concourse from .concourse/ directory", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".concourse"));
+    const result = detectCI(dir);
+    expect(result.some((c) => c.platform === "concourse")).toBe(true);
+  });
+
+  it("detects TeamCity from .teamcity/ directory", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".teamcity"));
+    const result = detectCI(dir);
+    expect(result.some((c) => c.platform === "teamcity")).toBe(true);
+  });
+});

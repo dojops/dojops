@@ -367,10 +367,8 @@ function acquireAuditLock(lockPath: string, maxRetries = 5, delayMs = 50): numbe
           continue;
         }
         // Active lock — wait and retry
-        const waitUntil = Date.now() + delayMs * Math.pow(2, attempt);
-        while (Date.now() < waitUntil) {
-          /* busy-wait */
-        }
+        const sab = new SharedArrayBuffer(4);
+        Atomics.wait(new Int32Array(sab), 0, 0, delayMs * Math.pow(2, attempt));
         continue;
       }
       throw err;
@@ -409,7 +407,18 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
           previousHash = lastEntry.hash ?? "genesis";
           seq = (lastEntry.seq ?? 0) + 1;
         } catch {
-          // Corrupt last line — reset chain
+          // Corrupt last line — scan backwards for last valid entry
+          console.warn("[audit] Last audit entry is corrupt — scanning for last valid entry");
+          for (let j = lines.length - 2; j >= 0; j--) {
+            try {
+              const prev = JSON.parse(lines[j]) as AuditEntry;
+              previousHash = prev.hash ?? "genesis";
+              seq = (prev.seq ?? 0) + 1;
+              break;
+            } catch {
+              /* continue scanning */
+            }
+          }
         }
       }
     }
@@ -548,7 +557,12 @@ export function saveScanReport(rootDir: string, report: Record<string, unknown>)
   fs.writeFileSync(file, JSON.stringify(report, null, 2) + "\n");
 }
 
+export function isValidScanId(scanId: string): boolean {
+  return /^scan-[a-z0-9-]+$/.test(scanId);
+}
+
 export function loadScanReport(rootDir: string, scanId: string): Record<string, unknown> | null {
+  if (!isValidScanId(scanId)) return null;
   const file = path.join(scanHistoryDir(rootDir), `${scanId}.json`);
   try {
     return JSON.parse(fs.readFileSync(file, "utf-8")) as Record<string, unknown>;

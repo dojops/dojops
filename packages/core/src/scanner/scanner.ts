@@ -24,7 +24,13 @@ function listChildDirs(root: string): string[] {
   try {
     return fs
       .readdirSync(root, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && !d.name.startsWith(".") && d.name !== "node_modules")
+      .filter(
+        (d) =>
+          d.isDirectory() &&
+          !d.isSymbolicLink() &&
+          !d.name.startsWith(".") &&
+          d.name !== "node_modules",
+      )
       .map((d) => d.name);
   } catch {
     return [];
@@ -74,6 +80,10 @@ const LANGUAGE_INDICATORS: Array<{
   { name: "elixir", files: ["mix.exs"], confidence: 0.95 },
   { name: "dart", files: ["pubspec.yaml"], confidence: 0.95 },
   { name: "swift", files: ["Package.swift"], confidence: 0.95 },
+  { name: "c-cpp", files: ["CMakeLists.txt", "meson.build", "configure.ac"], confidence: 0.85 },
+  { name: "scala", files: ["build.sbt"], confidence: 0.9 },
+  { name: "haskell", files: ["stack.yaml", "*.cabal"], confidence: 0.9 },
+  { name: "zig", files: ["build.zig"], confidence: 0.95 },
 ];
 
 /**
@@ -261,6 +271,16 @@ export function detectCI(root: string): CIDetection[] {
     results.push({ platform: "woodpecker", configPath: ".woodpecker/" });
   }
 
+  // Concourse CI
+  if (fs.existsSync(path.join(root, ".concourse"))) {
+    results.push({ platform: "concourse", configPath: ".concourse/" });
+  }
+
+  // TeamCity
+  if (fs.existsSync(path.join(root, ".teamcity"))) {
+    results.push({ platform: "teamcity", configPath: ".teamcity/" });
+  }
+
   return results;
 }
 
@@ -375,8 +395,12 @@ function scanTfDir(dir: string, tfProviders: string[]): boolean {
     for (const tf of tfFiles) {
       try {
         const content = fs.readFileSync(path.join(dir, tf), "utf-8");
+        const uncommented = content
+          .split("\n")
+          .filter((l) => !l.trimStart().startsWith("#") && !l.trimStart().startsWith("//"))
+          .join("\n");
         for (const { pattern, name } of TF_PROVIDER_PATTERNS) {
-          if (pattern.test(content) && !tfProviders.includes(name)) {
+          if (pattern.test(uncommented) && !tfProviders.includes(name)) {
             tfProviders.push(name);
           }
         }
@@ -505,6 +529,38 @@ export function detectInfra(root: string): InfraDetection {
     });
   }
 
+  // CDK — check root, then subdirectories
+  let hasCdk = fs.existsSync(path.join(root, "cdk.json"));
+  if (!hasCdk) {
+    hasCdk = listChildDirs(root).some((d) => fs.existsSync(path.join(root, d, "cdk.json")));
+  }
+
+  // Skaffold — check root, then subdirectories
+  let hasSkaffold = fs.existsSync(path.join(root, "skaffold.yaml"));
+  if (!hasSkaffold) {
+    hasSkaffold = listChildDirs(root).some((d) =>
+      fs.existsSync(path.join(root, d, "skaffold.yaml")),
+    );
+  }
+
+  // ArgoCD — check .argocd/ directory
+  const hasArgoCD = fs.existsSync(path.join(root, ".argocd"));
+
+  // Tiltfile — check root
+  const hasTiltfile = fs.existsSync(path.join(root, "Tiltfile"));
+
+  // Helmfile — check root, then subdirectories
+  let hasHelmfile =
+    fs.existsSync(path.join(root, "helmfile.yaml")) ||
+    fs.existsSync(path.join(root, "helmfile.yml"));
+  if (!hasHelmfile) {
+    hasHelmfile = listChildDirs(root).some(
+      (d) =>
+        fs.existsSync(path.join(root, d, "helmfile.yaml")) ||
+        fs.existsSync(path.join(root, d, "helmfile.yml")),
+    );
+  }
+
   return {
     hasTerraform,
     tfProviders,
@@ -517,6 +573,11 @@ export function detectInfra(root: string): InfraDetection {
     hasPulumi,
     hasCloudFormation,
     hasPacker,
+    hasCdk,
+    hasSkaffold,
+    hasArgoCD,
+    hasTiltfile,
+    hasHelmfile,
   };
 }
 
@@ -593,7 +654,7 @@ export function detectScripts(root: string): ScriptsDetection {
       const entries = fs.readdirSync(dir);
       for (const entry of entries) {
         const relPath = prefix ? `${prefix}/${entry}` : entry;
-        if (entry.endsWith(".sh")) shellScripts.push(relPath);
+        if (entry.endsWith(".sh") || entry.endsWith(".bash")) shellScripts.push(relPath);
         if (entry.endsWith(".py")) pythonScripts.push(relPath);
       }
     } catch {
@@ -612,6 +673,7 @@ export function detectScripts(root: string): ScriptsDetection {
 
   // Scan child directories and their scripts/ subdirectories
   for (const child of listChildDirs(root)) {
+    if (child === "scripts") continue; // Already scanned above
     const childPath = path.join(root, child);
     scanForScripts(childPath, child);
     const childScripts = path.join(childPath, "scripts");

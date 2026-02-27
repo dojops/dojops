@@ -75,7 +75,7 @@ vi.mock("./scanners/gitleaks", () => ({
   }),
 }));
 
-import { runScan } from "./runner";
+import { runScan, deduplicateByCve, compareScanReports } from "./runner";
 
 describe("runScan", () => {
   it("generates a scan report with unique ID", async () => {
@@ -126,7 +126,8 @@ describe("runScan", () => {
     const report = await runScan("/project", "security");
     expect(report.scannersRun).toContain("trivy");
     expect(report.scannersRun).toContain("gitleaks");
-    expect(report.scannersRun).not.toContain("npm-audit");
+    // npm-audit and pip-audit are now in both "deps" and "security" categories (F2 fix)
+    expect(report.scannersRun).toContain("npm-audit");
   });
 
   it("uses repo context for scanner selection", async () => {
@@ -200,5 +201,202 @@ describe("runScan", () => {
     // Monorepo with both Python and Node → both npm-audit and pip-audit should run
     expect(report.scannersRun).toContain("npm-audit");
     expect(report.scannersSkipped.some((s) => s.includes("pip-audit"))).toBe(true);
+  });
+});
+
+describe("T1: checkov applicable with CloudFormation only", () => {
+  it("runs checkov when only hasCloudFormation is true", async () => {
+    const ctx: RepoContext = {
+      version: 2,
+      scannedAt: new Date().toISOString(),
+      rootPath: "/project",
+      languages: [],
+      primaryLanguage: null,
+      packageManager: null,
+      ci: [],
+      container: { hasDockerfile: false, hasCompose: false },
+      infra: {
+        hasTerraform: false,
+        tfProviders: [],
+        hasState: false,
+        hasKubernetes: false,
+        hasHelm: false,
+        hasAnsible: false,
+        hasKustomize: false,
+        hasVagrant: false,
+        hasPulumi: false,
+        hasCloudFormation: true,
+      },
+      monitoring: {
+        hasPrometheus: false,
+        hasNginx: false,
+        hasSystemd: false,
+        hasHaproxy: false,
+        hasTomcat: false,
+        hasApache: false,
+        hasCaddy: false,
+        hasEnvoy: false,
+      },
+      scripts: { shellScripts: [], pythonScripts: [], hasJustfile: false },
+      security: {
+        hasEnvExample: false,
+        hasGitignore: false,
+        hasCodeowners: false,
+        hasSecurityPolicy: false,
+        hasDependabot: false,
+        hasRenovate: false,
+        hasSecretScanning: false,
+        hasEditorConfig: false,
+      },
+      meta: {
+        isGitRepo: true,
+        isMonorepo: false,
+        hasMakefile: false,
+        hasReadme: false,
+        hasEnvFile: false,
+      },
+      relevantDomains: [],
+      devopsFiles: [],
+    };
+
+    const report = await runScan("/project", "iac", ctx);
+    // checkov should have been selected (even though it's skipped due to binary not found)
+    expect(
+      report.scannersSkipped.some((s) => s.includes("checkov")) ||
+        report.scannersRun.includes("checkov"),
+    ).toBe(true);
+  });
+});
+
+describe("T3: compareScanReports", () => {
+  it("identifies new and resolved findings", () => {
+    const current = {
+      id: "scan-current",
+      projectPath: "/project",
+      timestamp: new Date().toISOString(),
+      scanType: "all" as const,
+      findings: [
+        {
+          id: "f1",
+          tool: "trivy",
+          severity: "HIGH" as const,
+          category: "SECURITY",
+          message: "Old vuln",
+          autoFixAvailable: false,
+        },
+        {
+          id: "f3",
+          tool: "trivy",
+          severity: "MEDIUM" as const,
+          category: "SECURITY",
+          message: "New vuln",
+          autoFixAvailable: false,
+        },
+      ],
+      summary: { total: 2, critical: 0, high: 1, medium: 1, low: 0 },
+      scannersRun: ["trivy"],
+      scannersSkipped: [],
+      durationMs: 100,
+    };
+
+    const previous = {
+      id: "scan-previous",
+      projectPath: "/project",
+      timestamp: new Date().toISOString(),
+      scanType: "all" as const,
+      findings: [
+        {
+          id: "f1",
+          tool: "trivy",
+          severity: "HIGH" as const,
+          category: "SECURITY",
+          message: "Old vuln",
+          autoFixAvailable: false,
+        },
+        {
+          id: "f2",
+          tool: "trivy",
+          severity: "LOW" as const,
+          category: "SECURITY",
+          message: "Resolved vuln",
+          autoFixAvailable: false,
+        },
+      ],
+      summary: { total: 2, critical: 0, high: 1, medium: 0, low: 1 },
+      scannersRun: ["trivy"],
+      scannersSkipped: [],
+      durationMs: 80,
+    };
+
+    const result = compareScanReports(current, previous);
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.newFindings[0].id).toBe("f3");
+    expect(result.resolvedFindings).toHaveLength(1);
+    expect(result.resolvedFindings[0].id).toBe("f2");
+  });
+});
+
+describe("T4: deduplicateByCve", () => {
+  it("deduplicates findings with same CVE, keeping highest severity", () => {
+    const findings = [
+      {
+        id: "f1",
+        tool: "trivy",
+        severity: "HIGH" as const,
+        category: "SECURITY",
+        message: "vuln",
+        cve: "CVE-2024-0001",
+        autoFixAvailable: false,
+      },
+      {
+        id: "f2",
+        tool: "npm-audit",
+        severity: "CRITICAL" as const,
+        category: "DEPENDENCY",
+        message: "vuln",
+        cve: "CVE-2024-0001",
+        autoFixAvailable: false,
+      },
+      {
+        id: "f3",
+        tool: "trivy",
+        severity: "MEDIUM" as const,
+        category: "SECURITY",
+        message: "other",
+        autoFixAvailable: false,
+      },
+    ];
+
+    const result = deduplicateByCve(findings);
+    expect(result).toHaveLength(2);
+    // f3 has no CVE, always kept
+    expect(result.some((f) => f.id === "f3")).toBe(true);
+    // CVE-2024-0001: f2 (CRITICAL) should be kept over f1 (HIGH)
+    const cveResult = result.find((f) => f.cve === "CVE-2024-0001");
+    expect(cveResult!.severity).toBe("CRITICAL");
+  });
+
+  it("keeps all findings without CVE", () => {
+    const findings = [
+      {
+        id: "f1",
+        tool: "hadolint",
+        severity: "MEDIUM" as const,
+        category: "IAC",
+        message: "pin versions",
+        autoFixAvailable: false,
+      },
+      {
+        id: "f2",
+        tool: "shellcheck",
+        severity: "LOW" as const,
+        category: "IAC",
+        message: "quote var",
+        autoFixAvailable: false,
+      },
+    ];
+
+    const result = deduplicateByCve(findings);
+    expect(result).toHaveLength(2);
   });
 });

@@ -630,6 +630,45 @@ describe("scanShellcheck", () => {
     expect(result.findings[1].severity).toBe("HIGH");
     expect(result.findings[1].message).toContain("SC2155");
   });
+
+  it("T5: detects extensionless script with shell shebang", async () => {
+    const { scanShellcheck } = await import("./shellcheck");
+    // Extensionless file that has #!/bin/bash shebang
+    const dirent = {
+      name: "run-deploy",
+      isFile: () => true,
+      isSymbolicLink: () => false,
+      isDirectory: () => false,
+    };
+    mockReaddirSync.mockImplementation((dir, opts) => {
+      if (String(dir) === "/project") {
+        if (opts && typeof opts === "object" && "withFileTypes" in opts) {
+          return [dirent] as unknown as fs.Dirent[];
+        }
+        return ["run-deploy"] as unknown as fs.Dirent[];
+      }
+      return [] as unknown as fs.Dirent[];
+    });
+    mockExistsSync.mockReturnValue(false);
+
+    // Mock openSync/readSync/closeSync for shebang detection
+    const mockOpenSync = vi.mocked(fs.openSync);
+    const mockReadSync = vi.mocked(fs.readSync);
+    const mockCloseSync = vi.mocked(fs.closeSync);
+    mockOpenSync.mockReturnValue(42);
+    mockReadSync.mockImplementation((_fd, buf: Buffer) => {
+      const shebang = "#!/bin/bash\necho hello\n";
+      buf.write(shebang, 0, "utf-8");
+      return shebang.length;
+    });
+    mockCloseSync.mockReturnValue(undefined);
+
+    mockExecFileSuccess(JSON.stringify([]));
+
+    const result = await scanShellcheck("/project");
+    expect(result.skipped).toBeFalsy();
+    expect(result.tool).toBe("shellcheck");
+  });
 });
 
 // ── trivy-sbom ──────────────────────────────────────────────────

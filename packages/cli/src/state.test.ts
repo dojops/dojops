@@ -22,6 +22,8 @@ import {
   releaseLock,
   isLocked,
   checkGitDirty,
+  loadScanReport,
+  isValidScanId,
   PlanState,
   SessionState,
 } from "./state";
@@ -451,5 +453,68 @@ describe("checkGitDirty", () => {
     const dirty = checkGitDirty(tmpDir);
     expect(dirty.dirty).toBe(true);
     expect(dirty.files.length).toBeGreaterThan(0);
+  });
+});
+
+describe("S4: corrupt audit entry recovery", () => {
+  const makeEntry = (command: string) => ({
+    timestamp: new Date().toISOString(),
+    user: "test",
+    command,
+    action: "test",
+    planId: "plan-test",
+    status: "success" as const,
+    durationMs: 100,
+  });
+
+  it("recovers chain from corrupt last line by scanning backwards", () => {
+    initProject(tmpDir);
+    appendAudit(tmpDir, makeEntry("cmd1"));
+    appendAudit(tmpDir, makeEntry("cmd2"));
+
+    // Corrupt the last line
+    const auditPath = path.join(tmpDir, ".dojops", "history", "audit.jsonl");
+    fs.appendFileSync(auditPath, "NOT VALID JSON\n");
+
+    // Append a new entry — should recover from cmd2, not reset to genesis
+    appendAudit(tmpDir, makeEntry("cmd3"));
+
+    const entries = readAudit(tmpDir);
+    const validEntries = entries.filter((e) => e.seq != null);
+    expect(validEntries).toHaveLength(3);
+    // cmd3 should chain from cmd2's hash
+    expect(validEntries[2].previousHash).toBe(validEntries[1].hash);
+    expect(validEntries[2].seq).toBe(3);
+  });
+});
+
+describe("S5: isValidScanId and loadScanReport path traversal", () => {
+  it("validates scan ID format", () => {
+    expect(isValidScanId("scan-abc12345")).toBe(true);
+    expect(isValidScanId("scan-a1b2c3d4")).toBe(true);
+    expect(isValidScanId("../../../etc/passwd")).toBe(false);
+    expect(isValidScanId("not-a-scan-id")).toBe(false);
+    expect(isValidScanId("SCAN-UPPER")).toBe(false);
+  });
+
+  it("rejects invalid scan IDs", () => {
+    initProject(tmpDir);
+    expect(loadScanReport(tmpDir, "../../../etc/passwd")).toBeNull();
+    expect(loadScanReport(tmpDir, "not-a-scan-id")).toBeNull();
+    expect(loadScanReport(tmpDir, "scan-valid123")).toBeNull(); // valid format but no file
+  });
+
+  it("accepts valid scan IDs", () => {
+    initProject(tmpDir);
+    // Create a fake scan report
+    const scanDir = path.join(tmpDir, ".dojops", "scan-history");
+    fs.mkdirSync(scanDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(scanDir, "scan-abc12345.json"),
+      JSON.stringify({ id: "scan-abc12345" }),
+    );
+    const report = loadScanReport(tmpDir, "scan-abc12345");
+    expect(report).not.toBeNull();
+    expect(report!.id).toBe("scan-abc12345");
   });
 });

@@ -24,7 +24,7 @@ const SCANNERS: ScannerEntry[] = [
   {
     name: "npm-audit",
     fn: scanNpm,
-    categories: ["deps"],
+    categories: ["deps", "security"],
     applicable: (ctx) =>
       !ctx ||
       ctx.primaryLanguage === "Node.js" ||
@@ -36,7 +36,7 @@ const SCANNERS: ScannerEntry[] = [
   {
     name: "pip-audit",
     fn: scanPip,
-    categories: ["deps"],
+    categories: ["deps", "security"],
     applicable: (ctx) =>
       !ctx ||
       ctx.primaryLanguage === "Python" ||
@@ -65,7 +65,12 @@ const SCANNERS: ScannerEntry[] = [
       ctx.infra.hasTerraform ||
       ctx.infra.hasKubernetes ||
       ctx.infra.hasHelm ||
-      ctx.infra.hasAnsible,
+      ctx.infra.hasAnsible ||
+      ctx.infra.hasCloudFormation ||
+      ctx.infra.hasKustomize ||
+      ctx.infra.hasPacker ||
+      ctx.infra.hasPulumi ||
+      ctx.container.hasDockerfile,
   },
   {
     name: "hadolint",

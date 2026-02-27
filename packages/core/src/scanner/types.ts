@@ -37,6 +37,11 @@ export const InfraDetectionSchema = z.object({
   hasPulumi: z.boolean(),
   hasCloudFormation: z.boolean(),
   hasPacker: z.boolean().optional(),
+  hasCdk: z.boolean().optional(),
+  hasSkaffold: z.boolean().optional(),
+  hasArgoCD: z.boolean().optional(),
+  hasTiltfile: z.boolean().optional(),
+  hasHelmfile: z.boolean().optional(),
 });
 
 export const MonitoringDetectionSchema = z.object({

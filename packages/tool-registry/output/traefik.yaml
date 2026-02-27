@@ -1,0 +1,7 @@
+entryPoints:
+  web:
+    address: ":80"
+http:
+  routers:
+    api:
+      rule: Host(`api.local`)

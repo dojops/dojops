@@ -234,6 +234,8 @@ async function main() {
     "history",
     "tools",
     "toolchain",
+    "inspect",
+    "scan",
   ]);
 
   try {

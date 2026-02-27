@@ -37,10 +37,12 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   } else if (providerName === "anthropic") {
     const key = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
     if (!key) {
-      if (allowMissing)
+      if (allowMissing) {
+        console.warn("[dojops] Anthropic API key not configured — using NoopProvider");
         return new NoopProvider(
           `Anthropic API key not configured. Set ANTHROPIC_API_KEY or run: dojops auth login --provider anthropic`,
         );
+      }
       throw new Error(
         "Anthropic API key is required. Set ANTHROPIC_API_KEY or run: dojops login --token <KEY> --provider anthropic",
       );
@@ -49,10 +51,12 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   } else if (providerName === "deepseek") {
     const key = options?.apiKey ?? process.env.DEEPSEEK_API_KEY;
     if (!key) {
-      if (allowMissing)
+      if (allowMissing) {
+        console.warn("[dojops] DeepSeek API key not configured — using NoopProvider");
         return new NoopProvider(
           `DeepSeek API key not configured. Set DEEPSEEK_API_KEY or run: dojops auth login --provider deepseek`,
         );
+      }
       throw new Error(
         "DeepSeek API key is required. Set DEEPSEEK_API_KEY or run: dojops login --token <KEY> --provider deepseek",
       );
@@ -61,10 +65,12 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   } else if (providerName === "gemini") {
     const key = options?.apiKey ?? process.env.GEMINI_API_KEY;
     if (!key) {
-      if (allowMissing)
+      if (allowMissing) {
+        console.warn("[dojops] Gemini API key not configured — using NoopProvider");
         return new NoopProvider(
           `Gemini API key not configured. Set GEMINI_API_KEY or run: dojops auth login --provider gemini`,
         );
+      }
       throw new Error(
         "Gemini API key is required. Set GEMINI_API_KEY or run: dojops login --token <KEY> --provider gemini",
       );
@@ -73,10 +79,12 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   } else {
     const key = options?.apiKey ?? process.env.OPENAI_API_KEY;
     if (!key) {
-      if (allowMissing)
+      if (allowMissing) {
+        console.warn("[dojops] OpenAI API key not configured — using NoopProvider");
         return new NoopProvider(
           `OpenAI API key not configured. Set OPENAI_API_KEY or run: dojops auth login --provider openai`,
         );
+      }
       throw new Error(
         "OpenAI API key is required. Set OPENAI_API_KEY or run: dojops login --token <KEY> --provider openai",
       );

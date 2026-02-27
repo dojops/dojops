@@ -522,18 +522,13 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
   let tmpDir: string;
   let origHome: string | undefined;
 
-  let origCwd: string;
-
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-exec-"));
     origHome = process.env.HOME;
     process.env.HOME = tmpDir;
-    origCwd = process.cwd();
-    process.chdir(tmpDir);
   });
 
   afterEach(() => {
-    process.chdir(origCwd);
     process.env.HOME = origHome;
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -618,7 +613,8 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
 
     // Check file was written — serializer is "raw", so it should write the raw content
     // The raw serializer converts objects to JSON string (since data.generated is an object)
-    const filePath = path.join(outputDir, "Caddyfile");
+    // resolveFilePath now anchors to toolDir, so paths are absolute under entry.toolDir
+    const filePath = path.join(entry.toolDir, outputDir, "Caddyfile");
     expect(fs.existsSync(filePath)).toBe(true);
     const content = fs.readFileSync(filePath, "utf-8");
     // "raw" serializer: object → JSON.stringify
@@ -660,7 +656,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
 
     expect(result.success).toBe(true);
 
-    const filePath = path.join(outputDir, "Caddyfile");
+    const filePath = path.join(entry.toolDir, outputDir, "Caddyfile");
     const content = fs.readFileSync(filePath, "utf-8");
     // raw serializer: string → string as-is
     expect(content).toBe(rawContent);
@@ -725,8 +721,8 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
 
     expect(result.success).toBe(true);
 
-    // Check YAML serialization
-    const filePath = path.join(outputDir, "envoy.yaml");
+    // Check YAML serialization — resolveFilePath now anchors to toolDir
+    const filePath = path.join(entry.toolDir, outputDir, "envoy.yaml");
     expect(fs.existsSync(filePath)).toBe(true);
     const content = fs.readFileSync(filePath, "utf-8");
 
@@ -748,8 +744,10 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     const entry = discoverTools(projectDir)[0];
 
     const outputDir = "output";
-    fs.mkdirSync(outputDir, { recursive: true });
-    const filePath = path.join(outputDir, "Caddyfile");
+    // Create existing file under toolDir since resolveFilePath anchors to it
+    const absOutputDir = path.join(entry.toolDir, outputDir);
+    fs.mkdirSync(absOutputDir, { recursive: true });
+    const filePath = path.join(absOutputDir, "Caddyfile");
     fs.writeFileSync(filePath, "original content", "utf-8");
 
     const tool = new CustomTool(
