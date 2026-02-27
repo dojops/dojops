@@ -134,6 +134,36 @@ Abstract `BaseTool<T>` class with Zod input schema validation, abstract `generat
 
 See [DevOps Tools](tools.md) for the tool pattern.
 
+### 4b. DOPS Runtime (`@dojops/runtime`)
+
+The DOPS runtime processes `.dops` module files — a declarative format combining YAML frontmatter with markdown prompt sections. Each `.dops` file defines a complete tool: input/output schemas, file specs, prompt templates, and metadata.
+
+**Frontmatter sections** (all optional except `meta`, `output`, `files`):
+
+| Section        | Purpose                                                                               |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `meta`         | Name, version, description, optional `icon` (HTTPS URL for marketplace display)       |
+| `input`        | Field definitions with types, constraints, defaults                                   |
+| `output`       | JSON Schema for LLM output validation                                                 |
+| `files`        | Output file specs with path templates, format, serialization options                  |
+| `scope`        | Write boundary — explicit list of allowed write paths (enforced at file-write time)   |
+| `risk`         | Self-classification: `LOW` / `MEDIUM` / `HIGH` with rationale string                  |
+| `execution`    | Mutation semantics: mode (`generate`/`update`), `deterministic`, `idempotent` flags   |
+| `update`       | Update behavior: strategy (`replace`/`preserve_structure`), `inputSource`, `injectAs` |
+| `detection`    | Existing file detection paths for auto-update mode                                    |
+| `verification` | Structural rules + optional binary verification command                               |
+| `permissions`  | Filesystem, child_process, and network permission declarations                        |
+
+**Markdown sections**: `## Prompt` (required), `## Update Prompt` (optional), `## Examples`, `## Constraints`, `## Keywords` (required).
+
+**Key runtime features**:
+
+- `DopsRuntime.risk` — Returns declared risk or defaults to `{ level: "LOW", rationale: "No risk classification declared" }`
+- `DopsRuntime.executionMode` — Returns declared execution semantics or defaults to `{ mode: "generate", deterministic: false, idempotent: false }`
+- `DopsRuntime.metadata` — Includes `riskLevel`, `icon`, `systemPromptHash`, `toolHash` for audit and marketplace integration
+- **Scope enforcement** — `writeFiles()` validates resolved paths against `scope.write` patterns after `{var}` expansion; out-of-scope writes throw
+- **Update strategy** — `preserve_structure` injects additional prompt instructions to maintain existing config organization
+
 ### 5. DevOps Tools (`@dojops/tools`)
 
 12 built-in tools covering CI/CD, IaC, containers, monitoring, and system services. Each follows the same file pattern: `schemas.ts` -> `detector.ts` -> `generator.ts` -> `verifier.ts` -> `*-tool.ts`. All tools support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. YAML generators use sorted keys for idempotent output. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
@@ -190,6 +220,7 @@ See [CLI Reference](cli-reference.md).
 4. **Idempotent operations** — Generated configs produce the same result on re-execution. YAML keys are sorted for deterministic output.
 5. **Clear separation of concerns** — Orchestration, generation, validation, execution, and auditing are independent layers.
 6. **Extensibility** — New tools follow the `BaseTool<T>` pattern. New agents are registered in the specialist list.
+7. **Declarative safety** — `.dops` modules declare their own scope boundaries, risk levels, and execution semantics, enabling automated policy enforcement without hardcoded tool-specific rules.
 
 ---
 

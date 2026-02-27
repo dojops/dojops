@@ -92,6 +92,19 @@ External tool validation (enabled by default in CLI; `--skip-verify` to disable)
 
 Verification runs by default for CLI commands (`apply`, `plan --execute`). It gracefully skips if external tools are not installed. Failed verification blocks execution. The SDK default (`skipVerification: true`) remains unchanged for programmatic callers.
 
+### Layer 3b: DOPS Scope Enforcement
+
+`.dops` modules can declare explicit write boundaries via the `scope` section:
+
+```yaml
+scope:
+  write: ["{outputPath}/main.tf", "{outputPath}/variables.tf"]
+```
+
+At file-write time, `writeFiles()` validates each resolved path against the expanded `scope.write` patterns. Writes to paths not covered by any scope pattern are rejected with an error. This provides tool-level write restriction independent of the global `ExecutionPolicy`, enabling defense-in-depth: even if the policy allows a broad set of paths, individual tools are constrained to their declared scope.
+
+Path traversal (`..`) in scope patterns is rejected at parse time by the Zod schema validator.
+
 ### Layer 4: Policy Engine
 
 `ExecutionPolicy` provides fine-grained control:
@@ -230,6 +243,18 @@ Plans are automatically classified into risk levels based on tool types and keyw
 - **HIGH** — Any task mentioning IAM, security groups, production, secrets, credentials, RBAC, roles, or permissions
 
 HIGH risk plans require explicit confirmation even with `--yes` (unless `--force` is also set), adding a safety gate before potentially dangerous operations.
+
+### DOPS-Declared Risk
+
+`.dops` modules can also self-classify their risk level via the `risk` frontmatter section:
+
+```yaml
+risk:
+  level: MEDIUM
+  rationale: "Infrastructure changes may affect cloud resources"
+```
+
+This metadata is exposed via `DopsRuntime.metadata.riskLevel` and can be consumed by planners and approval workflows. The declared risk level complements the CLI's keyword-based classifier — the CLI classifies plans, while `.dops` modules classify individual tools. When both are present, the higher risk level takes precedence.
 
 ---
 

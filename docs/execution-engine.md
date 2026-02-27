@@ -291,6 +291,8 @@ Plans are automatically classified into risk levels based on their content:
 
 HIGH risk plans always prompt for confirmation unless `--force` is also passed.
 
+Additionally, `.dops` modules can self-declare their risk level via the `risk` frontmatter section (`LOW`, `MEDIUM`, or `HIGH` with a rationale string). This metadata is exposed in `DopsRuntime.metadata.riskLevel` and complements the keyword-based classifier — providing tool-level risk classification alongside plan-level classification.
+
 ---
 
 ## Usage

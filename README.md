@@ -116,6 +116,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ### Tools
 
 - **12 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
+- **Declarative tool metadata** — `.dops` modules declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
 - **Custom tool system** — Extend DojOps with custom tools via declarative `tool.yaml` manifests + JSON Schema. Drop a tool into `~/.dojops/tools/` or `.dojops/tools/` and it's automatically available to all commands. Scaffold new tools with `dojops tools init <name>`. Tool isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
 - **Schema-validated** — Every tool input and LLM output is validated against Zod schemas before execution

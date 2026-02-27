@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **DOPS Spec Hardening**: 5 new `.dops` frontmatter sections for v1 contract freeze:
+  - `scope` — Write boundary enforcement with `{var}` path expansion; out-of-scope writes rejected at runtime
+  - `risk` — Tool self-classification (`LOW`/`MEDIUM`/`HIGH`) with rationale; exposed in `ToolMetadata.riskLevel`
+  - `execution` — Mutation semantics: `mode` (generate/update), `deterministic`, `idempotent` flags
+  - `update` — Structured update behavior: `strategy` (replace/preserve_structure), `inputSource`, `injectAs`
+  - `meta.icon` — Optional HTTPS URL (max 2048 chars) for marketplace tool icon display
+- **Scope Enforcement in File Writer**: `writeFiles()` validates resolved paths against `scope.write` patterns after variable expansion; `matchesScopePattern()` helper exported
+- **Risk & Execution Getters**: `DopsRuntime.risk`, `.executionMode`, `.isDeterministic`, `.isIdempotent` with safe defaults
+- **Parser Validation**: Path traversal prevention on `scope.write` paths; network permission constraint for v1 tools with risk declared
+- **Prompt Compiler Update Strategy**: `preserve_structure` injects additional LLM instructions; `injectAs` controls variable name for existing content
+- **12 Module Updates**: All built-in `.dops` modules updated with `scope`, `risk`, `execution`, and `update` sections
+- **16 New Tests**: Parser, runtime, and file-writer tests for all new features (282 total runtime tests)
+
 ## [1.0.0] - 2026-02-26
 
 ### Added

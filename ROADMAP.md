@@ -6,7 +6,16 @@ This document tracks DojOps's development from initial scaffold to production-gr
 
 # v1.0.0 — Shipped
 
-All eight phases are complete. DojOps v1.0.0 ships with 12 built-in DevOps tools, a plugin system for custom tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, observability metrics, and a rich terminal UI.
+All eight phases are complete. DojOps v1.0.0 ships with 12 built-in DevOps tools, a custom tool system, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, observability metrics, and a rich terminal UI.
+
+### Post-1.0.0 — DOPS Spec Hardening (DONE)
+
+- **5 new `.dops` frontmatter sections** — `scope` (write boundary enforcement), `risk` (tool self-classification with LOW/MEDIUM/HIGH + rationale), `execution` (mutation semantics: mode/deterministic/idempotent), `update` (strategy/inputSource/injectAs), and `meta.icon` (HTTPS URL for marketplace display)
+- **Scope enforcement** — File writer validates resolved paths against declared `scope.write` patterns; out-of-scope writes rejected at runtime
+- **Risk metadata** — `DopsRuntime.metadata.riskLevel` exposes declared risk for planners and approval workflows
+- **Preserve structure updates** — `update.strategy: preserve_structure` injects additional LLM instructions to maintain existing config organization
+- **All 12 modules updated** — Every built-in `.dops` module now declares scope, risk, and execution metadata
+- **Parser hardening** — Path traversal prevention on scope paths; network permission constraint for v1 tools
 
 ---
 

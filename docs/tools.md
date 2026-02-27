@@ -347,6 +347,123 @@ To add a new tool to DojOps:
 
 ---
 
+## DOPS Module Format
+
+Built-in tools can also be defined as `.dops` module files — a declarative format combining YAML frontmatter with markdown prompt sections. The `@dojops/runtime` package processes these modules through a unified runtime engine (`DopsRuntime`).
+
+### Frontmatter Sections
+
+All sections are defined in YAML between `---` delimiters:
+
+| Section        | Required | Description                                                           |
+| -------------- | -------- | --------------------------------------------------------------------- |
+| `dops`         | Yes      | Version identifier (`v1`)                                             |
+| `meta`         | Yes      | Tool name, version, description, optional `icon` URL                  |
+| `input`        | No       | Input field definitions with types, constraints, defaults             |
+| `output`       | Yes      | JSON Schema for LLM output validation                                 |
+| `files`        | Yes      | Output file specs (path templates, format, serialization options)     |
+| `scope`        | No       | Write boundary — explicit list of allowed write paths                 |
+| `risk`         | No       | Tool risk self-classification (`LOW` / `MEDIUM` / `HIGH` + rationale) |
+| `execution`    | No       | Mutation semantics (mode, deterministic, idempotent flags)            |
+| `update`       | No       | Structured update behavior (strategy, inputSource, injectAs)          |
+| `detection`    | No       | Existing file detection paths for auto-update mode                    |
+| `verification` | No       | Structural rules + optional binary verification command               |
+| `permissions`  | No       | Filesystem, child_process, and network permission declarations        |
+
+### Scope — Write Boundary Enforcement
+
+The `scope` section declares which files a tool is allowed to write. Paths use the same `{var}` template syntax as `files[].path`:
+
+```yaml
+scope:
+  write: ["{outputPath}/main.tf", "{outputPath}/variables.tf"]
+```
+
+At execution time, resolved file paths are validated against the expanded scope patterns. Writes to paths not in `scope.write` are rejected with an error. Path traversal (`..`) in scope patterns is rejected at parse time.
+
+When `scope` is omitted, the tool can write to any path (backward compatible with existing tools).
+
+### Risk — Tool Self-Classification
+
+Tools declare their own risk level:
+
+```yaml
+risk:
+  level: MEDIUM
+  rationale: "Infrastructure changes may affect cloud resources"
+```
+
+| Level    | Typical Use Cases                                              |
+| -------- | -------------------------------------------------------------- |
+| `LOW`    | CI/CD, monitoring, build automation (github-actions, makefile) |
+| `MEDIUM` | Infrastructure, containers, deployments (terraform, k8s)       |
+| `HIGH`   | Production resources, IAM, security configurations             |
+
+Default when not declared: `LOW` with rationale "No risk classification declared". The risk level is exposed via `DopsRuntime.metadata.riskLevel` for use by planners and approval workflows.
+
+### Execution — Mutation Semantics
+
+```yaml
+execution:
+  mode: generate # "generate" or "update"
+  deterministic: false # same input always produces same output?
+  idempotent: true # safe to re-run without side effects?
+```
+
+All fields have defaults: `mode: "generate"`, `deterministic: false`, `idempotent: false`.
+
+### Update — Structured Update Behavior
+
+```yaml
+update:
+  strategy: replace # "replace" or "preserve_structure"
+  inputSource: file # where existing content comes from
+  injectAs: existingContent # variable name for existing content in prompts
+```
+
+When `strategy` is `preserve_structure`, the prompt compiler injects additional instructions to maintain the existing configuration's organization. The `injectAs` field controls the variable name used in `## Update Prompt` sections (default: `existingContent`).
+
+### Meta Icon — Marketplace Display
+
+```yaml
+meta:
+  name: terraform
+  version: 1.0.0
+  description: "Generates Terraform configurations"
+  icon: "https://registry.dojops.ai/icons/terraform.svg"
+```
+
+The `icon` field is optional. When present, it must be an HTTPS URL (max 2048 characters). This URL is used by the DojOps marketplace to display a tool icon alongside the tool name.
+
+### Markdown Sections
+
+After the closing `---` delimiter, markdown sections define prompts:
+
+- `## Prompt` (required) — Main generation prompt with `{var}` template substitution
+- `## Update Prompt` (optional) — Used instead of `## Prompt` when updating existing content
+- `## Examples` (optional) — Example outputs for the LLM
+- `## Constraints` (optional) — Rules the LLM must follow
+- `## Keywords` (required) — Comma-separated keywords for agent routing
+
+### Built-in Module Risk Levels
+
+| Tool           | Risk   | Rationale                                             |
+| -------------- | ------ | ----------------------------------------------------- |
+| terraform      | MEDIUM | Infrastructure changes may affect cloud resources     |
+| kubernetes     | MEDIUM | Cluster configuration changes affect running services |
+| helm           | MEDIUM | Chart changes affect Kubernetes deployments           |
+| dockerfile     | MEDIUM | Build image changes may affect production runtime     |
+| docker-compose | MEDIUM | Service stack changes affect running containers       |
+| ansible        | MEDIUM | Playbook changes execute on remote hosts              |
+| nginx          | MEDIUM | Web server config changes affect traffic routing      |
+| systemd        | MEDIUM | Service unit changes affect system processes          |
+| github-actions | LOW    | CI/CD workflow changes require PR review              |
+| gitlab-ci      | LOW    | CI/CD pipeline changes require MR review              |
+| makefile       | LOW    | Build automation changes are local                    |
+| prometheus     | LOW    | Monitoring config changes are observable              |
+
+---
+
 ## Custom Tool System
 
 DojOps supports custom tools via the `@dojops/tool-registry` custom tool system. Custom tools are discovered automatically and behave exactly like built-in tools — they go through the same Planner, Executor, verification, and audit pipeline.
