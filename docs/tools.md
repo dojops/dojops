@@ -1,6 +1,6 @@
 # DevOps Tools
 
-DojOps includes 12 built-in DevOps tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All tools follow a consistent pattern built on the `BaseTool<T>` abstract class. Additionally, a **plugin system** lets you extend DojOps with custom tools via declarative `plugin.yaml` manifests.
+DojOps includes 12 built-in DevOps tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All tools follow a consistent pattern built on the `BaseTool<T>` abstract class. Additionally, a **custom tool system** lets you extend DojOps with custom tools via declarative `tool.yaml` manifests.
 
 ---
 
@@ -347,22 +347,22 @@ To add a new tool to DojOps:
 
 ---
 
-## Plugin System
+## Custom Tool System
 
-DojOps supports custom tools via the `@dojops/tool-registry` plugin system. Plugin tools are discovered automatically and behave exactly like built-in tools — they go through the same Planner, Executor, verification, and audit pipeline.
+DojOps supports custom tools via the `@dojops/tool-registry` custom tool system. Custom tools are discovered automatically and behave exactly like built-in tools — they go through the same Planner, Executor, verification, and audit pipeline.
 
-### Plugin Discovery
+### Custom Tool Discovery
 
-Plugins are discovered from two locations:
+Custom tools are discovered from two locations:
 
-1. **Global:** `~/.dojops/plugins/<name>/plugin.yaml`
-2. **Project:** `.dojops/plugins/<name>/plugin.yaml` (overrides global if same name)
+1. **Global:** `~/.dojops/tools/<name>/tool.yaml`
+2. **Project:** `.dojops/tools/<name>/tool.yaml` (overrides global if same name)
 
-Plugin discovery happens automatically on every command — no manual registration needed.
+Custom tool discovery happens automatically on every command — no manual registration needed.
 
-### Plugin Manifest (`plugin.yaml`)
+### Tool Manifest (`tool.yaml`)
 
-Each plugin is a directory containing a `plugin.yaml` manifest and a JSON Schema file:
+Each custom tool is a directory containing a `tool.yaml` manifest and a JSON Schema file:
 
 ```yaml
 spec: 1
@@ -402,7 +402,7 @@ permissions:
 
 ### Input Schema (`input.schema.json`)
 
-A JSON Schema file defining the plugin's input parameters:
+A JSON Schema file defining the custom tool's input parameters:
 
 ```json
 {
@@ -422,56 +422,56 @@ A JSON Schema file defining the plugin's input parameters:
 
 JSON Schema inputs are converted to Zod schemas at runtime, ensuring full compatibility with the Planner's `zodSchemaToText()` and the Executor's validation pipeline.
 
-### Plugin CLI Commands
+### Custom Tool CLI Commands
 
 ```bash
-# List all discovered plugins (global + project)
-dojops tools plugins list
+# List all discovered custom tools (global + project)
+dojops tools list
 
-# Validate a plugin manifest
-dojops tools plugins validate .dojops/plugins/my-tool/
+# Validate a tool manifest
+dojops tools validate .dojops/tools/my-tool/
 
-# Scaffold a new plugin with template files
-dojops tools plugins init my-tool
+# Scaffold a new custom tool with template files
+dojops tools init my-tool
 ```
 
-### Plugin Policy
+### Tool Policy
 
-Control which plugins are allowed via `.dojops/policy.yaml`:
+Control which custom tools are allowed via `.dojops/policy.yaml`:
 
 ```yaml
-# Only allow specific plugins
-allowedPlugins:
+# Only allow specific tools
+allowedTools:
   - my-tool
   - another-tool
 
-# Block specific plugins (takes precedence over allowedPlugins)
-blockedPlugins:
+# Block specific tools (takes precedence over allowedTools)
+blockedTools:
   - untrusted-tool
 ```
 
-### Plugin Isolation
+### Tool Isolation
 
-Plugins are sandboxed with the same guardrails as built-in tools, plus additional controls:
+Custom tools are sandboxed with the same guardrails as built-in tools, plus additional controls:
 
 - **Verification command whitelist** — Only 16 known DevOps binaries are allowed (terraform, kubectl, helm, ansible-lint, docker, hadolint, yamllint, jsonlint, shellcheck, tflint, kubeval, conftest, checkov, trivy, kube-score, polaris). Non-whitelisted commands are rejected at runtime
 - **Permission enforcement** — The `permissions.child_process` field must be `"required"` for verification commands to execute. Omitted or `"none"` means the command is silently skipped (default-safe)
 - **Path traversal prevention** — File paths in `files[].path` and `detector.path` cannot contain `..` segments, preventing writes outside the project directory
-- **Execution guardrails** — Plugins execute through the same `SafeExecutor` pipeline as built-in tools, inheriting `maxFileSize` (1MB default), `timeoutMs` (30s default), DevOps write allowlist enforcement, and per-file audit logging
+- **Execution guardrails** — Custom tools execute through the same `SafeExecutor` pipeline as built-in tools, inheriting `maxFileSize` (1MB default), `timeoutMs` (30s default), DevOps write allowlist enforcement, and per-file audit logging
 
-### Plugin Specification
+### Tool Specification
 
-The v1 plugin contract is documented and frozen in [Plugin Specification v1](PLUGIN_SPEC_v1.md). This spec covers manifest schema, discovery paths, input/output schemas, verification command whitelist, security constraints, and the compatibility promise.
+The v1 custom tool contract is documented and frozen in [Tool Specification v1](TOOL_SPEC_v1.md). This spec covers manifest schema, discovery paths, input/output schemas, verification command whitelist, security constraints, and the compatibility promise.
 
-### Plugin Audit Trail
+### Custom Tool Audit Trail
 
-Plugin executions include additional audit metadata:
+Custom tool executions include additional audit metadata:
 
-- `toolType: "plugin"` — distinguishes from built-in tools
-- `pluginSource: "global" | "project"` — where the plugin was discovered
-- `pluginVersion` — version from the manifest
-- `pluginHash` — SHA-256 hash of plugin directory for integrity verification
-- `systemPromptHash` — SHA-256 hash of the plugin's system prompt for reproducibility tracking
+- `toolType: "custom"` — distinguishes from built-in tools
+- `toolSource: "global" | "project"` — where the custom tool was discovered
+- `toolVersion` — version from the manifest
+- `toolHash` — SHA-256 hash of tool directory for integrity verification
+- `systemPromptHash` — SHA-256 hash of the custom tool's system prompt for reproducibility tracking
 
 ### Supported Serializers
 

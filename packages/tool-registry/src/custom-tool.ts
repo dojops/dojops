@@ -13,7 +13,7 @@ import {
   atomicWriteFileSync,
 } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
-import { PluginManifest, PluginSource } from "./types";
+import { ToolManifest, ToolSource } from "./types";
 import { jsonSchemaToZod, JSONSchemaObject } from "./json-schema-to-zod";
 import { serialize } from "./serializers";
 
@@ -44,31 +44,31 @@ export function isVerificationCommandAllowed(command: string): boolean {
 }
 
 /**
- * Adapts a declarative PluginManifest into a DevOpsTool-compatible object.
- * This is the core bridge that makes plugins behave identically to built-in tools.
+ * Adapts a declarative ToolManifest into a DevOpsTool-compatible object.
+ * This is the core bridge that makes custom tools behave identically to built-in tools.
  */
-export class PluginTool implements DevOpsTool<Record<string, unknown>> {
+export class CustomTool implements DevOpsTool<Record<string, unknown>> {
   name: string;
   description: string;
   inputSchema: ZodTypeAny;
-  source: PluginSource;
+  source: ToolSource;
 
-  private manifest: PluginManifest;
+  private manifest: ToolManifest;
   private provider: LLMProvider;
-  private pluginDir: string;
+  private toolDir: string;
   private outputZodSchema?: ZodTypeAny;
 
   constructor(
-    manifest: PluginManifest,
+    manifest: ToolManifest,
     provider: LLMProvider,
-    pluginDir: string,
-    source: PluginSource,
+    toolDir: string,
+    source: ToolSource,
     inputSchemaRaw: Record<string, unknown>,
     outputSchemaRaw?: Record<string, unknown>,
   ) {
     this.manifest = manifest;
     this.provider = provider;
-    this.pluginDir = pluginDir;
+    this.toolDir = toolDir;
     this.source = source;
     this.name = manifest.name;
     this.description = manifest.description;
@@ -216,7 +216,7 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
     try {
       const parts = command.split(/\s+/);
       execFileSync(parts[0], parts.slice(1), {
-        cwd: this.pluginDir,
+        cwd: this.toolDir,
         encoding: "utf-8",
         timeout: 30_000,
         stdio: "pipe",
@@ -289,3 +289,9 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
     return resolved;
   }
 }
+
+// Backward compatibility alias
+/** @deprecated Use CustomTool instead */
+export const PluginTool = CustomTool;
+/** @deprecated Use CustomTool instead */
+export type PluginTool = CustomTool;

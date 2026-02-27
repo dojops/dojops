@@ -1,18 +1,18 @@
 import { DevOpsTool } from "@dojops/sdk";
-import { PluginTool } from "./plugin-tool";
+import { CustomTool } from "./custom-tool";
 
 /**
- * Central registry combining built-in and plugin tools.
+ * Central registry combining built-in and custom tools.
  * Provides a unified getAll() / get(name) interface for Planner, Executor, CLI, and API.
  */
 export class ToolRegistry {
   private toolMap: Map<string, DevOpsTool>;
   private builtIn: DevOpsTool[];
-  private plugins: PluginTool[];
+  private customTools: CustomTool[];
 
-  constructor(builtInTools: DevOpsTool[], pluginTools: PluginTool[]) {
+  constructor(builtInTools: DevOpsTool[], customTools: CustomTool[]) {
     this.builtIn = builtInTools;
-    this.plugins = pluginTools;
+    this.customTools = customTools;
     this.toolMap = new Map();
 
     // Built-in tools first
@@ -20,13 +20,13 @@ export class ToolRegistry {
       this.toolMap.set(tool.name, tool);
     }
 
-    // Plugin tools can override built-in tools (project plugins win)
-    for (const plugin of pluginTools) {
-      this.toolMap.set(plugin.name, plugin);
+    // Custom tools can override built-in tools (project tools win)
+    for (const custom of customTools) {
+      this.toolMap.set(custom.name, custom);
     }
   }
 
-  /** All tools: built-in + plugins, deduplicated by name (plugins override). */
+  /** All tools: built-in + custom, deduplicated by name (custom tools override). */
   getAll(): DevOpsTool[] {
     return Array.from(this.toolMap.values());
   }
@@ -46,32 +46,37 @@ export class ToolRegistry {
     return [...this.builtIn];
   }
 
-  /** Get only plugin tools. */
-  getPlugins(): PluginTool[] {
-    return [...this.plugins];
+  /** Get only custom tools. */
+  getCustomTools(): CustomTool[] {
+    return [...this.customTools];
   }
 
-  /** Extract plugin metadata for a tool by name. */
+  /** @deprecated Use getCustomTools() instead */
+  getPlugins(): CustomTool[] {
+    return this.getCustomTools();
+  }
+
+  /** Extract tool metadata for a tool by name. */
   getToolMetadata(name: string):
     | {
-        toolType: "built-in" | "plugin";
-        pluginVersion?: string;
-        pluginHash?: string;
-        pluginSource?: string;
+        toolType: "built-in" | "custom";
+        toolVersion?: string;
+        toolHash?: string;
+        toolSource?: string;
         systemPromptHash?: string;
       }
     | undefined {
     const tool = this.toolMap.get(name);
     if (!tool) return undefined;
 
-    const plugin = this.plugins.find((p) => p.name === name);
-    if (plugin) {
+    const custom = this.customTools.find((t) => t.name === name);
+    if (custom) {
       return {
-        toolType: "plugin",
-        pluginVersion: plugin.source.pluginVersion,
-        pluginHash: plugin.source.pluginHash,
-        pluginSource: plugin.source.location,
-        systemPromptHash: plugin.systemPromptHash,
+        toolType: "custom",
+        toolVersion: custom.source.toolVersion,
+        toolHash: custom.source.toolHash,
+        toolSource: custom.source.location,
+        systemPromptHash: custom.systemPromptHash,
       };
     }
 

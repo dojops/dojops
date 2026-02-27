@@ -51,21 +51,21 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Agents & Tools
 
-| Command                                | Description                                   |
-| -------------------------------------- | --------------------------------------------- |
-| `dojops agents list`                   | List all agents (built-in + custom)           |
-| `dojops agents info <name>`            | Show agent details and tool dependencies      |
-| `dojops agents create <desc>`          | Create a custom agent (LLM-generated)         |
-| `dojops agents create --manual`        | Create a custom agent interactively           |
-| `dojops agents remove <name>`          | Remove a custom agent                         |
-| `dojops tools list`                    | List system tools with install status         |
-| `dojops tools install <name>`          | Download tool into sandbox (~/.dojops/tools/) |
-| `dojops tools remove <name>`           | Remove a sandboxed tool                       |
-| `dojops tools clean`                   | Remove all sandbox tools                      |
-| `dojops tools plugins list`            | List discovered plugins (global + project)    |
-| `dojops tools plugins validate <path>` | Validate a plugin manifest                    |
-| `dojops tools plugins init <name>`     | Scaffold a new plugin with template files     |
-| `dojops inspect <target>`              | Inspect config or session state               |
+| Command                           | Description                                           |
+| --------------------------------- | ----------------------------------------------------- |
+| `dojops agents list`              | List all agents (built-in + custom)                   |
+| `dojops agents info <name>`       | Show agent details and tool dependencies              |
+| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                 |
+| `dojops agents create --manual`   | Create a custom agent interactively                   |
+| `dojops agents remove <name>`     | Remove a custom agent                                 |
+| `dojops tools list`               | List discovered custom tools (global + project)       |
+| `dojops tools validate <path>`    | Validate a custom tool manifest                       |
+| `dojops tools init <name>`        | Scaffold a new custom tool with template files        |
+| `dojops toolchain list`           | List system toolchain binaries with install status    |
+| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
+| `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
+| `dojops toolchain clean`          | Remove all toolchain binaries                         |
+| `dojops inspect <target>`         | Inspect config or session state                       |
 
 ### History & Audit
 
@@ -232,32 +232,32 @@ dojops chat --session=infra --agent=terraform
 dojops chat --resume
 ```
 
-### Tool Management
+### Toolchain Management
 
 ```bash
-# Check available tools
-dojops tools list
+# Check available toolchain binaries
+dojops toolchain list
 
 # Install external validators
-dojops tools install terraform
-dojops tools install kubectl
-dojops tools install hadolint
+dojops toolchain install terraform
+dojops toolchain install kubectl
+dojops toolchain install hadolint
 
 # Cleanup
-dojops tools clean
+dojops toolchain clean
 ```
 
-### Plugin Management
+### Custom Tool Management
 
 ```bash
-# List discovered plugins (global + project)
-dojops tools plugins list
+# List discovered custom tools (global + project)
+dojops tools list
 
-# Scaffold a new plugin
-dojops tools plugins init my-tool
+# Scaffold a new custom tool
+dojops tools init my-tool
 
-# Validate a plugin manifest
-dojops tools plugins validate .dojops/plugins/my-tool/
+# Validate a custom tool manifest
+dojops tools validate .dojops/tools/my-tool/
 ```
 
 ### Provider Management

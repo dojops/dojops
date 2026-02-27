@@ -250,14 +250,13 @@ export class SafeExecutor {
       auditEntry.usage = details.usage;
     }
 
-    // Enrich audit entry with plugin metadata if provided
+    // Enrich audit entry with tool metadata if provided
     const meta = details.metadata;
     if (meta) {
       if (meta.toolType) auditEntry.toolType = meta.toolType as AuditEntry["toolType"];
-      if (meta.pluginSource)
-        auditEntry.pluginSource = meta.pluginSource as AuditEntry["pluginSource"];
-      if (meta.pluginVersion) auditEntry.pluginVersion = meta.pluginVersion as string;
-      if (meta.pluginHash) auditEntry.pluginHash = meta.pluginHash as string;
+      if (meta.toolSource) auditEntry.toolSource = meta.toolSource as AuditEntry["toolSource"];
+      if (meta.toolVersion) auditEntry.toolVersion = meta.toolVersion as string;
+      if (meta.toolHash) auditEntry.toolHash = meta.toolHash as string;
     }
     this.auditLog.push(auditEntry);
 

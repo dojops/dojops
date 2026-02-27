@@ -1,10 +1,10 @@
-# DojOps Plugin Specification v1
+# DojOps Tool Specification v1
 
 **Status: FROZEN**
 **Spec version: `spec: 1`**
 **Effective from: v1.x**
 
-This document defines the v1 plugin contract for DojOps. All plugins targeting DojOps v1.x MUST conform to this specification. The spec is **frozen** — no breaking changes will be made under `spec: 1`. See [Compatibility Promise](#12-compatibility-promise) for evolution rules.
+This document defines the v1 custom tool contract for DojOps. All custom tools targeting DojOps v1.x MUST conform to this specification. The spec is **frozen** — no breaking changes will be made under `spec: 1`. See [Compatibility Promise](#12-compatibility-promise) for evolution rules.
 
 ---
 
@@ -18,9 +18,9 @@ This document defines the v1 plugin contract for DojOps. All plugins targeting D
 6. [Input Schema](#6-input-schema)
 7. [Output Schema](#7-output-schema)
 8. [Verification Command Whitelist](#8-verification-command-whitelist)
-9. [Plugin Policy](#9-plugin-policy)
+9. [Tool Policy](#9-tool-policy)
 10. [Security Constraints](#10-security-constraints)
-11. [Plugin Lifecycle](#11-plugin-lifecycle)
+11. [Tool Lifecycle](#11-tool-lifecycle)
 12. [Compatibility Promise](#12-compatibility-promise)
 13. [Appendix A: Full Manifest Example](#appendix-a-full-manifest-example)
 14. [Appendix B: Input Schema Example](#appendix-b-input-schema-example)
@@ -29,13 +29,13 @@ This document defines the v1 plugin contract for DojOps. All plugins targeting D
 
 ## 1. Overview
 
-DojOps plugins extend the system with custom DevOps tools beyond the 12 built-in ones. Each plugin is a declarative package consisting of:
+DojOps custom tools extend the system with custom DevOps tools beyond the 12 built-in ones. Each custom tool is a declarative package consisting of:
 
-- A **manifest** (`plugin.yaml`) defining the tool's identity, LLM generation strategy, file outputs, and optional verification
+- A **manifest** (`tool.yaml`) defining the tool's identity, LLM generation strategy, file outputs, and optional verification
 - An **input schema** (`input.schema.json`) defining the tool's input contract via JSON Schema
 - An optional **output schema** for structured LLM output enforcement
 
-Plugins are discovered from disk, validated against this spec, converted to runtime `DevOpsTool`-compatible objects, and registered alongside built-in tools in the `ToolRegistry`.
+Custom tools are discovered from disk, validated against this spec, converted to runtime `DevOpsTool`-compatible objects, and registered alongside built-in tools in the `ToolRegistry`.
 
 ---
 
@@ -53,16 +53,16 @@ The spec version is validated as `z.number().int().min(1).max(1)`. Future versio
 
 ## 3. Directory Structure
 
-A plugin directory contains:
+A custom tool directory contains:
 
 ```
-my-plugin/
-  plugin.yaml            # Required: manifest file
+my-tool/
+  tool.yaml            # Required: manifest file
   input.schema.json      # Required: JSON Schema for tool inputs
   output.schema.json     # Optional: JSON Schema for structured LLM output
 ```
 
-The `plugin.yaml` references schema files via relative paths:
+The `tool.yaml` references schema files via relative paths:
 
 ```yaml
 inputSchema: "input.schema.json"
@@ -73,22 +73,22 @@ outputSchema: "output.schema.json" # optional
 
 ## 4. Discovery Paths
 
-Plugins are discovered from two locations:
+Custom tools are discovered from two locations:
 
-| Location | Path                               | Priority                  |
-| -------- | ---------------------------------- | ------------------------- |
-| Global   | `~/.dojops/plugins/<plugin-name>/` | Lower                     |
-| Project  | `.dojops/plugins/<plugin-name>/`   | Higher (overrides global) |
+| Location | Path                           | Priority                  |
+| -------- | ------------------------------ | ------------------------- |
+| Global   | `~/.dojops/tools/<tool-name>/` | Lower                     |
+| Project  | `.dojops/tools/<tool-name>/`   | Higher (overrides global) |
 
 **Discovery rules:**
 
-1. Global plugins are loaded first from `~/.dojops/plugins/`
-2. Project plugins are loaded from `.dojops/plugins/` relative to the project root
-3. If both locations contain a plugin with the same `name`, the **project plugin wins**
-4. Each subdirectory is checked for a `plugin.yaml` file
-5. Directories without `plugin.yaml` are silently skipped
+1. Global tools are loaded first from `~/.dojops/tools/`
+2. Project tools are loaded from `.dojops/tools/` relative to the project root
+3. If both locations contain a tool with the same `name`, the **project tool wins**
+4. Each subdirectory is checked for a `tool.yaml` file
+5. Directories without `tool.yaml` are silently skipped
 6. Invalid manifests are silently skipped (no crash)
-7. Plugins with missing input schema files are silently skipped
+7. Tools with missing input schema files are silently skipped
 
 The `HOME` environment variable (or `USERPROFILE` on Windows) determines the global directory.
 
@@ -96,16 +96,16 @@ The `HOME` environment variable (or `USERPROFILE` on Windows) determines the glo
 
 ## 5. Manifest Schema
 
-The `plugin.yaml` file MUST conform to the following schema:
+The `tool.yaml` file MUST conform to the following schema:
 
 ### Top-level fields
 
 | Field          | Type     | Required | Constraints                  | Description                              |
 | -------------- | -------- | -------- | ---------------------------- | ---------------------------------------- |
 | `spec`         | integer  | Yes      | `1` (exactly)                | Spec version                             |
-| `name`         | string   | Yes      | 1-64 chars, `/^[a-z0-9-]+$/` | Plugin identifier (lowercase, hyphens)   |
+| `name`         | string   | Yes      | 1-64 chars, `/^[a-z0-9-]+$/` | Tool identifier (lowercase, hyphens)     |
 | `version`      | string   | Yes      | min 1 char                   | Semantic version string                  |
-| `type`         | string   | Yes      | `"tool"` (literal)           | Plugin type                              |
+| `type`         | string   | Yes      | `"tool"` (literal)           | Tool type                                |
 | `description`  | string   | Yes      | 1-500 chars                  | Human-readable description               |
 | `inputSchema`  | string   | Yes      | min 1 char                   | Relative path to JSON Schema file        |
 | `outputSchema` | string   | No       | min 1 char                   | Relative path to output JSON Schema file |
@@ -158,7 +158,7 @@ The `plugin.yaml` file MUST conform to the following schema:
 
 ## 6. Input Schema
 
-The `input.schema.json` file uses standard JSON Schema (draft-07 compatible subset). It is converted to a runtime Zod schema at plugin load time.
+The `input.schema.json` file uses standard JSON Schema (draft-07 compatible subset). It is converted to a runtime Zod schema at tool load time.
 
 ### Supported JSON Schema types
 
@@ -192,7 +192,7 @@ If no output schema is provided, the LLM response is parsed as raw JSON or treat
 
 ## 8. Verification Command Whitelist
 
-Plugin verification commands are restricted to the following 16 binaries:
+Custom tool verification commands are restricted to the following 16 binaries:
 
 ```
 terraform    kubectl      helm         ansible-lint
@@ -212,25 +212,25 @@ The binary check matches: exact binary name, or binary name followed by a space 
 
 ---
 
-## 9. Plugin Policy
+## 9. Tool Policy
 
-Project owners can control which plugins are allowed via `.dojops/policy.yaml`:
+Project owners can control which custom tools are allowed via `.dojops/policy.yaml`:
 
 ```yaml
-# Allow only specific plugins (allowlist mode)
-allowedPlugins:
-  - my-terraform-plugin
-  - my-k8s-plugin
+# Allow only specific tools (allowlist mode)
+allowedTools:
+  - my-terraform-tool
+  - my-k8s-tool
 
-# Block specific plugins (blocklist mode)
-blockedPlugins:
-  - untrusted-plugin
+# Block specific tools (blocklist mode)
+blockedTools:
+  - untrusted-tool
 ```
 
 **Policy rules (evaluated in order):**
 
-1. If `blockedPlugins` includes the plugin name → **denied**
-2. If `allowedPlugins` is set and non-empty → only listed plugins are **allowed**
+1. If `blockedTools` includes the tool name → **denied**
+2. If `allowedTools` is set and non-empty → only listed tools are **allowed**
 3. Otherwise → **allowed** (default-open)
 
 The policy file is loaded from `.dojops/policy.yaml` relative to the project root. Missing or malformed policy files result in default-open behavior.
@@ -258,50 +258,50 @@ The check: `!path.split(/[/\\]/).includes("..")`
 - Without this permission, verification silently passes (default-safe)
 - Even with permission, only whitelisted binaries are allowed
 
-### Plugin hash integrity
+### Tool hash integrity
 
-Each plugin has a SHA-256 hash computed from its `plugin.yaml` content. This hash is:
+Each custom tool has a SHA-256 hash computed from its `tool.yaml` content. This hash is:
 
-- Stored in `PluginSource.pluginHash` at discovery time
+- Stored in `ToolSource.toolHash` at discovery time
 - Pinned into `PlanState` tasks at plan creation time
-- Validated on `--resume` and `--replay` to detect plugin modifications
-- **Only covers `plugin.yaml`** — changes to `input.schema.json` do not affect the hash
+- Validated on `--resume` and `--replay` to detect tool modifications
+- **Only covers `tool.yaml`** — changes to `input.schema.json` do not affect the hash
 
 ### System prompt hash
 
-Each `PluginTool` exposes a `systemPromptHash` (SHA-256 of `generator.systemPrompt`). This enables:
+Each `CustomTool` exposes a `systemPromptHash` (SHA-256 of `generator.systemPrompt`). This enables:
 
 - Per-task reproducibility tracking in plans
 - Replay validation to detect prompt drift between plan creation and execution
 
 ---
 
-## 11. Plugin Lifecycle
+## 11. Tool Lifecycle
 
 ```
 Discovery
-    │
-    ▼
+    |
+    v
 Manifest Validation (Zod schema)
-    │
-    ▼
+    |
+    v
 Schema Loading (input.schema.json → Zod, optional output.schema.json → Zod)
-    │
-    ▼
-Hash Computation (SHA-256 of plugin.yaml)
-    │
-    ▼
+    |
+    v
+Hash Computation (SHA-256 of tool.yaml)
+    |
+    v
 Policy Check (.dojops/policy.yaml → allowed/blocked)
-    │
-    ▼
-Registration (PluginTool created → added to ToolRegistry)
-    │
-    ▼
+    |
+    v
+Registration (CustomTool created → added to ToolRegistry)
+    |
+    v
 Execution
-    ├── validate(input) → Zod safeParse
-    ├── generate(input) → LLM call with systemPrompt + optional existingContent
-    ├── verify(data) → 3-tier check → optional whitelisted command
-    └── execute(input) → generate + serialize + write files (with .bak backup on update)
+    |-- validate(input) → Zod safeParse
+    |-- generate(input) → LLM call with systemPrompt + optional existingContent
+    |-- verify(data) → 3-tier check → optional whitelisted command
+    +-- execute(input) → generate + serialize + write files (with .bak backup on update)
 ```
 
 **Key behaviors during execution:**

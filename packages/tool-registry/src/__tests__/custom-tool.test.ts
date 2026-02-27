@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { PluginTool, isVerificationCommandAllowed } from "../plugin-tool";
-import { PluginManifest, PluginSource } from "../types";
+import { CustomTool, isVerificationCommandAllowed } from "../custom-tool";
+import { ToolManifest, ToolSource } from "../types";
 import { LLMProvider, LLMRequest, LLMResponse } from "@dojops/core";
 
 function createMockProvider(response: Partial<LLMResponse> = {}): LLMProvider {
@@ -17,7 +17,7 @@ function createMockProvider(response: Partial<LLMResponse> = {}): LLMProvider {
   };
 }
 
-function createTestManifest(overrides?: Partial<PluginManifest>): PluginManifest {
+function createTestManifest(overrides?: Partial<ToolManifest>): ToolManifest {
   return {
     spec: 1,
     name: "test-tool",
@@ -34,12 +34,12 @@ function createTestManifest(overrides?: Partial<PluginManifest>): PluginManifest
   };
 }
 
-const testSource: PluginSource = {
-  type: "plugin",
+const testSource: ToolSource = {
+  type: "custom",
   location: "project",
-  pluginPath: "/test",
-  pluginVersion: "1.0.0",
-  pluginHash: "abc123",
+  toolPath: "/test",
+  toolVersion: "1.0.0",
+  toolHash: "abc123",
 };
 
 const testInputSchema = {
@@ -51,11 +51,11 @@ const testInputSchema = {
   required: ["outputPath", "description"],
 };
 
-describe("PluginTool", () => {
+describe("CustomTool", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-plugin-tool-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-custom-tool-test-"));
   });
 
   afterEach(() => {
@@ -65,7 +65,7 @@ describe("PluginTool", () => {
   it("creates tool with correct name and description", () => {
     const provider = createMockProvider();
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     expect(tool.name).toBe("test-tool");
     expect(tool.description).toBe("A test tool");
@@ -75,7 +75,7 @@ describe("PluginTool", () => {
   it("validates input against JSON-derived schema", () => {
     const provider = createMockProvider();
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     expect(tool.validate({ outputPath: "/tmp", description: "test" }).valid).toBe(true);
     expect(tool.validate({ outputPath: "/tmp" }).valid).toBe(false); // missing required
@@ -85,7 +85,7 @@ describe("PluginTool", () => {
   it("generates using LLM provider", async () => {
     const provider = createMockProvider();
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.generate({ outputPath: tmpDir, description: "test config" });
 
@@ -101,7 +101,7 @@ describe("PluginTool", () => {
   it("generate builds user prompt from input", async () => {
     const provider = createMockProvider();
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     await tool.generate({ outputPath: "/out", description: "make config" });
 
@@ -120,7 +120,7 @@ describe("PluginTool", () => {
         updateMode: true,
       },
     });
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.generate({
       outputPath: tmpDir,
@@ -141,7 +141,7 @@ describe("PluginTool", () => {
     const provider = createMockProvider();
     (provider.generate as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("API error"));
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.generate({ outputPath: tmpDir, description: "test" });
 
@@ -153,7 +153,7 @@ describe("PluginTool", () => {
     const provider = createMockProvider();
     const outputDir = path.join(tmpDir, "output");
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, outputDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, outputDir, testSource, testInputSchema);
 
     const result = await tool.execute({ outputPath: outputDir, description: "test" });
 
@@ -180,7 +180,7 @@ describe("PluginTool", () => {
       detector: { path: "{outputPath}/config.yaml" },
     });
 
-    const tool = new PluginTool(manifest, provider, outputDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, outputDir, testSource, testInputSchema);
 
     const result = await tool.execute({
       outputPath: outputDir,
@@ -196,7 +196,7 @@ describe("PluginTool", () => {
   it("verify returns passed when no verification command", async () => {
     const provider = createMockProvider();
     const manifest = createTestManifest(); // no verification field
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.verify({});
     expect(result.passed).toBe(true);
@@ -209,7 +209,7 @@ describe("PluginTool", () => {
       parsed: undefined,
     });
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.generate({ outputPath: tmpDir, description: "test" });
 
@@ -223,7 +223,7 @@ describe("PluginTool", () => {
       parsed: undefined,
     });
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.generate({ outputPath: tmpDir, description: "test" });
 
@@ -234,13 +234,13 @@ describe("PluginTool", () => {
   it("exposes systemPromptHash as SHA-256 of system prompt", () => {
     const provider = createMockProvider();
     const manifest = createTestManifest();
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const hash = tool.systemPromptHash;
     expect(hash).toMatch(/^[a-f0-9]{64}$/);
 
     // Same manifest → same hash
-    const tool2 = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool2 = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
     expect(tool2.systemPromptHash).toBe(hash);
   });
 });
@@ -284,7 +284,7 @@ describe("verify() permission enforcement", () => {
       verification: { command: "terraform validate" },
       permissions: { child_process: "none" },
     });
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.verify({});
     expect(result.passed).toBe(true);
@@ -297,7 +297,7 @@ describe("verify() permission enforcement", () => {
       verification: { command: "terraform validate" },
       // no permissions field at all
     });
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.verify({});
     expect(result.passed).toBe(true);
@@ -310,7 +310,7 @@ describe("verify() permission enforcement", () => {
       verification: { command: "curl http://evil.com" },
       permissions: { child_process: "required" },
     });
-    const tool = new PluginTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.verify({});
     expect(result.passed).toBe(false);

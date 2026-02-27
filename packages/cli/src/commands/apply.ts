@@ -28,7 +28,7 @@ import { ExitCode, CLIError } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
 import { getDojopsVersion } from "../state";
 import { getDriftWarnings } from "../drift-warning";
-import { validateReplayIntegrity, checkPluginIntegrity } from "./replay-validator";
+import { validateReplayIntegrity, checkToolIntegrity } from "./replay-validator";
 
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
@@ -289,25 +289,22 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       }
     }
 
-    // Validate plugin integrity on resume
+    // Validate tool integrity on resume
     if (resume) {
-      const { mismatches: pluginMismatches, hasMismatches } = checkPluginIntegrity(
-        plan.tasks,
-        tools,
-      );
+      const { mismatches: toolMismatches, hasMismatches } = checkToolIntegrity(plan.tasks, tools);
 
       if (hasMismatches) {
-        p.log.warn(pc.bold("Plugin integrity warnings:"));
-        for (const msg of pluginMismatches) {
+        p.log.warn(pc.bold("Tool integrity warnings:"));
+        for (const msg of toolMismatches) {
           p.log.warn(`  ${pc.yellow("!")} ${msg}`);
         }
 
         if (!autoApprove) {
           const proceed = await p.confirm({
-            message: "Plugins have changed since this plan was created. Continue anyway?",
+            message: "Tools have changed since this plan was created. Continue anyway?",
           });
           if (p.isCancel(proceed) || !proceed) {
-            p.cancel("Aborted due to plugin integrity mismatch.");
+            p.cancel("Aborted due to tool integrity mismatch.");
             releaseLock(root);
             throw new CLIError(ExitCode.VALIDATION_ERROR);
           }
@@ -414,13 +411,13 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         continue;
       }
 
-      // Build plugin metadata for audit enrichment
+      // Build tool metadata for audit enrichment
       const taskDef = plan.tasks.find((t) => t.id === taskResult.taskId);
       const metadata: Record<string, unknown> = {};
       if (taskDef?.toolType) metadata.toolType = taskDef.toolType;
-      if (taskDef?.pluginVersion) metadata.pluginVersion = taskDef.pluginVersion;
-      if (taskDef?.pluginHash) metadata.pluginHash = taskDef.pluginHash;
-      if (taskDef?.pluginSource) metadata.pluginSource = taskDef.pluginSource;
+      if (taskDef?.toolVersion) metadata.toolVersion = taskDef.toolVersion;
+      if (taskDef?.toolHash) metadata.toolHash = taskDef.toolHash;
+      if (taskDef?.toolSource) metadata.toolSource = taskDef.toolSource;
 
       const execResult = await safeExecutor.executeTask(
         taskResult.taskId,

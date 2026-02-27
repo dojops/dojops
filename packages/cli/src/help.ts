@@ -33,7 +33,8 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
   console.log(`  ${pc.cyan("check")}              LLM-powered DevOps config quality check`);
   console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
-  console.log(`  ${pc.cyan("tools")}              Manage system tool sandbox (~/.dojops/tools/)`);
+  console.log(`  ${pc.cyan("tools")}              Manage DevOps tools (custom + marketplace)`);
+  console.log(`  ${pc.cyan("toolchain")}          Manage system toolchain (~/.dojops/toolchain/)`);
   console.log(
     `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
   );
@@ -682,17 +683,45 @@ export function printCommandHelp(command: string): void {
       break;
 
     case "tools":
-      console.log(`\n${pc.bold("dojops tools")} — Manage system tool sandbox`);
+      console.log(`\n${pc.bold("dojops tools")} — Manage DevOps tools (custom + marketplace)`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops tools [list|load|install|remove|clean]`);
+      console.log(`  ${pc.dim("$")} dojops tools [list|init|validate|load]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("list")}              List all custom tools ${pc.dim("(default)")}`);
+      console.log(
+        `  ${pc.cyan("init <name>")}      Scaffold a new tool (tool.yaml + input.schema.json)`,
+      );
+      console.log(`  ${pc.cyan("validate <name>")}  Validate a tool manifest`);
+      console.log(`  ${pc.cyan("load <path>")}      Load a tool from a local directory`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Custom tools are declarative manifests (tool.yaml) that define LLM-powered`);
+      console.log(`  configuration generators. Tools are discovered from:`);
+      console.log(`    - ~/.dojops/tools/<name>/    (global)`);
+      console.log(`    - .dojops/tools/<name>/      (project, overrides global)`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops tools`);
+      console.log(`  ${pc.dim("$")} dojops tools list`);
+      console.log(`  ${pc.dim("$")} dojops tools init my-tool`);
+      console.log(`  ${pc.dim("$")} dojops tools validate my-tool`);
+      console.log(`  ${pc.dim("$")} dojops tools load /path/to/tool`);
+      console.log(`  ${pc.dim("$")} dojops tools list --output json`);
+      console.log();
+      break;
+
+    case "toolchain":
+      console.log(`\n${pc.bold("dojops toolchain")} — Manage system toolchain`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops toolchain [list|load|install|remove|clean]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all system tools with status ${pc.dim("(default)")}`,
       );
       console.log(`  ${pc.cyan("load")}              Re-scan and detect available tools`);
-      console.log(`  ${pc.cyan("install <name>")}   Download and install a tool into sandbox`);
-      console.log(`  ${pc.cyan("remove <name>")}    Remove a tool from sandbox`);
-      console.log(`  ${pc.cyan("clean")}             Remove all sandbox tools`);
+      console.log(`  ${pc.cyan("install <name>")}   Download and install a tool`);
+      console.log(`  ${pc.cyan("remove <name>")}    Remove a tool`);
+      console.log(`  ${pc.cyan("clean")}             Remove all toolchain tools`);
       console.log(`\n${pc.bold("AVAILABLE TOOLS")}`);
       console.log(`  ${pc.cyan("terraform")}    Infrastructure as Code (HashiCorp)`);
       console.log(`  ${pc.cyan("kubectl")}      Kubernetes CLI`);
@@ -703,18 +732,18 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
       console.log(`  ${pc.cyan("--yes")}           Skip confirmation (clean)`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Tools are installed into ~/.dojops/tools/bin/ without elevated permissions.`);
-      console.log(`  The sandbox bin directory is prepended to PATH at startup, so installed`);
-      console.log(`  tools are available to all DojOps commands transparently.`);
+      console.log(`  System tools are installed into ~/.dojops/toolchain/bin/ without elevated`);
+      console.log(`  permissions. The toolchain bin directory is prepended to PATH at startup,`);
+      console.log(`  so installed tools are available to all DojOps commands transparently.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} dojops tools`);
-      console.log(`  ${pc.dim("$")} dojops tools list`);
-      console.log(`  ${pc.dim("$")} dojops tools load`);
-      console.log(`  ${pc.dim("$")} dojops tools install terraform`);
-      console.log(`  ${pc.dim("$")} dojops tools install kubectl`);
-      console.log(`  ${pc.dim("$")} dojops tools remove terraform`);
-      console.log(`  ${pc.dim("$")} dojops tools clean --yes`);
-      console.log(`  ${pc.dim("$")} dojops tools list --output json`);
+      console.log(`  ${pc.dim("$")} dojops toolchain`);
+      console.log(`  ${pc.dim("$")} dojops toolchain list`);
+      console.log(`  ${pc.dim("$")} dojops toolchain load`);
+      console.log(`  ${pc.dim("$")} dojops toolchain install terraform`);
+      console.log(`  ${pc.dim("$")} dojops toolchain install kubectl`);
+      console.log(`  ${pc.dim("$")} dojops toolchain remove terraform`);
+      console.log(`  ${pc.dim("$")} dojops toolchain clean --yes`);
+      console.log(`  ${pc.dim("$")} dojops toolchain list --output json`);
       console.log();
       break;
 

@@ -16,12 +16,12 @@ export const TaskGraphSchema = z.object({
 /** Base type inferred from the Zod schema (LLM output). */
 type TaskNodeBase = z.infer<typeof TaskNodeSchema>;
 
-/** Extended TaskNode with optional plugin metadata (enriched after decomposition). */
+/** Extended TaskNode with optional tool metadata (enriched after decomposition). */
 export type TaskNode = TaskNodeBase & {
-  toolType?: "built-in" | "plugin";
-  pluginVersion?: string;
-  pluginHash?: string;
-  pluginSource?: "global" | "project";
+  toolType?: "built-in" | "custom";
+  toolVersion?: string;
+  toolHash?: string;
+  toolSource?: "global" | "project";
   systemPromptHash?: string;
 };
 

@@ -1,4 +1,4 @@
-import { ToolRegistry, PluginTool } from "@dojops/tool-registry";
+import { ToolRegistry, CustomTool } from "@dojops/tool-registry";
 import { PlanState, getDojopsVersion } from "../state";
 
 export interface ReplayMismatch {
@@ -21,7 +21,7 @@ export interface ReplayValidationResult {
  * 1. executionContext exists (fail if missing — legacy plan)
  * 2. provider matches
  * 3. model matches (if plan stored one)
- * 4. systemPromptHash matches for plugin tasks
+ * 4. systemPromptHash matches for custom tool tasks
  */
 export function validateReplayIntegrity(
   plan: PlanState,
@@ -69,11 +69,11 @@ export function validateReplayIntegrity(
   }
 
   for (const task of plan.tasks) {
-    if (task.toolType !== "plugin") continue;
+    if (task.toolType !== "custom") continue;
     if (!task.systemPromptHash) continue;
 
     const metadata = registry.getToolMetadata(task.tool);
-    if (!metadata || metadata.toolType !== "plugin") continue;
+    if (!metadata || metadata.toolType !== "custom") continue;
     if (!metadata.systemPromptHash) continue;
 
     if (task.systemPromptHash !== metadata.systemPromptHash) {
@@ -90,30 +90,30 @@ export function validateReplayIntegrity(
 }
 
 /**
- * Checks plugin integrity for resume operations.
+ * Checks tool integrity for resume operations.
  * Extracted from apply.ts for independent testability.
  */
-export function checkPluginIntegrity(
+export function checkToolIntegrity(
   planTasks: PlanState["tasks"],
   currentTools: Array<{ name: string }>,
 ): { mismatches: string[]; hasMismatches: boolean } {
   const mismatches: string[] = [];
 
   for (const task of planTasks) {
-    if (task.toolType !== "plugin") continue;
+    if (task.toolType !== "custom") continue;
 
     const currentTool = currentTools.find((t) => t.name === task.tool);
     if (!currentTool) {
-      mismatches.push(`Plugin "${task.tool}" no longer available (was v${task.pluginVersion})`);
+      mismatches.push(`Tool "${task.tool}" no longer available (was v${task.toolVersion})`);
       continue;
     }
 
-    if (currentTool instanceof PluginTool && task.pluginHash) {
-      const currentHash = currentTool.source.pluginHash;
-      if (currentHash !== task.pluginHash) {
+    if (currentTool instanceof CustomTool && task.toolHash) {
+      const currentHash = currentTool.source.toolHash;
+      if (currentHash !== task.toolHash) {
         mismatches.push(
-          `Plugin "${task.tool}" changed: plan used v${task.pluginVersion} (${task.pluginHash?.slice(0, 8)}), ` +
-            `current is v${currentTool.source.pluginVersion} (${currentHash?.slice(0, 8)})`,
+          `Tool "${task.tool}" changed: plan used v${task.toolVersion} (${task.toolHash?.slice(0, 8)}), ` +
+            `current is v${currentTool.source.toolVersion} (${currentHash?.slice(0, 8)})`,
         );
       }
     }
@@ -121,3 +121,7 @@ export function checkPluginIntegrity(
 
   return { mismatches, hasMismatches: mismatches.length > 0 };
 }
+
+// Backward compatibility alias
+/** @deprecated Use checkToolIntegrity instead */
+export const checkPluginIntegrity = checkToolIntegrity;

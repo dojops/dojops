@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { validateReplayIntegrity, checkPluginIntegrity } from "./replay-validator";
+import { validateReplayIntegrity, checkToolIntegrity } from "./replay-validator";
 import { PlanState } from "../state";
 import { ToolRegistry } from "@dojops/tool-registry";
 
@@ -29,7 +29,7 @@ function createMockRegistry(
     get: vi.fn(),
     has: vi.fn(),
     getBuiltIn: vi.fn(() => []),
-    getPlugins: vi.fn(() => []),
+    getCustomTools: vi.fn(() => []),
     size: 0,
   } as unknown as ToolRegistry;
   return registry;
@@ -90,14 +90,14 @@ describe("validateReplayIntegrity", () => {
           tool: "custom-tool",
           description: "test",
           dependsOn: [],
-          toolType: "plugin",
+          toolType: "custom",
           systemPromptHash: "aabbccddee112233445566778899aabbccddeeff0011223344556677889900ab",
         },
       ],
     });
     const registry = createMockRegistry({
       "custom-tool": {
-        toolType: "plugin",
+        toolType: "custom",
         systemPromptHash: "ff00112233445566778899aabbccddeeff00112233445566778899aabbccddee",
       },
     });
@@ -117,14 +117,14 @@ describe("validateReplayIntegrity", () => {
           tool: "custom-tool",
           description: "test",
           dependsOn: [],
-          toolType: "plugin",
+          toolType: "custom",
           systemPromptHash: hash,
         },
       ],
     });
     const registry = createMockRegistry({
       "custom-tool": {
-        toolType: "plugin",
+        toolType: "custom",
         systemPromptHash: hash,
       },
     });
@@ -160,14 +160,14 @@ describe("validateReplayIntegrity", () => {
           tool: "custom-tool",
           description: "test",
           dependsOn: [],
-          toolType: "plugin",
+          toolType: "custom",
           systemPromptHash: "aaaa",
         },
       ],
     });
     const registry = createMockRegistry({
       "custom-tool": {
-        toolType: "plugin",
+        toolType: "custom",
         systemPromptHash: "bbbb",
       },
     });
@@ -181,27 +181,27 @@ describe("validateReplayIntegrity", () => {
   });
 });
 
-describe("checkPluginIntegrity", () => {
+describe("checkToolIntegrity", () => {
   it("returns no mismatches for built-in tasks", () => {
     const tasks: PlanState["tasks"] = [
       { id: "t1", tool: "terraform", description: "test", dependsOn: [], toolType: "built-in" },
     ];
-    const result = checkPluginIntegrity(tasks, []);
+    const result = checkToolIntegrity(tasks, []);
     expect(result.hasMismatches).toBe(false);
   });
 
-  it("detects missing plugin", () => {
+  it("detects missing tool", () => {
     const tasks: PlanState["tasks"] = [
       {
         id: "t1",
-        tool: "my-plugin",
+        tool: "my-tool",
         description: "test",
         dependsOn: [],
-        toolType: "plugin",
-        pluginVersion: "1.0.0",
+        toolType: "custom",
+        toolVersion: "1.0.0",
       },
     ];
-    const result = checkPluginIntegrity(tasks, []);
+    const result = checkToolIntegrity(tasks, []);
     expect(result.hasMismatches).toBe(true);
     expect(result.mismatches[0]).toContain("no longer available");
   });

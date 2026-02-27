@@ -226,12 +226,10 @@ describe("CLI", () => {
     it("shows tools-specific help with dojops tools --help", () => {
       const output = run("tools", "--help");
       expect(output).toContain("dojops tools");
-      expect(output).toContain("install");
-      expect(output).toContain("remove");
-      expect(output).toContain("clean");
-      expect(output).toContain("terraform");
-      expect(output).toContain("kubectl");
-      expect(output).toContain("AVAILABLE TOOLS");
+      expect(output).toContain("list");
+      expect(output).toContain("init");
+      expect(output).toContain("validate");
+      expect(output).toContain("load");
     });
   });
 
@@ -255,8 +253,9 @@ describe("CLI", () => {
 
     it("tools list runs without error", () => {
       const output = run("tools", "list");
-      expect(output).toContain("terraform");
-      expect(output).toContain("kubectl");
+      // tools list now shows custom manifest-based tools (not system binaries)
+      // In a test environment with no custom tools, it reports none found
+      expect(output).toContain("No custom tools discovered");
     });
   });
 });

@@ -148,7 +148,7 @@ Plans are saved to `.dojops/plans/<plan-id>.json` containing:
 
 - The full `TaskGraph`
 - Metadata (goal, timestamp, provider, model, temperature)
-- Plugin metadata per task (`toolType`, `pluginVersion`, `pluginHash`, `pluginSource`, `systemPromptHash`)
+- Custom tool metadata per task (`toolType`, `toolVersion`, `toolHash`, `toolSource`, `systemPromptHash`)
 - Execution context snapshot (`dojopsVersion`, `policySnapshot`, `toolVersions`)
 - Risk classification (`LOW`, `MEDIUM`, or `HIGH`)
 - Execution state (per-task status, outputs)

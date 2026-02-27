@@ -64,7 +64,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     diffAnalyzer,
     store,
     rootDir: projectRoot,
-    pluginCount: registry.getPlugins().length,
+    customToolCount: registry.getCustomTools().length,
     customAgentNames,
     corsOrigin: `http://localhost:${port}`,
   });

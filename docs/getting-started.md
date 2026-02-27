@@ -239,24 +239,24 @@ See [Web Dashboard](dashboard.md) for the full guide.
 
 ---
 
-## Extending with Plugins
+## Extending with Custom Tools
 
-DojOps supports custom tools via a plugin system. Create a plugin by dropping a `plugin.yaml` manifest + JSON Schema into `~/.dojops/plugins/` (global) or `.dojops/plugins/` (project-scoped):
+DojOps supports custom tools via a declarative tool system. Create a custom tool by dropping a `tool.yaml` manifest + JSON Schema into `~/.dojops/tools/` (global) or `.dojops/tools/` (project-scoped):
 
 ```bash
-# Scaffold a new plugin
-dojops tools plugins init my-tool
+# Scaffold a new custom tool
+dojops tools init my-tool
 
-# List discovered plugins
-dojops tools plugins list
+# List discovered custom tools
+dojops tools list
 
-# Validate a plugin manifest
-dojops tools plugins validate .dojops/plugins/my-tool/
+# Validate a tool manifest
+dojops tools validate .dojops/tools/my-tool/
 ```
 
-Plugins are automatically available to all commands — the Planner includes them in capabilities, the Executor validates and runs them, and the audit trail tracks their usage.
+Custom tools are automatically available to all commands — the Planner includes them in capabilities, the Executor validates and runs them, and the audit trail tracks their usage.
 
-See [DevOps Tools — Plugin System](tools.md#plugin-system) for the full guide.
+See [DevOps Tools — Custom Tool System](tools.md#custom-tool-system) for the full guide.
 
 ---
 

@@ -1,5 +1,5 @@
 /**
- * User-scoped tool sandbox at ~/.dojops/tools/.
+ * User-scoped toolchain sandbox at ~/.dojops/toolchain/.
  *
  * Downloads, manages, and cleans up binary tools without elevated permissions.
  * Uses node:https for downloads, system unzip/tar for extraction.
@@ -19,22 +19,51 @@ import {
   buildBinaryPathInArchive,
 } from "@dojops/core";
 
-export const TOOLS_DIR = path.join(os.homedir(), ".dojops", "tools");
-export const TOOLS_BIN_DIR = path.join(TOOLS_DIR, "bin");
-export const REGISTRY_FILE = path.join(TOOLS_DIR, "registry.json");
+export const TOOLCHAIN_DIR = path.join(os.homedir(), ".dojops", "toolchain");
+export const TOOLCHAIN_BIN_DIR = path.join(TOOLCHAIN_DIR, "bin");
+export const REGISTRY_FILE = path.join(TOOLCHAIN_DIR, "registry.json");
+
+// Legacy paths for auto-migration
+const LEGACY_TOOLS_DIR = path.join(os.homedir(), ".dojops", "tools");
 
 /**
- * Ensure ~/.dojops/tools/bin/ exists.
+ * Auto-migrate ~/.dojops/tools/ → ~/.dojops/toolchain/ if old path has bin/ or registry.json.
+ * Only runs once; safe to call repeatedly.
  */
-export function ensureToolsDir(): void {
-  fs.mkdirSync(TOOLS_BIN_DIR, { recursive: true, mode: 0o755 });
+function migrateToolchainDir(): void {
+  if (fs.existsSync(TOOLCHAIN_DIR)) return;
+
+  const legacyBinDir = path.join(LEGACY_TOOLS_DIR, "bin");
+  const legacyRegistry = path.join(LEGACY_TOOLS_DIR, "registry.json");
+
+  if (!fs.existsSync(legacyBinDir) && !fs.existsSync(legacyRegistry)) return;
+
+  try {
+    fs.renameSync(LEGACY_TOOLS_DIR, TOOLCHAIN_DIR);
+  } catch {
+    // Cross-device rename failed — copy instead
+    try {
+      fs.cpSync(LEGACY_TOOLS_DIR, TOOLCHAIN_DIR, { recursive: true });
+    } catch {
+      // Migration failed — will start fresh
+    }
+  }
 }
 
 /**
- * Load the tool registry from disk.
+ * Ensure ~/.dojops/toolchain/bin/ exists.
+ */
+export function ensureToolchainDir(): void {
+  migrateToolchainDir();
+  fs.mkdirSync(TOOLCHAIN_BIN_DIR, { recursive: true, mode: 0o755 });
+}
+
+/**
+ * Load the toolchain registry from disk.
  * Returns empty registry if file doesn't exist.
  */
-export function loadToolRegistry(): ToolRegistry {
+export function loadToolchainRegistry(): ToolRegistry {
+  migrateToolchainDir();
   try {
     const data = fs.readFileSync(REGISTRY_FILE, "utf-8");
     return JSON.parse(data) as ToolRegistry;
@@ -44,21 +73,21 @@ export function loadToolRegistry(): ToolRegistry {
 }
 
 /**
- * Save the tool registry to disk.
+ * Save the toolchain registry to disk.
  */
-export function saveToolRegistry(registry: ToolRegistry): void {
-  ensureToolsDir();
+export function saveToolchainRegistry(registry: ToolRegistry): void {
+  ensureToolchainDir();
   registry.updatedAt = new Date().toISOString();
   fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2), "utf-8");
 }
 
 /**
- * Prepend ~/.dojops/tools/bin to PATH (idempotent).
+ * Prepend ~/.dojops/toolchain/bin to PATH (idempotent).
  */
-export function prependToolsBinToPath(): void {
+export function prependToolchainBinToPath(): void {
   const currentPath = process.env.PATH ?? "";
-  if (!currentPath.includes(TOOLS_BIN_DIR)) {
-    process.env.PATH = `${TOOLS_BIN_DIR}${path.delimiter}${currentPath}`;
+  if (!currentPath.includes(TOOLCHAIN_BIN_DIR)) {
+    process.env.PATH = `${TOOLCHAIN_BIN_DIR}${path.delimiter}${currentPath}`;
   }
 }
 
@@ -140,7 +169,7 @@ export function extractTarGz(archivePath: string, destDir: string): void {
 }
 
 /**
- * Install a system tool into ~/.dojops/tools/bin/.
+ * Install a system tool into ~/.dojops/toolchain/bin/.
  */
 export async function installSystemTool(
   tool: SystemTool,
@@ -156,7 +185,7 @@ export async function installSystemTool(
     throw new Error(`Cannot build download URL for ${tool.name}`);
   }
 
-  ensureToolsDir();
+  ensureToolchainDir();
 
   // Download
   const tmpFile = await downloadToTemp(url);
@@ -184,7 +213,7 @@ export async function installSystemTool(
     }
 
     // Copy to bin directory
-    const destPath = path.join(TOOLS_BIN_DIR, tool.binaryName);
+    const destPath = path.join(TOOLCHAIN_BIN_DIR, tool.binaryName);
     fs.copyFileSync(binarySource, destPath);
     fs.chmodSync(destPath, 0o755);
 
@@ -198,10 +227,10 @@ export async function installSystemTool(
       binaryPath: destPath,
     };
 
-    const registry = loadToolRegistry();
+    const registry = loadToolchainRegistry();
     registry.tools = registry.tools.filter((t) => t.name !== tool.name);
     registry.tools.push(installed);
-    saveToolRegistry(registry);
+    saveToolchainRegistry(registry);
 
     return installed;
   } finally {
@@ -237,10 +266,10 @@ function commandExists(name: string): boolean {
  * Strategy order:
  * 1. `pipx install ansible` — if pipx binary is on PATH
  * 2. `python3 -m pipx install ansible` — if pipx is available as a Python module
- * 3. Sandbox venv at ~/.dojops/tools/venvs/ansible/ — always works on PEP 668 systems
+ * 3. Sandbox venv at ~/.dojops/toolchain/venvs/ansible/ — always works on PEP 668 systems
  */
 export async function installAnsible(tool: SystemTool): Promise<InstalledTool> {
-  const venvDir = path.join(TOOLS_DIR, "venvs", "ansible");
+  const venvDir = path.join(TOOLCHAIN_DIR, "venvs", "ansible");
   let binaryPath: string;
 
   // Strategy 1: pipx binary
@@ -272,9 +301,9 @@ export async function installAnsible(tool: SystemTool): Promise<InstalledTool> {
   const venvPip = path.join(venvDir, "bin", "pip");
   execFileSync(venvPip, ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
 
-  // Symlink venv ansible binary into sandbox bin
+  // Symlink venv ansible binary into toolchain bin
   const venvBinary = path.join(venvDir, "bin", "ansible");
-  const destPath = path.join(TOOLS_BIN_DIR, "ansible");
+  const destPath = path.join(TOOLCHAIN_BIN_DIR, "ansible");
   try {
     fs.unlinkSync(destPath);
   } catch {
@@ -308,24 +337,24 @@ function registerAnsible(tool: SystemTool, binaryPath: string): InstalledTool {
     binaryPath,
   };
 
-  const registry = loadToolRegistry();
+  const registry = loadToolchainRegistry();
   registry.tools = registry.tools.filter((t) => t.name !== tool.name);
   registry.tools.push(installed);
-  saveToolRegistry(registry);
+  saveToolchainRegistry(registry);
 
   return installed;
 }
 
 /**
- * Remove a system tool from the sandbox.
+ * Remove a system tool from the toolchain.
  */
 export function removeSystemTool(name: string): boolean {
-  const registry = loadToolRegistry();
+  const registry = loadToolchainRegistry();
   const entry = registry.tools.find((t) => t.name === name);
   if (!entry) return false;
 
   // Delete binary (or symlink)
-  const binPath = path.join(TOOLS_BIN_DIR, path.basename(entry.binaryPath));
+  const binPath = path.join(TOOLCHAIN_BIN_DIR, path.basename(entry.binaryPath));
   try {
     fs.unlinkSync(binPath);
   } catch {
@@ -333,7 +362,7 @@ export function removeSystemTool(name: string): boolean {
   }
 
   // Clean up venv if this was a venv-installed tool (e.g. ansible)
-  const venvDir = path.join(TOOLS_DIR, "venvs", name);
+  const venvDir = path.join(TOOLCHAIN_DIR, "venvs", name);
   try {
     fs.rmSync(venvDir, { recursive: true, force: true });
   } catch {
@@ -342,24 +371,24 @@ export function removeSystemTool(name: string): boolean {
 
   // Update registry
   registry.tools = registry.tools.filter((t) => t.name !== name);
-  saveToolRegistry(registry);
+  saveToolchainRegistry(registry);
 
   return true;
 }
 
 /**
- * Remove all sandbox tools and clear the registry.
+ * Remove all toolchain tools and clear the registry.
  */
-export function cleanAllTools(): { removed: string[] } {
-  const registry = loadToolRegistry();
+export function cleanAllToolchain(): { removed: string[] } {
+  const registry = loadToolchainRegistry();
   const removed = registry.tools.map((t) => t.name);
 
   // Delete all binaries
-  if (fs.existsSync(TOOLS_BIN_DIR)) {
-    const entries = fs.readdirSync(TOOLS_BIN_DIR);
+  if (fs.existsSync(TOOLCHAIN_BIN_DIR)) {
+    const entries = fs.readdirSync(TOOLCHAIN_BIN_DIR);
     for (const entry of entries) {
       try {
-        fs.unlinkSync(path.join(TOOLS_BIN_DIR, entry));
+        fs.unlinkSync(path.join(TOOLCHAIN_BIN_DIR, entry));
       } catch {
         /* ignore */
       }
@@ -367,7 +396,7 @@ export function cleanAllTools(): { removed: string[] } {
   }
 
   // Remove venvs directory
-  const venvsDir = path.join(TOOLS_DIR, "venvs");
+  const venvsDir = path.join(TOOLCHAIN_DIR, "venvs");
   try {
     fs.rmSync(venvsDir, { recursive: true, force: true });
   } catch {
@@ -375,7 +404,7 @@ export function cleanAllTools(): { removed: string[] } {
   }
 
   // Clear registry
-  saveToolRegistry({ tools: [], updatedAt: "" });
+  saveToolchainRegistry({ tools: [], updatedAt: "" });
 
   return { removed };
 }
@@ -391,10 +420,27 @@ export function verifyTool(tool: SystemTool): string | undefined {
       timeout: 10_000,
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf-8",
-      env: { ...process.env, PATH: `${TOOLS_BIN_DIR}${path.delimiter}${process.env.PATH ?? ""}` },
+      env: {
+        ...process.env,
+        PATH: `${TOOLCHAIN_BIN_DIR}${path.delimiter}${process.env.PATH ?? ""}`,
+      },
     });
     return result.trim().split("\n")[0];
   } catch {
     return undefined;
   }
 }
+
+// Backward compatibility re-exports
+/** @deprecated Use TOOLCHAIN_DIR instead */
+export const TOOLS_DIR = TOOLCHAIN_DIR;
+/** @deprecated Use TOOLCHAIN_BIN_DIR instead */
+export const TOOLS_BIN_DIR = TOOLCHAIN_BIN_DIR;
+/** @deprecated Use ensureToolchainDir instead */
+export const ensureToolsDir = ensureToolchainDir;
+/** @deprecated Use prependToolchainBinToPath instead */
+export const prependToolsBinToPath = prependToolchainBinToPath;
+/** @deprecated Use loadToolchainRegistry instead */
+export const loadToolRegistry = loadToolchainRegistry;
+/** @deprecated Use cleanAllToolchain instead */
+export const cleanAllTools = cleanAllToolchain;

@@ -1,6 +1,6 @@
 # Architecture
 
-DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 12 built-in DevOps tools, a plugin system for custom tools, 16 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
+DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 12 built-in DevOps tools, a custom tool system for extending with additional tools, 16 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 
@@ -19,7 +19,7 @@ Agent Router (16 specialist agents, keyword confidence scoring)
 Planner Engine (LLM -> TaskGraph -> topological execution)
  |
  v
-Tool Registry (12 built-in tools + plugin tools, unified discovery)
+Tool Registry (12 built-in tools + custom tools, unified discovery)
  |
  v
 Tool SDK Layer (BaseTool<T>, Zod validation)
@@ -39,7 +39,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 ```
 @dojops/cli            CLI entry point + rich TUI (@clack/prompts)
 @dojops/api            REST API (Express) + web dashboard + factory functions
-@dojops/tool-registry  Tool registry + plugin system (discovers built-in + plugin tools)
+@dojops/tool-registry  Tool registry + custom tool system (discovers built-in + custom tools)
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
 @dojops/tools          12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
@@ -142,14 +142,14 @@ See [DevOps Tools](tools.md) for the full tool list.
 
 ### 5b. Tool Registry (`@dojops/tool-registry`)
 
-Unified registry layer between consumers (Planner, Executor, CLI, API) and tool implementations. Combines all 12 built-in tools with plugin tools discovered from disk:
+Unified registry layer between consumers (Planner, Executor, CLI, API) and tool implementations. Combines all 12 built-in tools with custom tools discovered from disk:
 
-- **Plugin discovery** — Scans `~/.dojops/plugins/` (global) and `.dojops/plugins/` (project) for `plugin.yaml` manifests
-- **Manifest validation** — Zod schema validates plugin manifests; JSON Schema inputs are converted to Zod at runtime
-- **PluginTool adapter** — Converts declarative `plugin.yaml` into a `DevOpsTool`-compatible object with generate/execute/verify
-- **Plugin policy** — `.dojops/policy.yaml` supports `allowedPlugins` and `blockedPlugins` lists
-- **Audit enrichment** — Plugin executions include `toolType`, `pluginSource`, `pluginVersion`, `pluginHash`, and `systemPromptHash` in audit entries
-- **Plugin isolation** — Verification commands restricted to a whitelist of 16 allowed binaries (terraform, kubectl, helm, etc.), `child_process` permission must be `"required"` for execution, path traversal (`..`) blocked in manifest file paths and detector paths
+- **Custom tool discovery** — Scans `~/.dojops/tools/` (global) and `.dojops/tools/` (project) for `tool.yaml` manifests
+- **Manifest validation** — Zod schema validates tool manifests; JSON Schema inputs are converted to Zod at runtime
+- **CustomTool adapter** — Converts declarative `tool.yaml` into a `DevOpsTool`-compatible object with generate/execute/verify
+- **Tool policy** — `.dojops/policy.yaml` supports `allowedTools` and `blockedTools` lists
+- **Audit enrichment** — Custom tool executions include `toolType`, `toolSource`, `toolVersion`, `toolHash`, and `systemPromptHash` in audit entries
+- **Tool isolation** — Verification commands restricted to a whitelist of 16 allowed binaries (terraform, kubectl, helm, etc.), `child_process` permission must be `"required"` for execution, path traversal (`..`) blocked in manifest file paths and detector paths
 - **Unified interface** — `ToolRegistry.getAll()` returns `DevOpsTool[]`, so Planner, Executor, and API remain unchanged
 
 ### 6. Execution Engine (`@dojops/executor`)
@@ -170,7 +170,7 @@ Multi-turn conversation management with memory windowing, LLM-generated summarie
 
 ### 9. REST API & Dashboard (`@dojops/api`)
 
-Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/tool-registry` to load all built-in + plugin tools. 19 endpoints exposing all capabilities over HTTP. Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `pluginCount`.
+Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/tool-registry` to load all built-in + custom tools. 19 endpoints exposing all capabilities over HTTP. Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customToolCount`.
 
 See [API Reference](api-reference.md) and [Web Dashboard](dashboard.md).
 
@@ -206,14 +206,15 @@ DojOps stores project state in the `.dojops/` directory:
   execution-logs/        Per-execution results (*.json)
   scan-history/          Security scan reports (*.json)
   sessions/              Chat session persistence (*.json)
-  plugins/               Project-scoped plugin tools (plugin.yaml + input.schema.json)
+  tools/                 Project-scoped custom tools (tool.yaml + input.schema.json)
   agents/                Project-scoped custom agents (<name>/README.md)
-  policy.yaml            Plugin policy (allowedPlugins / blockedPlugins)
+  policy.yaml            Tool policy (allowedTools / blockedTools)
   history/
     audit.jsonl          Hash-chained audit log (append-only)
   lock.json              Execution lock (PID-based)
 
 ~/.dojops/
-  plugins/               Global plugin tools (shared across projects)
+  tools/                 Global custom tools (shared across projects)
+  toolchain/             System binary sandbox (installed verification binaries)
   agents/                Global custom agents (shared across projects)
 ```

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { ToolRegistry } from "../registry";
-import { PluginTool } from "../plugin-tool";
+import { CustomTool } from "../custom-tool";
 import { DevOpsTool } from "@dojops/sdk";
 import { z } from "zod";
 
@@ -14,24 +14,24 @@ function createMockTool(name: string, description = "desc"): DevOpsTool {
   };
 }
 
-function createMockPluginTool(
+function createMockCustomTool(
   name: string,
-  sourceOverrides?: Partial<{ location: string; pluginVersion: string; pluginHash: string }>,
-): PluginTool {
-  const tool = createMockTool(name) as unknown as PluginTool;
+  sourceOverrides?: Partial<{ location: string; toolVersion: string; toolHash: string }>,
+): CustomTool {
+  const tool = createMockTool(name) as unknown as CustomTool;
   Object.defineProperty(tool, "source", {
     value: {
-      type: "plugin",
+      type: "custom",
       location: sourceOverrides?.location ?? "project",
-      pluginVersion: sourceOverrides?.pluginVersion,
-      pluginHash: sourceOverrides?.pluginHash,
+      toolVersion: sourceOverrides?.toolVersion,
+      toolHash: sourceOverrides?.toolHash,
     },
   });
   return tool;
 }
 
 describe("ToolRegistry", () => {
-  it("returns all built-in tools when no plugins", () => {
+  it("returns all built-in tools when no custom tools", () => {
     const builtIn = [createMockTool("tool-a"), createMockTool("tool-b")];
     const registry = new ToolRegistry(builtIn, []);
 
@@ -39,24 +39,24 @@ describe("ToolRegistry", () => {
     expect(registry.size).toBe(2);
   });
 
-  it("returns built-in + plugin tools combined", () => {
+  it("returns built-in + custom tools combined", () => {
     const builtIn = [createMockTool("tool-a")];
-    const plugins = [createMockPluginTool("tool-b")];
-    const registry = new ToolRegistry(builtIn, plugins);
+    const customTools = [createMockCustomTool("tool-b")];
+    const registry = new ToolRegistry(builtIn, customTools);
 
     expect(registry.getAll()).toHaveLength(2);
     expect(registry.size).toBe(2);
   });
 
-  it("plugin overrides built-in with same name", () => {
+  it("custom tool overrides built-in with same name", () => {
     const builtIn = [createMockTool("shared-tool", "built-in desc")];
-    const plugins = [createMockPluginTool("shared-tool")];
+    const customTools = [createMockCustomTool("shared-tool")];
     // Override the description for test
-    (plugins[0] as unknown as { description: string }).description = "plugin desc";
-    const registry = new ToolRegistry(builtIn, plugins);
+    (customTools[0] as unknown as { description: string }).description = "custom desc";
+    const registry = new ToolRegistry(builtIn, customTools);
 
     expect(registry.getAll()).toHaveLength(1);
-    expect(registry.get("shared-tool")!.description).toBe("plugin desc");
+    expect(registry.get("shared-tool")!.description).toBe("custom desc");
   });
 
   it("get returns tool by name", () => {
@@ -76,22 +76,22 @@ describe("ToolRegistry", () => {
 
   it("getBuiltIn returns only built-in tools", () => {
     const builtIn = [createMockTool("built-in-a"), createMockTool("built-in-b")];
-    const plugins = [createMockPluginTool("plugin-a")];
-    const registry = new ToolRegistry(builtIn, plugins);
+    const customTools = [createMockCustomTool("custom-a")];
+    const registry = new ToolRegistry(builtIn, customTools);
 
     const result = registry.getBuiltIn();
     expect(result).toHaveLength(2);
     expect(result[0].name).toBe("built-in-a");
   });
 
-  it("getPlugins returns only plugin tools", () => {
+  it("getCustomTools returns only custom tools", () => {
     const builtIn = [createMockTool("built-in-a")];
-    const plugins = [createMockPluginTool("plugin-a"), createMockPluginTool("plugin-b")];
-    const registry = new ToolRegistry(builtIn, plugins);
+    const customTools = [createMockCustomTool("custom-a"), createMockCustomTool("custom-b")];
+    const registry = new ToolRegistry(builtIn, customTools);
 
-    const result = registry.getPlugins();
+    const result = registry.getCustomTools();
     expect(result).toHaveLength(2);
-    expect(result[0].name).toBe("plugin-a");
+    expect(result[0].name).toBe("custom-a");
   });
 
   it("getBuiltIn returns a copy (not internal array)", () => {
@@ -113,10 +113,10 @@ describe("ToolRegistry", () => {
     expect(registry.has("anything")).toBe(false);
   });
 
-  it("preserves order: built-in first, then plugins", () => {
+  it("preserves order: built-in first, then custom", () => {
     const builtIn = [createMockTool("alpha"), createMockTool("beta")];
-    const plugins = [createMockPluginTool("gamma")];
-    const registry = new ToolRegistry(builtIn, plugins);
+    const customTools = [createMockCustomTool("gamma")];
+    const registry = new ToolRegistry(builtIn, customTools);
 
     const names = registry.getAll().map((t) => t.name);
     expect(names).toEqual(["alpha", "beta", "gamma"]);
@@ -130,20 +130,20 @@ describe("ToolRegistry", () => {
       expect(meta).toEqual({ toolType: "built-in" });
     });
 
-    it("returns plugin metadata for a plugin tool", () => {
-      const plugin = createMockPluginTool("my-plugin", {
+    it("returns custom metadata for a custom tool", () => {
+      const custom = createMockCustomTool("my-custom", {
         location: "project",
-        pluginVersion: "1.2.0",
-        pluginHash: "abc123def456",
+        toolVersion: "1.2.0",
+        toolHash: "abc123def456",
       });
-      const registry = new ToolRegistry([], [plugin]);
-      const meta = registry.getToolMetadata("my-plugin");
+      const registry = new ToolRegistry([], [custom]);
+      const meta = registry.getToolMetadata("my-custom");
 
       expect(meta).toEqual({
-        toolType: "plugin",
-        pluginVersion: "1.2.0",
-        pluginHash: "abc123def456",
-        pluginSource: "project",
+        toolType: "custom",
+        toolVersion: "1.2.0",
+        toolHash: "abc123def456",
+        toolSource: "project",
       });
     });
 
@@ -152,21 +152,21 @@ describe("ToolRegistry", () => {
       expect(registry.getToolMetadata("nonexistent")).toBeUndefined();
     });
 
-    it("returns plugin metadata when plugin overrides built-in", () => {
+    it("returns custom metadata when custom tool overrides built-in", () => {
       const builtIn = [createMockTool("shared")];
-      const plugin = createMockPluginTool("shared", {
+      const custom = createMockCustomTool("shared", {
         location: "global",
-        pluginVersion: "2.0.0",
-        pluginHash: "hash999",
+        toolVersion: "2.0.0",
+        toolHash: "hash999",
       });
-      const registry = new ToolRegistry(builtIn, [plugin]);
+      const registry = new ToolRegistry(builtIn, [custom]);
       const meta = registry.getToolMetadata("shared");
 
       expect(meta).toEqual({
-        toolType: "plugin",
-        pluginVersion: "2.0.0",
-        pluginHash: "hash999",
-        pluginSource: "global",
+        toolType: "custom",
+        toolVersion: "2.0.0",
+        toolHash: "hash999",
+        toolSource: "global",
       });
     });
   });

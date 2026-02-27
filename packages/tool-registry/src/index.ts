@@ -14,14 +14,14 @@ import {
   SystemdTool,
 } from "@dojops/tools";
 import { ToolRegistry } from "./registry";
-import { PluginTool } from "./plugin-tool";
-import { discoverPlugins } from "./plugin-loader";
-import { loadPluginPolicy, isPluginAllowed } from "./policy";
+import { CustomTool } from "./custom-tool";
+import { discoverTools } from "./tool-loader";
+import { loadToolPolicy, isToolAllowed } from "./policy";
 
 export * from "./types";
 export * from "./registry";
-export * from "./plugin-tool";
-export * from "./plugin-loader";
+export * from "./custom-tool";
+export * from "./tool-loader";
 export * from "./policy";
 export * from "./json-schema-to-zod";
 export * from "./serializers";
@@ -52,34 +52,30 @@ export function createBuiltInTools(provider: LLMProvider) {
 
 /**
  * Convenience factory: builds a ToolRegistry with all 12 built-in tools
- * plus any valid, policy-allowed plugin tools discovered from disk.
- *
- * This fixes the previous bug where createTools() only instantiated 5 of 12 tools.
+ * plus any valid, policy-allowed custom tools discovered from disk.
  */
 export function createToolRegistry(provider: LLMProvider, projectPath?: string): ToolRegistry {
   const builtInTools = createBuiltInTools(provider);
 
-  // Discover plugin manifests
-  const pluginEntries = discoverPlugins(projectPath);
+  // Discover tool manifests
+  const toolEntries = discoverTools(projectPath);
 
   // Apply policy filter
-  const policy = loadPluginPolicy(projectPath);
-  const allowedEntries = pluginEntries.filter((entry) =>
-    isPluginAllowed(entry.manifest.name, policy),
-  );
+  const policy = loadToolPolicy(projectPath);
+  const allowedEntries = toolEntries.filter((entry) => isToolAllowed(entry.manifest.name, policy));
 
-  // Create PluginTool instances
-  const pluginTools: PluginTool[] = allowedEntries.map(
+  // Create CustomTool instances
+  const customTools: CustomTool[] = allowedEntries.map(
     (entry) =>
-      new PluginTool(
+      new CustomTool(
         entry.manifest,
         provider,
-        entry.pluginDir,
+        entry.toolDir,
         entry.source,
         entry.inputSchemaRaw,
         entry.outputSchemaRaw,
       ),
   );
 
-  return new ToolRegistry(builtInTools, pluginTools);
+  return new ToolRegistry(builtInTools, customTools);
 }

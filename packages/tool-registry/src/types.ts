@@ -1,4 +1,4 @@
-export interface PluginManifest {
+export interface ToolManifest {
   spec: number;
   name: string;
   version: string;
@@ -31,18 +31,26 @@ export interface PluginManifest {
   };
 }
 
-export interface PluginSource {
-  type: "built-in" | "plugin";
+export interface ToolSource {
+  type: "built-in" | "custom";
   location?: "global" | "project";
-  pluginPath?: string;
-  pluginVersion?: string;
-  pluginHash?: string;
+  toolPath?: string;
+  toolVersion?: string;
+  toolHash?: string;
 }
 
-export interface PluginEntry {
-  manifest: PluginManifest;
-  pluginDir: string;
-  source: PluginSource;
+export interface ToolEntry {
+  manifest: ToolManifest;
+  toolDir: string;
+  source: ToolSource;
   inputSchemaRaw: Record<string, unknown>;
   outputSchemaRaw?: Record<string, unknown>;
 }
+
+// Backward compatibility aliases
+/** @deprecated Use ToolManifest instead */
+export type PluginManifest = ToolManifest;
+/** @deprecated Use ToolSource instead */
+export type PluginSource = ToolSource;
+/** @deprecated Use ToolEntry instead */
+export type PluginEntry = ToolEntry;

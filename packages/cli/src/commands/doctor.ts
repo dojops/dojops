@@ -22,7 +22,7 @@ import {
   offerToolInstall,
   offerSystemToolInstall,
 } from "../preflight";
-import { loadToolRegistry } from "../tool-sandbox";
+import { loadToolchainRegistry } from "../toolchain-sandbox";
 
 interface Check {
   name: string;
@@ -133,7 +133,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
   }
 
   // System tool checks
-  const toolRegistry = loadToolRegistry();
+  const toolRegistry = loadToolchainRegistry();
   for (const tool of SYSTEM_TOOLS) {
     const sandboxEntry = toolRegistry.tools.find((t) => t.name === tool.name);
     const systemBinary = !sandboxEntry ? resolveBinary(tool.binaryName) : undefined;

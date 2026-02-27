@@ -38,13 +38,13 @@ const PermissionsSchema = z.object({
   child_process: z.enum(["none", "required"]).optional(),
 });
 
-export const PluginManifestSchema = z.object({
+export const ToolManifestSchema = z.object({
   spec: z.number().int().min(1).max(1),
   name: z
     .string()
     .min(1)
     .max(64)
-    .regex(/^[a-z0-9-]+$/, "Plugin name must be lowercase alphanumeric with hyphens"),
+    .regex(/^[a-z0-9-]+$/, "Tool name must be lowercase alphanumeric with hyphens"),
   version: z.string().min(1),
   type: z.literal("tool"),
   description: z.string().min(1).max(500),
@@ -69,12 +69,15 @@ export const PluginManifestSchema = z.object({
   permissions: PermissionsSchema.optional(),
 });
 
+/** @deprecated Use ToolManifestSchema instead */
+export const PluginManifestSchema = ToolManifestSchema;
+
 export function validateManifest(data: unknown): {
   valid: boolean;
-  manifest?: z.infer<typeof PluginManifestSchema>;
+  manifest?: z.infer<typeof ToolManifestSchema>;
   error?: string;
 } {
-  const result = PluginManifestSchema.safeParse(data);
+  const result = ToolManifestSchema.safeParse(data);
   if (result.success) {
     return { valid: true, manifest: result.data };
   }

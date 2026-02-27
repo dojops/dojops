@@ -29,7 +29,7 @@ export interface AppDependencies {
   store: HistoryStore;
   publicDir?: string;
   rootDir?: string;
-  pluginCount?: number;
+  customToolCount?: number;
   customAgentNames?: Set<string>;
   corsOrigin?: string | string[];
   apiKey?: string;
@@ -105,7 +105,7 @@ export function createApp(deps: AppDependencies): Express {
       provider: deps.provider.name,
       providerStatus,
       tools: deps.tools.map((t) => t.name),
-      pluginCount: deps.pluginCount ?? 0,
+      customToolCount: deps.customToolCount ?? 0,
       metricsEnabled,
       memory: process.memoryUsage().heapUsed,
       uptime: process.uptime(),

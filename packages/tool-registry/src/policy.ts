@@ -2,16 +2,17 @@ import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "js-yaml";
 
-export interface PluginPolicy {
-  allowedPlugins?: string[];
-  blockedPlugins?: string[];
+export interface ToolPolicy {
+  allowedTools?: string[];
+  blockedTools?: string[];
 }
 
 /**
- * Loads plugin policy from .dojops/policy.yaml if present.
+ * Loads tool policy from .dojops/policy.yaml if present.
  * Returns empty policy (everything allowed) if file is missing.
+ * Supports both new field names (allowedTools/blockedTools) and legacy (allowedPlugins/blockedPlugins).
  */
-export function loadPluginPolicy(projectPath?: string): PluginPolicy {
+export function loadToolPolicy(projectPath?: string): ToolPolicy {
   if (!projectPath) return {};
 
   const policyPath = path.join(projectPath, ".dojops", "policy.yaml");
@@ -22,13 +23,19 @@ export function loadPluginPolicy(projectPath?: string): PluginPolicy {
     const data = yaml.load(content) as Record<string, unknown> | null;
     if (!data) return {};
 
-    const policy: PluginPolicy = {};
-    if (Array.isArray(data.allowedPlugins)) {
-      policy.allowedPlugins = data.allowedPlugins.filter((p): p is string => typeof p === "string");
+    const policy: ToolPolicy = {};
+
+    // New field names take precedence, fall back to legacy
+    const allowed = data.allowedTools ?? data.allowedPlugins;
+    if (Array.isArray(allowed)) {
+      policy.allowedTools = allowed.filter((p): p is string => typeof p === "string");
     }
-    if (Array.isArray(data.blockedPlugins)) {
-      policy.blockedPlugins = data.blockedPlugins.filter((p): p is string => typeof p === "string");
+
+    const blocked = data.blockedTools ?? data.blockedPlugins;
+    if (Array.isArray(blocked)) {
+      policy.blockedTools = blocked.filter((p): p is string => typeof p === "string");
     }
+
     return policy;
   } catch {
     return {};
@@ -36,19 +43,27 @@ export function loadPluginPolicy(projectPath?: string): PluginPolicy {
 }
 
 /**
- * Checks whether a plugin is allowed by the given policy.
+ * Checks whether a tool is allowed by the given policy.
  *
  * Rules:
- * 1. If blockedPlugins is set and includes the name → denied
- * 2. If allowedPlugins is set → only those names are allowed
+ * 1. If blockedTools is set and includes the name → denied
+ * 2. If allowedTools is set → only those names are allowed
  * 3. Otherwise → allowed (default-open)
  */
-export function isPluginAllowed(name: string, policy: PluginPolicy): boolean {
-  if (policy.blockedPlugins?.includes(name)) {
+export function isToolAllowed(name: string, policy: ToolPolicy): boolean {
+  if (policy.blockedTools?.includes(name)) {
     return false;
   }
-  if (policy.allowedPlugins && policy.allowedPlugins.length > 0) {
-    return policy.allowedPlugins.includes(name);
+  if (policy.allowedTools && policy.allowedTools.length > 0) {
+    return policy.allowedTools.includes(name);
   }
   return true;
 }
+
+// Backward compatibility aliases
+/** @deprecated Use ToolPolicy instead */
+export type PluginPolicy = ToolPolicy;
+/** @deprecated Use loadToolPolicy instead */
+export const loadPluginPolicy = loadToolPolicy;
+/** @deprecated Use isToolAllowed instead */
+export const isPluginAllowed = isToolAllowed;

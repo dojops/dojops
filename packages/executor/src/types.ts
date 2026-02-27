@@ -59,9 +59,9 @@ export interface AuditEntry {
   filesWritten: string[];
   filesModified: string[];
   durationMs: number;
-  toolType?: "built-in" | "plugin";
-  pluginSource?: "global" | "project";
-  pluginVersion?: string;
-  pluginHash?: string;
+  toolType?: "built-in" | "custom";
+  toolSource?: "global" | "project";
+  toolVersion?: string;
+  toolHash?: string;
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 }

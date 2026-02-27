@@ -40,7 +40,7 @@ pnpm lint
 packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
-  tool-registry/    Tool registry + plugin system (built-in + plugin discovery)
+  tool-registry/    Tool registry + custom tool system (built-in + custom tool discovery)
   core/             LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
@@ -225,28 +225,28 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
 
 ---
 
-## Creating a Plugin Tool
+## Creating a Custom Tool
 
-For tools that don't need to be built into the core, use the plugin system instead. Plugins are declarative — no TypeScript code required.
+For tools that don't need to be built into the core, use the custom tool system instead. Custom tools are declarative — no TypeScript code required.
 
 ### Step-by-Step
 
-1. **Scaffold** a plugin:
+1. **Scaffold** a custom tool:
 
    ```bash
-   dojops tools plugins init my-tool
+   dojops tools init my-tool
    ```
 
-   This creates `.dojops/plugins/my-tool/` with template `plugin.yaml` and `input.schema.json`.
+   This creates `.dojops/tools/my-tool/` with template `tool.yaml` and `input.schema.json`.
 
-2. **Edit** `plugin.yaml` — set the name, description, system prompt, output files, and serializer.
+2. **Edit** `tool.yaml` — set the name, description, system prompt, output files, and serializer.
 
 3. **Edit** `input.schema.json` — define the JSON Schema for your tool's input parameters.
 
-4. **Validate** the plugin:
+4. **Validate** the tool:
 
    ```bash
-   dojops tools plugins validate .dojops/plugins/my-tool/
+   dojops tools validate .dojops/tools/my-tool/
    ```
 
 5. **Test** by generating a config:
@@ -255,7 +255,7 @@ For tools that don't need to be built into the core, use the plugin system inste
    dojops "Generate my-tool config for production"
    ```
 
-Plugins are automatically discovered and available to the Planner, Executor, and API. See [DevOps Tools — Plugin System](tools.md#plugin-system) for the full manifest format.
+Custom tools are automatically discovered and available to the Planner, Executor, and API. See [DevOps Tools — Custom Tool System](tools.md#custom-tool-system) for the full manifest format.
 
 ---
 

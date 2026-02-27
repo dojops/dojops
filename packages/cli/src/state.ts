@@ -26,10 +26,10 @@ export interface PlanState {
     description: string;
     dependsOn: string[];
     input?: Record<string, unknown>;
-    toolType?: "built-in" | "plugin";
-    pluginVersion?: string;
-    pluginHash?: string;
-    pluginSource?: "global" | "project";
+    toolType?: "built-in" | "custom";
+    toolVersion?: string;
+    toolHash?: string;
+    toolSource?: "global" | "project";
     systemPromptHash?: string;
   }>;
   results?: Array<{

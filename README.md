@@ -116,7 +116,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ### Tools
 
 - **12 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
-- **Plugin system** — Extend DojOps with custom tools via declarative `plugin.yaml` manifests + JSON Schema. Drop a plugin into `~/.dojops/plugins/` or `.dojops/plugins/` and it's automatically available to all commands. Scaffold new plugins with `dojops tools plugins init <name>`. Plugin isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
+- **Custom tool system** — Extend DojOps with custom tools via declarative `tool.yaml` manifests + JSON Schema. Drop a tool into `~/.dojops/tools/` or `.dojops/tools/` and it's automatically available to all commands. Scaffold new tools with `dojops tools init <name>`. Tool isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
 - **Schema-validated** — Every tool input and LLM output is validated against Zod schemas before execution
 - **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Use `--skip-verify` to disable
@@ -132,11 +132,11 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **Git dirty check** — `apply` warns when uncommitted changes exist in the working tree. Use `--force` to skip
 - **Atomic file writes** — All file writes use temp-file + rename for crash safety (no partial writes)
 - **DevOps write allowlist** — By default, only DevOps files (CI configs, Dockerfiles, Terraform, K8s manifests, etc.) can be written. Prevents LLM-generated code from mutating application source. Use `--allow-all-paths` to bypass
-- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with per-file size limits (1MB default), execution timeouts (30s default), and atomic writes. These guardrails apply uniformly to both built-in tools and plugins
+- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with per-file size limits (1MB default), execution timeouts (30s default), and atomic writes. These guardrails apply uniformly to both built-in tools and custom tools
 - **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, DevOps allowlist, environment variables, timeouts, file size limits, and verification toggle
 - **Approval workflows** — Auto-approve, auto-deny, or interactive callback with diff preview before any write operation
 - **Resume on failure** — `dojops apply --resume` skips completed tasks and retries failed ones
-- **Deterministic replay** — `dojops apply --replay` forces temperature=0 and validates that provider, model, and plugin system prompts match the plan's execution context for deterministic execution under identical provider and model conditions
+- **Deterministic replay** — `dojops apply --replay` forces temperature=0 and validates that provider, model, and custom tool system prompts match the plan's execution context for deterministic execution under identical provider and model conditions
 - **Plan snapshot freezing** — Plans capture DojOps version, policy hash, and tool versions at creation time. Version drift is detected at apply time (warning in normal mode, blocking in `--replay` mode)
 
 ### Observability
@@ -161,7 +161,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ```
 @dojops/cli            CLI entry point + rich TUI (@clack/prompts)
 @dojops/api            REST API (Express) + web dashboard + factory functions
-@dojops/tool-registry  Tool registry + plugin system + custom agent discovery
+@dojops/tool-registry  Tool registry + custom tool system + custom agent discovery
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
 @dojops/tools          12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
@@ -177,10 +177,10 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ### Package Dependency Flow
 
 ```
-cli → api → tool-registry → tools → core → sdk
-          → planner → executor
-          → scanner
-          → session → core
+cli -> api -> tool-registry -> tools -> core -> sdk
+          -> planner -> executor
+          -> scanner
+          -> session -> core
 ```
 
 Full architecture details in [docs/architecture.md](docs/architecture.md).
@@ -235,21 +235,21 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 #### Agents & Tools
 
-| Command                                | Description                                   |
-| -------------------------------------- | --------------------------------------------- |
-| `dojops agents list`                   | List all agents (built-in + custom)           |
-| `dojops agents info <name>`            | Show agent details and tool dependencies      |
-| `dojops agents create <desc>`          | Create a custom agent (LLM-generated)         |
-| `dojops agents create --manual`        | Create a custom agent interactively           |
-| `dojops agents remove <name>`          | Remove a custom agent                         |
-| `dojops tools list`                    | List system tools with install status         |
-| `dojops tools install <name>`          | Download tool into sandbox (~/.dojops/tools/) |
-| `dojops tools remove <name>`           | Remove a sandboxed tool                       |
-| `dojops tools clean`                   | Remove all sandbox tools                      |
-| `dojops tools plugins list`            | List discovered plugins (global + project)    |
-| `dojops tools plugins validate <path>` | Validate a plugin manifest                    |
-| `dojops tools plugins init <name>`     | Scaffold a new plugin with template files     |
-| `dojops inspect <target>`              | Inspect config or session state               |
+| Command                           | Description                                           |
+| --------------------------------- | ----------------------------------------------------- |
+| `dojops agents list`              | List all agents (built-in + custom)                   |
+| `dojops agents info <name>`       | Show agent details and tool dependencies              |
+| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                 |
+| `dojops agents create --manual`   | Create a custom agent interactively                   |
+| `dojops agents remove <name>`     | Remove a custom agent                                 |
+| `dojops tools list`               | List discovered custom tools (global + project)       |
+| `dojops tools validate <path>`    | Validate a custom tool manifest                       |
+| `dojops tools init <name>`        | Scaffold a new custom tool with template files        |
+| `dojops toolchain list`           | List system toolchain binaries with install status    |
+| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
+| `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
+| `dojops toolchain clean`          | Remove all toolchain binaries                         |
+| `dojops inspect <target>`         | Inspect config or session state                       |
 
 #### History & Audit
 
@@ -356,14 +356,14 @@ dojops scan --fix --yes
 dojops chat
 dojops chat --session myproject --agent terraform
 
-# Tool management
-dojops tools install terraform
-dojops tools install kubectl
+# Toolchain management (system binaries)
+dojops toolchain install terraform
+dojops toolchain install kubectl
 
-# Plugin management
-dojops tools plugins list
-dojops tools plugins init my-tool
-dojops tools plugins validate .dojops/plugins/my-tool/
+# Custom tool management
+dojops tools list
+dojops tools init my-tool
+dojops tools validate .dojops/tools/my-tool/
 
 # Custom agents
 dojops agents create "an SRE specialist for incident response"
@@ -396,7 +396,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Layer                   | Mechanism                                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                                                           |
-| **Plugin isolation**    | Verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention                                   |
+| **Tool isolation**      | Verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention                                   |
 | **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                                                    |
 | **Deep verification**   | External tool validation by default: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write. `--skip-verify` to disable |
 | **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits                                          |
@@ -411,20 +411,20 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 
 | Tool           | Serialization      | Output Files                        | Verifier             |
 | -------------- | ------------------ | ----------------------------------- | -------------------- |
-| GitHub Actions | YAML               | `.github/workflows/ci.yml`          | —                    |
+| GitHub Actions | YAML               | `.github/workflows/ci.yml`          | ---                  |
 | Terraform      | HCL                | `main.tf`, `variables.tf`           | `terraform validate` |
 | Kubernetes     | YAML               | K8s manifests                       | `kubectl --dry-run`  |
-| Helm           | YAML               | `Chart.yaml`, `values.yaml`         | —                    |
-| Ansible        | YAML               | `{name}.yml`                        | —                    |
-| Docker Compose | YAML               | `docker-compose.yml`                | —                    |
+| Helm           | YAML               | `Chart.yaml`, `values.yaml`         | ---                  |
+| Ansible        | YAML               | `{name}.yml`                        | ---                  |
+| Docker Compose | YAML               | `docker-compose.yml`                | ---                  |
 | Dockerfile     | Dockerfile syntax  | `Dockerfile`, `.dockerignore`       | `hadolint`           |
-| Nginx          | Nginx conf         | `nginx.conf`                        | —                    |
-| Makefile       | Make syntax (tabs) | `Makefile`                          | —                    |
-| GitLab CI      | YAML               | `.gitlab-ci.yml`                    | —                    |
-| Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | —                    |
-| Systemd        | INI                | `{name}.service`                    | —                    |
+| Nginx          | Nginx conf         | `nginx.conf`                        | ---                  |
+| Makefile       | Make syntax (tabs) | `Makefile`                          | ---                  |
+| GitLab CI      | YAML               | `.gitlab-ci.yml`                    | ---                  |
+| Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | ---                  |
+| Systemd        | INI                | `{name}.service`                    | ---                  |
 
-All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `verifier.ts` (optional) → `*-tool.ts` → tests. Tools auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename). YAML tools produce sorted keys for idempotent output.
+All tools follow the `BaseTool<T>` pattern: `schemas.ts` -> `detector.ts` (optional) -> `generator.ts` -> `verifier.ts` (optional) -> `*-tool.ts` -> tests. Tools auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename). YAML tools produce sorted keys for idempotent output.
 
 ---
 
@@ -513,7 +513,7 @@ curl -X POST http://localhost:3000/api/diff \
 | --------- | ----------------- | ------------------- | ---------------------------- |
 | OpenAI    | `openai`          | `OPENAI_API_KEY`    | `gpt-4o-mini`                |
 | Anthropic | `anthropic`       | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` |
-| Ollama    | `ollama`          | _(none — local)_    | `llama3`                     |
+| Ollama    | `ollama`          | _(none --- local)_  | `llama3`                     |
 | DeepSeek  | `deepseek`        | `DEEPSEEK_API_KEY`  | `deepseek-chat`              |
 | Gemini    | `gemini`          | `GEMINI_API_KEY`    | `gemini-2.5-flash`           |
 
@@ -590,7 +590,7 @@ pnpm dojops -- serve --port=8080
 packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
-  tool-registry/    Tool registry + plugin system + custom agent discovery
+  tool-registry/    Tool registry + custom tool system + custom agent discovery
   core/             LLM providers (5) + specialist agents (16 built-in) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
@@ -627,7 +627,7 @@ npm login
 pnpm publish-packages    # Build + publish in dependency order
 ```
 
-Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `tool-registry` → `scanner` → `session` → `api` → `cli`
+Publish order: `sdk` -> `core` -> `executor` -> `planner` -> `tools` -> `tool-registry` -> `scanner` -> `session` -> `api` -> `cli`
 
 ---
 

@@ -36,18 +36,23 @@ import { historyCommand } from "./commands/history";
 import { statusCommand } from "./commands/doctor";
 import {
   toolsListCommand,
+  toolsInitCommand,
+  toolsValidateCommand,
   toolsLoadCommand,
-  toolsInstallCommand,
-  toolsRemoveCommand,
-  toolsCleanCommand,
-  toolsPluginsCommand,
 } from "./commands/tools";
+import {
+  toolchainListCommand,
+  toolchainLoadCommand,
+  toolchainInstallCommand,
+  toolchainRemoveCommand,
+  toolchainCleanCommand,
+} from "./commands/toolchain";
 import { scanCommand } from "./commands/scan";
 import { chatCommand } from "./commands/chat";
 import { checkCommand } from "./commands/check";
 import { verifyCommand } from "./commands/verify";
 import { providerCommand } from "./commands/provider";
-import { prependToolsBinToPath } from "./tool-sandbox";
+import { prependToolchainBinToPath } from "./toolchain-sandbox";
 
 registerCommand("init", initCommand);
 registerCommand("apply", applyCommand);
@@ -86,19 +91,24 @@ registerSubcommand("history", "verify", (args, ctx) => historyCommand(["verify",
 registerSubcommand("history", "audit", (args, ctx) => historyCommand(["audit", ...args], ctx));
 registerCommand("provider", providerCommand);
 
-// Nested: tools <sub>
+// Nested: tools <sub> (manifest-based custom tools)
 registerSubcommand("tools", "list", toolsListCommand);
+registerSubcommand("tools", "init", toolsInitCommand);
+registerSubcommand("tools", "validate", toolsValidateCommand);
 registerSubcommand("tools", "load", toolsLoadCommand);
-registerSubcommand("tools", "install", toolsInstallCommand);
-registerSubcommand("tools", "remove", toolsRemoveCommand);
-registerSubcommand("tools", "clean", toolsCleanCommand);
-registerSubcommand("tools", "plugins", toolsPluginsCommand);
+
+// Nested: toolchain <sub> (system binaries)
+registerSubcommand("toolchain", "list", toolchainListCommand);
+registerSubcommand("toolchain", "load", toolchainLoadCommand);
+registerSubcommand("toolchain", "install", toolchainInstallCommand);
+registerSubcommand("toolchain", "remove", toolchainRemoveCommand);
+registerSubcommand("toolchain", "clean", toolchainCleanCommand);
 
 // ── Main ───────────────────────────────────────────────────────────
 
 async function main() {
-  // Prepend sandbox tools to PATH so they are found by all commands
-  prependToolsBinToPath();
+  // Prepend toolchain bin to PATH so they are found by all commands
+  prependToolchainBinToPath();
 
   // CI auto-detection: force non-interactive mode and suppress banner in CI environments
   const isCI = !!(
@@ -200,6 +210,7 @@ async function main() {
     "doctor",
     "status",
     "tools",
+    "toolchain",
     "scan",
     "chat",
     "check",

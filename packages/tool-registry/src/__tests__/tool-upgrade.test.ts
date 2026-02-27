@@ -3,22 +3,22 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as yaml from "js-yaml";
-import { discoverPlugins } from "../plugin-loader";
-import { PluginTool } from "../plugin-tool";
+import { discoverTools } from "../tool-loader";
+import { CustomTool } from "../custom-tool";
 import { ToolRegistry } from "../registry";
-import { PluginManifest, PluginSource } from "../types";
+import { ToolManifest, ToolSource } from "../types";
 import { LLMProvider } from "@dojops/core";
 
-function createTestPlugin(dir: string, name: string, overrides?: Record<string, unknown>) {
-  const pluginDir = path.join(dir, name);
-  fs.mkdirSync(pluginDir, { recursive: true });
+function createTestTool(dir: string, name: string, overrides?: Record<string, unknown>) {
+  const toolDir = path.join(dir, name);
+  fs.mkdirSync(toolDir, { recursive: true });
 
   const manifest = {
     spec: 1,
     name,
     version: "1.0.0",
     type: "tool",
-    description: `Test ${name} plugin`,
+    description: `Test ${name} tool`,
     inputSchema: "input.schema.json",
     generator: {
       strategy: "llm",
@@ -28,7 +28,7 @@ function createTestPlugin(dir: string, name: string, overrides?: Record<string, 
     ...overrides,
   };
 
-  fs.writeFileSync(path.join(pluginDir, "plugin.yaml"), yaml.dump(manifest), "utf-8");
+  fs.writeFileSync(path.join(toolDir, "tool.yaml"), yaml.dump(manifest), "utf-8");
 
   const inputSchema = {
     type: "object",
@@ -37,12 +37,12 @@ function createTestPlugin(dir: string, name: string, overrides?: Record<string, 
   };
 
   fs.writeFileSync(
-    path.join(pluginDir, "input.schema.json"),
+    path.join(toolDir, "input.schema.json"),
     JSON.stringify(inputSchema, null, 2),
     "utf-8",
   );
 
-  return pluginDir;
+  return toolDir;
 }
 
 function createMockProvider(): LLMProvider {
@@ -52,7 +52,7 @@ function createMockProvider(): LLMProvider {
   };
 }
 
-describe("Plugin hash changes on manifest modification", () => {
+describe("Tool hash changes on manifest modification", () => {
   let tmpDir: string;
   let projectDir: string;
   let origHome: string | undefined;
@@ -71,80 +71,80 @@ describe("Plugin hash changes on manifest modification", () => {
   });
 
   it("hash changes when systemPrompt is modified", () => {
-    const globalPluginsDir = path.join(tmpDir, ".dojops", "plugins");
-    fs.mkdirSync(globalPluginsDir, { recursive: true });
-    createTestPlugin(globalPluginsDir, "hash-test");
+    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    fs.mkdirSync(globalToolsDir, { recursive: true });
+    createTestTool(globalToolsDir, "hash-test");
 
-    const before = discoverPlugins(projectDir);
-    const hashBefore = before[0].source.pluginHash;
+    const before = discoverTools(projectDir);
+    const hashBefore = before[0].source.toolHash;
 
     // Modify the systemPrompt in the manifest
-    const manifestPath = path.join(globalPluginsDir, "hash-test", "plugin.yaml");
+    const manifestPath = path.join(globalToolsDir, "hash-test", "tool.yaml");
     const content = fs.readFileSync(manifestPath, "utf-8");
     const manifest = yaml.load(content) as Record<string, unknown>;
     (manifest.generator as Record<string, unknown>).systemPrompt = "Modified prompt.";
     fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
 
-    const after = discoverPlugins(projectDir);
-    const hashAfter = after[0].source.pluginHash;
+    const after = discoverTools(projectDir);
+    const hashAfter = after[0].source.toolHash;
 
     expect(hashBefore).not.toBe(hashAfter);
   });
 
   it("hash changes when version is bumped", () => {
-    const globalPluginsDir = path.join(tmpDir, ".dojops", "plugins");
-    fs.mkdirSync(globalPluginsDir, { recursive: true });
-    createTestPlugin(globalPluginsDir, "version-test");
+    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    fs.mkdirSync(globalToolsDir, { recursive: true });
+    createTestTool(globalToolsDir, "version-test");
 
-    const before = discoverPlugins(projectDir);
-    const hashBefore = before[0].source.pluginHash;
+    const before = discoverTools(projectDir);
+    const hashBefore = before[0].source.toolHash;
 
     // Bump version
-    const manifestPath = path.join(globalPluginsDir, "version-test", "plugin.yaml");
+    const manifestPath = path.join(globalToolsDir, "version-test", "tool.yaml");
     const content = fs.readFileSync(manifestPath, "utf-8");
     const manifest = yaml.load(content) as Record<string, unknown>;
     manifest.version = "2.0.0";
     fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
 
-    const after = discoverPlugins(projectDir);
-    const hashAfter = after[0].source.pluginHash;
+    const after = discoverTools(projectDir);
+    const hashAfter = after[0].source.toolHash;
 
     expect(hashBefore).not.toBe(hashAfter);
   });
 
   it("hash is stable when nothing changes", () => {
-    const globalPluginsDir = path.join(tmpDir, ".dojops", "plugins");
-    fs.mkdirSync(globalPluginsDir, { recursive: true });
-    createTestPlugin(globalPluginsDir, "stable-test");
+    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    fs.mkdirSync(globalToolsDir, { recursive: true });
+    createTestTool(globalToolsDir, "stable-test");
 
-    const first = discoverPlugins(projectDir);
-    const second = discoverPlugins(projectDir);
+    const first = discoverTools(projectDir);
+    const second = discoverTools(projectDir);
 
-    expect(first[0].source.pluginHash).toBe(second[0].source.pluginHash);
+    expect(first[0].source.toolHash).toBe(second[0].source.toolHash);
   });
 
-  it("hash only covers plugin.yaml (modifying input.schema.json does not change hash)", () => {
-    const globalPluginsDir = path.join(tmpDir, ".dojops", "plugins");
-    fs.mkdirSync(globalPluginsDir, { recursive: true });
-    createTestPlugin(globalPluginsDir, "schema-test");
+  it("hash only covers tool.yaml (modifying input.schema.json does not change hash)", () => {
+    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    fs.mkdirSync(globalToolsDir, { recursive: true });
+    createTestTool(globalToolsDir, "schema-test");
 
-    const before = discoverPlugins(projectDir);
-    const hashBefore = before[0].source.pluginHash;
+    const before = discoverTools(projectDir);
+    const hashBefore = before[0].source.toolHash;
 
     // Modify input.schema.json
-    const schemaPath = path.join(globalPluginsDir, "schema-test", "input.schema.json");
+    const schemaPath = path.join(globalToolsDir, "schema-test", "input.schema.json");
     const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
     schema.properties.extra = { type: "number" };
     fs.writeFileSync(schemaPath, JSON.stringify(schema, null, 2), "utf-8");
 
-    const after = discoverPlugins(projectDir);
-    const hashAfter = after[0].source.pluginHash;
+    const after = discoverTools(projectDir);
+    const hashAfter = after[0].source.toolHash;
 
     expect(hashBefore).toBe(hashAfter);
   });
 });
 
-describe("Plugin upgrade simulation", () => {
+describe("Tool upgrade simulation", () => {
   let tmpDir: string;
   let projectDir: string;
   let origHome: string | undefined;
@@ -162,48 +162,48 @@ describe("Plugin upgrade simulation", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("detects hash mismatch between saved plan hash and current plugin hash", () => {
-    const globalPluginsDir = path.join(tmpDir, ".dojops", "plugins");
-    fs.mkdirSync(globalPluginsDir, { recursive: true });
-    createTestPlugin(globalPluginsDir, "upgrade-tool");
+  it("detects hash mismatch between saved plan hash and current tool hash", () => {
+    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    fs.mkdirSync(globalToolsDir, { recursive: true });
+    createTestTool(globalToolsDir, "upgrade-tool");
 
-    const before = discoverPlugins(projectDir);
-    const savedHash = before[0].source.pluginHash;
+    const before = discoverTools(projectDir);
+    const savedHash = before[0].source.toolHash;
 
     // Simulate upgrade: modify manifest
-    const manifestPath = path.join(globalPluginsDir, "upgrade-tool", "plugin.yaml");
+    const manifestPath = path.join(globalToolsDir, "upgrade-tool", "tool.yaml");
     const content = fs.readFileSync(manifestPath, "utf-8");
     const manifest = yaml.load(content) as Record<string, unknown>;
     manifest.version = "2.0.0";
     (manifest.generator as Record<string, unknown>).systemPrompt = "Upgraded system prompt.";
     fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
 
-    const after = discoverPlugins(projectDir);
-    const currentHash = after[0].source.pluginHash;
+    const after = discoverTools(projectDir);
+    const currentHash = after[0].source.toolHash;
 
     expect(savedHash).not.toBe(currentHash);
     expect(after[0].manifest.version).toBe("2.0.0");
   });
 
-  it("detects missing plugin when plugin directory is deleted", () => {
-    const globalPluginsDir = path.join(tmpDir, ".dojops", "plugins");
-    fs.mkdirSync(globalPluginsDir, { recursive: true });
-    createTestPlugin(globalPluginsDir, "removed-tool");
+  it("detects missing tool when tool directory is deleted", () => {
+    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    fs.mkdirSync(globalToolsDir, { recursive: true });
+    createTestTool(globalToolsDir, "removed-tool");
 
-    const before = discoverPlugins(projectDir);
+    const before = discoverTools(projectDir);
     expect(before).toHaveLength(1);
 
-    // Remove the plugin
-    fs.rmSync(path.join(globalPluginsDir, "removed-tool"), { recursive: true, force: true });
+    // Remove the tool
+    fs.rmSync(path.join(globalToolsDir, "removed-tool"), { recursive: true, force: true });
 
-    const after = discoverPlugins(projectDir);
+    const after = discoverTools(projectDir);
     expect(after).toHaveLength(0);
   });
 
-  it("detects systemPromptHash mismatch between two PluginTool instances", () => {
+  it("detects systemPromptHash mismatch between two CustomTool instances", () => {
     const provider = createMockProvider();
 
-    const manifestV1: PluginManifest = {
+    const manifestV1: ToolManifest = {
       spec: 1,
       name: "prompt-tool",
       version: "1.0.0",
@@ -214,17 +214,17 @@ describe("Plugin upgrade simulation", () => {
       files: [{ path: "out.yaml", serializer: "yaml" }],
     };
 
-    const manifestV2: PluginManifest = {
+    const manifestV2: ToolManifest = {
       ...manifestV1,
       version: "2.0.0",
       generator: { strategy: "llm", systemPrompt: "Changed prompt." },
     };
 
-    const source: PluginSource = {
-      type: "plugin",
+    const source: ToolSource = {
+      type: "custom",
       location: "project",
-      pluginVersion: "1.0.0",
-      pluginHash: "abc123",
+      toolVersion: "1.0.0",
+      toolHash: "abc123",
     };
 
     const inputSchema = {
@@ -233,12 +233,12 @@ describe("Plugin upgrade simulation", () => {
       required: ["name"],
     };
 
-    const toolV1 = new PluginTool(manifestV1, provider, "/tmp", source, inputSchema);
-    const toolV2 = new PluginTool(
+    const toolV1 = new CustomTool(manifestV1, provider, "/tmp", source, inputSchema);
+    const toolV2 = new CustomTool(
       manifestV2,
       provider,
       "/tmp",
-      { ...source, pluginVersion: "2.0.0" },
+      { ...source, toolVersion: "2.0.0" },
       inputSchema,
     );
 
@@ -247,31 +247,31 @@ describe("Plugin upgrade simulation", () => {
     expect(toolV2.systemPromptHash.length).toBe(64);
   });
 
-  it("version string change is visible in PluginSource after re-discovery", () => {
-    const globalPluginsDir = path.join(tmpDir, ".dojops", "plugins");
-    fs.mkdirSync(globalPluginsDir, { recursive: true });
-    createTestPlugin(globalPluginsDir, "versioned-tool", { version: "1.0.0" });
+  it("version string change is visible in ToolSource after re-discovery", () => {
+    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    fs.mkdirSync(globalToolsDir, { recursive: true });
+    createTestTool(globalToolsDir, "versioned-tool", { version: "1.0.0" });
 
-    const before = discoverPlugins(projectDir);
-    expect(before[0].source.pluginVersion).toBe("1.0.0");
+    const before = discoverTools(projectDir);
+    expect(before[0].source.toolVersion).toBe("1.0.0");
 
     // Bump version
-    const manifestPath = path.join(globalPluginsDir, "versioned-tool", "plugin.yaml");
+    const manifestPath = path.join(globalToolsDir, "versioned-tool", "tool.yaml");
     const content = fs.readFileSync(manifestPath, "utf-8");
     const manifest = yaml.load(content) as Record<string, unknown>;
     manifest.version = "1.1.0";
     fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
 
-    const after = discoverPlugins(projectDir);
-    expect(after[0].source.pluginVersion).toBe("1.1.0");
+    const after = discoverTools(projectDir);
+    expect(after[0].source.toolVersion).toBe("1.1.0");
   });
 });
 
 describe("ToolRegistry metadata integration", () => {
-  it("getToolMetadata returns systemPromptHash for plugin tools", () => {
+  it("getToolMetadata returns systemPromptHash for custom tools", () => {
     const provider = createMockProvider();
 
-    const manifest: PluginManifest = {
+    const manifest: ToolManifest = {
       spec: 1,
       name: "meta-tool",
       version: "1.0.0",
@@ -282,11 +282,11 @@ describe("ToolRegistry metadata integration", () => {
       files: [{ path: "out.yaml", serializer: "yaml" }],
     };
 
-    const source: PluginSource = {
-      type: "plugin",
+    const source: ToolSource = {
+      type: "custom",
       location: "project",
-      pluginVersion: "1.0.0",
-      pluginHash: "deadbeef",
+      toolVersion: "1.0.0",
+      toolHash: "deadbeef",
     };
 
     const inputSchema = {
@@ -295,15 +295,15 @@ describe("ToolRegistry metadata integration", () => {
       required: ["name"],
     };
 
-    const pluginTool = new PluginTool(manifest, provider, "/tmp", source, inputSchema);
-    const registry = new ToolRegistry([], [pluginTool]);
+    const customTool = new CustomTool(manifest, provider, "/tmp", source, inputSchema);
+    const registry = new ToolRegistry([], [customTool]);
 
     const metadata = registry.getToolMetadata("meta-tool");
     expect(metadata).toBeDefined();
-    expect(metadata!.toolType).toBe("plugin");
-    expect(metadata!.systemPromptHash).toBe(pluginTool.systemPromptHash);
-    expect(metadata!.pluginVersion).toBe("1.0.0");
-    expect(metadata!.pluginHash).toBe("deadbeef");
+    expect(metadata!.toolType).toBe("custom");
+    expect(metadata!.systemPromptHash).toBe(customTool.systemPromptHash);
+    expect(metadata!.toolVersion).toBe("1.0.0");
+    expect(metadata!.toolHash).toBe("deadbeef");
   });
 
   it("getToolMetadata returns built-in type without systemPromptHash", () => {

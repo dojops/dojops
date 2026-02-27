@@ -14,7 +14,12 @@ import {
   findSystemTool,
   isToolSupportedOnCurrentPlatform,
 } from "@dojops/core";
-import { TOOLS_BIN_DIR, loadToolRegistry, installSystemTool, verifyTool } from "./tool-sandbox";
+import {
+  TOOLCHAIN_BIN_DIR,
+  loadToolchainRegistry,
+  installSystemTool,
+  verifyTool,
+} from "./toolchain-sandbox";
 
 /**
  * Attempt to resolve a binary on PATH.
@@ -23,8 +28,8 @@ import { TOOLS_BIN_DIR, loadToolRegistry, installSystemTool, verifyTool } from "
  */
 export function resolveBinary(name: string): string | undefined {
   // Check sandbox first
-  if (fs.existsSync(TOOLS_BIN_DIR)) {
-    const sandboxPath = nodePath.join(TOOLS_BIN_DIR, name);
+  if (fs.existsSync(TOOLCHAIN_BIN_DIR)) {
+    const sandboxPath = nodePath.join(TOOLCHAIN_BIN_DIR, name);
     if (fs.existsSync(sandboxPath)) {
       return sandboxPath;
     }
@@ -286,7 +291,7 @@ export async function offerToolInstall(options?: { nonInteractive?: boolean }): 
  * Collect system tools that are not installed anywhere (sandbox or system PATH).
  */
 export function collectMissingSystemTools(): typeof SYSTEM_TOOLS {
-  const registry = loadToolRegistry();
+  const registry = loadToolchainRegistry();
   return SYSTEM_TOOLS.filter((tool) => {
     if (!isToolSupportedOnCurrentPlatform(tool)) return false;
     if (registry.tools.find((t) => t.name === tool.name)) return false;
@@ -319,7 +324,7 @@ export async function offerSystemToolInstall(options?: {
   }
 
   const selected = await p.multiselect({
-    message: "Select system tools to install into sandbox (~/.dojops/tools/):",
+    message: "Select system tools to install into toolchain (~/.dojops/toolchain/):",
     options: missing.map((tool) => ({
       value: tool.name,
       label: tool.name,

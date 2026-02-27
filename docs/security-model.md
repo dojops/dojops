@@ -123,7 +123,7 @@ The approval context includes file paths, content preview, and tool name.
 - Atomic write operations (temp-file + `fs.renameSync` — POSIX atomic rename prevents partial writes on crash)
 - Per-file audit logging (path, size, timestamp, operation)
 
-All 12 built-in tools and plugin tools also use `atomicWriteFileSync()` from `@dojops/sdk` for direct file writes outside the sandbox.
+All 12 built-in tools and custom tools also use `atomicWriteFileSync()` from `@dojops/sdk` for direct file writes outside the sandbox.
 
 ### Layer 7: Immutable Audit Log
 
@@ -173,13 +173,13 @@ See [Security Scanning](security-scanning.md) for details.
 
 ---
 
-## Plugin Isolation
+## Tool Isolation
 
-Plugin tools execute through the same `SafeExecutor` pipeline as built-in tools (inheriting `maxFileSize`, `timeoutMs`, DevOps write allowlist, and per-file audit logging), plus three additional security controls:
+Custom tools execute through the same `SafeExecutor` pipeline as built-in tools (inheriting `maxFileSize`, `timeoutMs`, DevOps write allowlist, and per-file audit logging), plus three additional security controls:
 
 ### Verification Command Whitelist
 
-The `verification.command` field in plugin manifests can only invoke whitelisted binaries:
+The `verification.command` field in tool manifests can only invoke whitelisted binaries:
 
 ```
 terraform, kubectl, helm, ansible-lint, docker, hadolint,
@@ -199,15 +199,15 @@ The `permissions.child_process` field controls whether verification commands exe
 | `"none"`     | Command is never executed (skip)                    |
 | _(omitted)_  | Default-safe: command is never executed             |
 
-This ensures plugins cannot execute shell commands unless they explicitly declare `child_process: "required"` AND the command is whitelisted.
+This ensures custom tools cannot execute shell commands unless they explicitly declare `child_process: "required"` AND the command is whitelisted.
 
 ### Path Traversal Prevention
 
-File paths in `files[].path` and `detector.path` are validated at schema level — any segment containing `..` is rejected. This prevents plugins from writing to or detecting files outside the project directory (e.g., `../../etc/passwd`).
+File paths in `files[].path` and `detector.path` are validated at schema level — any segment containing `..` is rejected. This prevents custom tools from writing to or detecting files outside the project directory (e.g., `../../etc/passwd`).
 
-### Plugin Hash Integrity
+### Tool Hash Integrity
 
-Each plugin has a SHA-256 hash computed from its `plugin.yaml` content. This hash is pinned into plans at creation time and validated on `--resume` and `--replay` to detect plugin modifications between plan creation and execution. See [Plugin Specification v1](PLUGIN_SPEC_v1.md) for the full security model.
+Each custom tool has a SHA-256 hash computed from its `tool.yaml` content. This hash is pinned into plans at creation time and validated on `--resume` and `--replay` to detect tool modifications between plan creation and execution. See [Tool Specification v1](TOOL_SPEC_v1.md) for the full security model.
 
 ### Replay Validation
 
@@ -215,7 +215,7 @@ Each plugin has a SHA-256 hash computed from its `plugin.yaml` content. This has
 
 1. Forcing `temperature: 0` via a `DeterministicProvider` wrapper
 2. Validating `provider` and `model` match the plan's execution context
-3. Validating `systemPromptHash` for plugin tasks to detect prompt drift
+3. Validating `systemPromptHash` for custom tool tasks to detect prompt drift
 
 If any check fails, replay is aborted unless `--yes` forces continuation.
 

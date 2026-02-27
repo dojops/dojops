@@ -76,15 +76,15 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     }
   }
 
-  // Enrich tasks with plugin metadata
+  // Enrich tasks with tool metadata
   for (const task of graph.tasks) {
     const meta = registry.getToolMetadata(task.tool);
     if (meta) {
       task.toolType = meta.toolType;
-      if (meta.toolType === "plugin") {
-        task.pluginVersion = meta.pluginVersion;
-        task.pluginHash = meta.pluginHash;
-        task.pluginSource = meta.pluginSource as "global" | "project" | undefined;
+      if (meta.toolType === "custom") {
+        task.toolVersion = meta.toolVersion;
+        task.toolHash = meta.toolHash;
+        task.toolSource = meta.toolSource as "global" | "project" | undefined;
         task.systemPromptHash = meta.systemPromptHash;
       }
     }
@@ -119,9 +119,9 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       dependsOn: t.dependsOn,
       input: t.input as Record<string, unknown> | undefined,
       toolType: t.toolType,
-      pluginVersion: t.pluginVersion,
-      pluginHash: t.pluginHash,
-      pluginSource: t.pluginSource,
+      toolVersion: t.toolVersion,
+      toolHash: t.toolHash,
+      toolSource: t.toolSource,
       systemPromptHash: t.systemPromptHash,
     })),
     files: [],
@@ -139,7 +139,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       toolVersions: Object.fromEntries(
         graph.tasks.map((t) => {
           const meta = registry.getToolMetadata(t.tool);
-          return [t.tool, meta?.pluginVersion ?? "built-in"];
+          return [t.tool, meta?.toolVersion ?? "built-in"];
         }),
       ),
     },
@@ -234,13 +234,13 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       const tool = toolMap.get(taskNode.tool);
       if (!tool?.execute) continue;
 
-      // Build plugin metadata for audit enrichment
+      // Build tool metadata for audit enrichment
       const taskDef = savedPlan.tasks.find((t) => t.id === taskResult.taskId);
       const metadata: Record<string, unknown> = {};
       if (taskDef?.toolType) metadata.toolType = taskDef.toolType;
-      if (taskDef?.pluginVersion) metadata.pluginVersion = taskDef.pluginVersion;
-      if (taskDef?.pluginHash) metadata.pluginHash = taskDef.pluginHash;
-      if (taskDef?.pluginSource) metadata.pluginSource = taskDef.pluginSource;
+      if (taskDef?.toolVersion) metadata.toolVersion = taskDef.toolVersion;
+      if (taskDef?.toolHash) metadata.toolHash = taskDef.toolHash;
+      if (taskDef?.toolSource) metadata.toolSource = taskDef.toolSource;
 
       const execResult = await safeExecutor.executeTask(
         taskResult.taskId,
