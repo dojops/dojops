@@ -7,10 +7,9 @@ import { HistoryStore } from "../store";
 import { ScanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
-let scanInProgress = false;
-
 export function createScanRouter(store: HistoryStore, rootDir?: string): Router {
   const router = Router();
+  let scanInProgress = false;
 
   router.post("/", validateBody(ScanRequestSchema), async (req, res, next) => {
     if (scanInProgress) {

@@ -47,7 +47,7 @@ function computeAuditHash(entry: Record<string, unknown>): string {
     entry.status,
     entry.durationMs,
     (entry.previousHash as string) ?? "genesis",
-  ].join("|");
+  ].join("\0");
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 

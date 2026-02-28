@@ -68,11 +68,7 @@ export function createApp(deps: AppDependencies): Express {
   // Structured request logging
   app.use(requestLogger);
 
-  // API key auth (reads from deps or env; health check is always public)
-  const apiKey = deps.apiKey ?? process.env.DOJOPS_API_KEY;
-  app.use("/api/", authMiddleware(apiKey));
-
-  // Rate limiting for API routes (configurable via env)
+  // Rate limiting for API routes (A18: rate limiter before auth)
   const apiLimiter = rateLimit({
     windowMs: parseInt(process.env.DOJOPS_RATE_LIMIT_WINDOW_MS ?? String(15 * 60 * 1000), 10),
     limit: parseInt(process.env.DOJOPS_RATE_LIMIT ?? "100", 10),
@@ -82,6 +78,17 @@ export function createApp(deps: AppDependencies): Express {
   });
   app.use("/api/", apiLimiter);
 
+  // API key auth (reads from deps or env; health check is always public)
+  const apiKey = deps.apiKey ?? process.env.DOJOPS_API_KEY;
+  // When no API key is set, add warning header so clients/load-balancers can detect (A1)
+  if (!apiKey) {
+    app.use("/api/", (_req, _res, next) => {
+      _res.setHeader("X-DojOps-Warning", "no-auth");
+      next();
+    });
+  }
+  app.use("/api/", authMiddleware(apiKey));
+
   // Serve static dashboard files
   app.use(express.static(deps.publicDir ?? path.join(__dirname, "..", "public")));
 
@@ -89,21 +96,25 @@ export function createApp(deps: AppDependencies): Express {
   const metricsEnabled = !!deps.rootDir;
   const aggregator = deps.rootDir ? new MetricsAggregator(deps.rootDir) : null;
 
-  // Health check (public, no auth required)
+  // Health check (public, no auth required) — A26: cache provider status with 60s TTL
+  let cachedProviderStatus: "ok" | "degraded" = "ok";
+  let lastProviderCheck = 0;
+  const PROVIDER_CHECK_TTL = 60_000;
+
   app.get("/api/health", async (_req, res) => {
-    let providerStatus: "ok" | "degraded" = "ok";
-    // Lightweight provider ping: try listModels if available
-    if (deps.provider.listModels) {
+    if (deps.provider.listModels && Date.now() - lastProviderCheck > PROVIDER_CHECK_TTL) {
       try {
         await deps.provider.listModels();
+        cachedProviderStatus = "ok";
       } catch {
-        providerStatus = "degraded";
+        cachedProviderStatus = "degraded";
       }
+      lastProviderCheck = Date.now();
     }
     res.json({
-      status: providerStatus === "ok" ? "ok" : "degraded",
+      status: cachedProviderStatus === "ok" ? "ok" : "degraded",
       provider: deps.provider.name,
-      providerStatus,
+      providerStatus: cachedProviderStatus,
       tools: deps.tools.map((t) => t.name),
       customToolCount: deps.customToolCount ?? 0,
       metricsEnabled,

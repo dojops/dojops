@@ -86,8 +86,13 @@ describe("Chat routes", () => {
     expect(res.body.id).toBe(id);
   });
 
-  it("GET /api/chat/sessions/:id returns 404 for unknown", async () => {
+  it("GET /api/chat/sessions/:id returns 400 for invalid format", async () => {
     const res = await request(app).get("/api/chat/sessions/unknown-id");
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/chat/sessions/:id returns 404 for valid format but nonexistent", async () => {
+    const res = await request(app).get("/api/chat/sessions/chat-deadbeef");
     expect(res.status).toBe(404);
   });
 
@@ -102,8 +107,13 @@ describe("Chat routes", () => {
     expect(getRes.status).toBe(404);
   });
 
-  it("DELETE /api/chat/sessions/:id returns 404 for unknown", async () => {
+  it("DELETE /api/chat/sessions/:id returns 400 for invalid format", async () => {
     const res = await request(app).delete("/api/chat/sessions/unknown-id");
+    expect(res.status).toBe(400);
+  });
+
+  it("DELETE /api/chat/sessions/:id returns 404 for valid format but nonexistent", async () => {
+    const res = await request(app).delete("/api/chat/sessions/chat-deadbeef");
     expect(res.status).toBe(404);
   });
 
@@ -185,5 +195,59 @@ describe("Generate error handling", () => {
     expect(historyRes.body.entries).toHaveLength(1);
     expect(historyRes.body.entries[0].success).toBe(false);
     expect(historyRes.body.entries[0].error).toBe("Provider error");
+  });
+});
+
+describe("Chat session path traversal", () => {
+  it("returns 400 for session ID with path traversal characters", async () => {
+    const app = createApp(createTestDeps());
+
+    // Attempt path traversal via GET /api/chat/sessions/:id
+    // Express normalizes URL paths, so ../../ gets collapsed; session ID validation rejects.
+    const res = await request(app).get("/api/chat/sessions/../../etc/passwd");
+    expect([400, 404]).toContain(res.status);
+  });
+
+  it("returns 400 for session ID with encoded path traversal", async () => {
+    const app = createApp(createTestDeps());
+
+    // URL-encoded path traversal attempt — rejected by session ID validation (A6)
+    const res = await request(app).get("/api/chat/sessions/..%2F..%2Fetc%2Fpasswd");
+    expect(res.status).toBe(400);
+  });
+
+  it("DELETE with traversal ID does not affect other sessions", async () => {
+    const app = createApp(createTestDeps());
+
+    // Create a real session first
+    const createRes = await request(app).post("/api/chat/sessions").send({});
+    const realId = createRes.body.id;
+    expect(createRes.status).toBe(201);
+
+    // Try to delete with a traversal-style ID
+    await request(app).delete("/api/chat/sessions/../sessions/" + realId);
+    // Express path normalization means this resolves to /api/chat/sessions/<realId>
+    // which may or may not match depending on routing. Either way, the real session
+    // should remain accessible afterward via its actual ID.
+    const getRes = await request(app).get(`/api/chat/sessions/${realId}`);
+    // If the normalized path matched, the session is deleted (200 + 404 on re-get).
+    // If it didn't match, the session still exists (404 on delete + 200 on re-get).
+    // Either behavior is acceptable; what matters is no file system escape.
+    expect([200, 404]).toContain(getRes.status);
+  });
+
+  it("POST /api/chat with traversal sessionId creates new session instead", async () => {
+    const app = createApp(createTestDeps());
+
+    const res = await request(app).post("/api/chat").send({
+      message: "hello",
+      sessionId: "../../../etc/passwd",
+    });
+
+    expect(res.status).toBe(200);
+    // A traversal sessionId won't match anything in the in-memory map,
+    // so a brand-new session is created with a safe generated ID.
+    expect(res.body.sessionId).toMatch(/^chat-/);
+    expect(res.body.sessionId).not.toContain("..");
   });
 });

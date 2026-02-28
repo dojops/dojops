@@ -46,6 +46,9 @@ export class ToolRegistry {
 
     // Custom tools can override built-in tools (project tools win)
     for (const custom of customTools) {
+      if (this.toolMap.has(custom.name) && this.builtIn.some((b) => b.name === custom.name)) {
+        console.warn(`[tool-registry] Custom tool "${custom.name}" overrides built-in tool`);
+      }
       this.toolMap.set(custom.name, custom);
     }
   }

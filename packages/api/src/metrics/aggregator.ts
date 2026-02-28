@@ -49,7 +49,7 @@ interface ScanReport {
   };
 }
 
-function computeAuditHash(entry: MetricsAuditEntry): string {
+function computeAuditHash(entry: MetricsAuditEntry, hmacKey?: string | null): string {
   const payload = [
     entry.seq,
     entry.timestamp,
@@ -60,15 +60,33 @@ function computeAuditHash(entry: MetricsAuditEntry): string {
     entry.status,
     entry.durationMs,
     entry.previousHash ?? "genesis",
-  ].join("|");
+  ].join("\0");
+  if (hmacKey) {
+    return crypto.createHmac("sha256", hmacKey).update(payload).digest("hex");
+  }
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
 export class MetricsAggregator {
   private readonly dojopsDir: string;
+  // A32: Simple in-memory cache with 30s TTL (matches dashboard refresh interval)
+  private cache: {
+    overview?: { data: OverviewMetrics; ts: number };
+    security?: { data: SecurityMetrics; ts: number };
+    audit?: { data: AuditMetrics; ts: number };
+  } = {};
+  private readonly TTL = 30_000;
 
   constructor(private rootDir: string) {
     this.dojopsDir = path.join(rootDir, ".dojops");
+  }
+
+  private loadHmacKey(): string | null {
+    try {
+      return fs.readFileSync(path.join(this.dojopsDir, "audit-key"), "utf-8").trim();
+    } catch {
+      return null;
+    }
   }
 
   private readJsonFiles<T>(dir: string): T[] {
@@ -111,6 +129,7 @@ export class MetricsAggregator {
   } {
     if (entries.length === 0) return { valid: true, errors: 0, totalEntries: 0 };
 
+    const hmacKey = this.loadHmacKey();
     let errorCount = 0;
     let expectedPreviousHash = "genesis";
     let expectedSeq = 1;
@@ -124,8 +143,10 @@ export class MetricsAggregator {
       if (entry.seq !== expectedSeq) errorCount++;
       if (entry.previousHash !== expectedPreviousHash) errorCount++;
 
-      const recomputed = computeAuditHash(entry);
-      if (entry.hash !== recomputed) errorCount++;
+      // Try HMAC first, then fall back to plain SHA-256 for legacy entries
+      const recomputedHmac = hmacKey ? computeAuditHash(entry, hmacKey) : null;
+      const recomputedPlain = computeAuditHash(entry, null);
+      if (entry.hash !== recomputedHmac && entry.hash !== recomputedPlain) errorCount++;
 
       expectedPreviousHash = entry.hash;
       expectedSeq = entry.seq + 1;
@@ -141,6 +162,15 @@ export class MetricsAggregator {
   }
 
   getOverview(): OverviewMetrics {
+    if (this.cache.overview && Date.now() - this.cache.overview.ts < this.TTL) {
+      return this.cache.overview.data;
+    }
+    const data = this.computeOverview();
+    this.cache.overview = { data, ts: Date.now() };
+    return data;
+  }
+
+  private computeOverview(): OverviewMetrics {
     const plans = this.readJsonFiles<PlanData>(path.join(this.dojopsDir, "plans"));
     const executions = this.readJsonFiles<ExecutionData>(
       path.join(this.dojopsDir, "execution-logs"),
@@ -225,6 +255,15 @@ export class MetricsAggregator {
   }
 
   getSecurity(): SecurityMetrics {
+    if (this.cache.security && Date.now() - this.cache.security.ts < this.TTL) {
+      return this.cache.security.data;
+    }
+    const data = this.computeSecurity();
+    this.cache.security = { data, ts: Date.now() };
+    return data;
+  }
+
+  private computeSecurity(): SecurityMetrics {
     const scanReports = this.readJsonFiles<ScanReport>(path.join(this.dojopsDir, "scan-history"));
 
     const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
@@ -312,6 +351,15 @@ export class MetricsAggregator {
   }
 
   getAudit(): AuditMetrics {
+    if (this.cache.audit && Date.now() - this.cache.audit.ts < this.TTL) {
+      return this.cache.audit.data;
+    }
+    const data = this.computeAudit();
+    this.cache.audit = { data, ts: Date.now() };
+    return data;
+  }
+
+  private computeAudit(): AuditMetrics {
     const entries = this.readAuditEntries();
     const chainIntegrity = this.verifyAuditChain(entries);
 

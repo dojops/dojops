@@ -153,7 +153,15 @@ describe("CustomTool", () => {
     const provider = createMockProvider();
     const outputDir = "output";
     const manifest = createTestManifest();
-    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(
+      manifest,
+      provider,
+      tmpDir,
+      testSource,
+      testInputSchema,
+      undefined,
+      tmpDir,
+    );
 
     const result = await tool.execute({ outputPath: outputDir, description: "test" });
 
@@ -181,7 +189,15 @@ describe("CustomTool", () => {
       detector: { path: "{outputPath}/config.yaml" },
     });
 
-    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(
+      manifest,
+      provider,
+      tmpDir,
+      testSource,
+      testInputSchema,
+      undefined,
+      tmpDir,
+    );
 
     const result = await tool.execute({
       outputPath: outputDir,
@@ -335,7 +351,15 @@ describe("CustomTool — absolute path guard (H5 fix)", () => {
     const manifest = createTestManifest({
       files: [{ path: "{outputPath}/config.yaml", serializer: "yaml" }],
     });
-    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(
+      manifest,
+      provider,
+      tmpDir,
+      testSource,
+      testInputSchema,
+      undefined,
+      tmpDir,
+    );
 
     // Input that produces an absolute path: /etc/config.yaml
     const result = await tool.execute({ outputPath: "/etc", description: "test" });
@@ -348,7 +372,15 @@ describe("CustomTool — absolute path guard (H5 fix)", () => {
     const manifest = createTestManifest({
       files: [{ path: "{outputPath}/config.yaml", serializer: "yaml" }],
     });
-    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
+    const tool = new CustomTool(
+      manifest,
+      provider,
+      tmpDir,
+      testSource,
+      testInputSchema,
+      undefined,
+      tmpDir,
+    );
 
     const result = await tool.execute({ outputPath: "output", description: "test" });
     expect(result.success).toBe(true);

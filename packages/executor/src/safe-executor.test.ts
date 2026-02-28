@@ -91,6 +91,92 @@ class FailingVerifyTool extends BaseTool<MockInput> {
   }
 }
 
+class SlowVerifyTool extends BaseTool<MockInput> {
+  name = "slow-verify-tool";
+  description = "Verify hangs";
+  inputSchema = MockInputSchema;
+  async generate(input: MockInput): Promise<ToolOutput> {
+    return { success: true, data: { result: input.value } };
+  }
+  async execute(input: MockInput): Promise<ToolOutput> {
+    return { success: true, data: { executed: input.value } };
+  }
+  async verify(): Promise<VerificationResult> {
+    await new Promise((r) => setTimeout(r, 5000));
+    return { passed: true, tool: "slow-verify", issues: [] };
+  }
+}
+
+class ThrowingVerifyTool extends BaseTool<MockInput> {
+  name = "throwing-verify-tool";
+  description = "Verify throws";
+  inputSchema = MockInputSchema;
+  async generate(input: MockInput): Promise<ToolOutput> {
+    return { success: true, data: { result: input.value } };
+  }
+  async execute(input: MockInput): Promise<ToolOutput> {
+    return { success: true, data: { executed: input.value } };
+  }
+  async verify(): Promise<VerificationResult> {
+    throw new Error("kubectl not found");
+  }
+}
+
+class UsageTrackingTool extends BaseTool<MockInput> {
+  name = "usage-tool";
+  description = "Returns token usage";
+  inputSchema = MockInputSchema;
+  async generate(input: MockInput): Promise<ToolOutput> {
+    return {
+      success: true,
+      data: { result: input.value },
+      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+    };
+  }
+}
+
+class SlowExecuteTool extends BaseTool<MockInput> {
+  name = "slow-execute-tool";
+  description = "Execute hangs";
+  inputSchema = MockInputSchema;
+  async generate(input: MockInput): Promise<ToolOutput> {
+    return { success: true, data: { result: input.value } };
+  }
+  async execute(): Promise<ToolOutput> {
+    await new Promise((r) => setTimeout(r, 5000));
+    return { success: true, data: {} };
+  }
+}
+
+class FailingExecuteTool extends BaseTool<MockInput> {
+  name = "failing-execute-tool";
+  description = "Execute fails";
+  inputSchema = MockInputSchema;
+  async generate(input: MockInput): Promise<ToolOutput> {
+    return { success: true, data: { result: input.value } };
+  }
+  async execute(): Promise<ToolOutput> {
+    return { success: false, error: "disk full" };
+  }
+}
+
+class FileTrackingTool extends BaseTool<MockInput> {
+  name = "file-tracking-tool";
+  description = "Writes files";
+  inputSchema = MockInputSchema;
+  async generate(input: MockInput): Promise<ToolOutput> {
+    return { success: true, data: { result: input.value } };
+  }
+  async execute(): Promise<ToolOutput> {
+    return {
+      success: true,
+      data: {},
+      filesWritten: ["/tmp/new.yaml"],
+      filesModified: ["/tmp/existing.yaml"],
+    };
+  }
+}
+
 describe("SafeExecutor", () => {
   it("executes a tool through generate and execute with approval", async () => {
     const executor = new SafeExecutor({
@@ -266,5 +352,156 @@ describe("SafeExecutor", () => {
     expect(verifySpy).not.toHaveBeenCalled();
     expect(result.verification).toBeUndefined();
     verifySpy.mockRestore();
+  });
+
+  describe("verify-phase timeout", () => {
+    it("returns failed status when verify phase exceeds timeout", async () => {
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: false,
+          skipVerification: false,
+          verifyTimeoutMs: 100,
+        },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const result = await executor.executeTask("t1", new SlowVerifyTool(), { value: "hello" });
+
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Verification");
+      expect(result.error).toContain("timed out");
+      expect(result.verification).toBeDefined();
+      expect(result.verification!.passed).toBe(false);
+    });
+  });
+
+  describe("verify throwing unexpected error", () => {
+    it("returns failed with synthetic VerificationResult when verify throws", async () => {
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: false,
+          skipVerification: false,
+        },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const result = await executor.executeTask("t1", new ThrowingVerifyTool(), { value: "hello" });
+
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Verification threw unexpectedly: kubectl not found");
+      expect(result.verification).toBeDefined();
+      expect(result.verification!.passed).toBe(false);
+      expect(result.verification!.issues).toHaveLength(1);
+      expect(result.verification!.issues[0].severity).toBe("error");
+      expect(result.verification!.issues[0].message).toContain("kubectl not found");
+    });
+  });
+
+  describe("token usage accumulation", () => {
+    it("accumulates token usage across multiple executeTask calls", async () => {
+      const executor = new SafeExecutor({
+        policy: { requireApproval: false },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      await executor.executeTask("t1", new UsageTrackingTool(), { value: "first" });
+      await executor.executeTask("t2", new UsageTrackingTool(), { value: "second" });
+      await executor.executeTask("t3", new UsageTrackingTool(), { value: "third" });
+
+      const usage = executor.getTokenUsage();
+      expect(usage.prompt).toBe(300);
+      expect(usage.completion).toBe(150);
+      expect(usage.total).toBe(450);
+    });
+
+    it("returns zeros when tools do not return usage", async () => {
+      const executor = new SafeExecutor({
+        policy: { requireApproval: false },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      await executor.executeTask("t1", new MockTool(), { value: "no-usage" });
+      await executor.executeTask("t2", new GenerateOnlyTool(), { value: "no-usage" });
+
+      const usage = executor.getTokenUsage();
+      expect(usage.prompt).toBe(0);
+      expect(usage.completion).toBe(0);
+      expect(usage.total).toBe(0);
+    });
+  });
+
+  describe("execute phase timeout", () => {
+    it("returns timeout status when execute phase exceeds executeTimeoutMs", async () => {
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: false,
+          executeTimeoutMs: 100,
+        },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const result = await executor.executeTask("t1", new SlowExecuteTool(), { value: "hello" });
+
+      expect(result.status).toBe("timeout");
+      expect(result.error).toContain("timed out");
+    });
+  });
+
+  describe("execute phase failure", () => {
+    it("returns failed status when execute returns success=false", async () => {
+      const executor = new SafeExecutor({
+        policy: { requireApproval: false },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const result = await executor.executeTask("t1", new FailingExecuteTool(), { value: "hello" });
+
+      expect(result.status).toBe("failed");
+      expect(result.error).toBe("disk full");
+      expect(result.approval).toBe("approved");
+    });
+  });
+
+  describe("metadata enrichment", () => {
+    it("enriches audit entry with tool metadata", async () => {
+      const executor = new SafeExecutor({
+        policy: { requireApproval: false },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const metadata = {
+        toolType: "custom" as const,
+        toolSource: "project" as const,
+        toolVersion: "1.2.3",
+        toolHash: "sha256:abc123",
+      };
+
+      await executor.executeTask("t1", new MockTool(), { value: "hello" }, metadata);
+
+      const log = executor.getAuditLog();
+      expect(log).toHaveLength(1);
+      expect(log[0].toolType).toBe("custom");
+      expect(log[0].toolSource).toBe("project");
+      expect(log[0].toolVersion).toBe("1.2.3");
+      expect(log[0].toolHash).toBe("sha256:abc123");
+    });
+  });
+
+  describe("files tracking", () => {
+    it("captures filesWritten and filesModified in the audit entry", async () => {
+      const executor = new SafeExecutor({
+        policy: { requireApproval: false },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const result = await executor.executeTask("t1", new FileTrackingTool(), { value: "hello" });
+
+      expect(result.status).toBe("completed");
+
+      const log = executor.getAuditLog();
+      expect(log).toHaveLength(1);
+      expect(log[0].filesWritten).toEqual(["/tmp/new.yaml"]);
+      expect(log[0].filesModified).toEqual(["/tmp/existing.yaml"]);
+    });
   });
 });

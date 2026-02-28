@@ -16,6 +16,24 @@ export interface JSONSchemaObject {
 }
 
 /**
+ * Validates and constructs a RegExp from a pattern string.
+ * Rejects patterns with nested quantifiers (common ReDoS vectors).
+ */
+function safeRegex(pattern: string): RegExp {
+  if (
+    /(\+|\*|\{)\s*\??(\+|\*|\{)/.test(pattern) ||
+    /\([^)]*(\+|\*)\)[^)]*(\+|\*|\{)/.test(pattern)
+  ) {
+    throw new Error(`Potentially unsafe regex pattern rejected: "${pattern}"`);
+  }
+  try {
+    return new RegExp(pattern);
+  } catch {
+    throw new Error(`Invalid regex pattern: "${pattern}"`);
+  }
+}
+
+/**
  * Converts a JSON Schema (subset) to a runtime Zod schema.
  * Supports: string, number, integer, boolean, array, object, enum, default, description, required.
  *
@@ -40,7 +58,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
       let s = z.string();
       if (schema.minLength !== undefined) s = s.min(schema.minLength);
       if (schema.maxLength !== undefined) s = s.max(schema.maxLength);
-      if (schema.pattern !== undefined) s = s.regex(new RegExp(schema.pattern));
+      if (schema.pattern !== undefined) s = s.regex(safeRegex(schema.pattern));
       let result: ZodTypeAny = s;
       if (schema.description) {
         result = result.describe(schema.description);

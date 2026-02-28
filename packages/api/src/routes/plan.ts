@@ -19,17 +19,28 @@ export function createPlanRouter(
     try {
       const { goal, execute, autoApprove } = req.body;
 
+      // A1/A2: autoApprove requires authentication
+      const apiKey = req.headers.authorization || req.headers["x-api-key"];
+      if (autoApprove && !apiKey) {
+        res.status(403).json({ error: "autoApprove requires authentication" });
+        return;
+      }
+
       const graph = await decompose(goal, provider, tools);
 
       let result;
       if (execute) {
         const timeoutMs = parseInt(process.env.DOJOPS_PLAN_TIMEOUT_MS ?? "300000", 10);
 
-        const executePlan = async () => {
+        // A9: Use AbortController instead of Promise.race to avoid abandoned promises
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
           const executor = new PlannerExecutor(tools);
           const planResult = await executor.execute(graph);
 
-          if (autoApprove) {
+          if (autoApprove && !controller.signal.aborted) {
             const safeExecutor = new SafeExecutor({
               policy: {
                 allowWrite: true,
@@ -42,6 +53,7 @@ export function createPlanRouter(
 
             const toolMap = new Map(tools.map((t) => [t.name, t]));
             for (const taskResult of planResult.results) {
+              if (controller.signal.aborted) break;
               if (taskResult.status !== "completed") continue;
               const taskNode = graph.tasks.find((t) => t.id === taskResult.taskId);
               if (!taskNode) continue;
@@ -51,15 +63,14 @@ export function createPlanRouter(
             }
           }
 
-          return planResult;
-        };
+          result = planResult;
+        } finally {
+          clearTimeout(timer);
+        }
 
-        result = await Promise.race([
-          executePlan(),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Plan execution timeout")), timeoutMs),
-          ),
-        ]);
+        if (controller.signal.aborted) {
+          throw new Error("Plan execution timeout");
+        }
       }
 
       const response = {

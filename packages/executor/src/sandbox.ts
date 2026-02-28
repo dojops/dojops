@@ -46,10 +46,19 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
   };
 }
 
-export function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+export function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message?: string,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new PolicyViolationError(`Execution timed out after ${timeoutMs}ms`, "timeoutMs"));
+      reject(
+        new PolicyViolationError(
+          message ?? `Execution timed out after ${timeoutMs}ms`,
+          "timeoutMs",
+        ),
+      );
     }, timeoutMs);
 
     promise

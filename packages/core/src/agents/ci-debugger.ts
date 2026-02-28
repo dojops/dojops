@@ -92,13 +92,18 @@ export class CIDebugger {
     const results: { name: string; diagnosis: CIDiagnosis }[] = [];
     for (let i = 0; i < logs.length; i += CONCURRENCY) {
       const chunk = logs.slice(i, i + CONCURRENCY);
-      const chunkResults = await Promise.all(
+      const settled = await Promise.allSettled(
         chunk.map(async (log) => {
           const diagnosis = await this.diagnose(log.content);
           return { name: log.name, diagnosis };
         }),
       );
-      results.push(...chunkResults);
+      for (const outcome of settled) {
+        if (outcome.status === "fulfilled") {
+          results.push(outcome.value);
+        }
+        // Rejected outcomes are silently skipped (partial results preserved)
+      }
     }
     return results;
   }

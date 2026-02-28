@@ -459,6 +459,8 @@ save 300 10
         entry.toolDir,
         entry.source,
         entry.inputSchemaRaw,
+        undefined,
+        entry.toolDir,
       );
 
       const result = await tool.execute({
@@ -503,6 +505,8 @@ save 300 10
         entry.toolDir,
         entry.source,
         entry.inputSchemaRaw,
+        undefined,
+        entry.toolDir,
       );
 
       const result = await tool.execute({
@@ -541,6 +545,8 @@ save 300 10
         entry.toolDir,
         entry.source,
         entry.inputSchemaRaw,
+        undefined,
+        entry.toolDir,
       );
 
       const result = await tool.execute({

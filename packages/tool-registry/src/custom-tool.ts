@@ -16,6 +16,7 @@ import { LLMProvider, sanitizeSystemPrompt } from "@dojops/core";
 import { ToolManifest, ToolSource } from "./types";
 import { jsonSchemaToZod, JSONSchemaObject } from "./json-schema-to-zod";
 import { serialize } from "./serializers";
+import { validateSystemPrompt } from "./prompt-validator";
 
 export const ALLOWED_VERIFICATION_BINARIES = [
   "terraform",
@@ -56,6 +57,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
   private manifest: ToolManifest;
   private provider: LLMProvider;
   private toolDir: string;
+  private projectDir: string;
   private outputZodSchema?: ZodTypeAny;
 
   constructor(
@@ -65,10 +67,12 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
     source: ToolSource,
     inputSchemaRaw: Record<string, unknown>,
     outputSchemaRaw?: Record<string, unknown>,
+    projectDir?: string,
   ) {
     this.manifest = manifest;
     this.provider = provider;
     this.toolDir = toolDir;
+    this.projectDir = projectDir ?? process.cwd();
     this.source = source;
     this.name = manifest.name;
     this.description = manifest.description;
@@ -76,6 +80,14 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
 
     if (outputSchemaRaw) {
       this.outputZodSchema = jsonSchemaToZod(outputSchemaRaw as JSONSchemaObject);
+    }
+
+    // Validate system prompt for injection patterns (A3)
+    const promptValidation = validateSystemPrompt(manifest.generator.systemPrompt);
+    if (!promptValidation.safe) {
+      for (const warning of promptValidation.warnings) {
+        console.warn(`[custom-tool] Tool "${manifest.name}": ${warning}`);
+      }
     }
   }
 
@@ -96,7 +108,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
         const rawPath = this.manifest.detector.path;
         const paths = Array.isArray(rawPath) ? rawPath : [rawPath];
         for (const p of paths) {
-          const detectorPath = this.resolveFilePath(p, input);
+          const detectorPath = this.resolveDetectorPath(p, input);
           const content = readExistingConfig(detectorPath);
           if (content) {
             existingContent = content;
@@ -160,7 +172,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       const filesModified: string[] = [];
 
       for (const file of this.manifest.files) {
-        const filePath = this.resolveFilePath(file.path, input);
+        const filePath = this.resolveOutputPath(file.path, input);
 
         if (data.isUpdate) {
           backupFile(filePath);
@@ -212,9 +224,20 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       return { passed: false, tool: this.name, issues };
     }
 
+    // Reject dangerous arguments (A8)
+    const parts = command.split(/\s+/);
+    const DANGEROUS_ARG_PATTERNS = [/--backend-config/, /--plugin-dir/, /-chdir/];
+    for (const arg of parts.slice(1)) {
+      if (DANGEROUS_ARG_PATTERNS.some((p) => p.test(arg))) {
+        const issues: VerificationIssue[] = [
+          { severity: "error", message: `Dangerous argument rejected: ${arg}` },
+        ];
+        return { passed: false, tool: this.name, issues };
+      }
+    }
+
     // Whitelisted + permission required → execute
     try {
-      const parts = command.split(/\s+/);
       execFileSync(parts[0], parts.slice(1), {
         cwd: this.toolDir,
         encoding: "utf-8",
@@ -265,7 +288,21 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
     return parts.join("\n");
   }
 
-  private resolveFilePath(templatePath: string, input: Record<string, unknown>): string {
+  /** Resolve and anchor to toolDir — used for detector paths. */
+  private resolveDetectorPath(templatePath: string, input: Record<string, unknown>): string {
+    return this.resolvePathAnchored(templatePath, input, this.toolDir);
+  }
+
+  /** Resolve and anchor to projectDir — used for output file writes. */
+  private resolveOutputPath(templatePath: string, input: Record<string, unknown>): string {
+    return this.resolvePathAnchored(templatePath, input, this.projectDir);
+  }
+
+  private resolvePathAnchored(
+    templatePath: string,
+    input: Record<string, unknown>,
+    baseDir: string,
+  ): string {
     let resolved = templatePath;
     for (const [key, value] of Object.entries(input)) {
       if (typeof value === "string") {
@@ -291,14 +328,14 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       throw new Error(`Path traversal detected in resolved file path "${resolved}"`);
     }
 
-    // Anchor resolved path to toolDir to prevent escape
-    const anchored = path.join(this.toolDir, resolved);
-    const realBase = path.resolve(this.toolDir);
+    // Anchor resolved path to baseDir to prevent escape
+    const anchored = path.join(baseDir, resolved);
+    const realBase = path.resolve(baseDir);
     if (
       path.resolve(anchored) !== realBase &&
       !path.resolve(anchored).startsWith(realBase + path.sep)
     ) {
-      throw new Error(`Resolved path escapes tool directory`);
+      throw new Error(`Resolved path escapes base directory`);
     }
 
     return anchored;

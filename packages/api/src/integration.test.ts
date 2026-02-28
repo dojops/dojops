@@ -152,4 +152,72 @@ describe("API integration", () => {
       expect(res.headers["access-control-allow-origin"]).toBe("https://example.com");
     });
   });
+
+  describe("rate limiting", () => {
+    it("returns 429 after exceeding rate limit", async () => {
+      // Save original env values
+      const origLimit = process.env.DOJOPS_RATE_LIMIT;
+      const origWindow = process.env.DOJOPS_RATE_LIMIT_WINDOW_MS;
+
+      // Set very low rate limit — must be set BEFORE createApp reads them
+      process.env.DOJOPS_RATE_LIMIT = "3";
+      process.env.DOJOPS_RATE_LIMIT_WINDOW_MS = "60000";
+
+      const limitedApp = createApp(createMockDeps());
+
+      // Send requests up to the limit
+      for (let i = 0; i < 3; i++) {
+        await request(limitedApp).get("/api/health").expect(200);
+      }
+
+      // Next request should be rate limited
+      const res = await request(limitedApp).get("/api/health");
+      expect(res.status).toBe(429);
+
+      // Cleanup
+      if (origLimit === undefined) delete process.env.DOJOPS_RATE_LIMIT;
+      else process.env.DOJOPS_RATE_LIMIT = origLimit;
+      if (origWindow === undefined) delete process.env.DOJOPS_RATE_LIMIT_WINDOW_MS;
+      else process.env.DOJOPS_RATE_LIMIT_WINDOW_MS = origWindow;
+    });
+  });
+
+  describe("health check details", () => {
+    it("returns detailed health response shape", async () => {
+      const app = createApp(deps);
+      const res = await request(app).get("/api/health").expect(200);
+
+      expect(res.body).toEqual(
+        expect.objectContaining({
+          status: "ok",
+          provider: "mock",
+          providerStatus: "ok",
+          tools: ["test-tool"],
+          customToolCount: 0,
+          metricsEnabled: false,
+        }),
+      );
+      expect(typeof res.body.memory).toBe("number");
+      expect(res.body.memory).toBeGreaterThan(0);
+      expect(typeof res.body.uptime).toBe("number");
+      expect(res.body.uptime).toBeGreaterThanOrEqual(0);
+      expect(typeof res.body.timestamp).toBe("string");
+      // Timestamp should be a valid ISO date
+      expect(new Date(res.body.timestamp).toISOString()).toBe(res.body.timestamp);
+    });
+
+    it("shows degraded when listModels fails", async () => {
+      const degradedDeps = createMockDeps();
+      degradedDeps.provider.listModels = vi
+        .fn()
+        .mockRejectedValue(new Error("Provider unreachable"));
+      const app = createApp(degradedDeps);
+
+      const res = await request(app).get("/api/health").expect(200);
+
+      expect(res.body.status).toBe("degraded");
+      expect(res.body.providerStatus).toBe("degraded");
+      expect(res.body.provider).toBe("mock");
+    });
+  });
 });

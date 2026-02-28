@@ -60,12 +60,14 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
           lastError = err;
 
           // Schema validation retry: re-send with stricter instructions
+          // Schema retries do NOT count against the network retry budget
           if (request.schema && isSchemaValidationError(err) && schemaAttempt < schemaRetries) {
             schemaAttempt++;
             const validationErr = err as JsonValidationError;
             const stricterSystem =
               `${request.system ?? ""}\n\nIMPORTANT: Your previous response failed JSON schema validation: ${validationErr.message}. You MUST respond with valid JSON that matches the required schema exactly. No markdown fences, no extra text outside JSON.`.trim();
             request = { ...request, system: stricterSystem };
+            attempt--; // Don't count schema retry against network budget
             await sleep(500);
             continue;
           }

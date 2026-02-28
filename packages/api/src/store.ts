@@ -9,6 +9,10 @@ export interface HistoryEntry {
   error?: string;
 }
 
+/**
+ * In-memory operation history. Data is lost on server restart.
+ * For persistent storage, see roadmap Phase 9 (Enterprise Readiness).
+ */
 export class HistoryStore {
   private entries: HistoryEntry[] = [];
   private nextId = 1;

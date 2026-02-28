@@ -23,6 +23,9 @@ function resolveInputRefs(
       if (refResult === undefined) {
         throw new Error(`$ref references unknown task: ${refId}`);
       }
+      if (refResult.status === "failed" || refResult.status === "skipped") {
+        throw new Error(`$ref:${refId} references a ${refResult.status} task`);
+      }
       resolved[key] = refResult.output;
     } else {
       resolved[key] = value;
@@ -229,6 +232,13 @@ export class PlannerExecutor {
           this.logger.taskEnd(task.id, "failed", error);
         }
       });
+
+      // Warn when a wave has mixed success/failure (A10/A30)
+      if (wave.some((id) => failed.has(id)) && wave.some((id) => !failed.has(id))) {
+        console.warn(
+          `[planner] Wave completed with mixed results — some tasks failed while others succeeded. Manual review recommended.`,
+        );
+      }
 
       // After wave completes, find newly ready tasks
       for (const completedId of wave) {

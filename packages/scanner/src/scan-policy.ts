@@ -20,6 +20,7 @@ export interface ScanPolicy {
 export interface PolicyResult {
   passed: boolean;
   violations: string[];
+  suppressedCount: number;
 }
 
 /**
@@ -46,13 +47,16 @@ export function loadScanPolicy(projectPath: string): ScanPolicy | undefined {
  */
 export function evaluatePolicy(report: ScanReport, policy: ScanPolicy): PolicyResult {
   const violations: string[] = [];
+  let suppressedCount = 0;
 
-  // Apply ignore list — filter out suppressed findings (false positive suppression 3E)
+  // Apply ignore list — filter out suppressed findings (clone to avoid mutating original)
   if (policy.ignore && policy.ignore.length > 0) {
     const ignoreIds = new Set(policy.ignore.map((e) => e.id));
-    report.findings = report.findings.filter(
+    const originalFindings = [...report.findings];
+    report.findings = originalFindings.filter(
       (f) => !ignoreIds.has(f.id) && !ignoreIds.has(f.cve ?? ""),
     );
+    suppressedCount = originalFindings.length - report.findings.length;
   }
 
   // Check severity count thresholds
@@ -70,7 +74,7 @@ export function evaluatePolicy(report: ScanReport, policy: ScanPolicy): PolicyRe
     }
   }
 
-  return { passed: violations.length === 0, violations };
+  return { passed: violations.length === 0, violations, suppressedCount };
 }
 
 /**

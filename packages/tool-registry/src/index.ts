@@ -19,6 +19,7 @@ export * from "./manifest-schema";
 export * from "./agent-parser";
 export * from "./agent-loader";
 export * from "./agent-schema";
+export * from "./prompt-validator";
 
 /**
  * Load built-in .dops modules from @dojops/runtime/modules/.
@@ -98,7 +99,7 @@ export function createToolRegistry(provider: LLMProvider, projectPath?: string):
   const policy = loadToolPolicy(projectPath);
   const allowedEntries = toolEntries.filter((entry) => isToolAllowed(entry.manifest.name, policy));
 
-  // 4. Create CustomTool instances from legacy manifests
+  // 4. Create CustomTool instances from legacy manifests (FB10: pass projectPath for output)
   const customTools: CustomTool[] = allowedEntries.map(
     (entry) =>
       new CustomTool(
@@ -108,6 +109,7 @@ export function createToolRegistry(provider: LLMProvider, projectPath?: string):
         entry.source,
         entry.inputSchemaRaw,
         entry.outputSchemaRaw,
+        projectPath,
       ),
   );
 

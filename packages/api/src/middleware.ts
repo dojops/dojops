@@ -99,9 +99,12 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 // Express error handlers must have 4 parameters
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction): void {
+  const requestId = _req.headers["x-request-id"] as string | undefined;
+
   if (err instanceof ZodError) {
     res.status(400).json({
       error: "Validation failed",
+      ...(requestId ? { requestId } : {}),
       details: err.issues.map((i) => ({
         path: i.path.join("."),
         message: i.message,
@@ -114,6 +117,7 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
   const isProduction = process.env.NODE_ENV === "production";
   res.status(500).json({
     error: "Internal server error",
+    ...(requestId ? { requestId } : {}),
     ...(isProduction ? {} : { message: err.message }),
   });
 }

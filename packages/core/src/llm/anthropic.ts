@@ -47,7 +47,7 @@ export class AnthropicProvider implements LLMProvider {
     } catch (err: unknown) {
       const errMsg = extractApiError(err);
       // Some models don't support assistant prefill — retry without it
-      if (usedPrefill && errMsg.includes("prefill")) {
+      if (usedPrefill && /\bprefill\b/i.test(errMsg)) {
         usedPrefill = false;
         const messagesWithoutPrefill = messages.filter(
           (m) => !(m.role === "assistant" && m.content === "{"),

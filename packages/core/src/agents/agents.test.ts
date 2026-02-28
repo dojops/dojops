@@ -309,3 +309,95 @@ describe("AgentRouter", () => {
     expect(agents.map((a) => a.name)).toContain("ops-cortex");
   });
 });
+
+describe("AgentRouter edge cases", () => {
+  const minimalConfigs: SpecialistConfig[] = [
+    {
+      name: "test-orchestrator",
+      domain: "orchestration",
+      description: "Orchestrator",
+      systemPrompt: "You orchestrate.",
+      keywords: ["orchestrate", "manage"],
+    },
+    {
+      name: "test-terraform",
+      domain: "terraform",
+      description: "Terraform",
+      systemPrompt: "You do terraform.",
+      keywords: ["terraform", "hcl", "infrastructure"],
+    },
+    {
+      name: "test-kubernetes",
+      domain: "kubernetes",
+      description: "K8s",
+      systemPrompt: "You do k8s.",
+      keywords: ["kubernetes", "k8s", "pod", "deployment"],
+    },
+  ];
+
+  it("routes to fallback with confidence 0 when no keywords match", () => {
+    const provider = mockProvider("ok");
+    const router = new AgentRouter(provider, minimalConfigs);
+
+    const result = router.route("hello world zzz qqq");
+
+    expect(result.agent.domain).toBe("orchestration");
+    expect(result.agent.name).toBe("test-orchestrator");
+    expect(result.confidence).toBe(0);
+    expect(result.reason).toContain("No domain match");
+    expect(result.reason).toContain("test-orchestrator");
+  });
+
+  it("routes to fallback on low confidence match", () => {
+    const provider = mockProvider("ok");
+    const router = new AgentRouter(provider, minimalConfigs);
+
+    // Only "hcl" matches from terraform's keywords ["terraform", "hcl", "infrastructure"]
+    // matchedKeywords.length = 1, matchRatio = 1/3
+    // confidence = 1 * 0.3 + (1/3) * 0.1 = ~0.333 which is < 0.4
+    const result = router.route("write some hcl code please");
+
+    expect(result.confidence).toBeLessThan(0.4);
+    expect(result.agent.domain).toBe("orchestration");
+    expect(result.reason).toContain("Low confidence");
+    expect(result.reason).toContain("hcl");
+  });
+
+  it("routes to fallback on multi-domain ambiguity", () => {
+    const provider = mockProvider("ok");
+    const router = new AgentRouter(provider, minimalConfigs);
+
+    // "terraform" + "hcl" match terraform (2 of 3 keywords): confidence = 2*0.3 + (2/3)*0.1 = ~0.667
+    // "kubernetes" + "deployment" match kubernetes (2 of 4 keywords): confidence = 2*0.3 + (2/4)*0.1 = 0.65
+    // Difference: 0.667 - 0.65 = 0.017 < 0.1, different domains -> ambiguity
+    const result = router.route("terraform kubernetes deployment hcl");
+
+    expect(result.agent.domain).toBe("orchestration");
+    expect(result.reason).toContain("Ambiguous");
+    expect(result.reason).toContain("test-terraform");
+    expect(result.reason).toContain("test-kubernetes");
+  });
+
+  it("routes to correct agent on clear match", () => {
+    const provider = mockProvider("ok");
+    const router = new AgentRouter(provider, minimalConfigs);
+
+    // "terraform", "infrastructure", "hcl" all match terraform (3 of 3 keywords)
+    // confidence = 3*0.3 + (3/3)*0.1 = 1.0 — clear winner, no other agent matches closely
+    const result = router.route("deploy terraform infrastructure with hcl");
+
+    expect(result.agent.domain).toBe("terraform");
+    expect(result.agent.name).toBe("test-terraform");
+    expect(result.confidence).toBeGreaterThanOrEqual(0.4);
+    expect(result.reason).toContain("terraform");
+  });
+
+  it("throws when no agents configured", () => {
+    const provider = mockProvider("ok");
+
+    expect(() => {
+      const router = new AgentRouter(provider, []);
+      router.route("anything");
+    }).toThrow("AgentRouter has no agents configured");
+  });
+});

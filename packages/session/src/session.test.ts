@@ -121,4 +121,72 @@ describe("ChatSession", () => {
       expect(result.agent).not.toBe("bridge");
     });
   });
+
+  describe("summarization edge cases", () => {
+    it("continues when summarization fails", async () => {
+      // With maxContextMessages: 4, summarization triggers when messageCount > floor(4 * 1.5) = 6.
+      // Each send() adds 2 messages (user + assistant).
+      // After 3 sends: 6 messages. On 4th send: user message pushed first -> 7 messages -> triggers summarization.
+      // Mock sequence:
+      //   1. generate() for send #1 agent call -> succeeds
+      //   2. generate() for send #2 agent call -> succeeds
+      //   3. generate() for send #3 agent call -> succeeds
+      //   4. generate() for summarizer call -> fails (summarization)
+      //   5. generate() for send #4 agent call -> succeeds
+      const provider: LLMProvider = {
+        name: "mock",
+        generate: vi
+          .fn()
+          .mockResolvedValueOnce({ content: "response1" })
+          .mockResolvedValueOnce({ content: "response2" })
+          .mockResolvedValueOnce({ content: "response3" })
+          .mockRejectedValueOnce(new Error("LLM unavailable"))
+          .mockResolvedValueOnce({ content: "response4" }),
+      };
+
+      const router = new AgentRouter(provider);
+      const session = new ChatSession({ provider, router, maxContextMessages: 4 });
+
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      await session.send("msg1");
+      await session.send("msg2");
+      await session.send("msg3");
+
+      // 4th send triggers summarization (7 > 6), which fails, then continues with agent call
+      const result = await session.send("msg4");
+
+      expect(result.content).toBe("response4");
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("summarization failed"),
+        expect.any(String),
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it("getState returns shallow copy - messages array is shared", () => {
+      // getState() uses spread operator { ...this.state } which is a shallow copy.
+      // The messages array reference inside is the same object.
+      const provider = createMockProvider();
+      const router = new AgentRouter(provider);
+      const state: ChatSessionState = {
+        id: "chat-shallow",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        mode: "INTERACTIVE",
+        messages: [{ role: "user", content: "hello", timestamp: "2024-01-01T00:00:01.000Z" }],
+        metadata: { totalTokensEstimate: 0, messageCount: 1 },
+      };
+      const session = new ChatSession({ provider, router, state });
+
+      const copy = session.getState();
+
+      // Top-level object is different (shallow copy)
+      expect(copy).not.toBe(state);
+      // Messages array is deep-copied (A15: prevent external mutation)
+      expect(copy.messages).not.toBe(session.messages);
+      expect(copy.messages).toStrictEqual(session.messages);
+    });
+  });
 });

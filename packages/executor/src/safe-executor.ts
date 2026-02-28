@@ -47,12 +47,15 @@ export class SafeExecutor {
         this.policy.generateTimeoutMs ?? this.policy.timeoutMs,
       );
     } catch (err) {
-      const status =
-        err instanceof PolicyViolationError && err.rule === "timeoutMs"
-          ? ("timeout" as const)
-          : ("failed" as const);
+      const isTimeout = err instanceof PolicyViolationError && err.rule === "timeoutMs";
+      const status = isTimeout ? ("timeout" as const) : ("failed" as const);
+      const error = isTimeout
+        ? "Generate phase timed out"
+        : err instanceof Error
+          ? err.message
+          : String(err);
       return this.buildResult(taskId, tool.name, status, startTime, {
-        error: err instanceof Error ? err.message : String(err),
+        error,
         filesWritten,
         metadata: meta,
       });
@@ -82,6 +85,7 @@ export class SafeExecutor {
         verification = await withTimeout(
           tool.verify(generateOutput.data),
           this.policy.verifyTimeoutMs ?? this.policy.timeoutMs,
+          "Verify phase timed out",
         );
 
         if (!verification.passed) {
@@ -160,6 +164,7 @@ export class SafeExecutor {
       const executeOutput = await withTimeout(
         tool.execute(input as never),
         this.policy.executeTimeoutMs ?? this.policy.timeoutMs,
+        "Execute phase timed out",
       );
 
       // Extract file metadata from tool output
@@ -189,12 +194,15 @@ export class SafeExecutor {
         metadata: meta,
       });
     } catch (err) {
-      const status =
-        err instanceof PolicyViolationError && err.rule === "timeoutMs"
-          ? ("timeout" as const)
-          : ("failed" as const);
+      const isTimeout = err instanceof PolicyViolationError && err.rule === "timeoutMs";
+      const status = isTimeout ? ("timeout" as const) : ("failed" as const);
+      const error = isTimeout
+        ? "Execute phase timed out"
+        : err instanceof Error
+          ? err.message
+          : String(err);
       return this.buildResult(taskId, tool.name, status, startTime, {
-        error: err instanceof Error ? err.message : String(err),
+        error,
         approval,
         verification,
         filesWritten,

@@ -6,9 +6,9 @@ export const ExecutionPolicySchema = z.object({
   allowedWritePaths: z.array(z.string()).default([]),
   deniedWritePaths: z.array(z.string()).default([]),
   enforceDevOpsAllowlist: z.boolean().default(true),
-  /** @advisory Not enforced at runtime — reserved for future OS-level sandboxing. */
+  /** @advisory NOT enforced at runtime. Tool code has full network access. Reserved for future OS-level sandboxing. */
   allowNetwork: z.boolean().default(false),
-  /** @advisory Names of env vars to pass through. Use `filterEnvVars(policy)` to apply manually. */
+  /** @advisory NOT enforced at runtime. Tool code has full env access. Use `filterEnvVars(policy)` to apply manually. */
   allowEnvVars: z.array(z.string()).default([]),
   timeoutMs: z.number().positive().default(30_000),
   generateTimeoutMs: z.number().positive().optional(),

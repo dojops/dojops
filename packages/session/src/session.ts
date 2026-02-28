@@ -165,7 +165,7 @@ export class ChatSession {
   }
 
   getState(): ChatSessionState {
-    return { ...this.state };
+    return { ...this.state, messages: this.state.messages.map((m) => ({ ...m })) };
   }
 
   isBridgeCommand(msg: string): BridgeCommand | null {

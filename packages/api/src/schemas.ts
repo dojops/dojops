@@ -21,17 +21,21 @@ export const DebugCIRequestSchema = z.object({
 
 export type DebugCIRequest = z.infer<typeof DebugCIRequestSchema>;
 
-export const DiffRequestSchema = z.object({
-  diff: z.string().min(1, "diff is required").max(262144, "diff too long"),
-  before: z.string().max(262144, "before too long").optional(),
-  after: z.string().max(262144, "after too long").optional(),
-});
+export const DiffRequestSchema = z
+  .object({
+    diff: z.string().min(1, "diff is required").max(262144, "diff too long"),
+    before: z.string().max(262144, "before too long").optional(),
+    after: z.string().max(262144, "after too long").optional(),
+  })
+  .refine((data) => (!data.before && !data.after) || (data.before && data.after), {
+    message: "'before' and 'after' must both be provided, or both omitted",
+  });
 
 export type DiffRequest = z.infer<typeof DiffRequestSchema>;
 
 export const ScanRequestSchema = z.object({
   target: z.string().max(2048, "Path too long").optional(),
-  scanType: z.enum(["all", "security", "deps", "iac", "sbom"]).optional().default("all"),
+  scanType: z.enum(["all", "security", "deps", "iac", "sbom", "license"]).optional().default("all"),
   context: z
     .object({
       primaryLanguage: z.string().optional(),

@@ -8,6 +8,13 @@ import { HistoryStore } from "../store";
 import { ChatRequestSchema, ChatSessionRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
+// ── Session ID validation (A6: path traversal prevention) ────────
+
+const SESSION_ID_PATTERN = /^chat-[a-f0-9]{8}$/;
+function isValidSessionId(id: string): boolean {
+  return SESSION_ID_PATTERN.test(id);
+}
+
 // ── Disk persistence helpers ──────────────────────────────────────
 
 function sessionsDir(rootDir: string): string {
@@ -28,6 +35,7 @@ function persistSession(rootDir: string | undefined, session: ChatSession): void
 }
 
 function loadSessionFromDisk(rootDir: string, sessionId: string): ChatSessionState | null {
+  if (!isValidSessionId(sessionId)) return null;
   try {
     const file = path.join(sessionsDir(rootDir), `${sessionId}.json`);
     return JSON.parse(fs.readFileSync(file, "utf-8")) as ChatSessionState;
@@ -38,6 +46,7 @@ function loadSessionFromDisk(rootDir: string, sessionId: string): ChatSessionSta
 
 function deleteSessionFromDisk(rootDir: string | undefined, sessionId: string): void {
   if (!rootDir) return;
+  if (!isValidSessionId(sessionId)) return;
   try {
     const file = path.join(sessionsDir(rootDir), `${sessionId}.json`);
     fs.unlinkSync(file);
@@ -122,6 +131,11 @@ export function createChatRouter(
       }
     }
 
+    // FB8: Log warning when a specific sessionId was requested but not found
+    if (sessionId) {
+      console.warn(`[chat] Session "${sessionId}" not found, creating new session`);
+    }
+
     // Evict oldest session if at capacity
     if (sessions.size >= MAX_SESSIONS) {
       const oldestKey = sessions.keys().next().value;
@@ -177,38 +191,50 @@ export function createChatRouter(
     }
   });
 
-  // POST /sessions — Create a new session
-  router.post("/sessions", validateBody(ChatSessionRequestSchema), (req, res) => {
-    // Evict oldest session if at capacity
-    if (sessions.size >= MAX_SESSIONS) {
-      const oldestKey = sessions.keys().next().value;
-      if (oldestKey) sessions.delete(oldestKey);
-    }
+  // POST /sessions — Create a new session (A28: error handling)
+  router.post("/sessions", validateBody(ChatSessionRequestSchema), (req, res, next) => {
+    try {
+      // Evict oldest session if at capacity
+      if (sessions.size >= MAX_SESSIONS) {
+        const oldestKey = sessions.keys().next().value;
+        if (oldestKey) sessions.delete(oldestKey);
+      }
 
-    const { name, mode } = req.body;
-    const session = new ChatSession({
-      provider,
-      router: agentRouter,
-      mode: mode ?? "INTERACTIVE",
-    });
-    if (name) session.setName(name);
-    sessions.set(session.id, session);
-    persistSession(rootDir, session);
-    res.status(201).json(session.getState());
+      const { name, mode } = req.body;
+      const session = new ChatSession({
+        provider,
+        router: agentRouter,
+        mode: mode ?? "INTERACTIVE",
+      });
+      if (name) session.setName(name);
+      sessions.set(session.id, session);
+      persistSession(rootDir, session);
+      res.status(201).json(session.getState());
+    } catch (err) {
+      next(err);
+    }
   });
 
-  // GET /sessions — List all sessions
-  router.get("/sessions", (_req, res) => {
-    const list: ChatSessionState[] = [];
-    for (const session of sessions.values()) {
-      list.push(session.getState());
+  // GET /sessions — List all sessions (A28: error handling)
+  router.get("/sessions", (_req, res, next) => {
+    try {
+      const list: ChatSessionState[] = [];
+      for (const session of sessions.values()) {
+        list.push(session.getState());
+      }
+      list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      res.json(list);
+    } catch (err) {
+      next(err);
     }
-    list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    res.json(list);
   });
 
-  // GET /sessions/:id — Get session state
+  // GET /sessions/:id — Get session state (A6: validate session ID)
   router.get("/sessions/:id", (req, res) => {
+    if (!isValidSessionId(req.params.id)) {
+      res.status(400).json({ error: "Invalid session ID format" });
+      return;
+    }
     let session = sessions.get(req.params.id);
     if (!session && rootDir) {
       const diskState = loadSessionFromDisk(rootDir, req.params.id);
@@ -229,8 +255,12 @@ export function createChatRouter(
     res.json(session.getState());
   });
 
-  // DELETE /sessions/:id — Delete session
+  // DELETE /sessions/:id — Delete session (A6: validate session ID)
   router.delete("/sessions/:id", (req, res) => {
+    if (!isValidSessionId(req.params.id)) {
+      res.status(400).json({ error: "Invalid session ID format" });
+      return;
+    }
     const deleted = sessions.delete(req.params.id);
     deleteSessionFromDisk(rootDir, req.params.id);
     if (!deleted) {

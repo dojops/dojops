@@ -75,6 +75,38 @@ vi.mock("./scanners/gitleaks", () => ({
   }),
 }));
 
+vi.mock("./scanners/shellcheck", () => ({
+  scanShellcheck: vi.fn().mockResolvedValue({
+    tool: "shellcheck",
+    findings: [],
+    skipped: true,
+    skipReason: "shellcheck not found",
+  }),
+}));
+
+vi.mock("./scanners/trivy-sbom", () => ({
+  scanTrivySbom: vi.fn().mockResolvedValue({
+    tool: "trivy-sbom",
+    findings: [],
+    skipped: true,
+    skipReason: "trivy not found",
+  }),
+}));
+
+vi.mock("./scanners/trivy-license", () => ({
+  scanTrivyLicense: vi.fn().mockResolvedValue({
+    tool: "trivy-license",
+    findings: [],
+    skipped: true,
+    skipReason: "trivy not found",
+  }),
+}));
+
+vi.mock("./scan-policy", () => ({
+  loadScanPolicy: vi.fn().mockReturnValue(undefined),
+  evaluatePolicy: vi.fn(),
+}));
+
 import { runScan, deduplicateByCve, compareScanReports } from "./runner";
 
 describe("runScan", () => {
@@ -398,5 +430,116 @@ describe("T4: deduplicateByCve", () => {
 
     const result = deduplicateByCve(findings);
     expect(result).toHaveLength(2);
+  });
+});
+
+describe("scanner crash isolation (Promise.allSettled)", () => {
+  it("isolates a crashing scanner and continues with others", async () => {
+    // Make trivy crash with a rejected promise
+    const { scanTrivy } = await import("./scanners/trivy");
+    const mockedTrivy = vi.mocked(scanTrivy);
+    mockedTrivy.mockRejectedValueOnce(new Error("trivy segfault: signal 11"));
+
+    const report = await runScan("/project", "security");
+
+    // Trivy should appear in scannersSkipped, NOT scannersRun
+    expect(report.scannersRun).not.toContain("trivy");
+    expect(report.scannersSkipped.some((s) => s.includes("trivy"))).toBe(true);
+    expect(report.scannersSkipped.some((s) => s.includes("Scanner crashed"))).toBe(true);
+
+    // The crash reason should be captured in the errors array
+    expect(report.errors).toBeDefined();
+    expect(report.errors!.some((e) => e.includes("trivy crashed"))).toBe(true);
+    expect(report.errors!.some((e) => e.includes("trivy segfault: signal 11"))).toBe(true);
+
+    // Other scanners should still have run successfully
+    expect(report.scannersRun).toContain("npm-audit");
+    expect(report.scannersRun).toContain("gitleaks");
+
+    // Findings from non-crashing scanners should still be present
+    expect(report.findings.some((f) => f.tool === "npm-audit")).toBe(true);
+
+    // Report should still be structurally valid
+    expect(report.id).toMatch(/^scan-[a-f0-9]{8}$/);
+    expect(report.durationMs).toBeGreaterThanOrEqual(0);
+    expect(report.summary.total).toBeGreaterThan(0);
+  });
+
+  it("records crash reason from non-Error rejections", async () => {
+    const { scanGitleaks } = await import("./scanners/gitleaks");
+    const mockedGitleaks = vi.mocked(scanGitleaks);
+    // Reject with a plain string (not an Error object)
+    mockedGitleaks.mockRejectedValueOnce("binary not found");
+
+    const report = await runScan("/project", "security");
+
+    expect(report.scannersRun).not.toContain("gitleaks");
+    expect(report.scannersSkipped.some((s) => s.includes("gitleaks"))).toBe(true);
+    expect(report.errors).toBeDefined();
+    expect(report.errors!.some((e) => e.includes("binary not found"))).toBe(true);
+
+    // Other scanners still ran
+    expect(report.scannersRun).toContain("trivy");
+    expect(report.scannersRun).toContain("npm-audit");
+  });
+
+  it("handles multiple scanners crashing simultaneously", async () => {
+    const { scanTrivy } = await import("./scanners/trivy");
+    const { scanNpm } = await import("./scanners/npm");
+
+    vi.mocked(scanTrivy).mockRejectedValueOnce(new Error("trivy OOM"));
+    vi.mocked(scanNpm).mockRejectedValueOnce(new Error("npm registry timeout"));
+    // gitleaks still works (default mock)
+
+    const report = await runScan("/project", "security");
+
+    // Both crashed scanners should be in skipped
+    expect(report.scannersSkipped.some((s) => s.includes("trivy"))).toBe(true);
+    expect(report.scannersSkipped.some((s) => s.includes("npm-audit"))).toBe(true);
+
+    // Multiple errors should be recorded
+    expect(report.errors).toBeDefined();
+    expect(report.errors!.length).toBeGreaterThanOrEqual(2);
+
+    // Gitleaks should still have run
+    expect(report.scannersRun).toContain("gitleaks");
+
+    // Report should still be valid even with multiple crashes
+    expect(report.id).toMatch(/^scan-[a-f0-9]{8}$/);
+    expect(report.timestamp).toBeTruthy();
+  });
+
+  it("produces valid summary even when all security scanners crash", async () => {
+    const { scanTrivy } = await import("./scanners/trivy");
+    const { scanNpm } = await import("./scanners/npm");
+    const { scanGitleaks } = await import("./scanners/gitleaks");
+    const { scanHadolint } = await import("./scanners/hadolint");
+    const { scanCheckov } = await import("./scanners/checkov");
+
+    vi.mocked(scanTrivy).mockRejectedValueOnce(new Error("crash"));
+    vi.mocked(scanNpm).mockRejectedValueOnce(new Error("crash"));
+    vi.mocked(scanGitleaks).mockRejectedValueOnce(new Error("crash"));
+    vi.mocked(scanHadolint).mockRejectedValueOnce(new Error("crash"));
+    vi.mocked(scanCheckov).mockRejectedValueOnce(new Error("crash"));
+
+    const report = await runScan("/project", "security");
+
+    // All should be skipped, none should have run
+    expect(report.scannersRun).toHaveLength(0);
+    expect(report.scannersSkipped.length).toBeGreaterThan(0);
+
+    // Summary should be zero across the board
+    expect(report.summary.total).toBe(0);
+    expect(report.summary.critical).toBe(0);
+    expect(report.summary.high).toBe(0);
+    expect(report.summary.medium).toBe(0);
+    expect(report.summary.low).toBe(0);
+
+    // Findings should be empty
+    expect(report.findings).toHaveLength(0);
+
+    // Errors should be populated
+    expect(report.errors).toBeDefined();
+    expect(report.errors!.length).toBeGreaterThan(0);
   });
 });

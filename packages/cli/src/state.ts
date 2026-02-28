@@ -89,6 +89,10 @@ export interface LockInfo {
 
 // ── Execution locking ─────────────────────────────────────────────
 
+// NOTE: There is a small TOCTOU window between stale lock removal and
+// retry write. Another process could acquire the lock in this window.
+// This is an inherent limitation of file-based locking. For production
+// multi-process deployments, consider using a proper distributed lock.
 export function acquireLock(rootDir: string, operation: string): boolean {
   const lockFile = path.join(dojopsDir(rootDir), "lock.json");
   const info: LockInfo = {
@@ -198,6 +202,9 @@ export function initProject(rootDir: string): string[] {
     created.push(".dojops/session.json");
   }
 
+  // Init HMAC key for audit hash chain (A5)
+  createAuditKey(rootDir);
+
   // Init .gitignore for .dojops/
   const gitignore = path.join(base, ".gitignore");
   if (!fs.existsSync(gitignore)) {
@@ -252,7 +259,20 @@ export function savePlan(rootDir: string, plan: PlanState): string {
   const dir = plansDir(rootDir);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${plan.id}.json`);
-  fs.writeFileSync(file, JSON.stringify(plan, null, 2) + "\n");
+  // A14: Atomic write to prevent corruption on concurrent access
+  const content = JSON.stringify(plan, null, 2) + "\n";
+  const tmpFile = `${file}.tmp`;
+  try {
+    fs.writeFileSync(tmpFile, content);
+    fs.renameSync(tmpFile, file);
+  } catch (err) {
+    try {
+      fs.unlinkSync(tmpFile);
+    } catch {
+      /* .tmp already gone */
+    }
+    throw err;
+  }
   return plan.id;
 }
 
@@ -328,7 +348,26 @@ function auditFile(rootDir: string): string {
   return path.join(dojopsDir(rootDir), "history", "audit.jsonl");
 }
 
-function computeAuditHash(entry: AuditEntry): string {
+/** Load or create the HMAC key for audit hash chain. */
+function loadAuditKey(rootDir: string): string | null {
+  const keyFile = path.join(dojopsDir(rootDir), "audit-key");
+  try {
+    return fs.readFileSync(keyFile, "utf-8").trim();
+  } catch {
+    return null;
+  }
+}
+
+/** Create a new HMAC key for audit hash chain (called during init). */
+export function createAuditKey(rootDir: string): void {
+  const keyFile = path.join(dojopsDir(rootDir), "audit-key");
+  if (fs.existsSync(keyFile)) return;
+  const key = crypto.randomBytes(32).toString("hex");
+  fs.writeFileSync(keyFile, key + "\n");
+}
+
+function computeAuditHash(entry: AuditEntry, hmacKey?: string | null): string {
+  // Use null byte delimiter to avoid field value collisions
   const payload = [
     entry.seq,
     entry.timestamp,
@@ -339,7 +378,11 @@ function computeAuditHash(entry: AuditEntry): string {
     entry.status,
     entry.durationMs,
     entry.previousHash ?? "genesis",
-  ].join("|");
+  ].join("\0");
+  if (hmacKey) {
+    return crypto.createHmac("sha256", hmacKey).update(payload).digest("hex");
+  }
+  // Legacy fallback: plain SHA-256
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
@@ -381,6 +424,14 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
   const file = auditFile(rootDir);
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  // A5: Load HMAC key for audit hash chain
+  const hmacKey = loadAuditKey(rootDir);
+  if (!hmacKey) {
+    console.warn(
+      "[audit] No HMAC key found (.dojops/audit-key). Using legacy SHA-256 hashing. Run `dojops init` to create one.",
+    );
+  }
 
   const lockPath = file + ".lock";
   const lockFd = acquireAuditLock(lockPath);
@@ -425,7 +476,7 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
 
     entry.seq = seq;
     entry.previousHash = previousHash;
-    entry.hash = computeAuditHash(entry);
+    entry.hash = computeAuditHash(entry, hmacKey);
 
     fs.appendFileSync(file, JSON.stringify(entry) + "\n");
   } finally {
@@ -480,6 +531,7 @@ export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
   const content = fs.readFileSync(file, "utf-8").trimEnd();
   if (content.length === 0) return { valid: true, totalEntries: 0, errors: [] };
 
+  const hmacKey = loadAuditKey(rootDir);
   const lines = content.split("\n");
   const errors: AuditVerificationResult["errors"] = [];
   let expectedPreviousHash = "genesis";
@@ -527,8 +579,10 @@ export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
       });
     }
 
-    const recomputed = computeAuditHash(entry);
-    if (entry.hash !== recomputed) {
+    // Try HMAC first, then fall back to plain SHA-256 for legacy entries
+    const recomputedHmac = hmacKey ? computeAuditHash(entry, hmacKey) : null;
+    const recomputedPlain = computeAuditHash(entry, null);
+    if (entry.hash !== recomputedHmac && entry.hash !== recomputedPlain) {
       errors.push({
         seq: entry.seq ?? expectedSeq,
         line: i + 1,

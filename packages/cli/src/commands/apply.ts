@@ -216,7 +216,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   // Ensure lock is released even on abrupt process.exit() calls
   process.once("exit", () => releaseLock(root));
 
-  // Graceful SIGINT/SIGTERM handling during apply
+  // FB6: Graceful SIGINT/SIGTERM handling with named handlers for cleanup
   let interrupted = false;
   const onSignal = (signal: string) => {
     if (interrupted) {
@@ -228,8 +228,10 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     p.log.warn(`\nReceived ${signal}. Finishing current task before stopping...`);
     p.log.info("Press Ctrl+C again to force exit.");
   };
-  process.on("SIGINT", () => onSignal("SIGINT"));
-  process.on("SIGTERM", () => onSignal("SIGTERM"));
+  const sigintHandler = () => onSignal("SIGINT");
+  const sigtermHandler = () => onSignal("SIGTERM");
+  process.on("SIGINT", sigintHandler);
+  process.on("SIGTERM", sigtermHandler);
 
   // Git dirty working tree check
   if (!force) {
@@ -557,6 +559,8 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       }
     }
   } finally {
+    process.removeListener("SIGINT", sigintHandler);
+    process.removeListener("SIGTERM", sigtermHandler);
     releaseLock(root);
   }
 }

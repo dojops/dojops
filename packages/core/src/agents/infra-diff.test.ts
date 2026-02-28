@@ -142,3 +142,78 @@ describe("InfraDiffAnalyzer", () => {
     expect(result.summary).toBe("Adding tags to existing resources");
   });
 });
+
+describe("InfraDiffAnalyzer edge cases", () => {
+  it("returns analysis with empty diff input", async () => {
+    const emptyDiffAnalysis: InfraDiffAnalysis = {
+      summary: "No changes detected",
+      changes: [],
+      riskLevel: "low",
+      riskFactors: [],
+      costImpact: { direction: "unchanged", details: "No resources modified" },
+      securityImpact: [],
+      rollbackComplexity: "trivial",
+      recommendations: ["No action needed"],
+      confidence: 1.0,
+    };
+    const provider: LLMProvider = {
+      name: "mock",
+      generate: vi.fn().mockResolvedValue({
+        content: JSON.stringify(emptyDiffAnalysis),
+        parsed: emptyDiffAnalysis,
+      }),
+    };
+    const analyzer = new InfraDiffAnalyzer(provider);
+
+    const result = await analyzer.analyze("");
+
+    // Even with empty input, the provider's generate is called
+    expect(provider.generate).toHaveBeenCalledTimes(1);
+    expect(result.summary).toBe("No changes detected");
+    expect(result.changes).toHaveLength(0);
+    expect(result.riskLevel).toBe("low");
+  });
+
+  it("handles compare with before and after using structured prompts", async () => {
+    const provider: LLMProvider = {
+      name: "mock",
+      generate: vi.fn().mockResolvedValue({
+        content: JSON.stringify(highRiskAnalysis),
+        parsed: highRiskAnalysis,
+      }),
+    };
+    const analyzer = new InfraDiffAnalyzer(provider);
+
+    const before = 'resource "aws_instance" "web" { instance_type = "t2.micro" }';
+    const after = 'resource "aws_instance" "web" { instance_type = "t3.xlarge" }';
+
+    const result = await analyzer.compare(before, after);
+
+    // Verify the prompt contains both BEFORE and AFTER sections
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("BEFORE"),
+      }),
+    );
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("AFTER"),
+      }),
+    );
+    // Verify the wrapped content includes the actual before/after configs
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("t2.micro"),
+      }),
+    );
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("t3.xlarge"),
+      }),
+    );
+    // Verify the result is properly returned
+    expect(result.riskLevel).toBe("high");
+    expect(result.changes).toHaveLength(2);
+    expect(result.rollbackComplexity).toBe("complex");
+  });
+});

@@ -601,6 +601,8 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       entry.toolDir,
       entry.source,
       entry.inputSchemaRaw,
+      undefined,
+      entry.toolDir,
     );
 
     const result = await tool.execute({
@@ -646,6 +648,8 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       entry.toolDir,
       entry.source,
       entry.inputSchemaRaw,
+      undefined,
+      entry.toolDir,
     );
 
     const result = await tool.execute({
@@ -709,6 +713,8 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       entry.toolDir,
       entry.source,
       entry.inputSchemaRaw,
+      undefined,
+      entry.toolDir,
     );
 
     const result = await tool.execute({
@@ -756,6 +762,8 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       entry.toolDir,
       entry.source,
       entry.inputSchemaRaw,
+      undefined,
+      entry.toolDir,
     );
 
     const result = await tool.execute({

@@ -1,3 +1,5 @@
+import { validateSystemPrompt } from "./prompt-validator";
+
 export interface CustomAgentConfig {
   name: string;
   domain: string;
@@ -57,6 +59,14 @@ export function parseAgentReadme(content: string, dirName: string): CustomAgentC
     .filter((k) => k.length > 0);
 
   if (keywords.length === 0) return null;
+
+  // Validate system prompt for injection patterns (A4)
+  const promptValidation = validateSystemPrompt(systemPrompt);
+  if (!promptValidation.safe) {
+    for (const warning of promptValidation.warnings) {
+      console.warn(`[agent-parser] Agent "${dirName}": ${warning}`);
+    }
+  }
 
   return {
     name: dirName,
