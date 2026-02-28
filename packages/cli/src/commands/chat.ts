@@ -37,9 +37,18 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
 
   if (resumeFlag) {
     const sessions = listChatSessions(rootDir);
-    if (sessions.length > 0) {
+    if (sessionName) {
+      // Resume specific session by name or ID
+      state = sessions.find((s) => s.name === sessionName || s.id === sessionName) ?? undefined;
+      if (!state) {
+        throw new CLIError(ExitCode.VALIDATION_ERROR, `Session "${sessionName}" not found.`);
+      }
+      p.log.info(`Resuming session ${pc.cyan(state.name ?? state.id)}`);
+    } else if (sessions.length > 0) {
       state = sessions[0];
       p.log.info(`Resuming session ${pc.cyan(state.id)}`);
+    } else {
+      p.log.warn("No sessions found to resume.");
     }
   } else if (sessionName) {
     // Look for existing session by name
@@ -95,6 +104,9 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
       p.log.error(err instanceof Error ? err.message : String(err));
     }
     saveChatSession(rootDir, session.getState());
+    if (ctx.globalOpts.output !== "json") {
+      p.log.info(pc.dim(`Session: ${session.id}`));
+    }
     return;
   }
 
@@ -183,6 +195,60 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
       } else {
         session.pinAgent(agentName);
         p.log.info(`Agent pinned to ${pc.cyan(agentName)}`);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("/plan ")) {
+      const goal = trimmed.slice(6).trim();
+      if (!goal) {
+        p.log.warn("Usage: /plan <goal>");
+        continue;
+      }
+      saveChatSession(rootDir, session.getState());
+      try {
+        const { planCommand } = await import("./plan");
+        await planCommand([goal], ctx);
+      } catch (err) {
+        if (err instanceof Error && "exitCode" in err) {
+          p.log.error(err.message);
+        } else {
+          p.log.error(err instanceof Error ? err.message : String(err));
+        }
+      }
+      continue;
+    }
+
+    if (trimmed === "/apply" || trimmed.startsWith("/apply ")) {
+      const planId = trimmed.slice(7).trim() || undefined;
+      saveChatSession(rootDir, session.getState());
+      try {
+        const { applyCommand } = await import("./apply");
+        const applyArgs: string[] = [];
+        if (planId) applyArgs.push(planId);
+        await applyCommand(applyArgs, ctx);
+      } catch (err) {
+        if (err instanceof Error && "exitCode" in err) {
+          p.log.error(err.message);
+        } else {
+          p.log.error(err instanceof Error ? err.message : String(err));
+        }
+      }
+      continue;
+    }
+
+    if (trimmed === "/scan" || trimmed.startsWith("/scan ")) {
+      const scanArgs = trimmed.slice(6).trim().split(/\s+/).filter(Boolean);
+      saveChatSession(rootDir, session.getState());
+      try {
+        const { scanCommand } = await import("./scan");
+        await scanCommand(scanArgs, ctx);
+      } catch (err) {
+        if (err instanceof Error && "exitCode" in err) {
+          p.log.error(err.message);
+        } else {
+          p.log.error(err instanceof Error ? err.message : String(err));
+        }
       }
       continue;
     }

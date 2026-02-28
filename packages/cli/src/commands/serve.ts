@@ -171,7 +171,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     customToolCount: registry.getCustomTools().length,
     customAgentNames,
     corsOrigin: `${tlsOptions ? "https" : "http"}://localhost:${port}`,
-    apiKey: Array.isArray(serverApiKey) ? serverApiKey[0] : (serverApiKey ?? undefined),
+    apiKey: serverApiKey ?? undefined,
   });
 
   const protocol = tlsOptions ? "https" : "http";

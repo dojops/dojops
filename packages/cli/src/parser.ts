@@ -116,6 +116,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "doctor",
     "status",
     "init",
+    "clean",
     "destroy",
     "rollback",
     "tools",

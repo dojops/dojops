@@ -261,5 +261,6 @@ function historyVerify(ctx: CLIContext): void {
     for (const err of result.errors) {
       p.log.error(`  Line ${err.line} (seq ${err.seq}): ${err.reason}`);
     }
+    throw new CLIError(ExitCode.GENERAL_ERROR, "Audit log integrity check failed.");
   }
 }

@@ -16,7 +16,15 @@ import {
 } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
-export async function destroyCommand(args: string[], ctx: CLIContext): Promise<void> {
+export async function cleanCommand(
+  args: string[],
+  ctx: CLIContext,
+  isLegacyDestroy = false,
+): Promise<void> {
+  if (isLegacyDestroy) {
+    p.log.warn(pc.yellow("'destroy' is deprecated. Use 'clean' instead."));
+  }
+
   const root = findProjectRoot();
   if (!root) {
     throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
@@ -26,8 +34,8 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const planId = args.find((a) => !a.startsWith("-"));
   if (!planId) {
-    p.log.info(`  ${pc.dim("$")} dojops destroy <plan-id>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required for destroy (safety measure).");
+    p.log.info(`  ${pc.dim("$")} dojops clean <plan-id>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required for clean (safety measure).");
   }
 
   const plan = loadPlan(root, planId);
@@ -43,13 +51,13 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
   const allFiles = [...new Set([...plan.files, ...execFiles])];
 
   if (allFiles.length === 0) {
-    p.log.info("No files to destroy for this plan.");
+    p.log.info("No files to clean for this plan.");
     return;
   }
 
   // Show what will be destroyed
   const lines = allFiles.map((f) => `  ${pc.red("-")} ${f}`);
-  p.note(lines.join("\n"), pc.red(`Destroy artifacts from ${plan.id}`));
+  p.note(lines.join("\n"), pc.red(`Clean artifacts from ${plan.id}`));
 
   if (dryRun) {
     p.log.info(`${allFiles.length} file(s) would be deleted.`);
@@ -67,7 +75,7 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
     }
   }
 
-  if (!acquireLock(root, "destroy")) {
+  if (!acquireLock(root, "clean")) {
     const { info } = isLocked(root);
     throw new CLIError(
       ExitCode.LOCK_CONFLICT,
@@ -100,14 +108,14 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
     appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: getCurrentUser(),
-      command: `destroy ${planId}`,
-      action: "destroy",
+      command: `clean ${planId}`,
+      action: "clean",
       planId,
       status: "success",
       durationMs: Date.now() - startTime,
     });
 
-    p.log.success(`Destroyed ${deleted}/${allFiles.length} artifacts.`);
+    p.log.success(`Cleaned ${deleted}/${allFiles.length} artifacts.`);
   } finally {
     releaseLock(root);
   }

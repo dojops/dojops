@@ -240,7 +240,7 @@ export function initProject(rootDir: string): string[] {
   if (!fs.existsSync(gitignore)) {
     fs.writeFileSync(
       gitignore,
-      "# DojOps project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\n",
+      "# DojOps project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\naudit-key\n",
     );
     created.push(".dojops/.gitignore");
   }

@@ -180,9 +180,15 @@ describe("CLI", () => {
       expect(output).toContain("diagnostics");
     });
 
-    it("shows destroy-specific help with dojops destroy --help", () => {
+    it("shows clean-specific help with dojops clean --help", () => {
+      const output = run("clean", "--help");
+      expect(output).toContain("dojops clean");
+      expect(output).toContain("--dry-run");
+    });
+
+    it("shows destroy as deprecated alias for clean", () => {
       const output = run("destroy", "--help");
-      expect(output).toContain("dojops destroy");
+      expect(output).toContain("clean");
       expect(output).toContain("--dry-run");
     });
 

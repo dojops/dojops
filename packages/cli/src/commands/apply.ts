@@ -45,6 +45,15 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const skipVerify = hasFlag(args, "--skip-verify");
   const force = hasFlag(args, "--force");
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
+  const timeoutArg = extractFlagValue(args, "--timeout");
+  const timeoutMs = timeoutArg ? parseInt(timeoutArg, 10) * 1000 : 60_000; // --timeout in seconds
+  if (timeoutArg && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Invalid --timeout value: "${timeoutArg}". Must be a positive number (seconds).`,
+    );
+  }
+  const jsonOutput = ctx.globalOpts.output === "json";
   const singleTaskId = extractFlagValue(args, "--task");
   const planId = args.find((a) => !a.startsWith("-") && a !== singleTaskId);
 
@@ -324,7 +333,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       policy: {
         allowWrite: true,
         requireApproval: !autoApprove,
-        timeoutMs: 60_000,
+        timeoutMs,
         skipVerification: skipVerify,
         enforceDevOpsAllowlist: !allowAllPaths,
       },
@@ -448,31 +457,33 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         error: execResult.error,
       });
 
-      const approval =
-        execResult.approval === "approved"
-          ? pc.green(execResult.approval)
-          : pc.yellow(execResult.approval);
-      const icon = statusIcon(execResult.status);
-      p.log.message(
-        `${icon} ${pc.blue(execResult.taskId)} ${statusText(execResult.status)} (approval: ${approval})`,
-      );
-
-      // Render verification results
-      if (ctx.globalOpts.verbose && execResult.verification) {
-        p.log.info(
-          `  Verification: ${execResult.verification.passed ? pc.green("passed") : pc.red("failed")} (${execResult.verification.issues.length} issue(s))`,
+      if (!jsonOutput) {
+        const approval =
+          execResult.approval === "approved"
+            ? pc.green(execResult.approval)
+            : pc.yellow(execResult.approval);
+        const icon = statusIcon(execResult.status);
+        p.log.message(
+          `${icon} ${pc.blue(execResult.taskId)} ${statusText(execResult.status)} (approval: ${approval})`,
         );
-      }
-      if (execResult.verification?.issues.length) {
-        for (const issue of execResult.verification.issues) {
-          const line = issue.line ? `:${issue.line}` : "";
-          const rule = issue.rule ? ` [${issue.rule}]` : "";
-          if (issue.severity === "error") {
-            p.log.error(`  ${pc.red("\u2717")} ${issue.message}${line}${rule}`);
-          } else if (issue.severity === "warning") {
-            p.log.warn(`  ${pc.yellow("!")} ${issue.message}${line}${rule}`);
-          } else {
-            p.log.info(pc.dim(`    ${issue.message}${line}${rule}`));
+
+        // Render verification results
+        if (ctx.globalOpts.verbose && execResult.verification) {
+          p.log.info(
+            `  Verification: ${execResult.verification.passed ? pc.green("passed") : pc.red("failed")} (${execResult.verification.issues.length} issue(s))`,
+          );
+        }
+        if (execResult.verification?.issues.length) {
+          for (const issue of execResult.verification.issues) {
+            const line = issue.line ? `:${issue.line}` : "";
+            const rule = issue.rule ? ` [${issue.rule}]` : "";
+            if (issue.severity === "error") {
+              p.log.error(`  ${pc.red("\u2717")} ${issue.message}${line}${rule}`);
+            } else if (issue.severity === "warning") {
+              p.log.warn(`  ${pc.yellow("!")} ${issue.message}${line}${rule}`);
+            } else {
+              p.log.info(pc.dim(`    ${issue.message}${line}${rule}`));
+            }
           }
         }
       }
@@ -518,7 +529,27 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       durationMs,
     });
 
-    if (allCompleted) {
+    if (jsonOutput) {
+      console.log(
+        JSON.stringify(
+          {
+            planId: plan.id,
+            status,
+            tasks: newResults.map((r) => ({
+              taskId: r.taskId,
+              status: r.status,
+              executionStatus: r.executionStatus,
+              error: r.error,
+            })),
+            filesCreated: allFilesCreated,
+            filesModified: allFilesModified,
+            durationMs,
+          },
+          null,
+          2,
+        ),
+      );
+    } else if (allCompleted) {
       p.log.success(pc.bold("Plan applied successfully."));
     } else if (plan.approvalStatus === "PARTIAL") {
       p.log.warn(pc.bold("Plan partially applied. Use `dojops apply --resume` to continue."));

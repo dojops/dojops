@@ -148,6 +148,10 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
       console.log(`  ${line}`);
     }
   } else {
-    p.log.message(result.content);
+    if (process.stdout.isTTY) {
+      p.log.message(result.content);
+    } else {
+      process.stdout.write(result.content);
+    }
   }
 }

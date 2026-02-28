@@ -39,7 +39,8 @@ export function printHelp(): void {
     `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
   );
   console.log(`  ${pc.cyan("init")}               Initialize .dojops/ + scan repo context`);
-  console.log(`  ${pc.cyan("destroy")}            Remove generated artifacts from a plan`);
+  console.log(`  ${pc.cyan("clean")}              Remove generated artifacts from a plan`);
+  console.log(`  ${pc.dim("  destroy")}            ${pc.dim("Deprecated alias for clean")}`);
   console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
@@ -80,6 +81,9 @@ export function printHelp(): void {
     `  ${pc.cyan("--replay")}               Deterministic mode: temp=0, validate provider/model/prompts`,
   );
   console.log(`  ${pc.cyan("--task=ID")}              Execute only a single task from the plan`);
+  console.log(
+    `  ${pc.cyan("--timeout <sec>")}        Execution timeout per task in seconds (default: 60)`,
+  );
   console.log();
   console.log(pc.bold("SCAN OPTIONS"));
   console.log(
@@ -91,6 +95,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--license")}          License compliance scan only`);
   console.log(`  ${pc.cyan("--fix")}              Auto-remediate HIGH/CRITICAL findings`);
   console.log(`  ${pc.cyan("--target=<dir>")}     Target directory for scanning`);
+  console.log(
+    `  ${pc.cyan("--fail-on <sev>")}    Exit non-zero at severity threshold: CRITICAL, HIGH ${pc.dim("(default)")}, MEDIUM, LOW`,
+  );
   console.log();
   console.log(pc.bold("CHAT OPTIONS"));
   console.log(
@@ -610,17 +617,34 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
-    case "destroy":
-      console.log(`\n${pc.bold("dojops destroy")} — Remove generated artifacts from a plan`);
+    case "clean":
+      console.log(`\n${pc.bold("dojops clean")} — Remove generated artifacts from a plan`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops destroy <plan-id> [options]`);
+      console.log(`  ${pc.dim("$")} dojops clean <plan-id> [options]`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--dry-run")}    Preview files to be deleted without removing them`);
       console.log(`  ${pc.cyan("--yes")}        Skip confirmation prompt`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} dojops destroy plan-abc123`);
-      console.log(`  ${pc.dim("$")} dojops destroy plan-abc123 --dry-run`);
-      console.log(`  ${pc.dim("$")} dojops destroy plan-abc123 --yes`);
+      console.log(`  ${pc.dim("$")} dojops clean plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops clean plan-abc123 --dry-run`);
+      console.log(`  ${pc.dim("$")} dojops clean plan-abc123 --yes`);
+      console.log(`\n${pc.bold("NOTE")}`);
+      console.log(`  ${pc.dim("'destroy' is a deprecated alias for 'clean'.")}`);
+      console.log();
+      break;
+
+    case "destroy":
+      console.log(`\n${pc.yellow("'destroy' is deprecated. Use 'clean' instead.")}`);
+      console.log(`\n${pc.bold("dojops clean")} — Remove generated artifacts from a plan`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops clean <plan-id> [options]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--dry-run")}    Preview files to be deleted without removing them`);
+      console.log(`  ${pc.cyan("--yes")}        Skip confirmation prompt`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops clean plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops clean plan-abc123 --dry-run`);
+      console.log(`  ${pc.dim("$")} dojops clean plan-abc123 --yes`);
       console.log();
       break;
 

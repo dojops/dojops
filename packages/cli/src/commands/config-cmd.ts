@@ -19,6 +19,7 @@ function showConfig(config: DojOpsConfig): void {
   const lines = [
     `${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`,
     `${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`,
+    `${pc.bold("Temperature:")} ${config.defaultTemperature != null ? String(config.defaultTemperature) : pc.dim("(not set)")}`,
     `${pc.bold("Tokens:")}`,
     `  openai:    ${maskToken(config.tokens?.openai)}`,
     `  anthropic: ${maskToken(config.tokens?.anthropic)}`,
@@ -79,9 +80,10 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   const providerFlag = extractFlagValue(args, "--provider") ?? ctx.globalOpts.provider;
   const tokenFlag = extractFlagValue(args, "--token");
   const modelFlag = extractFlagValue(args, "--model") ?? ctx.globalOpts.model;
+  const temperatureFlag = extractFlagValue(args, "--temperature");
 
   // Direct flags mode
-  if (providerFlag || tokenFlag || modelFlag) {
+  if (providerFlag || tokenFlag || modelFlag || temperatureFlag) {
     const config = loadConfig();
 
     if (providerFlag) {
@@ -107,6 +109,17 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
 
     if (modelFlag) {
       config.defaultModel = modelFlag;
+    }
+
+    if (temperatureFlag) {
+      const temp = parseFloat(temperatureFlag);
+      if (!Number.isFinite(temp) || temp < 0 || temp > 2) {
+        throw new CLIError(
+          ExitCode.VALIDATION_ERROR,
+          "Temperature must be a number between 0 and 2.",
+        );
+      }
+      config.defaultTemperature = temp;
     }
 
     saveConfig(config);

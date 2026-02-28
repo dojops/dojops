@@ -33,6 +33,19 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   const fixMode = hasFlag(args, "--fix");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const targetDir = extractFlagValue(args, "--target");
+  const failOnArg = extractFlagValue(args, "--fail-on");
+  const failOnSeverity = failOnArg?.toUpperCase() as
+    | "CRITICAL"
+    | "HIGH"
+    | "MEDIUM"
+    | "LOW"
+    | undefined;
+  if (failOnArg && !["CRITICAL", "HIGH", "MEDIUM", "LOW"].includes(failOnSeverity!)) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Invalid --fail-on value: "${failOnArg}". Must be CRITICAL, HIGH, MEDIUM, or LOW.`,
+    );
+  }
 
   // Determine scan type
   let scanType: ScanType = "all";
@@ -81,14 +94,14 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   // JSON output mode
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify(report, null, 2));
-    throwOnSeverity(report);
+    throwOnSeverity(report, failOnSeverity);
     return;
   }
 
   // YAML output mode
   if (ctx.globalOpts.output === "yaml") {
     console.log(yaml.dump(report, { lineWidth: 120, noRefs: true }));
-    throwOnSeverity(report);
+    throwOnSeverity(report, failOnSeverity);
     return;
   }
 
@@ -234,6 +247,13 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
           }
 
           if (approved) {
+            // Create .bak backups before patching
+            for (const fix of plan.fixes) {
+              const fixPath = path.resolve(root, fix.file);
+              if (fs.existsSync(fixPath)) {
+                fs.copyFileSync(fixPath, fixPath + ".bak");
+              }
+            }
             const patchResult = applyFixes(plan, root);
             if (patchResult.filesModified.length > 0) {
               p.log.success(`Modified: ${patchResult.filesModified.join(", ")}`);
@@ -262,7 +282,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     }
   }
 
-  throwOnSeverity(rescanReport ?? report);
+  throwOnSeverity(rescanReport ?? report, failOnSeverity);
 }
 
 function severityLabel(severity: ScanFinding["severity"]): string {
@@ -278,15 +298,24 @@ function severityLabel(severity: ScanFinding["severity"]): string {
   }
 }
 
-function throwOnSeverity(report: ScanReport): void {
+function throwOnSeverity(
+  report: ScanReport,
+  threshold?: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+): void {
   // SBOM scans always pass (no findings to assess)
   if (report.scanType === "sbom") {
     return;
   }
-  if (report.summary.critical > 0) {
-    throw new CLIError(ExitCode.CRITICAL_VULNERABILITIES);
-  }
-  if (report.summary.high > 0) {
-    throw new CLIError(ExitCode.SECURITY_ISSUES);
+  const severity = threshold ?? "HIGH"; // default: fail on HIGH+
+  const levels = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+  const minIndex = levels.indexOf(severity);
+  for (let i = levels.length - 1; i >= minIndex; i--) {
+    const key = levels[i].toLowerCase() as keyof typeof report.summary;
+    if ((report.summary[key] as number) > 0) {
+      if (i >= levels.indexOf("CRITICAL")) {
+        throw new CLIError(ExitCode.CRITICAL_VULNERABILITIES);
+      }
+      throw new CLIError(ExitCode.SECURITY_ISSUES);
+    }
   }
 }
