@@ -99,6 +99,7 @@ export function printHelp(): void {
   console.log();
   console.log(pc.bold("SERVE OPTIONS"));
   console.log(`  ${pc.cyan("--port=N")}           API server port ${pc.dim("(default: 3000)")}`);
+  console.log(`  ${pc.cyan("credentials")}        Generate API key for dashboard auth`);
   console.log();
   console.log(pc.bold("BACKWARD COMPATIBILITY"));
   console.log(`  ${pc.dim("$")} dojops --plan "..."             ${pc.dim('→ dojops plan "..."')}`);
@@ -491,13 +492,23 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("dojops serve")} — Start REST API server and web dashboard`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} dojops serve [--port=N]`);
+      console.log(`  ${pc.dim("$")} dojops serve credentials`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(
+        `  ${pc.cyan("credentials")}   Generate an API key and save to ~/.dojops/server.json`,
+      );
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(
-        `  ${pc.cyan("--port=N")}    API server port ${pc.dim("(default: 3000, or $DOJOPS_API_PORT)")}`,
+        `  ${pc.cyan("--port=N")}      API server port ${pc.dim("(default: 3000, or $DOJOPS_API_PORT)")}`,
+      );
+      console.log(
+        `  ${pc.cyan("--no-auth")}     Allow unauthenticated access ${pc.dim("(not recommended)")}`,
       );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Starts an Express server exposing all DojOps capabilities via REST API`);
       console.log(`  and a web dashboard at the root URL.`);
+      console.log(`  When DOJOPS_API_KEY is set or ~/.dojops/server.json exists, all API`);
+      console.log(`  routes (except /api/health) require authentication.`);
       console.log(`\n${pc.bold("ENDPOINTS")}`);
       console.log(`  GET  /api/health       Provider status`);
       console.log(`  POST /api/generate     Agent-routed LLM generation`);
@@ -508,6 +519,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  GET  /api/history      Execution history`);
       console.log(`  POST /api/scan         Security scan`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops serve credentials`);
       console.log(`  ${pc.dim("$")} dojops serve`);
       console.log(`  ${pc.dim("$")} dojops serve --port=8080`);
       console.log();

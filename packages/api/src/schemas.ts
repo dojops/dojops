@@ -58,7 +58,7 @@ export const ScanRequestSchema = z.object({
 export type ScanRequest = z.infer<typeof ScanRequestSchema>;
 
 export const ChatRequestSchema = z.object({
-  sessionId: z.string().optional(),
+  sessionId: z.string().max(64, "sessionId too long").optional(),
   message: z.string().min(1, "message is required").max(65536, "message too long"),
   agent: z.string().optional(),
 });

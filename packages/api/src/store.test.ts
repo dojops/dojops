@@ -8,7 +8,7 @@ describe("HistoryStore", () => {
     store = new HistoryStore();
   });
 
-  it("assigns sequential ids", () => {
+  it("assigns unique random ids", () => {
     const a = store.add({
       type: "generate",
       request: {},
@@ -17,8 +17,12 @@ describe("HistoryStore", () => {
       success: true,
     });
     const b = store.add({ type: "plan", request: {}, response: {}, durationMs: 20, success: true });
-    expect(a.id).toBe("1");
-    expect(b.id).toBe("2");
+    expect(a.id).toBeDefined();
+    expect(b.id).toBeDefined();
+    expect(a.id).not.toBe(b.id);
+    // IDs should be 12-char hex strings
+    expect(a.id).toMatch(/^[a-f0-9]{12}$/);
+    expect(b.id).toMatch(/^[a-f0-9]{12}$/);
   });
 
   it("assigns timestamps on add", () => {
@@ -34,14 +38,19 @@ describe("HistoryStore", () => {
   });
 
   it("getAll returns entries in reverse-chronological order", () => {
-    store.add({ type: "generate", request: {}, response: {}, durationMs: 10, success: true });
+    const a = store.add({
+      type: "generate",
+      request: {},
+      response: {},
+      durationMs: 10,
+      success: true,
+    });
     store.add({ type: "plan", request: {}, response: {}, durationMs: 20, success: true });
-    store.add({ type: "diff", request: {}, response: {}, durationMs: 30, success: true });
+    const c = store.add({ type: "diff", request: {}, response: {}, durationMs: 30, success: true });
 
     const all = store.getAll();
-    expect(all[0].id).toBe("3");
-    expect(all[1].id).toBe("2");
-    expect(all[2].id).toBe("1");
+    expect(all[0].id).toBe(c.id);
+    expect(all[2].id).toBe(a.id);
   });
 
   it("getAll filters by type", () => {
@@ -63,24 +72,7 @@ describe("HistoryStore", () => {
     expect(limited).toHaveLength(2);
   });
 
-  it("getById returns matching entry", () => {
-    store.add({ type: "generate", request: {}, response: {}, durationMs: 10, success: true });
-    const entry = store.getById("1");
-    expect(entry).toBeDefined();
-    expect(entry!.type).toBe("generate");
-  });
-
-  it("getById returns undefined for missing id", () => {
-    expect(store.getById("999")).toBeUndefined();
-  });
-
-  it("clear empties the store and resets ids", () => {
-    store.add({ type: "generate", request: {}, response: {}, durationMs: 10, success: true });
-    store.add({ type: "plan", request: {}, response: {}, durationMs: 20, success: true });
-    store.clear();
-
-    expect(store.getAll()).toHaveLength(0);
-
+  it("getById returns matching entry via O(1) lookup", () => {
     const entry = store.add({
       type: "generate",
       request: {},
@@ -88,6 +80,58 @@ describe("HistoryStore", () => {
       durationMs: 10,
       success: true,
     });
-    expect(entry.id).toBe("1");
+    const found = store.getById(entry.id);
+    expect(found).toBeDefined();
+    expect(found!.type).toBe("generate");
+    expect(found!.id).toBe(entry.id);
+  });
+
+  it("getById returns undefined for missing id", () => {
+    expect(store.getById("nonexistent")).toBeUndefined();
+  });
+
+  it("clear empties the store", () => {
+    store.add({ type: "generate", request: {}, response: {}, durationMs: 10, success: true });
+    store.add({ type: "plan", request: {}, response: {}, durationMs: 20, success: true });
+    store.clear();
+
+    expect(store.getAll()).toHaveLength(0);
+  });
+
+  it("generates different ids after clear (no reuse)", () => {
+    const before = store.add({
+      type: "generate",
+      request: {},
+      response: {},
+      durationMs: 10,
+      success: true,
+    });
+    store.clear();
+    const after = store.add({
+      type: "generate",
+      request: {},
+      response: {},
+      durationMs: 10,
+      success: true,
+    });
+    expect(after.id).not.toBe(before.id);
+  });
+
+  it("evicts oldest entries and cleans idIndex when at capacity", () => {
+    const smallStore = new HistoryStore(3);
+    const first = smallStore.add({
+      type: "generate",
+      request: {},
+      response: {},
+      durationMs: 10,
+      success: true,
+    });
+    smallStore.add({ type: "plan", request: {}, response: {}, durationMs: 20, success: true });
+    smallStore.add({ type: "diff", request: {}, response: {}, durationMs: 30, success: true });
+    smallStore.add({ type: "scan", request: {}, response: {}, durationMs: 40, success: true });
+
+    expect(smallStore.getAll()).toHaveLength(3);
+    // First entry should have been evicted from index too
+    expect(smallStore.getById(first.id)).toBeUndefined();
   });
 });

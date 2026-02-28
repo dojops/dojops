@@ -10,10 +10,13 @@ export function createHistoryRouter(store: HistoryStore): Router {
   router.get("/", (req, res) => {
     const rawType = req.query.type as string | undefined;
     const type = rawType && ALLOWED_TYPES.has(rawType) ? rawType : undefined;
-    const rawLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
-    const limit = rawLimit && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : undefined;
-    const rawOffset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
-    const offset = rawOffset > 0 ? rawOffset : 0;
+    const parsedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const limit =
+      parsedLimit !== undefined && Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, MAX_LIMIT)
+        : undefined;
+    const parsedOffset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+    const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
 
     let entries = store.getAll({ type, limit: undefined });
 

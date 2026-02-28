@@ -10,7 +10,7 @@ import { validateBody } from "../middleware";
 
 // ── Session ID validation (A6: path traversal prevention) ────────
 
-const SESSION_ID_PATTERN = /^chat-[a-f0-9]{8}$/;
+const SESSION_ID_PATTERN = /^chat-[a-f0-9]{8,16}$/;
 function isValidSessionId(id: string): boolean {
   return SESSION_ID_PATTERN.test(id);
 }
@@ -27,8 +27,10 @@ function persistSession(rootDir: string | undefined, session: ChatSession): void
     const dir = sessionsDir(rootDir);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `${session.id}.json`);
+    const tmpFile = file + ".tmp";
     const state = session.getState();
-    fs.writeFileSync(file, JSON.stringify(state, null, 2) + "\n");
+    fs.writeFileSync(tmpFile, JSON.stringify(state, null, 2) + "\n");
+    fs.renameSync(tmpFile, file);
   } catch {
     // Disk persistence is best-effort — never fail the request
   }
@@ -69,6 +71,7 @@ function loadAllSessionsFromDisk(
     for (const file of files) {
       try {
         const data = JSON.parse(fs.readFileSync(path.join(dir, file), "utf-8")) as ChatSessionState;
+        if (!isValidSessionId(data.id)) continue;
         if (cache.has(data.id)) continue;
         if (cache.size >= maxSessions) break;
         const session = new ChatSession({
@@ -133,7 +136,8 @@ export function createChatRouter(
 
     // FB8: Log warning when a specific sessionId was requested but not found
     if (sessionId) {
-      console.warn(`[chat] Session "${sessionId}" not found, creating new session`);
+      const sanitized = sessionId.replace(/[\r\n\t]/g, "").slice(0, 64);
+      console.warn(`[chat] Session "${sanitized}" not found, creating new session`);
     }
 
     // Evict oldest session if at capacity

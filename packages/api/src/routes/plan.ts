@@ -11,6 +11,7 @@ export function createPlanRouter(
   provider: LLMProvider,
   tools: DevOpsTool[],
   store: HistoryStore,
+  serverApiKey?: string,
 ): Router {
   const router = Router();
 
@@ -19,10 +20,11 @@ export function createPlanRouter(
     try {
       const { goal, execute, autoApprove } = req.body;
 
-      // A1/A2: autoApprove requires authentication
-      const apiKey = req.headers.authorization || req.headers["x-api-key"];
-      if (autoApprove && !apiKey) {
-        res.status(403).json({ error: "autoApprove requires authentication" });
+      // A1/A2: autoApprove requires a configured server API key (not just any header)
+      if (autoApprove && !serverApiKey) {
+        res
+          .status(403)
+          .json({ error: "autoApprove requires server authentication to be configured" });
         return;
       }
 

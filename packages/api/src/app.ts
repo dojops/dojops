@@ -2,6 +2,7 @@ import express, { Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import crypto from "node:crypto";
 import path from "path";
 import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
@@ -100,8 +101,9 @@ export function createApp(deps: AppDependencies): Express {
   let cachedProviderStatus: "ok" | "degraded" = "ok";
   let lastProviderCheck = 0;
   const PROVIDER_CHECK_TTL = 60_000;
+  const authRequired = !!apiKey;
 
-  app.get("/api/health", async (_req, res) => {
+  app.get("/api/health", async (req, res) => {
     if (deps.provider.listModels && Date.now() - lastProviderCheck > PROVIDER_CHECK_TTL) {
       try {
         await deps.provider.listModels();
@@ -111,8 +113,35 @@ export function createApp(deps: AppDependencies): Express {
       }
       lastProviderCheck = Date.now();
     }
+
+    const status = cachedProviderStatus === "ok" ? "ok" : "degraded";
+    const timestamp = new Date().toISOString();
+
+    // Check if caller is authenticated (for info-leak gating)
+    let isAuthenticated = !authRequired;
+    if (authRequired) {
+      const bearer = req.headers.authorization?.startsWith("Bearer ")
+        ? req.headers.authorization.slice(7)
+        : undefined;
+      const headerKey = req.headers["x-api-key"] as string | undefined;
+      const provided = bearer ?? headerKey;
+      if (provided && apiKey) {
+        const expected = Buffer.from(apiKey, "utf8");
+        const actual = Buffer.from(provided, "utf8");
+        isAuthenticated =
+          expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+      }
+    }
+
+    if (!isAuthenticated) {
+      // Minimal payload for unauthenticated callers — no info leak
+      res.json({ status, authRequired, timestamp });
+      return;
+    }
+
     res.json({
-      status: cachedProviderStatus === "ok" ? "ok" : "degraded",
+      status,
+      authRequired,
       provider: deps.provider.name,
       providerStatus: cachedProviderStatus,
       tools: deps.tools.map((t) => t.name),
@@ -120,13 +149,13 @@ export function createApp(deps: AppDependencies): Express {
       metricsEnabled,
       memory: process.memoryUsage().heapUsed,
       uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
+      timestamp,
     });
   });
 
   // API routes
   app.use("/api/generate", createGenerateRouter(deps.router, deps.store));
-  app.use("/api/plan", createPlanRouter(deps.provider, deps.tools, deps.store));
+  app.use("/api/plan", createPlanRouter(deps.provider, deps.tools, deps.store, apiKey));
   app.use("/api/debug-ci", createDebugCIRouter(deps.debugger, deps.store));
   app.use("/api/diff", createDiffRouter(deps.diffAnalyzer, deps.store));
   app.use("/api/agents", createAgentsRouter(deps.router, deps.customAgentNames));

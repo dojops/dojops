@@ -79,6 +79,7 @@ describe("API integration", () => {
 
       const allHistory = await request(app).get("/api/history").expect(200);
       const id = allHistory.body.entries[0].id;
+      expect(id).toMatch(/^[a-f0-9]{12}$/);
 
       const single = await request(app).get(`/api/history/${id}`).expect(200);
       expect(single.body.id).toBe(id);
@@ -118,9 +119,36 @@ describe("API integration", () => {
       const res = await request(app).get("/api/health").expect(200);
 
       expect(res.body.status).toBe("ok");
+      expect(res.body.authRequired).toBe(false);
       expect(res.body.provider).toBe("mock");
       expect(res.body.tools).toContain("test-tool");
       expect(res.body.timestamp).toBeDefined();
+    });
+
+    it("returns minimal payload when auth enabled and no key provided", async () => {
+      const authDeps = createMockDeps();
+      authDeps.apiKey = "secret-key-123";
+      const app = createApp(authDeps);
+
+      const res = await request(app).get("/api/health").expect(200);
+      expect(res.body.authRequired).toBe(true);
+      expect(res.body.status).toBe("ok");
+      expect(res.body.provider).toBeUndefined();
+      expect(res.body.tools).toBeUndefined();
+    });
+
+    it("returns full payload when auth enabled and valid key provided", async () => {
+      const authDeps = createMockDeps();
+      authDeps.apiKey = "secret-key-123";
+      const app = createApp(authDeps);
+
+      const res = await request(app)
+        .get("/api/health")
+        .set("X-API-Key", "secret-key-123")
+        .expect(200);
+      expect(res.body.authRequired).toBe(true);
+      expect(res.body.provider).toBe("mock");
+      expect(res.body.tools).toContain("test-tool");
     });
   });
 
@@ -190,6 +218,7 @@ describe("API integration", () => {
       expect(res.body).toEqual(
         expect.objectContaining({
           status: "ok",
+          authRequired: false,
           provider: "mock",
           providerStatus: "ok",
           tools: ["test-tool"],
@@ -218,6 +247,37 @@ describe("API integration", () => {
       expect(res.body.status).toBe("degraded");
       expect(res.body.providerStatus).toBe("degraded");
       expect(res.body.provider).toBe("mock");
+    });
+  });
+
+  describe("autoApprove auth bypass prevention", () => {
+    it("returns 403 when autoApprove used without server API key configured", async () => {
+      const app = createApp(deps);
+      const res = await request(app)
+        .post("/api/plan")
+        .send({ goal: "deploy app", autoApprove: true });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/autoApprove/);
+    });
+  });
+
+  describe("parseInt NaN guards", () => {
+    it("returns 200 with defaults for invalid limit/offset", async () => {
+      const app = createApp(deps);
+      const res = await request(app).get("/api/history?limit=abc&offset=xyz").expect(200);
+      expect(res.body.entries).toBeDefined();
+      expect(res.body.offset).toBe(0);
+    });
+  });
+
+  describe("sessionId validation", () => {
+    it("rejects sessionId longer than 64 chars", async () => {
+      const app = createApp(deps);
+      const longId = "a".repeat(65);
+      const res = await request(app)
+        .post("/api/chat")
+        .send({ sessionId: longId, message: "hello" });
+      expect(res.status).toBe(400);
     });
   });
 });

@@ -89,6 +89,10 @@ export class MetricsAggregator {
     }
   }
 
+  private static readonly MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  private static readonly MAX_AUDIT_LINES = 10_000;
+  private static readonly MAX_TOP_ISSUES = 100;
+
   private readJsonFiles<T>(dir: string): T[] {
     if (!fs.existsSync(dir)) return [];
     return fs
@@ -96,7 +100,10 @@ export class MetricsAggregator {
       .filter((f) => f.endsWith(".json"))
       .map((f) => {
         try {
-          return JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as T;
+          const filePath = path.join(dir, f);
+          const stat = fs.statSync(filePath);
+          if (stat.size > MetricsAggregator.MAX_FILE_SIZE) return null;
+          return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
         } catch {
           return null;
         }
@@ -107,10 +114,13 @@ export class MetricsAggregator {
   private readAuditEntries(): MetricsAuditEntry[] {
     const file = path.join(this.dojopsDir, "history", "audit.jsonl");
     if (!fs.existsSync(file)) return [];
-    return fs
+    const lines = fs
       .readFileSync(file, "utf-8")
       .split("\n")
-      .filter((line) => line.trim())
+      .filter((line) => line.trim());
+    // Cap at last N lines to prevent unbounded memory usage
+    const capped = lines.slice(-MetricsAggregator.MAX_AUDIT_LINES);
+    return capped
       .map((line) => {
         try {
           return JSON.parse(line) as MetricsAuditEntry;
@@ -294,7 +304,8 @@ export class MetricsAggregator {
 
     const topIssues = Array.from(issueCounts.entries())
       .map(([message, data]) => ({ message, ...data }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count)
+      .slice(0, MetricsAggregator.MAX_TOP_ISSUES);
 
     // Findings trend: group by date
     const dateMap = new Map<

@@ -1,14 +1,47 @@
-/* global document, fetch, navigator, setTimeout, setInterval, clearInterval */
+/* global document, fetch, navigator, setTimeout, setInterval, clearInterval, sessionStorage */
 
 const API = "/api";
+
+// ── Auth Helpers ─────────────────────────────────────────
+
+function getStoredApiKey() {
+  try {
+    return sessionStorage.getItem("dojops-api-key") || "";
+  } catch {
+    return "";
+  }
+}
+
+function setStoredApiKey(key) {
+  try {
+    sessionStorage.setItem("dojops-api-key", key);
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearStoredApiKey() {
+  try {
+    sessionStorage.removeItem("dojops-api-key");
+  } catch {
+    /* ignore */
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────
 
 async function apiCall(path, opts = {}) {
-  const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-  });
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  const apiKey = getStoredApiKey();
+  if (apiKey) {
+    headers["X-API-Key"] = apiKey;
+  }
+  const res = await fetch(`${API}${path}`, { ...opts, headers });
+  if (res.status === 401 || res.status === 403) {
+    clearStoredApiKey();
+    showLoginOverlay();
+    throw new Error("Authentication required");
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
   return data;
@@ -1661,12 +1694,120 @@ function setProviderStatus(text, online) {
   }
 }
 
-async function init() {
+// ── Login Overlay ────────────────────────────────────────
+
+function showLoginOverlay() {
+  // Remove existing overlay if present
+  var existing = $("auth-overlay");
+  if (existing) existing.remove();
+
+  var overlay = document.createElement("div");
+  overlay.id = "auth-overlay";
+  overlay.className = "auth-overlay";
+  overlay.innerHTML =
+    '<div class="auth-card">' +
+    '<h2 class="auth-title">Authentication Required</h2>' +
+    '<p class="auth-hint">Enter your API key to access the dashboard.<br>' +
+    "Generate one with: <code>dojops serve credentials</code></p>" +
+    '<input type="password" id="auth-key-input" class="auth-input" placeholder="API Key" autocomplete="off" />' +
+    '<button id="auth-submit-btn" class="btn btn--primary auth-submit" data-action="authSubmit">Sign In</button>' +
+    '<p id="auth-error" class="auth-error" style="display:none"></p>' +
+    "</div>";
+  document.body.appendChild(overlay);
+
+  var input = $("auth-key-input");
+  if (input) {
+    input.focus();
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") attemptLogin();
+    });
+  }
+}
+
+function hideLoginOverlay() {
+  var overlay = $("auth-overlay");
+  if (overlay) overlay.remove();
+}
+
+async function attemptLogin() {
+  var input = $("auth-key-input");
+  var errorEl = $("auth-error");
+  if (!input) return;
+  var key = input.value.trim();
+  if (!key) {
+    if (errorEl) {
+      errorEl.textContent = "Please enter an API key";
+      errorEl.style.display = "block";
+    }
+    return;
+  }
   try {
-    const health = await apiCall("/health");
-    setProviderStatus(health.provider, true);
-    toast("success", "Connected", `Provider: ${health.provider}`);
+    // Test key against agents endpoint
+    var res = await fetch(API + "/agents", {
+      headers: { "X-API-Key": key },
+    });
+    if (res.ok) {
+      setStoredApiKey(key);
+      hideLoginOverlay();
+      showLogoutButton();
+      init();
+    } else {
+      if (errorEl) {
+        errorEl.textContent = "Invalid API key. Please try again.";
+        errorEl.style.display = "block";
+      }
+    }
   } catch {
+    if (errorEl) {
+      errorEl.textContent = "Connection error. Is the server running?";
+      errorEl.style.display = "block";
+    }
+  }
+}
+
+function showLogoutButton() {
+  var footer = document.querySelector(".sidebar__footer");
+  if (!footer || $("logout-btn")) return;
+  var btn = document.createElement("button");
+  btn.id = "logout-btn";
+  btn.className = "btn btn--ghost logout-btn";
+  btn.textContent = "Logout";
+  btn.dataset.action = "authLogout";
+  footer.appendChild(btn);
+}
+
+function hideLogoutButton() {
+  var btn = $("logout-btn");
+  if (btn) btn.remove();
+}
+
+function doLogout() {
+  clearStoredApiKey();
+  hideLogoutButton();
+  showLoginOverlay();
+}
+
+async function init() {
+  // Check health (raw fetch, no auth needed for minimal payload)
+  try {
+    var healthRes = await fetch(API + "/health");
+    var health = await healthRes.json();
+
+    if (health.authRequired && !getStoredApiKey()) {
+      showLoginOverlay();
+      return;
+    }
+
+    // Full health check with auth
+    var fullHealth = await apiCall("/health");
+    setProviderStatus(fullHealth.provider, true);
+    toast("success", "Connected", "Provider: " + fullHealth.provider);
+
+    if (health.authRequired) {
+      showLogoutButton();
+    }
+  } catch (err) {
+    if (err && err.message === "Authentication required") return;
     setProviderStatus("offline", false);
     toast("error", "Connection failed", "Could not reach API. Is the server running?");
   }
@@ -1676,7 +1817,7 @@ async function init() {
   updateAutoRefresh("overview");
 
   // Agents search listener
-  const searchEl = $("agents-search");
+  var searchEl = $("agents-search");
   if (searchEl) {
     searchEl.addEventListener("input", renderAgentsFiltered);
   }
@@ -1699,6 +1840,10 @@ document.addEventListener("click", function (e) {
   } else if (action === "paginate") {
     var fn = globalThis[target.dataset.fn];
     if (typeof fn === "function") fn(parseInt(target.dataset.page, 10));
+  } else if (action === "authSubmit") {
+    attemptLogin();
+  } else if (action === "authLogout") {
+    doLogout();
   }
 });
 

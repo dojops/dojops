@@ -1,3 +1,7 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createProvider, createRouter, createDebugger, createDiffAnalyzer } from "@dojops/api";
@@ -8,7 +12,43 @@ import { resolveToken } from "../config";
 import { findProjectRoot } from "../state";
 import { ExitCode } from "../exit-codes";
 
+const SERVER_JSON_PATH = path.join(os.homedir(), ".dojops", "server.json");
+
+function loadServerApiKey(): string | undefined {
+  try {
+    const data = JSON.parse(fs.readFileSync(SERVER_JSON_PATH, "utf-8")) as { apiKey?: string };
+    return typeof data.apiKey === "string" && data.apiKey.length > 0 ? data.apiKey : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function serveCredentialsCommand(): Promise<void> {
+  const key = crypto.randomBytes(32).toString("base64url");
+  const dir = path.dirname(SERVER_JSON_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(SERVER_JSON_PATH, JSON.stringify({ apiKey: key }, null, 2) + "\n", {
+    mode: 0o600,
+  });
+
+  p.note(
+    [
+      `${pc.bold("API Key:")}  ${pc.cyan(key)}`,
+      `${pc.bold("Saved to:")} ${pc.dim(SERVER_JSON_PATH)}`,
+      "",
+      `${pc.dim("The key is auto-loaded by")} ${pc.bold("dojops serve")}${pc.dim(".")}`,
+      `${pc.dim("You can also set")} ${pc.bold("DOJOPS_API_KEY")} ${pc.dim("env var instead.")}`,
+    ].join("\n"),
+    "Credentials Generated",
+  );
+}
+
 export async function serveCommand(args: string[], ctx: CLIContext): Promise<void> {
+  // Dispatch subcommand
+  if (args[0] === "credentials") {
+    return serveCredentialsCommand();
+  }
+
   const noAuth = hasFlag(args, "--no-auth");
   const portArg = extractFlagValue(args, "--port");
   const port = portArg
@@ -41,7 +81,8 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   }
 
   // A1: Require API key (or --no-auth) for non-local providers
-  const serverApiKey = process.env.DOJOPS_API_KEY;
+  // Auto-load from ~/.dojops/server.json when DOJOPS_API_KEY is not set
+  const serverApiKey = process.env.DOJOPS_API_KEY ?? loadServerApiKey();
   if (!serverApiKey && !noAuth) {
     if (providerName === "ollama") {
       p.log.warn(
@@ -100,6 +141,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     customToolCount: registry.getCustomTools().length,
     customAgentNames,
     corsOrigin: `http://localhost:${port}`,
+    apiKey: serverApiKey ?? undefined,
   });
 
   const server = app.listen(port, () => {

@@ -7,6 +7,8 @@ import { HistoryStore } from "../store";
 import { ScanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
+const SCAN_TIMEOUT_MS = parseInt(process.env.DOJOPS_SCAN_TIMEOUT_MS ?? "120000", 10);
+
 export function createScanRouter(store: HistoryStore, rootDir?: string): Router {
   const router = Router();
   let scanInProgress = false;
@@ -39,7 +41,13 @@ export function createScanRouter(store: HistoryStore, rootDir?: string): Router 
         return;
       }
 
-      const report = await runScan(projectPath, scanType, context as Parameters<typeof runScan>[2]);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Scan timed out")), SCAN_TIMEOUT_MS),
+      );
+      const report = await Promise.race([
+        runScan(projectPath, scanType, context as Parameters<typeof runScan>[2]),
+        timeoutPromise,
+      ]);
 
       const entry = store.add({
         type: "scan",

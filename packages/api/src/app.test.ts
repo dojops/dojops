@@ -97,13 +97,45 @@ describe("API Integration", () => {
   });
 
   describe("GET /api/health", () => {
-    it("returns provider status", async () => {
+    it("returns provider status and authRequired field", async () => {
       const res = await request(app).get("/api/health");
       expect(res.status).toBe(200);
       expect(res.body.status).toBe("ok");
       expect(res.body.provider).toBe("mock");
       expect(res.body.tools).toContain("mock-tool");
       expect(res.body.timestamp).toBeDefined();
+      expect(res.body.authRequired).toBe(false);
+    });
+
+    it("returns minimal payload when auth is enabled and no key provided", async () => {
+      const authDeps = createTestDeps();
+      authDeps.apiKey = "test-secret-key";
+      const authApp = createApp(authDeps);
+
+      const res = await request(authApp).get("/api/health");
+      expect(res.status).toBe(200);
+      expect(res.body.authRequired).toBe(true);
+      expect(res.body.status).toBe("ok");
+      expect(res.body.timestamp).toBeDefined();
+      // Should NOT contain sensitive info
+      expect(res.body.provider).toBeUndefined();
+      expect(res.body.tools).toBeUndefined();
+      expect(res.body.memory).toBeUndefined();
+      expect(res.body.uptime).toBeUndefined();
+    });
+
+    it("returns full payload when auth is enabled and valid key provided", async () => {
+      const authDeps = createTestDeps();
+      authDeps.apiKey = "test-secret-key";
+      const authApp = createApp(authDeps);
+
+      const res = await request(authApp).get("/api/health").set("X-API-Key", "test-secret-key");
+      expect(res.status).toBe(200);
+      expect(res.body.authRequired).toBe(true);
+      expect(res.body.provider).toBe("mock");
+      expect(res.body.tools).toContain("mock-tool");
+      expect(typeof res.body.memory).toBe("number");
+      expect(typeof res.body.uptime).toBe("number");
     });
   });
 
@@ -237,13 +269,15 @@ describe("API Integration", () => {
       expect(res.body.count).toBe(0);
     });
 
-    it("records entries from other endpoints", async () => {
+    it("records entries from other endpoints with random IDs", async () => {
       await request(app).post("/api/generate").send({ prompt: "test" });
 
       const res = await request(app).get("/api/history");
       expect(res.status).toBe(200);
       expect(res.body.entries).toHaveLength(1);
       expect(res.body.entries[0].type).toBe("generate");
+      // IDs should be 12-char hex strings (not sequential)
+      expect(res.body.entries[0].id).toMatch(/^[a-f0-9]{12}$/);
     });
 
     it("filters by type", async () => {
@@ -269,14 +303,17 @@ describe("API Integration", () => {
     it("returns single entry by id", async () => {
       await request(app).post("/api/generate").send({ prompt: "test" });
 
-      const res = await request(app).get("/api/history/1");
+      const allRes = await request(app).get("/api/history");
+      const entryId = allRes.body.entries[0].id;
+
+      const res = await request(app).get(`/api/history/${entryId}`);
       expect(res.status).toBe(200);
-      expect(res.body.id).toBe("1");
+      expect(res.body.id).toBe(entryId);
       expect(res.body.type).toBe("generate");
     });
 
     it("returns 404 for missing entry", async () => {
-      const res = await request(app).get("/api/history/999");
+      const res = await request(app).get("/api/history/nonexistent");
       expect(res.status).toBe(404);
     });
 

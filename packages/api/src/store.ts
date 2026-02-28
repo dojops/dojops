@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 export interface HistoryEntry {
   id: string;
   type: "generate" | "plan" | "debug-ci" | "diff" | "scan" | "chat";
@@ -15,23 +17,31 @@ export interface HistoryEntry {
  */
 export class HistoryStore {
   private entries: HistoryEntry[] = [];
-  private nextId = 1;
+  private idIndex = new Map<string, HistoryEntry>();
   private maxEntries: number;
 
   constructor(maxEntries = 1000) {
     this.maxEntries = maxEntries;
   }
 
+  private generateId(): string {
+    return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  }
+
   add(entry: Omit<HistoryEntry, "id" | "timestamp">): HistoryEntry {
     const full: HistoryEntry = {
       ...entry,
-      id: String(this.nextId++),
+      id: this.generateId(),
       timestamp: new Date().toISOString(),
     };
     this.entries.push(full);
+    this.idIndex.set(full.id, full);
     // Evict oldest entries when at capacity
     if (this.entries.length > this.maxEntries) {
-      this.entries = this.entries.slice(-this.maxEntries);
+      const evicted = this.entries.splice(0, this.entries.length - this.maxEntries);
+      for (const e of evicted) {
+        this.idIndex.delete(e.id);
+      }
     }
     return full;
   }
@@ -48,11 +58,11 @@ export class HistoryStore {
   }
 
   getById(id: string): HistoryEntry | undefined {
-    return this.entries.find((e) => e.id === id);
+    return this.idIndex.get(id);
   }
 
   clear(): void {
     this.entries = [];
-    this.nextId = 1;
+    this.idIndex.clear();
   }
 }

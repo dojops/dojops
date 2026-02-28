@@ -37,9 +37,9 @@ describe("serializer", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("generateSessionId returns chat- prefixed string", () => {
+  it("generateSessionId returns chat- prefixed 16-char hex string", () => {
     const id = generateSessionId();
-    expect(id).toMatch(/^chat-[a-f0-9]{8}$/);
+    expect(id).toMatch(/^chat-[a-f0-9]{16}$/);
   });
 
   it("saveSession writes to .dojops/sessions/", () => {

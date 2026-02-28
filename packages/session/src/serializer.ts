@@ -9,7 +9,7 @@ function sessionsDir(rootDir: string): string {
 }
 
 export function generateSessionId(): string {
-  return `chat-${crypto.randomUUID().slice(0, 8)}`;
+  return `chat-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
 
 export function saveSession(rootDir: string, session: ChatSessionState): void {
