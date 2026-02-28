@@ -181,6 +181,25 @@ function getVersion(): string {
   }
 }
 
+function asciiFallback(): string {
+  const ver = pc.dim(`v${getVersion()}`);
+  const c = (s: string) => pc.cyan(s);
+  const r = (s: string) => pc.red(s);
+  const d = (s: string) => pc.dim(s);
+
+  const lines = [
+    "",
+    `  ${d("╭")}${d("─".repeat(14))}${d("╮")}`,
+    `  ${d("│")} ${c("◉")}  ${d("═══")}  ${c("◉")}    ${d("│")}    ${pc.bold(pc.cyan("DojOps"))}`,
+    `  ${d("│")} ${d("▄▄▄▄▄▄▄▄▄▄")} ${d("│")}      ${pc.dim("AI DevOps Automation Engine")}`,
+    `  ${d("╰")}${d("─".repeat(14))}${d("╯")}`,
+    `    ${r("┃")}${" ".repeat(8)}${r("┃")}       ${ver}`,
+    `   ${r("━┻━")}${" ".repeat(6)}${r("━┻━")}`,
+    "",
+  ];
+  return lines.join("\n");
+}
+
 export function createBanner(): string {
   const svgPath = path.join(__dirname, "..", "img", "dojops-mascot-cli-header.svg");
 
@@ -188,10 +207,7 @@ export function createBanner(): string {
   try {
     svg = fs.readFileSync(svgPath, "utf-8");
   } catch {
-    const name = pc.bold(pc.cyan("Dojops"));
-    const desc = pc.dim("AI DevOps Automation Engine");
-    const ver = pc.dim(`v${getVersion()}`);
-    return `\n  ${name}  ${desc}  \u00b7  ${ver}\n`;
+    return asciiFallback();
   }
 
   const rects = parseSvgRects(svg);
@@ -207,9 +223,10 @@ export function createBanner(): string {
   const pad = artWidth + gap;
 
   const labels: Record<number, string> = {
-    1: pc.bold(pc.cyan("Dojops")),
+    1: pc.bold(pc.cyan("DojOps")),
     2: pc.dim("AI DevOps Automation Engine"),
-    4: pc.dim(`v${getVersion()}`),
+    3: pc.dim("Your AI sensei for DevOps"),
+    5: pc.dim(`v${getVersion()}`),
   };
 
   const output: string[] = [""];

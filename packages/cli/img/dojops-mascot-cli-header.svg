@@ -1,28 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 12" width="32" height="24">
-  <!-- Helmet -->
-  <rect x="4" y="0" width="8" height="1" fill="#e8e8e8"/>
-  <rect x="3" y="1" width="10" height="1" fill="#f5f5f5"/>
-  <rect x="3" y="2" width="10" height="2" fill="#ffffff"/>
-  <rect x="4" y="4" width="8" height="1" fill="#f0f0f0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 16" width="40" height="32">
+  <!-- Kendo Helmet (Men) - Top Plate -->
+  <rect x="5" y="0" width="10" height="1" fill="#1a1a2e"/>
+  <rect x="4" y="1" width="12" height="1" fill="#2d2d44"/>
+  <rect x="3" y="2" width="14" height="1" fill="#1a1a2e"/>
 
-  <!-- Antennae -->
-  <rect x="1" y="1" width="1" height="4" fill="#0066cc"/>
-  <rect x="14" y="1" width="1" height="4" fill="#0066cc"/>
-  <rect x="1" y="2" width="1" height="1" fill="#00ccff"/>
-  <rect x="14" y="2" width="1" height="1" fill="#00ccff"/>
+  <!-- Helmet Side Guards -->
+  <rect x="2" y="3" width="1" height="5" fill="#1a1a2e"/>
+  <rect x="17" y="3" width="1" height="5" fill="#1a1a2e"/>
+  <rect x="3" y="3" width="1" height="5" fill="#2d2d44"/>
+  <rect x="16" y="3" width="1" height="5" fill="#2d2d44"/>
 
-  <!-- Side Accents -->
-  <rect x="2" y="2" width="1" height="3" fill="#0066cc"/>
-  <rect x="13" y="2" width="1" height="3" fill="#0066cc"/>
+  <!-- Face Plate - Dark -->
+  <rect x="4" y="3" width="12" height="5" fill="#0d0d1a"/>
 
-  <!-- Visor -->
-  <rect x="3" y="5" width="10" height="3" fill="#003366"/>
-  <rect x="4" y="6" width="3" height="1" fill="#00ccff"/>
-  <rect x="9" y="6" width="3" height="1" fill="#00ccff"/>
+  <!-- Kendo Face Guard Bars (horizontal) -->
+  <rect x="4" y="3" width="12" height="1" fill="#3a3a50"/>
+  <rect x="4" y="5" width="12" height="1" fill="#3a3a50"/>
+  <rect x="4" y="7" width="12" height="1" fill="#3a3a50"/>
 
-  <!-- Collar -->
-  <rect x="2" y="8" width="12" height="1" fill="#004499"/>
-  <rect x="3" y="9" width="10" height="1" fill="#0066cc"/>
-  <rect x="4" y="10" width="8" height="1" fill="#0099ff"/>
-  <rect x="5" y="11" width="6" height="1" fill="#00ccff"/>
+  <!-- Circuit Eye - Left (glowing cyan) -->
+  <rect x="6" y="4" width="3" height="1" fill="#00d4ff"/>
+
+  <!-- Circuit Eye - Right (glowing cyan) -->
+  <rect x="11" y="4" width="3" height="1" fill="#00d4ff"/>
+
+  <!-- Neural Node - Center (AI brain dot) -->
+  <rect x="9" y="6" width="2" height="1" fill="#00d4ff"/>
+
+  <!-- Torii Gate Collar - Crossbar -->
+  <rect x="3" y="8" width="14" height="1" fill="#c0392b"/>
+  <rect x="2" y="9" width="16" height="1" fill="#a93226"/>
+
+  <!-- Torii Gate Collar - Pillars -->
+  <rect x="5" y="10" width="2" height="3" fill="#c0392b"/>
+  <rect x="13" y="10" width="2" height="3" fill="#c0392b"/>
+
+  <!-- Torii Gate Collar - Base -->
+  <rect x="4" y="13" width="4" height="1" fill="#a93226"/>
+  <rect x="12" y="13" width="4" height="1" fill="#a93226"/>
+
+  <!-- Circuit Traces (subtle data flow from eyes) -->
+  <rect x="5" y="4" width="1" height="1" fill="#006688"/>
+  <rect x="14" y="4" width="1" height="1" fill="#006688"/>
+
+  <!-- Ensō Arc Hint - Left -->
+  <rect x="0" y="2" width="1" height="8" fill="#2d2d44"/>
+  <rect x="1" y="1" width="1" height="1" fill="#2d2d44"/>
+  <rect x="1" y="10" width="1" height="1" fill="#2d2d44"/>
+
+  <!-- Ensō Arc Hint - Right -->
+  <rect x="19" y="2" width="1" height="8" fill="#2d2d44"/>
+  <rect x="18" y="1" width="1" height="1" fill="#2d2d44"/>
+  <rect x="18" y="10" width="1" height="1" fill="#2d2d44"/>
+
+  <!-- Helmet Accent Stripe (vermillion) -->
+  <rect x="5" y="1" width="10" height="1" fill="#c0392b"/>
 </svg>
