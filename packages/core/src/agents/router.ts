@@ -27,7 +27,12 @@ export class AgentRouter {
       if (matchedKeywords.length === 0) continue;
 
       const matchRatio = matchedKeywords.length / agent.keywords.length;
-      const confidence = Math.min(matchedKeywords.length * 0.3 + matchRatio * 0.1, 1.0);
+      const confidence = Math.min(
+        matchedKeywords.length * 0.25 +
+          matchRatio * 0.25 +
+          (matchedKeywords.length >= 3 ? 0.15 : 0),
+        1.0,
+      );
 
       scored.push({ agent, confidence, keywords: matchedKeywords });
     }

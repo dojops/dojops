@@ -27,6 +27,25 @@ function showConfig(config: DojOpsConfig): void {
     `  gemini:    ${maskToken(config.tokens?.gemini)}`,
     `  ollama:    ${pc.dim("(no token needed)")}`,
   ];
+
+  // Show environment variable tokens (not visible via config file)
+  const envVars: Record<string, string> = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    deepseek: "DEEPSEEK_API_KEY",
+    gemini: "GEMINI_API_KEY",
+  };
+  const envLines: string[] = [];
+  for (const [provider, envKey] of Object.entries(envVars)) {
+    if (process.env[envKey]) {
+      envLines.push(`  ${provider}: ${maskToken(process.env[envKey])} ${pc.dim("(env)")}`);
+    }
+  }
+  if (envLines.length > 0) {
+    lines.push(`${pc.bold("Env tokens:")}`);
+    lines.push(...envLines);
+  }
+
   p.note(lines.join("\n"), `Configuration ${pc.dim(`(${getConfigPath()})`)}`);
 }
 
@@ -168,11 +187,12 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
         // Try fetching models dynamically
         if (token || provider === "ollama") {
           try {
+            const isStructured = ctx.globalOpts.output !== "table";
             const s = p.spinner();
-            s.start("Fetching available models...");
+            if (!isStructured) s.start("Fetching available models...");
             const llm = createProvider({ provider, apiKey: token || undefined });
             const models = await llm.listModels?.();
-            s.stop("Models fetched.");
+            if (!isStructured) s.stop("Models fetched.");
 
             if (models && models.length > 0) {
               const customValue = "__custom__";

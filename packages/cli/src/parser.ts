@@ -28,6 +28,8 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
       globalOpts.quiet = true;
     } else if (arg === "--no-color") {
       globalOpts.noColor = true;
+    } else if (arg === "--raw") {
+      globalOpts.raw = true;
     } else if (arg === "--non-interactive") {
       globalOpts.nonInteractive = true;
     } else if (arg === "--") {
@@ -56,6 +58,10 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
       if (isNaN(t)) throw new Error(`Invalid --temperature value: "${raw}"`);
       if (t < 0 || t > 2) throw new Error(`--temperature must be between 0 and 2, got: ${t}`);
       globalOpts.temperature = t;
+    } else if (arg === "--fallback-provider" && i + 1 < args.length) {
+      globalOpts.fallbackProvider = args[++i];
+    } else if (arg.startsWith("--fallback-provider=")) {
+      globalOpts.fallbackProvider = arg.slice("--fallback-provider=".length);
     } else if (arg === "--agent" && i + 1 < args.length) {
       globalOpts.agent = args[++i];
     } else if (arg.startsWith("--agent=")) {
@@ -161,6 +167,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "add",
     "switch",
     "credentials",
+    "repair",
   ]);
 
   const command: string[] = [];

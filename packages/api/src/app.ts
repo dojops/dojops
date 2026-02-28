@@ -70,6 +70,11 @@ export function createRateLimiter(windowMs: number, maxRequests: number) {
 
     entry.count++;
 
+    // RFC 6585 / draft-ietf-httpapi-ratelimit-headers: set on every response
+    res.setHeader("RateLimit-Limit", String(maxRequests));
+    res.setHeader("RateLimit-Remaining", String(Math.max(0, maxRequests - entry.count)));
+    res.setHeader("RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
+
     if (entry.count > maxRequests) {
       const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
       res.setHeader("Retry-After", String(retryAfter));
@@ -231,8 +236,13 @@ export function createApp(deps: AppDependencies): Express {
   const originalAdd = deps.store.add.bind(deps.store);
   deps.store.add = (entry) => {
     const result = originalAdd(entry);
-    // Extract token usage from response if available
-    if (entry.response && typeof entry.response === "object") {
+    // Extract token usage from entry.tokens (set by route handlers) or entry.response
+    const rec = entry as Record<string, unknown>;
+    if (rec.tokens && typeof rec.tokens === "object") {
+      const tokens = rec.tokens as Record<string, unknown>;
+      const total = typeof tokens.total === "number" ? tokens.total : 0;
+      if (total > 0) tokenTracker.record(total);
+    } else if (entry.response && typeof entry.response === "object") {
       const resp = entry.response as Record<string, unknown>;
       if (typeof resp.totalTokens === "number") {
         tokenTracker.record(resp.totalTokens);

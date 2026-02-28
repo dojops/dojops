@@ -45,13 +45,14 @@ export async function explainCommand(args: string[], ctx: CLIContext): Promise<v
 
   const prompt = `Plan: ${plan.goal}\n\nTasks:\n${planSummary}`;
 
+  const isStructured = ctx.globalOpts.output !== "table";
   const s = p.spinner();
-  s.start("Generating explanation...");
+  if (!isStructured) s.start("Generating explanation...");
   const result = await provider.generate({
     prompt,
     system: systemPrompt,
   });
-  s.stop("Explanation ready.");
+  if (!isStructured) s.stop("Explanation ready.");
 
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify({ planId: plan.id, explanation: result.content }));

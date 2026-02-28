@@ -2,6 +2,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
+import fs from "node:fs";
 import {
   findProjectRoot,
   listPlans,
@@ -9,6 +10,9 @@ import {
   listExecutions,
   verifyAuditIntegrity,
   readAudit,
+  auditFile,
+  loadAuditKey,
+  computeAuditHash,
 } from "../state";
 import type { AuditEntry } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -21,6 +25,8 @@ export async function historyCommand(args: string[], ctx: CLIContext): Promise<v
       return historyShow(args.slice(1), ctx);
     case "verify":
       return historyVerify(ctx);
+    case "repair":
+      return historyRepair(ctx);
     case "audit":
       return historyAudit(args.slice(1), ctx);
     case "list":
@@ -263,4 +269,79 @@ function historyVerify(ctx: CLIContext): void {
     }
     throw new CLIError(ExitCode.GENERAL_ERROR, "Audit log integrity check failed.");
   }
+}
+
+function historyRepair(ctx: CLIContext): void {
+  const root = findProjectRoot();
+  if (!root) {
+    p.log.info("No .dojops/ project found. Run `dojops init` first.");
+    return;
+  }
+
+  const result = verifyAuditIntegrity(root);
+
+  if (result.valid) {
+    p.log.success("Audit chain is healthy — no repair needed.");
+    return;
+  }
+
+  const firstBroken = result.errors[0];
+  p.log.warn(
+    `Found ${result.errors.length} error(s). First break at line ${firstBroken.line} (seq ${firstBroken.seq}).`,
+  );
+
+  const file = auditFile(root);
+  const hmacKey = loadAuditKey(root);
+  const content = fs.readFileSync(file, "utf-8").trimEnd();
+  const lines = content.split("\n");
+
+  const entries: AuditEntry[] = [];
+  for (const line of lines) {
+    try {
+      entries.push(JSON.parse(line) as AuditEntry);
+    } catch {
+      // Skip corrupt lines
+    }
+  }
+
+  if (entries.length === 0) {
+    p.log.error("No valid entries found — cannot repair.");
+    return;
+  }
+
+  // Find the first entry that needs repair (line numbers are 1-based)
+  const repairFrom = Math.max(0, firstBroken.line - 1);
+
+  // Recompute hashes from the break point forward
+  let previousHash = "genesis";
+  let seq = 1;
+
+  // Entries before the break point keep their existing hashes
+  if (repairFrom > 0 && entries[repairFrom - 1]) {
+    previousHash = entries[repairFrom - 1].hash ?? "genesis";
+    seq = (entries[repairFrom - 1].seq ?? 0) + 1;
+  }
+
+  let repaired = 0;
+  for (let i = repairFrom; i < entries.length; i++) {
+    entries[i].seq = seq;
+    entries[i].previousHash = previousHash;
+    entries[i].hash = computeAuditHash(entries[i], hmacKey);
+    previousHash = entries[i].hash!;
+    seq++;
+    repaired++;
+  }
+
+  // Write repaired entries back
+  const repairedContent = entries.map((e) => JSON.stringify(e)).join("\n") + "\n";
+  fs.writeFileSync(file, repairedContent, "utf-8");
+
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify({ repaired, total: entries.length }));
+    return;
+  }
+
+  p.log.success(
+    `Repaired ${repaired} entries (${entries.length} total). Chain integrity restored.`,
+  );
 }

@@ -362,12 +362,13 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
   const created = initProject(root);
 
   // Scan the repository
+  const isStructured = cliCtx.globalOpts.output !== "table";
   const s = p.spinner();
-  s.start("Scanning repository...");
+  if (!isStructured) s.start("Scanning repository...");
   const ctx = scanRepo(root);
   const contextPath = path.join(root, ".dojops", "context.json");
   fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
-  s.stop("Repository scanned.");
+  if (!isStructured) s.stop("Repository scanned.");
 
   if (alreadyExists && created.length === 0) {
     p.log.info("Project already initialized — context updated.");
@@ -397,7 +398,7 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
 
   if (provider) {
     const enrichSpinner = p.spinner();
-    enrichSpinner.start("Analyzing project with LLM...");
+    if (!isStructured) enrichSpinner.start("Analyzing project with LLM...");
     try {
       const insights = await enrichWithLLM(ctx, provider);
 
@@ -419,12 +420,12 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
       fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
       fs.writeFileSync(contextMdPath, formatContextMarkdown(ctx));
 
-      enrichSpinner.stop("LLM analysis complete.");
+      if (!isStructured) enrichSpinner.stop("LLM analysis complete.");
 
       const insightLines = formatLLMInsights(insights);
       p.note(insightLines.join("\n"), "LLM project insights");
     } catch (err) {
-      enrichSpinner.stop("LLM analysis failed.");
+      if (!isStructured) enrichSpinner.stop("LLM analysis failed.");
       p.log.warn(`LLM enrichment skipped: ${err instanceof Error ? err.message : String(err)}`);
     }
   } else {

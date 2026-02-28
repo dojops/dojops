@@ -661,6 +661,11 @@ Always follow ShellCheck recommendations and produce scripts that are safe, port
     "pipefail",
     "trap",
     "shebang",
+    "systemd",
+    "service",
+    "timer",
+    "unit",
+    "journalctl",
   ],
 };
 

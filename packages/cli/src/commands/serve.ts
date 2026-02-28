@@ -205,7 +205,13 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
-      p.log.error(`Port ${port} is already in use. Try: dojops serve --port=${port + 1}`);
+      p.log.error(`Port ${port} is already in use.`);
+      p.log.info(pc.dim(`Try: dojops serve --port=${port + 1}`));
+      p.log.info(
+        pc.dim(
+          `To find the process: lsof -i :${port} (macOS/Linux) or netstat -ano | findstr :${port} (Windows)`,
+        ),
+      );
     } else {
       p.log.error(`Server error: ${err.message}`);
     }

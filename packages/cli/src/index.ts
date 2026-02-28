@@ -12,7 +12,7 @@ import "dotenv/config";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createProvider } from "@dojops/api";
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, FallbackProvider } from "@dojops/core";
 import { resolveProvider, resolveModel, resolveToken, loadProfileConfig } from "./config";
 import { parseGlobalOptions, parseCommandPath } from "./parser";
 import { remapLegacyArgs } from "./compat";
@@ -90,6 +90,7 @@ registerSubcommand("history", "list", (args, ctx) => historyCommand(["list", ...
 registerSubcommand("history", "show", (args, ctx) => historyCommand(["show", ...args], ctx));
 registerSubcommand("history", "verify", (args, ctx) => historyCommand(["verify", ...args], ctx));
 registerSubcommand("history", "audit", (args, ctx) => historyCommand(["audit", ...args], ctx));
+registerSubcommand("history", "repair", (args, ctx) => historyCommand(["repair", ...args], ctx));
 registerCommand("provider", providerCommand);
 
 // Nested: tools <sub> (manifest-based custom tools)
@@ -108,6 +109,12 @@ registerSubcommand("toolchain", "clean", toolchainCleanCommand);
 // ── Main ───────────────────────────────────────────────────────────
 
 async function main() {
+  // L-2: Restore cursor visibility on SIGINT (interrupted spinner leaves cursor hidden)
+  process.on("SIGINT", () => {
+    process.stdout.write("\x1b[?25h"); // Show cursor
+    process.exit(130);
+  });
+
   // Prepend toolchain bin to PATH so they are found by all commands
   prependToolchainBinToPath();
 
@@ -197,7 +204,21 @@ async function main() {
       const model = resolveModel(globalOpts.model, config);
       const apiKey = resolveToken(providerName, config);
 
-      cachedProvider = createProvider({ provider: providerName, model, apiKey });
+      let provider: LLMProvider = createProvider({ provider: providerName, model, apiKey });
+
+      // F-2: Multi-provider fallback
+      const fallbackName = globalOpts.fallbackProvider ?? process.env.DOJOPS_FALLBACK_PROVIDER;
+      if (fallbackName) {
+        try {
+          const fallbackKey = resolveToken(fallbackName, config);
+          const fallbackProv = createProvider({ provider: fallbackName, apiKey: fallbackKey });
+          provider = new FallbackProvider([provider, fallbackProv]);
+        } catch {
+          // Fallback provider misconfigured — use primary only
+        }
+      }
+
+      cachedProvider = provider;
       return cachedProvider;
     },
   };
@@ -223,7 +244,7 @@ async function main() {
   ]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 
-  if (!isQuiet && !isCI && !globalOpts.quiet && globalOpts.output !== "json") {
+  if (!isQuiet && !isCI && !globalOpts.quiet && !globalOpts.raw && globalOpts.output === "table") {
     printBanner();
   }
 
@@ -276,7 +297,7 @@ async function main() {
     process.exit(ExitCode.GENERAL_ERROR);
   }
 
-  if (!isQuiet && !globalOpts.quiet && globalOpts.output !== "json") {
+  if (!isQuiet && !globalOpts.quiet && !globalOpts.raw && globalOpts.output === "table") {
     p.outro("Done.");
   }
 }

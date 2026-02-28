@@ -187,7 +187,36 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   p.note(impactLines.join("\n"), "Impact Summary");
 
   if (dryRun) {
-    p.log.info(pc.dim("Dry run — no changes will be made."));
+    p.log.info(pc.dim("Dry run — previewing what would be generated (no files written)."));
+
+    // F-5: Run generation for each task and display preview
+    try {
+      const provider = ctx.getProvider();
+      const registry = createToolRegistry(provider, root);
+      const tools = registry.getAll();
+
+      for (const task of remainingTasks) {
+        const tool = tools.find((t) => t.name === task.tool);
+        if (!tool) {
+          p.log.warn(`Skipping ${pc.bold(task.id)}: tool "${task.tool}" not found.`);
+          continue;
+        }
+
+        try {
+          const result = await tool.generate({ prompt: task.description });
+          const preview = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+          const truncated =
+            preview.length > 2000 ? preview.slice(0, 2000) + "\n... (truncated)" : preview;
+          p.note(truncated, `${task.id} — ${task.tool}: ${task.description}`);
+        } catch (err) {
+          p.log.warn(
+            `${pc.bold(task.id)} generation failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+    } catch (err) {
+      p.log.warn(`Could not preview tasks: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return;
   }
 

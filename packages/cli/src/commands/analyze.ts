@@ -38,10 +38,11 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
   const provider = ctx.getProvider();
   const analyzer = createDiffAnalyzer(provider);
 
+  const isStructured = ctx.globalOpts.output !== "table";
   const s = p.spinner();
-  s.start("Analyzing infrastructure diff...");
+  if (!isStructured) s.start("Analyzing infrastructure diff...");
   const analysis = await analyzer.analyze(content);
-  s.stop("Analysis complete.");
+  if (!isStructured) s.stop("Analysis complete.");
 
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify(analysis, null, 2));

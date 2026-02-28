@@ -10,7 +10,9 @@ export interface GlobalOptions {
   temperature?: number;
   timeout?: number;
   agent?: string;
+  fallbackProvider?: string;
   output: OutputFormat;
+  raw: boolean;
   nonInteractive: boolean;
   verbose: boolean;
   debug: boolean;
@@ -30,6 +32,7 @@ export type CommandHandler = (args: string[], ctx: CLIContext) => Promise<void>;
 
 export const DEFAULT_GLOBAL_OPTIONS: GlobalOptions = {
   output: "table",
+  raw: false,
   nonInteractive: false,
   verbose: false,
   debug: false,

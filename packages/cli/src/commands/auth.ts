@@ -1,6 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { loadConfig, saveConfig, getConfigPath, validateProvider } from "../config";
+import { createProvider } from "@dojops/api";
 import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
 import { maskToken } from "../formatter";
@@ -63,6 +64,20 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
   saveConfig(config);
 
   p.log.success("Token saved successfully.");
+
+  // M-4: Validate the token by attempting a lightweight provider call
+  try {
+    const testProvider = createProvider({ provider, apiKey: token });
+    if (testProvider.listModels) {
+      await Promise.race([
+        testProvider.listModels(),
+        new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 5000)),
+      ]);
+      p.log.success("Token validated — provider connection verified.");
+    }
+  } catch {
+    p.log.warn("Could not verify token. It has been saved, but may be invalid.");
+  }
 
   const isDefault = config.defaultProvider === provider;
   const defaultNote = isDefault

@@ -225,10 +225,13 @@ export class MetricsAggregator {
       }
     }
 
-    // Most used agents from audit command field
+    // Most used agents from audit entries (prefer agent field, fall back to command verb)
     const agentCounts = new Map<string, number>();
     for (const entry of auditEntries) {
-      const agent = entry.command || "unknown";
+      const agent =
+        ((entry as unknown as Record<string, unknown>).agent as string | undefined) ||
+        entry.command?.split(/\s+/)[0] ||
+        "unknown";
       agentCounts.set(agent, (agentCounts.get(agent) || 0) + 1);
     }
     const mostUsedAgents = Array.from(agentCounts.entries())

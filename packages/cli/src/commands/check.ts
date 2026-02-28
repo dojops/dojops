@@ -11,6 +11,11 @@ const MAX_FILES = 20;
 const MAX_FILE_SIZE = 50 * 1024; // 50 KB
 
 export const checkCommand: CommandHandler = async (_args, cliCtx) => {
+  // F-6: `dojops check provider` — test provider connectivity
+  if (_args[0] === "provider") {
+    return checkProviderCommand(_args.slice(1), cliCtx);
+  }
+
   const start = Date.now();
   const root = findProjectRoot();
   if (!root) {
@@ -64,8 +69,9 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     );
   }
 
+  const isStructured = cliCtx.globalOpts.output !== "table";
   const s = p.spinner();
-  s.start(`Analyzing ${fileContents.length} DevOps files...`);
+  if (!isStructured) s.start(`Analyzing ${fileContents.length} DevOps files...`);
 
   const checker = new DevOpsChecker(provider);
 
@@ -76,7 +82,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
 
   try {
     const report = await checker.check(contextJson, fileContents);
-    s.stop("Analysis complete.");
+    if (!isStructured) s.stop("Analysis complete.");
 
     const durationMs = Date.now() - start;
 
@@ -164,7 +170,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
       durationMs,
     });
   } catch (err) {
-    s.stop("Analysis failed.");
+    if (!isStructured) s.stop("Analysis failed.");
     appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: getCurrentUser(),
@@ -179,3 +185,89 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     );
   }
 };
+
+/** F-6: Provider connectivity test — `dojops check provider` */
+async function checkProviderCommand(
+  _args: string[],
+  cliCtx: Parameters<CommandHandler>[1],
+): Promise<void> {
+  let provider;
+  try {
+    provider = cliCtx.getProvider();
+  } catch (err) {
+    p.log.info(`Run ${pc.cyan("dojops config")} to configure a provider.`);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `LLM provider required. ${(err as Error).message}`,
+    );
+  }
+
+  const isStructured = cliCtx.globalOpts.output !== "table";
+  const s = p.spinner();
+  if (!isStructured) s.start(`Testing ${provider.name} connectivity...`);
+
+  const start = Date.now();
+  try {
+    if (provider.listModels) {
+      const models = await provider.listModels();
+      const latency = Date.now() - start;
+
+      if (cliCtx.globalOpts.output === "json") {
+        if (!isStructured) s.stop("Done.");
+        console.log(
+          JSON.stringify({
+            status: "ok",
+            provider: provider.name,
+            latencyMs: latency,
+            models: models.length,
+          }),
+        );
+        return;
+      }
+
+      if (!isStructured) s.stop(`Connected to ${pc.bold(provider.name)} (${latency}ms)`);
+      p.log.success(
+        `Provider ${pc.bold(provider.name)} is reachable. ${models.length} models available.`,
+      );
+    } else {
+      const latency = Date.now() - start;
+      if (!isStructured) s.stop("Done.");
+
+      if (cliCtx.globalOpts.output === "json") {
+        console.log(
+          JSON.stringify({
+            status: "ok",
+            provider: provider.name,
+            latencyMs: latency,
+            note: "listModels not supported",
+          }),
+        );
+        return;
+      }
+
+      p.log.success(
+        `Provider ${pc.bold(provider.name)} configured (listModels not supported — cannot verify connectivity).`,
+      );
+    }
+  } catch (err) {
+    const latency = Date.now() - start;
+    if (!isStructured) s.stop("Connection failed.");
+
+    if (cliCtx.globalOpts.output === "json") {
+      console.log(
+        JSON.stringify({
+          status: "error",
+          provider: provider.name,
+          latencyMs: latency,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      return;
+    }
+
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `Provider ${provider.name} connectivity check failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}

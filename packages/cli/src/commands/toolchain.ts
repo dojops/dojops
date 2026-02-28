@@ -74,8 +74,9 @@ export const toolchainListCommand: CommandHandler = async (_args, ctx) => {
 };
 
 export const toolchainLoadCommand: CommandHandler = async () => {
+  const isStructured = !process.stdout.isTTY;
   const s = p.spinner();
-  s.start("Scanning for system tools...");
+  if (!isStructured) s.start("Scanning for system tools...");
 
   const registry = loadToolchainRegistry();
 
@@ -87,7 +88,7 @@ export const toolchainLoadCommand: CommandHandler = async () => {
     }
   }
 
-  s.stop("Scan complete.");
+  if (!isStructured) s.stop("Scan complete.");
 
   const installed = registry.tools.length;
   const system = SYSTEM_TOOLS.filter(
@@ -169,12 +170,14 @@ async function doInstall(name: string): Promise<void> {
     return;
   }
 
+  const isStructured = !process.stdout.isTTY;
   const s = p.spinner();
-  s.start(`Installing ${tool.name}...`);
+  if (!isStructured) s.start(`Installing ${tool.name}...`);
 
   try {
     const installed = await installSystemTool(tool);
-    s.stop(`${pc.green("\u2713")} ${tool.name} v${installed.version} installed.`);
+    if (!isStructured)
+      s.stop(`${pc.green("\u2713")} ${tool.name} v${installed.version} installed.`);
 
     // Verify
     const versionOutput = verifyTool(tool);
@@ -182,7 +185,7 @@ async function doInstall(name: string): Promise<void> {
       p.log.info(pc.dim(versionOutput));
     }
   } catch (err) {
-    s.stop(`${pc.red("\u2717")} ${tool.name} installation failed.`);
+    if (!isStructured) s.stop(`${pc.red("\u2717")} ${tool.name} installation failed.`);
     const msg = err instanceof Error ? err.message : String(err);
     p.log.error(msg);
   }

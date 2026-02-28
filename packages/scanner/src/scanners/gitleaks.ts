@@ -21,25 +21,28 @@ interface GitleaksResult {
 export async function scanGitleaks(projectPath: string): Promise<ScannerResult> {
   // Use a temp file for the report — /dev/stdout is unavailable in some environments (WSL2, sandboxes)
   const reportFile = path.join(os.tmpdir(), `gitleaks-${crypto.randomUUID().slice(0, 8)}.json`);
+  // M-1: Support .gitleaksignore for false positive suppression
+  const gitleaksIgnore = path.join(projectPath, ".gitleaksignore");
+  const args = [
+    "detect",
+    "--source",
+    projectPath,
+    "--report-format",
+    "json",
+    "--report-path",
+    reportFile,
+    "--no-git",
+  ];
+  if (fs.existsSync(gitleaksIgnore)) {
+    args.push("--gitleaksignore", gitleaksIgnore);
+  }
+
   let rawOutput: string;
   try {
-    await execFileAsync(
-      "gitleaks",
-      [
-        "detect",
-        "--source",
-        projectPath,
-        "--report-format",
-        "json",
-        "--report-path",
-        reportFile,
-        "--no-git",
-      ],
-      {
-        encoding: "utf-8",
-        timeout: 120_000,
-      },
-    );
+    await execFileAsync("gitleaks", args, {
+      encoding: "utf-8",
+      timeout: 120_000,
+    });
     rawOutput = readAndCleanup(reportFile);
   } catch (err: unknown) {
     if (isENOENT(err)) {

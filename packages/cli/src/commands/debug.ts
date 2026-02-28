@@ -38,10 +38,11 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
   const provider = ctx.getProvider();
   const debugger_ = createDebugger(provider);
 
+  const isStructured = ctx.globalOpts.output !== "table";
   const s = p.spinner();
-  s.start("Analyzing CI log...");
+  if (!isStructured) s.start("Analyzing CI log...");
   const diagnosis = await debugger_.diagnose(logContent);
-  s.stop("Analysis complete.");
+  if (!isStructured) s.stop("Analysis complete.");
 
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify(diagnosis, null, 2));

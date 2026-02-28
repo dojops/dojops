@@ -431,12 +431,12 @@ export function listExecutions(rootDir: string): ExecutionRecord[] {
 
 // ── Audit ──────────────────────────────────────────────────────────
 
-function auditFile(rootDir: string): string {
+export function auditFile(rootDir: string): string {
   return path.join(dojopsDir(rootDir), "history", "audit.jsonl");
 }
 
 /** Load or create the HMAC key for audit hash chain. */
-function loadAuditKey(rootDir: string): string | null {
+export function loadAuditKey(rootDir: string): string | null {
   const keyFile = path.join(dojopsDir(rootDir), "audit-key");
   try {
     return fs.readFileSync(keyFile, "utf-8").trim();
@@ -453,7 +453,7 @@ export function createAuditKey(rootDir: string): void {
   fs.writeFileSync(keyFile, key + "\n", { mode: 0o600 });
 }
 
-function computeAuditHash(entry: AuditEntry, hmacKey?: string | null): string {
+export function computeAuditHash(entry: AuditEntry, hmacKey?: string | null): string {
   // Use null byte delimiter to avoid field value collisions
   const payload = [
     entry.seq,

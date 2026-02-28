@@ -204,8 +204,9 @@ async function agentCreateLLM(
 ): Promise<void> {
   const provider = ctx.getProvider();
 
+  const isStructured = ctx.globalOpts.output !== "table";
   const s = p.spinner();
-  s.start("Generating custom agent...");
+  if (!isStructured) s.start("Generating custom agent...");
 
   const result = await provider.generate({
     prompt: `Create a DojOps specialist agent based on this description: "${description}"
@@ -219,7 +220,7 @@ Generate a complete agent definition with:
     schema: GeneratedAgentSchema,
   });
 
-  s.stop("Agent generated.");
+  if (!isStructured) s.stop("Agent generated.");
 
   if (!result.parsed) {
     throw new CLIError(

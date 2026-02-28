@@ -43,8 +43,9 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
   const basename = path.basename(resolvedPath);
   const ext = path.extname(resolvedPath).toLowerCase();
 
+  const isStructured = !process.stdout.isTTY;
   const spinner = p.spinner();
-  spinner.start(`Verifying ${pc.cyan(basename)}...`);
+  if (!isStructured) spinner.start(`Verifying ${pc.cyan(basename)}...`);
 
   let result: VerificationResult;
 
@@ -66,7 +67,7 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
     } else if (ext === ".yaml" || ext === ".yml") {
       result = await verifyYamlFile(content, basename);
     } else {
-      spinner.stop("Unknown file type");
+      if (!isStructured) spinner.stop("Unknown file type");
       throw new CLIError(
         ExitCode.VALIDATION_ERROR,
         `Cannot verify file type: ${ext || basename}. Supported: .tf, Dockerfile, .yaml/.yml`,
@@ -76,11 +77,11 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
     if (err instanceof CLIError) {
       throw err;
     }
-    spinner.stop("Verification failed");
+    if (!isStructured) spinner.stop("Verification failed");
     throw new CLIError(ExitCode.GENERAL_ERROR, err instanceof Error ? err.message : String(err));
   }
 
-  spinner.stop(`Verified with ${pc.cyan(result.tool)}`);
+  if (!isStructured) spinner.stop(`Verified with ${pc.cyan(result.tool)}`);
 
   // Display results
   if (result.passed) {
