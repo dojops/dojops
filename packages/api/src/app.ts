@@ -155,7 +155,7 @@ export function createApp(deps: AppDependencies): Express {
 
   // API routes
   app.use("/api/generate", createGenerateRouter(deps.router, deps.store));
-  app.use("/api/plan", createPlanRouter(deps.provider, deps.tools, deps.store, apiKey));
+  app.use("/api/plan", createPlanRouter(deps.provider, deps.tools, deps.store));
   app.use("/api/debug-ci", createDebugCIRouter(deps.debugger, deps.store));
   app.use("/api/diff", createDiffRouter(deps.diffAnalyzer, deps.store));
   app.use("/api/agents", createAgentsRouter(deps.router, deps.customAgentNames));

@@ -24,6 +24,16 @@ export function atomicWriteFileSync(filePath: string, content: string): void {
 export function restoreBackup(filePath: string): boolean {
   const bakPath = `${filePath}.bak`;
   if (!fs.existsSync(bakPath)) return false;
+  // Reject symlinks to prevent overwriting arbitrary targets
+  try {
+    const bakStat = fs.lstatSync(bakPath);
+    if (bakStat.isSymbolicLink()) {
+      throw new Error(`Refusing to restore symlinked backup: ${bakPath}`);
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
+  }
   try {
     fs.renameSync(bakPath, filePath);
   } catch (err) {
@@ -48,6 +58,15 @@ export function readExistingConfig(filePath: string): string | null {
 }
 
 export function backupFile(filePath: string): void {
-  if (!fs.existsSync(filePath)) return;
+  try {
+    const stat = fs.lstatSync(filePath);
+    if (stat.isSymbolicLink()) {
+      throw new Error(`Refusing to backup symlink: ${filePath}`);
+    }
+    if (!stat.isFile()) return;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
   fs.copyFileSync(filePath, `${filePath}.bak`);
 }

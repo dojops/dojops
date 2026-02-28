@@ -2,6 +2,15 @@
 
 const API = "/api";
 
+// Module-scoped state for pagination (C-9: no globalThis data storage)
+var _state = {
+  issuesData: [],
+  issuesPage: 1,
+  filteredIssues: [],
+  scanHistoryData: [],
+  scanHistoryPage: 1,
+};
+
 // ── Auth Helpers ─────────────────────────────────────────
 
 function getStoredApiKey() {
@@ -109,8 +118,6 @@ function copyCode(id) {
   );
 }
 
-globalThis.copyCode = copyCode;
-
 // ── Toast Notification System ────────────────────────────
 
 const toastIcons = {
@@ -200,8 +207,6 @@ function navigateToTab(tab) {
   updateAutoRefresh(tab);
   closeSidebar();
 }
-
-globalThis.navigateToTab = navigateToTab;
 
 // Logo click handlers (CSP-compliant, no inline onclick)
 if ($("sidebar-logo")) $("sidebar-logo").addEventListener("click", () => navigateToTab("overview"));
@@ -314,8 +319,6 @@ function toggleTaskOutput(outputId, toggleId) {
     toggle.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg> Hide output`;
   }
 }
-
-globalThis.toggleTaskOutput = toggleTaskOutput;
 
 function renderDiagnosis(d) {
   const diagCid = nextCopyId();
@@ -769,8 +772,6 @@ function toggleDetail(id) {
     el.classList.toggle("active");
   }
 }
-
-globalThis.toggleDetail = toggleDetail;
 
 $("history-type").addEventListener("change", loadHistory);
 
@@ -1238,7 +1239,7 @@ function renderSecurity(data) {
     html += '<div class="filter-toolbar">';
     html += '<div class="filter-group">';
     html += '<label class="filter-label">Severity</label>';
-    html += '<select id="issues-sev-filter" class="filter-select" onchange="filterIssuesTable()">';
+    html += '<select id="issues-sev-filter" class="filter-select" data-action="filterIssues">';
     html += '<option value="">All</option>';
     for (var si = 0; si < severities.length; si++) {
       html +=
@@ -1251,7 +1252,7 @@ function renderSecurity(data) {
     html += "</select></div>";
     html += '<div class="filter-group">';
     html += '<label class="filter-label">Tool</label>';
-    html += '<select id="issues-tool-filter" class="filter-select" onchange="filterIssuesTable()">';
+    html += '<select id="issues-tool-filter" class="filter-select" data-action="filterIssues">';
     html += '<option value="">All</option>';
     for (var ti = 0; ti < tools.length; ti++) {
       html +=
@@ -1264,8 +1265,8 @@ function renderSecurity(data) {
     html += "</div>";
 
     // Store data globally for filtering/pagination
-    globalThis._issuesData = data.topIssues;
-    globalThis._issuesPage = 1;
+    _state.issuesData = data.topIssues;
+    _state.issuesPage = 1;
     setTimeout(function () {
       filterIssuesTable();
     }, 0);
@@ -1283,8 +1284,8 @@ function renderSecurity(data) {
     html += '<div id="scan-history-pagination" class="pagination"></div>';
     html += "</div>";
 
-    globalThis._scanHistoryData = sortedScans;
-    globalThis._scanHistoryPage = 1;
+    _state.scanHistoryData = sortedScans;
+    _state.scanHistoryPage = 1;
     setTimeout(function () {
       renderScanHistoryPage();
     }, 0);
@@ -1460,22 +1461,20 @@ function filterIssuesTable() {
   var sev = sevFilter ? sevFilter.value : "";
   var tool = toolFilter ? toolFilter.value : "";
 
-  var filtered = (globalThis._issuesData || []).filter(function (issue) {
+  var filtered = (_state.issuesData || []).filter(function (issue) {
     if (sev && issue.severity !== sev) return false;
     if (tool && issue.tool !== tool) return false;
     return true;
   });
 
-  globalThis._filteredIssues = filtered;
-  globalThis._issuesPage = 1;
+  _state.filteredIssues = filtered;
+  _state.issuesPage = 1;
   renderIssuesPage();
 }
 
-globalThis.filterIssuesTable = filterIssuesTable;
-
 function renderIssuesPage() {
-  var items = globalThis._filteredIssues || [];
-  var page = globalThis._issuesPage || 1;
+  var items = _state.filteredIssues || [];
+  var page = _state.issuesPage || 1;
   var totalPages = Math.max(1, Math.ceil(items.length / ISSUES_PER_PAGE));
   if (page > totalPages) page = totalPages;
 
@@ -1524,19 +1523,17 @@ function renderIssuesPage() {
 }
 
 function goIssuesPage(p) {
-  globalThis._issuesPage = p;
+  _state.issuesPage = p;
   renderIssuesPage();
 }
-
-globalThis.goIssuesPage = goIssuesPage;
 
 // ── Scan history pagination ───────────────────────────
 
 var SCANS_PER_PAGE = 10;
 
 function renderScanHistoryPage() {
-  var items = globalThis._scanHistoryData || [];
-  var page = globalThis._scanHistoryPage || 1;
+  var items = _state.scanHistoryData || [];
+  var page = _state.scanHistoryPage || 1;
   var totalPages = Math.max(1, Math.ceil(items.length / SCANS_PER_PAGE));
   if (page > totalPages) page = totalPages;
 
@@ -1581,11 +1578,9 @@ function renderScanHistoryPage() {
 }
 
 function goScanHistoryPage(p) {
-  globalThis._scanHistoryPage = p;
+  _state.scanHistoryPage = p;
   renderScanHistoryPage();
 }
-
-globalThis.goScanHistoryPage = goScanHistoryPage;
 
 // ── Shared pagination renderer ────────────────────────
 
@@ -1823,6 +1818,12 @@ async function init() {
   }
 }
 
+// ── Pagination function allowlist (C-9: no globalThis dispatch) ──────
+var PAGINATE_FUNCTIONS = {
+  goIssuesPage: goIssuesPage,
+  goScanHistoryPage: goScanHistoryPage,
+};
+
 // ── CSP-safe event delegation ────────────────────────────
 // Replaces all inline onclick handlers with data-action attributes
 document.addEventListener("click", function (e) {
@@ -1838,12 +1839,21 @@ document.addEventListener("click", function (e) {
   } else if (action === "navigateToTab") {
     navigateToTab(target.dataset.tab);
   } else if (action === "paginate") {
-    var fn = globalThis[target.dataset.fn];
-    if (typeof fn === "function") fn(parseInt(target.dataset.page, 10));
+    var paginateFn = PAGINATE_FUNCTIONS[target.dataset.fn];
+    if (typeof paginateFn === "function") paginateFn(parseInt(target.dataset.page, 10));
   } else if (action === "authSubmit") {
     attemptLogin();
   } else if (action === "authLogout") {
     doLogout();
+  }
+});
+
+// CSP-safe change event delegation for data-action="filterIssues" selects
+document.addEventListener("change", function (e) {
+  var target = e.target.closest("[data-action]");
+  if (!target) return;
+  if (target.dataset.action === "filterIssues") {
+    filterIssuesTable();
   }
 });
 

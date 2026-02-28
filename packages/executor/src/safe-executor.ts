@@ -1,7 +1,7 @@
 import { DevOpsTool, ToolOutput, VerificationResult } from "@dojops/sdk";
 import { ExecutionPolicy, ExecutionResult, AuditEntry, ApprovalDecision } from "./types";
 import { ApprovalHandler, AutoApproveHandler, buildPreview } from "./approval";
-import { DEFAULT_POLICY, PolicyViolationError } from "./policy";
+import { DEFAULT_POLICY, PolicyViolationError, checkWriteAllowed } from "./policy";
 import { withTimeout } from "./sandbox";
 
 export interface SafeExecutorOptions {
@@ -170,6 +170,29 @@ export class SafeExecutor {
       // Extract file metadata from tool output
       if (executeOutput.filesWritten) filesWritten.push(...executeOutput.filesWritten);
       if (executeOutput.filesModified) filesModified.push(...executeOutput.filesModified);
+
+      // Post-hoc policy enforcement: validate all written/modified files against policy.
+      // Tools write files directly (not through SandboxedFs), so we enforce the policy
+      // after execution by checking each file path against the configured policy.
+      if (this.policy.allowWrite) {
+        const allFiles = [...filesWritten, ...filesModified];
+        for (const filePath of allFiles) {
+          try {
+            checkWriteAllowed(filePath, this.policy);
+          } catch (policyErr) {
+            return this.buildResult(taskId, tool.name, "failed", startTime, {
+              error: `Policy violation on written file: ${policyErr instanceof Error ? policyErr.message : String(policyErr)}`,
+              output: executeOutput.data,
+              approval,
+              verification,
+              filesWritten,
+              filesModified,
+              usage: generateOutput.usage,
+              metadata: meta,
+            });
+          }
+        }
+      }
 
       if (!executeOutput.success) {
         return this.buildResult(taskId, tool.name, "failed", startTime, {

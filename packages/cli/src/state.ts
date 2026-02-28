@@ -363,7 +363,7 @@ export function createAuditKey(rootDir: string): void {
   const keyFile = path.join(dojopsDir(rootDir), "audit-key");
   if (fs.existsSync(keyFile)) return;
   const key = crypto.randomBytes(32).toString("hex");
-  fs.writeFileSync(keyFile, key + "\n");
+  fs.writeFileSync(keyFile, key + "\n", { mode: 0o600 });
 }
 
 function computeAuditHash(entry: AuditEntry, hmacKey?: string | null): string {

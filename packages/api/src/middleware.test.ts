@@ -71,6 +71,7 @@ function mockAuthReqRes(path: string, headers: Record<string, string> = {}) {
   const res = {
     status: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
+    locals: {} as Record<string, unknown>,
   } as unknown as Response;
   const next = vi.fn() as NextFunction;
   return { req, res, next };
@@ -83,6 +84,8 @@ describe("authMiddleware", () => {
     middleware(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
+    // No API key configured → not authenticated
+    expect(res.locals.authenticated).toBe(false);
   });
 
   it("allows /health without auth even when apiKey is set", () => {
@@ -121,7 +124,7 @@ describe("authMiddleware", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("passes with correct Bearer token", () => {
+  it("passes with correct Bearer token and sets authenticated", () => {
     const middleware = authMiddleware("my-secret-key");
     const { req, res, next } = mockAuthReqRes("/api/generate", {
       authorization: "Bearer my-secret-key",
@@ -129,6 +132,7 @@ describe("authMiddleware", () => {
     middleware(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
+    expect(res.locals.authenticated).toBe(true);
   });
 
   it("passes with correct X-API-Key header", () => {

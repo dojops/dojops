@@ -251,13 +251,24 @@ describe("API integration", () => {
   });
 
   describe("autoApprove auth bypass prevention", () => {
-    it("returns 403 when autoApprove used without server API key configured", async () => {
+    it("returns 403 when autoApprove used without authenticated request", async () => {
       const app = createApp(deps);
       const res = await request(app)
         .post("/api/plan")
         .send({ goal: "deploy app", autoApprove: true });
       expect(res.status).toBe(403);
       expect(res.body.error).toMatch(/autoApprove/);
+    });
+
+    it("allows autoApprove when request is authenticated", async () => {
+      const app = createApp({ ...deps, apiKey: "test-key-123" });
+      const res = await request(app)
+        .post("/api/plan")
+        .set("X-API-Key", "test-key-123")
+        .send({ goal: "deploy app", autoApprove: true });
+      // Should not be 403 — request is authenticated
+      // (may be 500 due to mock provider, but not 403)
+      expect(res.status).not.toBe(403);
     });
   });
 

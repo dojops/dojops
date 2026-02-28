@@ -23,6 +23,8 @@ export interface SystemTool {
   archMap: Record<Arch, string>;
   supportedTargets: Array<{ platform: Platform; arch: Arch }>;
   binaryPathInArchive?: string;
+  /** SHA-256 checksums keyed by version string. Used to verify downloaded binaries. */
+  sha256?: Record<string, string>;
 }
 
 export interface InstalledTool {

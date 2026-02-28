@@ -144,6 +144,15 @@ function resolveFilePath(templatePath: string, input: Record<string, unknown>): 
     throw new Error(`Path traversal detected in file path: ${resolved}`);
   }
 
+  // For relative paths, anchor to cwd and verify containment
+  if (!path.isAbsolute(resolved)) {
+    const base = path.resolve(".");
+    const anchored = path.resolve(base, resolved);
+    if (!anchored.startsWith(base + path.sep) && anchored !== base) {
+      throw new Error(`Resolved path escapes base directory: ${resolved}`);
+    }
+  }
+
   return resolved;
 }
 

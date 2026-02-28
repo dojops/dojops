@@ -116,6 +116,18 @@ function serializeHcl(data: unknown, options?: SerializerOptions): string {
   return lines.join("\n") + "\n";
 }
 
+/**
+ * Safe HCL identifier pattern: letters, digits, underscores, hyphens.
+ * Rejects keys that could inject arbitrary HCL syntax.
+ */
+const SAFE_HCL_KEY = /^[a-zA-Z_][a-zA-Z0-9_.-]*$/;
+
+function assertSafeHclKey(key: string): void {
+  if (!SAFE_HCL_KEY.test(key)) {
+    throw new Error(`Unsafe HCL key rejected: ${JSON.stringify(key)}`);
+  }
+}
+
 function serializeHclEntries(
   obj: Record<string, unknown>,
   indent: number,
@@ -124,6 +136,7 @@ function serializeHclEntries(
 ): void {
   const pad = "  ".repeat(indent);
   for (const [key, value] of Object.entries(obj)) {
+    assertSafeHclKey(key);
     if (typeof value === "object" && value !== null && !Array.isArray(value)) {
       if (mapAttrs.has(key)) {
         lines.push(`${pad}${key} = ${hclMap(value as Record<string, unknown>, indent, mapAttrs)}`);
@@ -157,6 +170,7 @@ function hclBlock(obj: Record<string, unknown>, indent: number, mapAttrs: Set<st
   const pad = " ".repeat(indent * 2);
   const lines: string[] = ["{"];
   for (const [key, val] of Object.entries(obj)) {
+    assertSafeHclKey(key);
     if (typeof val === "object" && val !== null && !Array.isArray(val)) {
       if (mapAttrs.has(key)) {
         lines.push(
@@ -181,6 +195,7 @@ function hclMap(obj: Record<string, unknown>, indent: number, mapAttrs: Set<stri
   if (entries.length === 0) return "{}";
   const lines: string[] = ["{"];
   for (const [key, val] of entries) {
+    assertSafeHclKey(key);
     lines.push(`${pad}  ${key} = ${hclValue(val, indent + 1, mapAttrs)}`);
   }
   lines.push(`${pad}}`);

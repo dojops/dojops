@@ -73,6 +73,28 @@ export function compilePrompt(sections: MarkdownSections, context: PromptContext
   return parts.join("\n");
 }
 
+/** Maximum length for a single substituted input value (bytes). */
+const MAX_INPUT_VALUE_LENGTH = 10_000;
+
+/**
+ * Sanitize a user-provided input value before substituting it into a prompt.
+ * Strips invisible/control characters (keeping newlines, tabs, spaces) and
+ * truncates to MAX_INPUT_VALUE_LENGTH to prevent prompt-size DoS.
+ */
+function sanitizeInputValue(value: string): string {
+  // Strip control chars except \n (0x0A), \t (0x09), \r (0x0D)
+  // Also strip zero-width chars (U+200B-U+200D, U+FEFF) and bidi overrides
+  const cleaned = value.replace(
+    // eslint-disable-next-line no-control-regex
+    /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B-\u200D\uFEFF\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
+    "",
+  );
+  if (cleaned.length > MAX_INPUT_VALUE_LENGTH) {
+    return cleaned.slice(0, MAX_INPUT_VALUE_LENGTH);
+  }
+  return cleaned;
+}
+
 /**
  * Substitute `{variableName}` placeholders in a prompt string
  * with values from the context.
@@ -81,6 +103,7 @@ function substituteVariables(prompt: string, context: PromptContext): string {
   let result = prompt;
 
   // Substitute existing content under the configured variable name
+  // existingContent is trusted (read from filesystem by readExistingConfig), not user-typed
   if (context.existingContent !== undefined) {
     const injectAs = context.updateConfig?.injectAs ?? "existingContent";
     result = result.replace(new RegExp(`\\{${injectAs}\\}`, "g"), context.existingContent);
@@ -90,11 +113,12 @@ function substituteVariables(prompt: string, context: PromptContext): string {
     }
   }
 
-  // Substitute {key} from input values
+  // Substitute {key} from input values — sanitize each value first
   if (context.input) {
     for (const [key, value] of Object.entries(context.input)) {
       if (typeof value === "string") {
-        result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+        const safe = sanitizeInputValue(value);
+        result = result.replace(new RegExp(`\\{${key}\\}`, "g"), safe);
       }
     }
   }

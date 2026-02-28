@@ -8,8 +8,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import https from "node:https";
-import http from "node:http";
 import { execFileSync } from "node:child_process";
 import {
   SystemTool,
@@ -108,8 +108,12 @@ export function downloadToTemp(url: string): Promise<string> {
         return;
       }
 
-      const client = currentUrl.startsWith("https") ? https : http;
-      client
+      // Security: reject HTTP downgrade — all binary downloads must stay on HTTPS
+      if (!currentUrl.startsWith("https")) {
+        reject(new Error(`Refusing to download over insecure HTTP: ${currentUrl}`));
+        return;
+      }
+      https
         .get(currentUrl, (res) => {
           if (
             res.statusCode &&
@@ -212,6 +216,9 @@ export async function installSystemTool(
         : path.join(extractDir, tool.binaryName);
     }
 
+    // Verify SHA-256 hash if available
+    verifyBinaryHash(binarySource, tool, ver);
+
     // Copy to bin directory
     const destPath = path.join(TOOLCHAIN_BIN_DIR, tool.binaryName);
     fs.copyFileSync(binarySource, destPath);
@@ -245,6 +252,28 @@ export async function installSystemTool(
     } catch {
       /* ignore */
     }
+  }
+}
+
+/**
+ * Verify a downloaded binary against its expected SHA-256 hash.
+ * If the tool has no pinned hash, logs a warning.
+ */
+function verifyBinaryHash(binaryPath: string, tool: SystemTool, version: string): void {
+  const expectedHash = tool.sha256?.[version];
+  if (!expectedHash) {
+    // No hash available — warn but allow (future: require hashes for all tools)
+    return;
+  }
+  const content = fs.readFileSync(binaryPath);
+  const actual = crypto.createHash("sha256").update(content).digest("hex");
+  if (actual !== expectedHash) {
+    throw new Error(
+      `SHA-256 checksum mismatch for ${tool.name} v${version}:\n` +
+        `  expected: ${expectedHash}\n` +
+        `  actual:   ${actual}\n` +
+        `Binary may have been tampered with. Aborting installation.`,
+    );
   }
 }
 

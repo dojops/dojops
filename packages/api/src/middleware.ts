@@ -27,7 +27,11 @@ export function validateBody(schema: ZodSchema) {
  */
 export function authMiddleware(apiKey?: string) {
   return (req: Request, res: Response, next: NextFunction): void => {
+    // Track authentication state on res.locals for downstream route handlers
+    res.locals.authenticated = false;
+
     if (!apiKey) {
+      // No server-side auth configured — mark as unauthenticated
       next();
       return;
     }
@@ -57,6 +61,7 @@ export function authMiddleware(apiKey?: string) {
       return;
     }
 
+    res.locals.authenticated = true;
     next();
   };
 }

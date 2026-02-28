@@ -13,9 +13,6 @@ import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
-import { planCommand } from "./plan";
-import { applyCommand } from "./apply";
-import { scanCommand } from "./scan";
 
 export async function chatCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sessionName = extractFlagValue(args, "--session");
@@ -196,33 +193,9 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     try {
       const result = await session.send(trimmed);
 
-      // Check for bridge command — execute actual command handlers
-      if (result.agent === "bridge" && result.content.startsWith("__bridge__:")) {
-        s.stop("Delegating to command...");
-        const [, command, cmdArgs] = result.content.split(":");
-        p.log.info(
-          `Bridging to ${pc.cyan(`dojops ${command}`)}${cmdArgs ? ` with: ${cmdArgs}` : ""}`,
-        );
-
-        try {
-          if (command === "plan" && cmdArgs) {
-            await planCommand([cmdArgs], ctx);
-          } else if (command === "apply") {
-            await applyCommand(cmdArgs ? [cmdArgs] : ["--yes"], ctx);
-          } else if (command === "scan") {
-            await scanCommand(cmdArgs ? [cmdArgs] : [], ctx);
-          } else {
-            p.log.info(pc.dim(`Run: dojops ${command} ${cmdArgs ?? ""}`.trim()));
-          }
-        } catch (err) {
-          if (err instanceof CLIError) {
-            if (err.message) p.log.error(err.message);
-          } else {
-            p.log.error(err instanceof Error ? err.message : String(err));
-          }
-        }
-        continue;
-      }
+      // Security: Never interpret LLM output as executable bridge commands.
+      // Bridge commands are only processed from user-typed slash commands
+      // (handled above in the slash-command section), never from LLM responses.
 
       s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
       p.log.message(result.content);
