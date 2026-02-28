@@ -1701,6 +1701,7 @@ function showLoginOverlay() {
   overlay.className = "auth-overlay";
   overlay.innerHTML =
     '<div class="auth-card">' +
+    '<img src="icons/official-dojops-icon.png" alt="DojOps" class="auth-logo" />' +
     '<h2 class="auth-title">Authentication Required</h2>' +
     '<p class="auth-hint">Enter your API key to access the dashboard.<br>' +
     "Generate one with: <code>dojops serve credentials</code></p>" +

@@ -201,7 +201,7 @@ function asciiFallback(): string {
 }
 
 export function createBanner(): string {
-  const svgPath = path.join(__dirname, "..", "img", "dojops-mascot-cli-header.svg");
+  const svgPath = path.join(__dirname, "..", "img", "official-dojops-icon-cli.svg");
 
   let svg: string;
   try {

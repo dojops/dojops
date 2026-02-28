@@ -266,6 +266,19 @@ body {
   font-size: 11px;
 }
 
+.status-chip__icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.status-chip--sm .status-chip__icon {
+  width: 14px;
+  height: 14px;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;
@@ -2858,6 +2871,14 @@ pre {
   box-shadow:
     0 0 60px rgba(0, 229, 255, 0.06),
     0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.auth-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  object-fit: contain;
+  margin-bottom: 16px;
 }
 
 .auth-title {
