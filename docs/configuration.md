@@ -90,11 +90,12 @@ dojops config
 The interactive wizard:
 
 1. Selects a provider from the list
-2. Prompts for the API key
-3. Fetches available models from the provider's API via `listModels()`
-4. Shows an interactive model picker
-5. Asks whether to switch default provider (if one already exists)
-6. Offers to configure another provider
+2. Prompts for the API key (skipped for Ollama and GitHub Copilot)
+3. For GitHub Copilot: runs the OAuth Device Flow automatically if not already authenticated
+4. Fetches available models from the provider's API via `listModels()`
+5. Shows an interactive model picker
+6. Asks whether to switch default provider (if one already exists)
+7. Offers to configure another provider
 
 ### Environment Variables
 
@@ -279,7 +280,7 @@ dojops provider add github-copilot
 
 # Or configure interactively
 dojops config
-# Select "github-copilot" → Device Flow runs automatically
+# Select "github-copilot" → Device Flow runs automatically → model picker shown
 ```
 
 The Device Flow works as follows:
@@ -289,8 +290,9 @@ The Device Flow works as follows:
 3. DojOps polls GitHub for authorization
 4. Once approved, DojOps exchanges the OAuth token for a short-lived Copilot JWT
 5. The JWT is cached and auto-refreshed before each API call (~30 min expiry)
+6. DojOps fetches available models and shows an interactive picker to select the default model
 
-Tokens are stored in `~/.dojops/copilot-token.json` (mode 0600). The Copilot API is OpenAI-compatible, so you can use models like `gpt-4o`, `claude-3.5-sonnet`, `o1-mini`, etc. depending on your subscription tier.
+Tokens are stored in `~/.dojops/copilot-token.json` (mode 0600). The Copilot API is OpenAI-compatible, so you can use models like `gpt-4o`, `gpt-4o-mini`, `claude-3.5-sonnet`, `o1-mini`, etc. depending on your subscription tier. After authentication, all three commands (`auth login`, `provider add`, and `config`) will present a model picker so you can choose your preferred model immediately.
 
 For CI/CD, you can set `GITHUB_COPILOT_TOKEN` to a GitHub OAuth token (`ghu_xxx`) to skip the interactive Device Flow.
 

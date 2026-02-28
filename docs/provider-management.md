@@ -78,13 +78,14 @@ dojops provider add ollama
 
 You can also set the host via the `OLLAMA_HOST` environment variable or `dojops config`.
 
-**GitHub Copilot** uses OAuth Device Flow instead of a token. Running `provider add` triggers the interactive flow:
+**GitHub Copilot** uses OAuth Device Flow instead of a token. Running `provider add` triggers the interactive flow and presents a model picker after authentication:
 
 ```bash
 dojops provider add github-copilot
 # Shows: Code: XXXX-XXXX, URL: https://github.com/login/device
 # → Open URL, enter code, authorize
 # ✓ Authenticated with GitHub Copilot.
+# → Select default model: gpt-4o, gpt-4o-mini, claude-3.5-sonnet, o1-mini, ...
 ```
 
 ### `provider remove <name>`
