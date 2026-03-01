@@ -213,23 +213,15 @@ jobs:
           fi
         continue-on-error: true
 
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "table"
-          output: "trivy-results.txt"
-          severity: "LOW,MEDIUM,HIGH,CRITICAL"
+        run: trivy fs --format table --output trivy-results.txt --severity LOW,MEDIUM,HIGH,CRITICAL .
 
       - name: Run Trivy (JSON for summary)
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "json"
-          output: "trivy-results.json"
-          severity: "LOW,MEDIUM,HIGH,CRITICAL"
+        run: trivy fs --format json --output trivy-results.json --severity LOW,MEDIUM,HIGH,CRITICAL .
 
       - name: Build Trivy summary
         id: trivy-summary
