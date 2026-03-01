@@ -124,9 +124,9 @@ describe("withRetry()", () => {
   // ---------------------------------------------------------------
   it("gives up after max retries and throws the last error", async () => {
     const generate = scriptedGenerate([
-      { reject: new Error("503 first") },
-      { reject: new Error("503 second") },
-      { reject: new Error("503 final") },
+      { reject: new Error("service unavailable: first") },
+      { reject: new Error("service unavailable: second") },
+      { reject: new Error("service unavailable: final") },
     ]);
     const generateSpy = vi.fn(generate);
     const provider = mockProvider(generateSpy);
@@ -135,7 +135,7 @@ describe("withRetry()", () => {
     const promise = retried.generate({ prompt: "hello" });
     await flush();
 
-    await expect(promise).rejects.toThrow("503 final");
+    await expect(promise).rejects.toThrow("service unavailable: final");
     // 1 initial + 2 retries = 3 total attempts
     expect(generateSpy).toHaveBeenCalledTimes(3);
   });
@@ -306,10 +306,10 @@ describe("withRetry()", () => {
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
 
     const generate = scriptedGenerate([
-      { reject: new Error("503 attempt 1") },
-      { reject: new Error("503 attempt 2") },
-      { reject: new Error("503 attempt 3") },
-      { reject: new Error("503 attempt 4") },
+      { reject: new Error("service unavailable: attempt 1") },
+      { reject: new Error("service unavailable: attempt 2") },
+      { reject: new Error("service unavailable: attempt 3") },
+      { reject: new Error("service unavailable: attempt 4") },
     ]);
     const generateSpy = vi.fn(generate);
     const provider = mockProvider(generateSpy);
@@ -322,7 +322,7 @@ describe("withRetry()", () => {
     const promise = retried.generate({ prompt: "hello" });
     await flush();
 
-    await expect(promise).rejects.toThrow("503");
+    await expect(promise).rejects.toThrow("service unavailable");
 
     // With Math.random() mocked to 0, jitter is 0.
     // Expected delays: 1000*2^0=1000, 1000*2^1=2000, 1000*2^2=4000
@@ -340,12 +340,12 @@ describe("withRetry()", () => {
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
 
     const generate = scriptedGenerate([
-      { reject: new Error("503 a1") },
-      { reject: new Error("503 a2") },
-      { reject: new Error("503 a3") },
-      { reject: new Error("503 a4") },
-      { reject: new Error("503 a5") },
-      { reject: new Error("503 final") },
+      { reject: new Error("bad gateway: a1") },
+      { reject: new Error("bad gateway: a2") },
+      { reject: new Error("bad gateway: a3") },
+      { reject: new Error("bad gateway: a4") },
+      { reject: new Error("bad gateway: a5") },
+      { reject: new Error("bad gateway: final") },
     ]);
     const generateSpy = vi.fn(generate);
     const provider = mockProvider(generateSpy);
@@ -358,7 +358,7 @@ describe("withRetry()", () => {
     const promise = retried.generate({ prompt: "hello" });
     await flush();
 
-    await expect(promise).rejects.toThrow("503");
+    await expect(promise).rejects.toThrow("bad gateway");
 
     // With Math.random() = 0: min(5000, 8000)=5000, min(10000, 8000)=8000, ...capped
     const delays = setTimeoutSpy.mock.calls

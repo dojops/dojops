@@ -127,6 +127,11 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
     let restored = 0;
     for (const file of filesToRestore) {
       try {
+        const absFile = path.resolve(file);
+        if (!absFile.startsWith(root + path.sep)) {
+          p.log.warn(`Skipping out-of-project file: ${file}`);
+          continue;
+        }
         if (restoreBackup(file)) {
           p.log.success(`Restored: ${file}`);
           restored++;

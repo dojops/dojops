@@ -24,6 +24,8 @@ export interface CLIContext {
   globalOpts: GlobalOptions;
   config: DojOpsConfig;
   cwd: string;
+  /** Resolved temperature (CLI flag > env > config > undefined) */
+  resolvedTemperature?: number;
   /** Lazy provider creation — avoids API key requirement for non-LLM commands */
   getProvider(): LLMProvider;
 }

@@ -18,11 +18,10 @@ function isRetryableError(err: unknown): boolean {
     lower.includes("rate limit") ||
     lower.includes("rate_limit") ||
     lower.includes("overloaded") ||
-    lower.includes("500") ||
-    lower.includes("502") ||
-    lower.includes("503") ||
-    lower.includes("service unavailable") ||
     lower.includes("internal server error") ||
+    lower.includes("bad gateway") ||
+    lower.includes("service unavailable") ||
+    /\bstatus\s*(code\s*)?5\d\d\b/.test(lower) ||
     lower.includes("econnreset") ||
     lower.includes("socket hang up")
   );

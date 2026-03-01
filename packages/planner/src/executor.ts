@@ -212,22 +212,22 @@ export class PlannerExecutor {
 
         this.logger.taskStart(task.id, task.description);
 
-        const resolvedInput = resolveInputRefs(task.input, results);
-        const validation = tool.validate(resolvedInput);
-
-        if (!validation.valid) {
-          failed.add(task.id);
-          const result: TaskResult = {
-            taskId: task.id,
-            status: "failed",
-            error: `Validation failed: ${validation.error}`,
-          };
-          results.set(task.id, result);
-          this.logger.taskEnd(task.id, "failed", result.error);
-          return;
-        }
-
         try {
+          const resolvedInput = resolveInputRefs(task.input, results);
+          const validation = tool.validate(resolvedInput);
+
+          if (!validation.valid) {
+            failed.add(task.id);
+            const result: TaskResult = {
+              taskId: task.id,
+              status: "failed",
+              error: `Validation failed: ${validation.error}`,
+            };
+            results.set(task.id, result);
+            this.logger.taskEnd(task.id, "failed", result.error);
+            return;
+          }
+
           const output = await tool.generate(resolvedInput);
           if (!output.success) {
             failed.add(task.id);

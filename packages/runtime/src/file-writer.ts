@@ -144,13 +144,11 @@ function resolveFilePath(templatePath: string, input: Record<string, unknown>): 
     throw new Error(`Path traversal detected in file path: ${resolved}`);
   }
 
-  // For relative paths, anchor to cwd and verify containment
-  if (!path.isAbsolute(resolved)) {
-    const base = path.resolve(".");
-    const anchored = path.resolve(base, resolved);
-    if (!anchored.startsWith(base + path.sep) && anchored !== base) {
-      throw new Error(`Resolved path escapes base directory: ${resolved}`);
-    }
+  // Reject absolute paths that were hardcoded in the template (not from variable expansion).
+  // Absolute paths produced by expanding {var} placeholders are allowed because
+  // tools legitimately receive absolute outputPath values at runtime.
+  if (path.isAbsolute(resolved) && path.isAbsolute(templatePath)) {
+    throw new Error(`Template contains an absolute path: ${resolved}`);
   }
 
   return resolved;
@@ -210,14 +208,15 @@ function matchGlob(filename: string, pattern: string): boolean {
 /**
  * Check if a resolved file path matches at least one scope.write pattern.
  * Scope patterns use the same `{var}` syntax as file paths — variables
- * are expanded before matching via simple string equality.
+ * are expanded before matching. Supports `*` (single segment) and `**`
+ * (recursive directory) globs in addition to exact matches.
  */
 export function matchesScopePattern(
   resolvedPath: string,
   scopePatterns: string[],
   input: Record<string, unknown>,
 ): boolean {
-  const normalizedResolved = path.normalize(resolvedPath);
+  const normalizedResolved = path.normalize(resolvedPath).replace(/\\/g, "/");
   for (const pattern of scopePatterns) {
     // Expand {var} placeholders in the scope pattern
     let expanded = pattern;
@@ -226,7 +225,24 @@ export function matchesScopePattern(
         expanded = expanded.replace(new RegExp(`\\{${key}\\}`, "g"), value);
       }
     }
-    if (normalizedResolved === path.normalize(expanded)) return true;
+    const normalizedExpanded = path.normalize(expanded).replace(/\\/g, "/");
+
+    // Exact match
+    if (normalizedResolved === normalizedExpanded) return true;
+
+    // ** recursive directory match (e.g. "k8s/**")
+    if (normalizedExpanded.endsWith("/**")) {
+      const prefix = normalizedExpanded.slice(0, -3);
+      if (normalizedResolved.startsWith(prefix + "/") || normalizedResolved === prefix) return true;
+      continue;
+    }
+
+    // * wildcard within pattern (e.g. "Dockerfile.*", "*.tf")
+    if (normalizedExpanded.includes("*")) {
+      const regexStr =
+        "^" + normalizedExpanded.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$";
+      if (new RegExp(regexStr).test(normalizedResolved)) return true;
+    }
   }
   return false;
 }

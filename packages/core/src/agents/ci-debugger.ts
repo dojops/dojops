@@ -84,12 +84,13 @@ export class CIDebugger {
   async diagnoseMultiple(logs: { name: string; content: string }[]): Promise<
     {
       name: string;
-      diagnosis: CIDiagnosis;
+      diagnosis?: CIDiagnosis;
+      error?: string;
     }[]
   > {
     // Process in chunks of 3 to avoid overwhelming the LLM provider
     const CONCURRENCY = 3;
-    const results: { name: string; diagnosis: CIDiagnosis }[] = [];
+    const results: { name: string; diagnosis?: CIDiagnosis; error?: string }[] = [];
     for (let i = 0; i < logs.length; i += CONCURRENCY) {
       const chunk = logs.slice(i, i + CONCURRENCY);
       const settled = await Promise.allSettled(
@@ -98,11 +99,18 @@ export class CIDebugger {
           return { name: log.name, diagnosis };
         }),
       );
-      for (const outcome of settled) {
+      for (let idx = 0; idx < settled.length; idx++) {
+        const outcome = settled[idx];
         if (outcome.status === "fulfilled") {
           results.push(outcome.value);
+        } else {
+          // Surface failures so callers know which logs could not be diagnosed
+          results.push({
+            name: chunk[idx].name,
+            error:
+              outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
+          });
         }
-        // Rejected outcomes are silently skipped (partial results preserved)
       }
     }
     return results;

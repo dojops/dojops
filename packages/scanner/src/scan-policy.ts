@@ -49,7 +49,7 @@ export function evaluatePolicy(report: ScanReport, policy: ScanPolicy): PolicyRe
   const violations: string[] = [];
   let suppressedCount = 0;
 
-  // Apply ignore list — filter out suppressed findings (clone to avoid mutating original)
+  // Apply ignore list — filter suppressed findings and recompute summary
   if (policy.ignore && policy.ignore.length > 0) {
     const ignoreIds = new Set(policy.ignore.map((e) => e.id));
     const originalFindings = [...report.findings];
@@ -57,6 +57,17 @@ export function evaluatePolicy(report: ScanReport, policy: ScanPolicy): PolicyRe
       (f) => !ignoreIds.has(f.id) && !ignoreIds.has(f.cve ?? ""),
     );
     suppressedCount = originalFindings.length - report.findings.length;
+
+    // Recompute summary to match filtered findings
+    if (suppressedCount > 0) {
+      report.summary = {
+        total: report.findings.length,
+        critical: report.findings.filter((f) => f.severity === "CRITICAL").length,
+        high: report.findings.filter((f) => f.severity === "HIGH").length,
+        medium: report.findings.filter((f) => f.severity === "MEDIUM").length,
+        low: report.findings.filter((f) => f.severity === "LOW").length,
+      };
+    }
   }
 
   // Check severity count thresholds

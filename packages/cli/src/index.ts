@@ -16,6 +16,7 @@ import { LLMProvider, FallbackProvider } from "@dojops/core";
 import {
   resolveProvider,
   resolveModel,
+  resolveTemperature,
   resolveToken,
   resolveOllamaHost,
   resolveOllamaTls,
@@ -198,6 +199,7 @@ async function main() {
     globalOpts,
     config,
     cwd: process.cwd(),
+    resolvedTemperature: resolveTemperature(globalOpts.temperature, config),
     getProvider() {
       if (cachedProvider) return cachedProvider;
 

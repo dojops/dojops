@@ -4,6 +4,7 @@ import { CustomAgentConfig, parseAgentReadme } from "./agent-parser";
 
 const AGENTS_DIR_NAME = "agents";
 const README_FILE = "README.md";
+const MAX_README_SIZE = 65_536; // 64KB — same cap as tool manifests
 
 export interface CustomAgentEntry {
   config: CustomAgentConfig;
@@ -30,6 +31,8 @@ function loadAgentFromDir(
 
   let content: string;
   try {
+    const stat = fs.statSync(readmePath);
+    if (stat.size > MAX_README_SIZE) return null;
     content = fs.readFileSync(readmePath, "utf-8");
   } catch {
     return null;

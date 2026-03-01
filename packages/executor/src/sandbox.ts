@@ -42,12 +42,24 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
     },
 
     readFileSync(filePath: string): string {
-      const resolved = path.resolve(filePath);
+      // Resolve symlinks to prevent reading outside allowed paths
+      let resolved: string;
+      try {
+        resolved = fs.realpathSync(path.resolve(filePath));
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+          throw new PolicyViolationError(`File not found: ${filePath}`, "readFileSync");
+        }
+        throw err;
+      }
 
-      // Reject reads from denied paths
+      // Reject reads from denied paths (with separator to prevent prefix collision)
       for (const denied of policy.deniedWritePaths) {
         const deniedResolved = path.resolve(denied);
-        if (resolved.startsWith(deniedResolved)) {
+        const deniedWithSep = deniedResolved.endsWith(path.sep)
+          ? deniedResolved
+          : deniedResolved + path.sep;
+        if (resolved.startsWith(deniedWithSep) || resolved === deniedResolved) {
           throw new PolicyViolationError(
             `Read from ${resolved} is denied by policy (matches ${deniedResolved})`,
             "deniedWritePaths",

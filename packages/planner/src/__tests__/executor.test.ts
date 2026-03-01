@@ -289,7 +289,7 @@ describe("PlannerExecutor", () => {
   });
 
   describe("$ref resolution edge cases", () => {
-    it("throws error when $ref references a task that does not exist", async () => {
+    it("fails task when $ref references a task that does not exist", async () => {
       const graph: TaskGraph = {
         goal: "bad ref",
         tasks: [
@@ -304,7 +304,11 @@ describe("PlannerExecutor", () => {
       };
 
       const executor = new PlannerExecutor([new SuccessTool()]);
-      await expect(executor.execute(graph)).rejects.toThrow("references unknown task");
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(false);
+      expect(result.results[0].status).toBe("failed");
+      expect(result.results[0].error).toContain("references unknown task");
     });
 
     it("resolves $ref to undefined when referenced task has output: undefined", async () => {

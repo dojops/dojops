@@ -44,6 +44,20 @@ function getTokenFile(): string {
   return path.join(getTokenDir(), "copilot-token.json");
 }
 
+// ─── SSRF Protection ────────────────────────────────────────────────────────
+
+const ALLOWED_COPILOT_HOSTS = [".github.com", ".githubcopilot.com", ".githubusercontent.com"];
+
+function isValidCopilotApiUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    return ALLOWED_COPILOT_HOSTS.some((suffix) => parsed.hostname.endsWith(suffix));
+  } catch {
+    return false;
+  }
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface DeviceCodeResponse {
@@ -148,7 +162,7 @@ export async function pollForAccessToken(
         onStatus?.("Waiting for user authorization...");
         break;
       case "slow_down":
-        pollInterval += 5000;
+        pollInterval = Math.min(pollInterval + 5000, 30_000); // Cap per RFC 8628
         onStatus?.(`Slowing down, new interval: ${pollInterval / 1000}s`);
         break;
       case "expired_token":
@@ -218,7 +232,10 @@ export function saveCopilotAuth(auth: StoredCopilotAuth): void {
   if (!fs.existsSync(getTokenDir())) {
     fs.mkdirSync(getTokenDir(), { recursive: true, mode: 0o700 });
   }
-  fs.writeFileSync(getTokenFile(), JSON.stringify(auth, null, 2) + "\n", { mode: 0o600 });
+  // Atomic write: tmp + rename to prevent corruption on kill
+  const tmpFile = getTokenFile() + ".tmp";
+  fs.writeFileSync(tmpFile, JSON.stringify(auth, null, 2) + "\n", { mode: 0o600 });
+  fs.renameSync(tmpFile, getTokenFile());
 }
 
 // Validate GitHub token format (ghu_, gho_, ghp_ prefixes, or legacy tokens)
@@ -231,6 +248,10 @@ export function loadCopilotAuth(): StoredCopilotAuth | null {
     if (typeof data !== "object" || data === null || !data.github_token) return null;
     // Validate token format to prevent using malformed tokens
     if (!GITHUB_TOKEN_PATTERN.test(data.github_token)) return null;
+    // SSRF protection: validate api_base_url from disk
+    if (data.api_base_url && !isValidCopilotApiUrl(data.api_base_url)) {
+      return null;
+    }
     return data as StoredCopilotAuth;
   } catch {
     return null;
@@ -301,15 +322,33 @@ export async function copilotLogin(callbacks: LoginCallbacks): Promise<StoredCop
 // Module-level JWT cache for env-var-based token path (avoids exchanging on every generate() call)
 let envTokenCache: { token: string; apiBaseUrl: string; expiresAt: number } | null = null;
 
+// Module-level refresh lock to prevent token stampede on concurrent requests
+let refreshPromise: Promise<{ token: string; apiBaseUrl: string }> | null = null;
+
 /** Reset the env token cache (for testing only). */
 export function resetEnvTokenCache(): void {
   envTokenCache = null;
+  refreshPromise = null;
+}
+
+const DEFAULT_COPILOT_API_URL = "https://api.githubcopilot.com";
+
+/** Validate and return a safe API base URL. */
+function safeApiBaseUrl(url: string | undefined): string {
+  if (!url) return DEFAULT_COPILOT_API_URL;
+  return isValidCopilotApiUrl(url) ? url : DEFAULT_COPILOT_API_URL;
 }
 
 export async function getValidCopilotToken(): Promise<{ token: string; apiBaseUrl: string }> {
   // Allow env-var-based token for CI/CD
   const envToken = process.env.GITHUB_COPILOT_TOKEN;
   if (envToken) {
+    // Validate env var format
+    if (!GITHUB_TOKEN_PATTERN.test(envToken)) {
+      throw new Error(
+        "GITHUB_COPILOT_TOKEN has an invalid format. Expected a GitHub OAuth token (ghu_*, gho_*, ghp_*).",
+      );
+    }
     const now = Math.floor(Date.now() / 1000);
     const bufferSeconds = 60;
     // Return cached JWT if still valid
@@ -318,7 +357,7 @@ export async function getValidCopilotToken(): Promise<{ token: string; apiBaseUr
     }
     // Env var provides a GitHub OAuth token; exchange it for a Copilot JWT
     const copilotToken = await getCopilotToken(envToken);
-    const apiBaseUrl = copilotToken.endpoints?.api || "https://api.githubcopilot.com";
+    const apiBaseUrl = safeApiBaseUrl(copilotToken.endpoints?.api);
     envTokenCache = { token: copilotToken.token, apiBaseUrl, expiresAt: copilotToken.expires_at };
     return { token: copilotToken.token, apiBaseUrl };
   }
@@ -340,21 +379,29 @@ export async function getValidCopilotToken(): Promise<{ token: string; apiBaseUr
   ) {
     return {
       token: auth.copilot_token,
-      apiBaseUrl: auth.api_base_url || "https://api.githubcopilot.com",
+      apiBaseUrl: safeApiBaseUrl(auth.api_base_url),
     };
   }
 
-  // Token expired or about to expire — refresh
-  const copilotToken = await getCopilotToken(auth.github_token);
+  // Token expired — use lock to prevent concurrent refresh stampede
+  if (refreshPromise) return refreshPromise;
 
-  auth.copilot_token = copilotToken.token;
-  auth.copilot_token_expires_at = copilotToken.expires_at;
-  saveCopilotAuth(auth);
+  refreshPromise = (async () => {
+    try {
+      const copilotToken = await getCopilotToken(auth.github_token);
+      auth.copilot_token = copilotToken.token;
+      auth.copilot_token_expires_at = copilotToken.expires_at;
+      saveCopilotAuth(auth);
+      return {
+        token: copilotToken.token,
+        apiBaseUrl: safeApiBaseUrl(auth.api_base_url),
+      };
+    } finally {
+      refreshPromise = null;
+    }
+  })();
 
-  return {
-    token: copilotToken.token,
-    apiBaseUrl: auth.api_base_url || "https://api.githubcopilot.com",
-  };
+  return refreshPromise;
 }
 
 // ─── Utility ─────────────────────────────────────────────────────────────────

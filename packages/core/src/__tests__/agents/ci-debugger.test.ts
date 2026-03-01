@@ -216,10 +216,15 @@ describe("CIDebugger.diagnoseMultiple edge cases", () => {
     ];
 
     // All three logs are in the same chunk (CONCURRENCY = 3),
-    // Promise.allSettled keeps the 2 successful results
+    // Promise.allSettled keeps all results — failures include an error field
     const results = await debugger_.diagnoseMultiple(logs);
-    expect(results).toHaveLength(2);
+    expect(results).toHaveLength(3);
     expect(results[0].name).toBe("log-0");
-    expect(results[1].name).toBe("log-2");
+    expect(results[0].diagnosis).toBeDefined();
+    expect(results[1].name).toBe("log-1");
+    expect(results[1].error).toBe("LLM provider rate limited");
+    expect(results[1].diagnosis).toBeUndefined();
+    expect(results[2].name).toBe("log-2");
+    expect(results[2].diagnosis).toBeDefined();
   });
 });

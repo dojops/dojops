@@ -133,7 +133,10 @@ export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy): vo
 
   for (const denied of policy.deniedWritePaths) {
     const deniedResolved = path.resolve(denied);
-    if (resolved.startsWith(deniedResolved)) {
+    const deniedWithSep = deniedResolved.endsWith(path.sep)
+      ? deniedResolved
+      : deniedResolved + path.sep;
+    if (resolved.startsWith(deniedWithSep) || resolved === deniedResolved) {
       throw new PolicyViolationError(
         `Write to ${resolved} is denied by policy (matches ${deniedResolved})`,
         "deniedWritePaths",
@@ -144,7 +147,10 @@ export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy): vo
   if (policy.allowedWritePaths.length > 0) {
     const allowed = policy.allowedWritePaths.some((p) => {
       const allowedResolved = path.resolve(p);
-      return resolved.startsWith(allowedResolved);
+      const allowedWithSep = allowedResolved.endsWith(path.sep)
+        ? allowedResolved
+        : allowedResolved + path.sep;
+      return resolved.startsWith(allowedWithSep) || resolved === allowedResolved;
     });
     if (!allowed) {
       throw new PolicyViolationError(

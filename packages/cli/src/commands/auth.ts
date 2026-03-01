@@ -59,18 +59,7 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
     );
   }
 
-  config.tokens = config.tokens ?? {};
-  config.tokens[provider] = token;
-
-  if (!config.defaultProvider) {
-    config.defaultProvider = provider;
-  }
-
-  saveConfig(config);
-
-  p.log.success("Token saved successfully.");
-
-  // M-4: Validate the token by attempting a lightweight provider call
+  // Validate the token before saving by attempting a lightweight provider call
   try {
     const testProvider = createProvider({ provider, apiKey: token });
     if (testProvider.listModels) {
@@ -81,8 +70,19 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
       p.log.success("Token validated — provider connection verified.");
     }
   } catch {
-    p.log.warn("Could not verify token. It has been saved, but may be invalid.");
+    p.log.warn("Could not verify token online. Saving anyway — it may be invalid.");
   }
+
+  config.tokens = config.tokens ?? {};
+  config.tokens[provider] = token;
+
+  if (!config.defaultProvider) {
+    config.defaultProvider = provider;
+  }
+
+  saveConfig(config);
+
+  p.log.success("Token saved successfully.");
 
   const isDefault = config.defaultProvider === provider;
   const defaultNote = isDefault

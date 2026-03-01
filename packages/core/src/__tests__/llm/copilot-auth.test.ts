@@ -167,7 +167,7 @@ describe("copilot-auth", () => {
           Promise.resolve({
             token: "jwt_from_env",
             expires_at: 9999999999,
-            endpoints: { api: "https://copilot.example.com" },
+            endpoints: { api: "https://api.githubcopilot.com" },
           }),
       });
       vi.stubGlobal("fetch", mockFetch);
@@ -176,7 +176,7 @@ describe("copilot-auth", () => {
       const result = await getValidCopilotToken();
 
       expect(result.token).toBe("jwt_from_env");
-      expect(result.apiBaseUrl).toBe("https://copilot.example.com");
+      expect(result.apiBaseUrl).toBe("https://api.githubcopilot.com");
 
       vi.unstubAllGlobals();
     });

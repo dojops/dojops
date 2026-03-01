@@ -123,7 +123,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     executionContext: {
       provider: provider.name,
       model: ctx.globalOpts.model,
-      temperature: ctx.globalOpts.temperature,
+      temperature: ctx.resolvedTemperature,
       dojopsVersion: getDojopsVersion(),
       policySnapshot: crypto
         .createHash("sha256")

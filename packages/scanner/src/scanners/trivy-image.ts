@@ -24,7 +24,19 @@ interface TrivyImageOutput {
   Results?: TrivyImageResult[];
 }
 
+// Validate Docker image name format — reject argument injection and shell metacharacters
+const SAFE_IMAGE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_./:@-]{0,254}$/;
+
 export async function scanTrivyImage(imageName: string): Promise<ScannerResult> {
+  if (!SAFE_IMAGE_NAME.test(imageName)) {
+    return {
+      tool: "trivy-image",
+      findings: [],
+      skipped: true,
+      skipReason: "Invalid image name format",
+    };
+  }
+
   let rawOutput: string;
   try {
     const result = await execFileAsync("trivy", ["image", "--format", "json", imageName], {

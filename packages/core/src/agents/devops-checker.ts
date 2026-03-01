@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LLMProvider } from "../llm/provider";
 import { parseAndValidate } from "../llm/json-validator";
+import { wrapAsData, sanitizeUserInput } from "../llm/sanitizer";
 
 export const CheckFindingSchema = z.object({
   file: z.string(),
@@ -55,7 +56,7 @@ export class DevOpsChecker {
     fileContents: { path: string; content: string }[],
   ): Promise<CheckReport> {
     const filesSection = fileContents
-      .map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
+      .map((f) => wrapAsData(sanitizeUserInput(f.content), f.path))
       .join("\n\n");
 
     const prompt = [

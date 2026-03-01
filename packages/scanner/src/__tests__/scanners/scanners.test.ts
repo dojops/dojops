@@ -579,7 +579,12 @@ describe("scanShellcheck", () => {
 
   it("skips when shellcheck not found (ENOENT)", async () => {
     const { scanShellcheck } = await import("../../scanners/shellcheck");
-    const dirent = { name: "deploy.sh", isFile: () => true, isDirectory: () => false };
+    const dirent = {
+      name: "deploy.sh",
+      isFile: () => true,
+      isDirectory: () => false,
+      isSymbolicLink: () => false,
+    };
     mockReaddirSync.mockImplementation((dir) => {
       if (String(dir) === "/project") return [dirent] as unknown as fs.Dirent[];
       return [] as unknown as fs.Dirent[];
@@ -595,7 +600,12 @@ describe("scanShellcheck", () => {
 
   it("parses shellcheck JSON output", async () => {
     const { scanShellcheck } = await import("../../scanners/shellcheck");
-    const dirent = { name: "deploy.sh", isFile: () => true, isDirectory: () => false };
+    const dirent = {
+      name: "deploy.sh",
+      isFile: () => true,
+      isDirectory: () => false,
+      isSymbolicLink: () => false,
+    };
     mockReaddirSync.mockImplementation((dir) => {
       if (String(dir) === "/project") return [dirent] as unknown as fs.Dirent[];
       return [] as unknown as fs.Dirent[];

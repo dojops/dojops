@@ -92,8 +92,10 @@ export function backupFile(filePath: string): void {
   const timestamp = Date.now();
   const versionedPath = `${filePath}.bak.${timestamp}`;
   fs.copyFileSync(filePath, versionedPath);
-  // Maintain `.bak` as latest backup for backward compat
-  fs.copyFileSync(filePath, `${filePath}.bak`);
+  // Atomic update of `.bak` as latest backup for backward compat
+  const tmpBak = `${filePath}.bak.tmp`;
+  fs.copyFileSync(filePath, tmpBak);
+  fs.renameSync(tmpBak, `${filePath}.bak`);
 }
 
 /**
@@ -106,8 +108,11 @@ export function listBackups(filePath: string): string[] {
     return fs
       .readdirSync(dir)
       .filter((f) => f.startsWith(`${base}.bak.`) && /\.\d+$/.test(f))
-      .sort()
-      .reverse()
+      .sort((a, b) => {
+        const tsA = parseInt(a.match(/\.(\d+)$/)?.[1] ?? "0", 10);
+        const tsB = parseInt(b.match(/\.(\d+)$/)?.[1] ?? "0", 10);
+        return tsB - tsA; // newest first
+      })
       .map((f) => path.join(dir, f));
   } catch {
     return [];

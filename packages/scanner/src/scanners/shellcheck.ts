@@ -138,14 +138,29 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
   return { tool: "shellcheck", findings: allFindings, rawOutput: combinedRawOutput };
 }
 
+const MAX_SCRIPTS = 200;
+
 function findShellScripts(projectPath: string): string[] {
   const results: string[] = [];
   const seen = new Set<string>();
+  const projectRoot = path.resolve(projectPath);
 
-  function addScript(filePath: string): void {
+  function addScript(filePath: string): boolean {
+    if (results.length >= MAX_SCRIPTS) return false;
     if (!seen.has(filePath)) {
       seen.add(filePath);
       results.push(filePath);
+    }
+    return true;
+  }
+
+  /** Resolve symlinks and verify the real path stays within the project root. */
+  function isContainedPath(filePath: string): boolean {
+    try {
+      const real = fs.realpathSync(filePath);
+      return real.startsWith(projectRoot + path.sep) || real === projectRoot;
+    } catch {
+      return false;
     }
   }
 
@@ -171,15 +186,21 @@ function findShellScripts(projectPath: string): string[] {
   }
 
   function scanDir(dir: string): void {
+    if (results.length >= MAX_SCRIPTS) return;
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
+        if (results.length >= MAX_SCRIPTS) return;
         if (!entry.isFile() && !entry.isSymbolicLink()) continue;
         const fullPath = path.join(dir, entry.name);
+
+        // Symlink containment: resolve and verify within project root
+        if (entry.isSymbolicLink() && !isContainedPath(fullPath)) continue;
+
         if (entry.name.endsWith(".sh") || entry.name.endsWith(".bash")) {
-          addScript(fullPath);
+          if (!addScript(fullPath)) return;
         } else if (!entry.name.includes(".") && hasShellShebang(fullPath)) {
-          addScript(fullPath);
+          if (!addScript(fullPath)) return;
         }
       }
     } catch {

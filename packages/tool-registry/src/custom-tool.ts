@@ -224,11 +224,27 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       return { passed: false, tool: this.name, issues };
     }
 
-    // Reject dangerous arguments (A8)
+    // Reject dangerous arguments (A8) — expanded blocklist for all whitelisted binaries
     const parts = command.split(/\s+/);
-    const DANGEROUS_ARG_PATTERNS = [/--backend-config/, /--plugin-dir/, /-chdir/];
+    const DANGEROUS_ARG_PATTERNS = [
+      /--backend-config/,
+      /--plugin-dir/,
+      /-chdir/,
+      /--config/,
+      /--kubeconfig/,
+      /--credentials/,
+      /--token/,
+      /--cert/,
+      /--key/,
+      /--output/,
+      /--exec/,
+    ];
     for (const arg of parts.slice(1)) {
-      if (DANGEROUS_ARG_PATTERNS.some((p) => p.test(arg))) {
+      if (
+        DANGEROUS_ARG_PATTERNS.some((p) => p.test(arg)) ||
+        arg.includes("/") ||
+        arg.includes("\\")
+      ) {
         const issues: VerificationIssue[] = [
           { severity: "error", message: `Dangerous argument rejected: ${arg}` },
         ];

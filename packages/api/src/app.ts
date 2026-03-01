@@ -128,6 +128,7 @@ export function createApp(deps: AppDependencies): Express {
     message: { error: "Too many requests, please try again later" },
   });
   app.use("/api/", apiLimiter);
+  app.use("/api/v1/", apiLimiter);
 
   // API key auth (reads from deps or env; health check is always public)
   const apiKey = deps.apiKey ?? process.env.DOJOPS_API_KEY;
@@ -139,6 +140,7 @@ export function createApp(deps: AppDependencies): Express {
     });
   }
   app.use("/api/", authMiddleware(apiKey));
+  app.use("/api/v1/", authMiddleware(apiKey));
 
   // Serve static dashboard files
   app.use(express.static(deps.publicDir ?? path.join(__dirname, "..", "public")));

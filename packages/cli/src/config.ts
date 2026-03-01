@@ -136,7 +136,14 @@ export function resolveTemperature(
 ): number | undefined {
   if (cliFlag !== undefined) return cliFlag;
   const envVal = process.env.DOJOPS_TEMPERATURE;
-  if (envVal !== undefined) return Number(envVal);
+  if (envVal !== undefined) {
+    const parsed = Number(envVal);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2) {
+      console.warn(`[dojops] Invalid DOJOPS_TEMPERATURE="${envVal}", ignoring.`);
+    } else {
+      return parsed;
+    }
+  }
   return config.defaultTemperature ?? undefined;
 }
 
