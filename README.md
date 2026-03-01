@@ -22,7 +22,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.0-00e5ff?style=flat-square" alt="Version" />
-  <img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
+  <img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
   <img src="https://img.shields.io/badge/agents-16%2B_custom-8b5cf6?style=flat-square" alt="Agents" />
@@ -46,15 +46,32 @@
 
 ## Quick Start
 
+### Install
+
 ```bash
-# 1. Install globally
+# npm (recommended)
 npm i -g @dojops/cli
 
-# 2. Configure your provider
+# Shell script
+curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh
+
+# Homebrew
+brew install dojops/tap/dojops
+
+# Docker
+docker run --rm -it ghcr.io/dojops/dojops "Create a Terraform config for S3"
+```
+
+See [docs/installation.md](docs/installation.md) for detailed instructions, upgrade/uninstall, and troubleshooting.
+
+### Configure & Run
+
+```bash
+# 1. Configure your provider
 dojops config                                  # Interactive wizard
 # or: dojops provider add openai --token sk-...  # Direct setup
 
-# 3. Generate your first config
+# 2. Generate your first config
 dojops "Create a Kubernetes deployment for nginx with 3 replicas"
 ```
 
@@ -559,7 +576,7 @@ dojops --profile=staging "Create S3..."  # One-off profile override
 
 ### Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 20
 - **pnpm** >= 8
 - **TypeScript** >= 5.4
 

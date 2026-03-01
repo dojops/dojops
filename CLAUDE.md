@@ -154,6 +154,30 @@ verifier.ts    -> (optional) external tool validation (terraform validate, hadol
 - Specifications — `docs/TOOL_SPEC_v1.md` freezes the v1 custom tool contract (manifest schema, discovery, security constraints, compatibility promise)
 - Dev tooling — Vitest (1931 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
+## Installation & Distribution
+
+**4 install methods:**
+
+```bash
+npm i -g @dojops/cli                                                       # npm
+curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh  # Shell script
+brew install dojops/tap/dojops                                             # Homebrew
+docker run --rm -it ghcr.io/dojops/dojops "prompt"                        # Docker (GHCR)
+```
+
+**Release workflow** (`.github/workflows/release.yml`, triggered on `v*` tags):
+1. Build + test + lint
+2. Validate all 10 package versions match git tag
+3. Publish to npm (`pnpm publish-packages`)
+4. Generate SHA256 checksums (`npm pack` each package), attach `SHA256SUMS.txt` to GitHub Release
+5. Build + push Docker image to `ghcr.io/dojops/dojops:{version}` + `:latest`
+6. Update Homebrew tap formula (`dojops/homebrew-tap`) via `mislav/bump-homebrew-formula-action`
+
+**External dependencies** (manual setup, not in this repo):
+- `dojops/homebrew-tap` GitHub repository with `Formula/dojops.rb`
+- `NPM_TOKEN` secret on main repo (for npm publishing)
+- `HOMEBREW_TAP_TOKEN` secret on main repo (for tap formula updates)
+
 ## Roadmap
 
 **Phase 1 — Core Intelligence: DONE**

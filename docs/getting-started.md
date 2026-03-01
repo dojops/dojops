@@ -6,7 +6,7 @@ This guide walks you through installing DojOps, configuring an LLM provider, and
 
 ## Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 20
 - **pnpm** >= 8 (for development only)
 - An API key from at least one supported LLM provider (or a local Ollama instance)
 
@@ -14,11 +14,40 @@ This guide walks you through installing DojOps, configuring an LLM provider, and
 
 ## Installation
 
+### npm (recommended)
+
 ```bash
 npm i -g @dojops/cli
 ```
 
-Verify the installation:
+### Shell script
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh
+
+# Install a specific version
+curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh -s -- --version 1.0.0
+```
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew install dojops/tap/dojops
+```
+
+### Docker
+
+```bash
+# One-off generation
+docker run --rm -it ghcr.io/dojops/dojops "Create a Terraform config for S3"
+
+# API server
+docker run --rm -p 3000:3000 -e OPENAI_API_KEY ghcr.io/dojops/dojops serve
+```
+
+See [installation.md](installation.md) for upgrade/uninstall instructions and troubleshooting.
+
+### Verify
 
 ```bash
 dojops --help

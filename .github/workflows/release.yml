@@ -7,11 +7,12 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -30,12 +31,98 @@ jobs:
       - run: pnpm test:coverage
       - run: pnpm lint
 
+      - name: Validate package versions match tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Tag version: $TAG_VERSION"
+          MISMATCH=0
+          for pkg in packages/*/package.json; do
+            PKG_NAME=$(node -p "require('./$pkg').name")
+            PKG_VERSION=$(node -p "require('./$pkg').version")
+            if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+              echo "::error::$PKG_NAME has version $PKG_VERSION, expected $TAG_VERSION"
+              MISMATCH=1
+            fi
+          done
+          if [ "$MISMATCH" -eq 1 ]; then
+            echo "::error::Package version mismatch. All packages must match the git tag."
+            exit 1
+          fi
+          echo "All packages match tag version $TAG_VERSION"
+
       - name: Publish packages
         run: pnpm publish-packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Generate checksums
+        run: |
+          mkdir -p checksums
+          for pkg in packages/*/; do
+            PKG_NAME=$(node -p "require('./${pkg}package.json').name" 2>/dev/null) || continue
+            (cd "$pkg" && npm pack --pack-destination ../../checksums 2>/dev/null) || true
+          done
+          cd checksums
+          sha256sum *.tgz > SHA256SUMS.txt
+          echo "--- SHA256SUMS.txt ---"
+          cat SHA256SUMS.txt
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          files: checksums/SHA256SUMS.txt
+
+  docker:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/dojops/dojops:latest
+            ghcr.io/dojops/dojops:${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=DojOps
+            org.opencontainers.image.description=AI DevOps Automation Engine
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=https://github.com/dojops/dojops
+            org.opencontainers.image.licenses=MIT
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref_name, '-') }}
+    timeout-minutes: 5
+    steps:
+      - name: Update Homebrew formula
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: dojops
+          homebrew-tap: dojops/homebrew-tap
+          tag-name: ${{ github.ref_name }}
+          download-url: https://registry.npmjs.org/@dojops/cli/-/cli-${{ github.ref_name }}.tgz
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

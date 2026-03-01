@@ -10,7 +10,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/sdk/package.json packages/sdk/
 COPY packages/planner/package.json packages/planner/
-COPY packages/tools/package.json packages/tools/
+COPY packages/runtime/package.json packages/runtime/
 COPY packages/executor/package.json packages/executor/
 COPY packages/scanner/package.json packages/scanner/
 COPY packages/session/package.json packages/session/

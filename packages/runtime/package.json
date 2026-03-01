@@ -2,6 +2,18 @@
   "name": "@dojops/runtime",
   "version": "1.0.0",
   "description": "Unified DOPS tool runtime engine for DojOps",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dojops/dojops.git",
+    "directory": "packages/runtime"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -17,7 +29,8 @@
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
   },
   "dependencies": {
     "@dojops/core": "workspace:*",
