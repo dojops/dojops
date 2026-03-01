@@ -55,10 +55,10 @@ if (!apiKey) {
 }
 
 const server = app.listen(port, () => {
-  console.log(`DojOps API server running on http://localhost:${port}`);
-  console.log(`Provider: ${provider.name}`);
-  console.log(`Tools: ${tools.map((t) => t.name).join(", ")}`);
-  console.log(`Dashboard: http://localhost:${port}`);
+  console.log(`\n  🥷 DojOps API server running on http://localhost:${port}`);
+  console.log(`  Provider: ${provider.name}`);
+  console.log(`  Tools: ${tools.map((t) => t.name).join(", ")}`);
+  console.log(`  Dashboard: http://localhost:${port}\n`);
 });
 
 server.on("error", (err: NodeJS.ErrnoException) => {
