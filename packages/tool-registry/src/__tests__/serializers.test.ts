@@ -65,4 +65,69 @@ describe("serialize", () => {
     expect(result).toContain("- a");
     expect(result).toContain("- b");
   });
+
+  it("serializes nested HCL blocks", () => {
+    const result = serialize({ provider: { aws: { region: "us-east-1" } } }, "hcl");
+    expect(result).toContain("provider {");
+    expect(result).toContain("  aws {");
+    expect(result).toContain('    region = "us-east-1"');
+  });
+
+  it("serializes HCL booleans and numbers", () => {
+    const result = serialize({ config: { enabled: true, count: 3 } }, "hcl");
+    expect(result).toContain("enabled = true");
+    expect(result).toContain("count = 3");
+  });
+
+  it("serializes HCL null values", () => {
+    const result = serialize({ config: { value: null } }, "hcl");
+    expect(result).toContain("value = null");
+  });
+
+  it("serializes HCL empty arrays", () => {
+    const result = serialize({ config: { items: [] } }, "hcl");
+    expect(result).toContain("items = []");
+  });
+
+  it("serializes HCL arrays with values", () => {
+    const result = serialize({ tags: { items: ["a", "b"] } }, "hcl");
+    expect(result).toContain('items = ["a", "b"]');
+  });
+
+  it("serializes HCL inline objects", () => {
+    const result = serialize({ config: { meta: { nested: { key: "val" } } } }, "hcl");
+    expect(result).toContain("meta {");
+    expect(result).toContain('key = "val"');
+  });
+
+  it("escapes special characters in HCL strings", () => {
+    const result = serialize({ config: { path: 'C:\\dir\t"name"\n' } }, "hcl");
+    expect(result).toContain("\\\\");
+    expect(result).toContain('\\"');
+    expect(result).toContain("\\n");
+    expect(result).toContain("\\t");
+  });
+
+  it("throws for HCL with non-string non-object data", () => {
+    expect(() => serialize(42, "hcl")).toThrow("requires a string or object");
+  });
+
+  it("throws for ini with non-string data", () => {
+    expect(() => serialize({ key: "value" }, "ini")).toThrow("does not support structured data");
+  });
+
+  it("throws for toml with non-string data", () => {
+    expect(() => serialize({ key: "value" }, "toml")).toThrow("does not support structured data");
+  });
+
+  it("serializes HCL with undefined values", () => {
+    const result = serialize({ config: { value: undefined } }, "hcl");
+    expect(result).toContain("value = null");
+  });
+
+  it("serializes HCL empty inline objects", () => {
+    // An array containing an object triggers the inline object path
+    const result = serialize({ items: [{ a: 1, b: 2 }] }, "hcl");
+    expect(result).toContain("a = 1");
+  });
 });

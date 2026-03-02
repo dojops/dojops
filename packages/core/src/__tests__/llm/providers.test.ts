@@ -258,6 +258,56 @@ describe("OpenAIProvider", () => {
       totalTokens: 15,
     });
   });
+
+  it("forwards messages array when provided", async () => {
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: "response" } }],
+    });
+
+    const provider = new OpenAIProvider("key");
+    await provider.generate({
+      prompt: "Hi",
+      system: "Be helpful",
+      messages: [
+        { role: "user", content: "first" },
+        { role: "assistant", content: "reply" },
+        { role: "user", content: "second" },
+      ],
+    });
+
+    const call = mockOpenAICreate.mock.calls[0][0];
+    expect(call.messages[0].role).toBe("system");
+    expect(call.messages).toHaveLength(4); // system + 3 messages
+  });
+
+  it("filters out system role from messages array", async () => {
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: "response" } }],
+    });
+
+    const provider = new OpenAIProvider("key");
+    await provider.generate({
+      prompt: "Hi",
+      messages: [
+        { role: "system", content: "extra system" },
+        { role: "user", content: "hello" },
+      ],
+    });
+
+    const call = mockOpenAICreate.mock.calls[0][0];
+    const roles = call.messages.map((m: { role: string }) => m.role);
+    expect(roles.filter((r: string) => r === "system")).toHaveLength(1);
+  });
+
+  it("returns undefined usage when not present", async () => {
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: "ok" } }],
+    });
+
+    const provider = new OpenAIProvider("key");
+    const res = await provider.generate({ prompt: "Hi" });
+    expect(res.usage).toBeUndefined();
+  });
 });
 
 describe("AnthropicProvider", () => {
