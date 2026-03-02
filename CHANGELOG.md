@@ -7,22 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [1.0.2] - 2026-03-02
 
-- **DOPS Spec Hardening**: 5 new `.dops` frontmatter sections for v1 contract freeze:
-  - `scope` — Write boundary enforcement with `{var}` path expansion; out-of-scope writes rejected at runtime
-  - `risk` — Tool self-classification (`LOW`/`MEDIUM`/`HIGH`) with rationale; exposed in `ToolMetadata.riskLevel`
-  - `execution` — Mutation semantics: `mode` (generate/update), `deterministic`, `idempotent` flags
-  - `update` — Structured update behavior: `strategy` (replace/preserve_structure), `inputSource`, `injectAs`
-  - `meta.icon` — Optional HTTPS URL (max 2048 chars) for marketplace tool icon display
-- **Scope Enforcement in File Writer**: `writeFiles()` validates resolved paths against `scope.write` patterns after variable expansion; `matchesScopePattern()` helper exported
-- **Risk & Execution Getters**: `DopsRuntime.risk`, `.executionMode`, `.isDeterministic`, `.isIdempotent` with safe defaults
-- **Parser Validation**: Path traversal prevention on `scope.write` paths; network permission constraint for v1 tools with risk declared
-- **Prompt Compiler Update Strategy**: `preserve_structure` injects additional LLM instructions; `injectAs` controls variable name for existing content
-- **12 Module Updates**: All built-in `.dops` modules updated with `scope`, `risk`, `execution`, and `update` sections
-- **16 New Tests**: Parser, runtime, and file-writer tests for all new features (282 total runtime tests)
-
-## [1.0.0] - 2026-02-26
+First official public release. Versions 1.0.0 and 1.0.1 were internal testing releases.
 
 ### Added
 
@@ -42,4 +29,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Metrics Dashboard**: `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit) with Overview, Security, and Audit dashboard tabs.
 - **Trust Hardening**: Hard file write allowlist, plan snapshot freezing, risk classification, drift awareness warnings, SBOM persistence versioning, change impact summary, CI provider schema validation.
 - **Atomic File Writes**: Write to `.tmp` then rename for crash safety across all 12 tools and `SandboxedFs`.
-- **Dev Tooling**: 1931 Vitest tests, ESLint, Prettier, Husky + lint-staged, Turbo monorepo build, conventional commit hooks, Dependabot, release workflow.
+- **DOPS Spec Hardening**: 5 new `.dops` frontmatter sections for v1 contract freeze:
+  - `scope` — Write boundary enforcement with `{var}` path expansion; out-of-scope writes rejected at runtime
+  - `risk` — Tool self-classification (`LOW`/`MEDIUM`/`HIGH`) with rationale; exposed in `ToolMetadata.riskLevel`
+  - `execution` — Mutation semantics: `mode` (generate/update), `deterministic`, `idempotent` flags
+  - `update` — Structured update behavior: `strategy` (replace/preserve_structure), `inputSource`, `injectAs`
+  - `meta.icon` — Optional HTTPS URL (max 2048 chars) for marketplace tool icon display
+- **Scope Enforcement in File Writer**: `writeFiles()` validates resolved paths against `scope.write` patterns after variable expansion; `matchesScopePattern()` helper exported
+- **Risk & Execution Getters**: `DopsRuntime.risk`, `.executionMode`, `.isDeterministic`, `.isIdempotent` with safe defaults
+- **Parser Validation**: Path traversal prevention on `scope.write` paths; network permission constraint for v1 tools with risk declared
+- **Prompt Compiler Update Strategy**: `preserve_structure` injects additional LLM instructions; `injectAs` controls variable name for existing content
+- **12 Module Updates**: All built-in `.dops` modules updated with `scope`, `risk`, `execution`, and `update` sections
+- **Test Coverage**: New unit tests across packages to meet 75% coverage threshold
+- **Tool Command `new` Option**: `dojops tools new` scaffolds a new custom tool from a template
+- **Tool Subcommands**: Additional `dojops tools` subcommands for managing tool lifecycle
+- **Release Workflow**: Changelog-driven GitHub Release notes (replaces auto-generated notes)
+- **Dev Tooling**: 1931+ Vitest tests, ESLint, Prettier, Husky + lint-staged, Turbo monorepo build, conventional commit hooks, Dependabot, release workflow.
+
+### Changed
+
+- **Tool Publish Auth Flow**: Updated authentication flow for publishing tools to DojOps Hub
+- **CLI Banner**: Updated CLI banner and mascot display
+
+### Fixed
+
+- **Doc Site URL**: Corrected documentation site URL references
+- **Brew Installer**: Fixed Homebrew tap installer issues
