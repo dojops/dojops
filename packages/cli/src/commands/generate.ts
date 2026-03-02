@@ -5,6 +5,7 @@ import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
 import { sanitizeUserInput } from "@dojops/core";
 import { isDevOpsFile } from "@dojops/executor";
+import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -39,6 +40,80 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   const provider = ctx.getProvider();
   const projectRoot = findProjectRoot() ?? undefined;
+
+  // --tool flag: bypass agent routing, use a specific tool directly
+  const toolName = ctx.globalOpts.tool;
+  if (toolName) {
+    const registry = createToolRegistry(provider, projectRoot);
+    const tool = registry.get(toolName);
+    if (!tool) {
+      const available = registry
+        .getAll()
+        .map((t) => t.name)
+        .join(", ");
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Tool "${toolName}" not found. Available: ${available}`,
+      );
+    }
+
+    if (ctx.globalOpts.output !== "json") {
+      p.log.info(`Using tool: ${pc.bold(toolName)} (forced via --tool)`);
+    }
+
+    const isStructured =
+      ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml" || ctx.globalOpts.raw;
+    const s = p.spinner();
+    if (!isStructured) s.start("Generating...");
+    const result = await tool.generate({ prompt });
+    if (!isStructured) s.stop("Done.");
+
+    const content = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+
+    if (ctx.globalOpts.raw) {
+      process.stdout.write(content);
+      if (!content.endsWith("\n")) process.stdout.write("\n");
+      return;
+    }
+
+    if (writePath) {
+      if (!allowAllPaths && !isDevOpsFile(writePath)) {
+        throw new CLIError(
+          ExitCode.VALIDATION_ERROR,
+          `Write to "${writePath}" blocked: not a recognized DevOps file. Use --allow-all-paths to bypass.`,
+        );
+      }
+      if (fs.existsSync(writePath)) {
+        fs.copyFileSync(writePath, writePath + ".bak");
+      }
+      fs.writeFileSync(writePath, content, "utf-8");
+      if (ctx.globalOpts.output === "json") {
+        console.log(JSON.stringify({ tool: toolName, content, written: writePath }));
+      } else {
+        p.log.success(`Written to ${pc.underline(writePath)}`);
+      }
+      return;
+    }
+
+    if (ctx.globalOpts.output === "json") {
+      console.log(JSON.stringify({ tool: toolName, content }));
+    } else if (ctx.globalOpts.output === "yaml") {
+      console.log("---");
+      console.log(`tool: ${toolName}`);
+      console.log("content: |");
+      for (const line of content.split("\n")) {
+        console.log(`  ${line}`);
+      }
+    } else {
+      if (process.stdout.isTTY) {
+        p.log.message(content);
+      } else {
+        process.stdout.write(content);
+      }
+    }
+    return;
+  }
+
   const { router } = createRouter(provider, projectRoot);
 
   // --agent flag: force routing to a specific agent

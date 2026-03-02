@@ -66,6 +66,10 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
       globalOpts.agent = args[++i];
     } else if (arg.startsWith("--agent=")) {
       globalOpts.agent = arg.slice("--agent=".length);
+    } else if (arg === "--tool" && i + 1 < args.length) {
+      globalOpts.tool = args[++i];
+    } else if (arg.startsWith("--tool=")) {
+      globalOpts.tool = arg.slice("--tool=".length);
     } else if (arg === "--timeout" && i + 1 < args.length) {
       const t = parseInt(args[++i], 10);
       if (isNaN(t) || t <= 0)
@@ -169,6 +173,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "credentials",
     "repair",
     "publish",
+    "search",
   ]);
 
   const command: string[] = [];

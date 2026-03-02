@@ -43,10 +43,24 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   // Load repo context for context-aware file placement
   const projectRoot = findProjectRoot();
   const registry = createToolRegistry(provider, projectRoot ?? undefined);
-  const tools = registry.getAll();
+  let tools = registry.getAll();
   const repoContext = projectRoot ? loadContext(projectRoot) : null;
-
   const isJson = ctx.globalOpts.output === "json";
+
+  // --tool flag: restrict decomposition to a single tool
+  if (ctx.globalOpts.tool) {
+    const toolName = ctx.globalOpts.tool;
+    const match = tools.find((t) => t.name === toolName);
+    if (!match) {
+      const available = tools.map((t) => t.name).join(", ");
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Tool "${toolName}" not found. Available: ${available}`,
+      );
+    }
+    tools = [match];
+    if (!isJson) p.log.info(`Using tool: ${pc.bold(toolName)}`);
+  }
   const s = p.spinner();
   if (!isJson) s.start("Decomposing goal into tasks...");
   if (ctx.globalOpts.verbose) {

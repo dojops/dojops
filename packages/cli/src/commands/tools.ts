@@ -8,6 +8,7 @@ import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
 import * as yaml from "js-yaml";
 import { CommandHandler } from "../types";
 import { ExitCode, CLIError } from "../exit-codes";
+import { extractFlagValue } from "../parser";
 import { findProjectRoot } from "../state";
 
 const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "http://localhost:3000";
@@ -874,6 +875,99 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
   } catch (err) {
     if (err instanceof CLIError) throw err;
     spinner.stop("Failed");
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `Failed to connect to hub at ${DEFAULT_HUB_URL}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+};
+
+/**
+ * `dojops tools search <query>` — searches the DojOps Hub for tools.
+ *
+ * Usage:
+ *   dojops tools search docker           # search for docker-related tools
+ *   dojops tools search terraform --limit 5
+ *   dojops tools search k8s --output json
+ *
+ * Env: DOJOPS_HUB_URL (default: http://localhost:3000)
+ */
+export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
+  const query = args.filter((a) => !a.startsWith("-")).join(" ");
+  if (!query) {
+    p.log.info(`  ${pc.dim("$")} dojops tools search <query>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Search query required.");
+  }
+
+  const limitStr = extractFlagValue(args, "--limit");
+  const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 20, 1), 50) : 20;
+  const isJson = ctx.globalOpts.output === "json";
+
+  const spinner = p.spinner();
+  if (!isJson) spinner.start(`Searching hub for "${query}"...`);
+
+  try {
+    const url = `${DEFAULT_HUB_URL}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      if (!isJson) spinner.stop("Search failed");
+      if (res.status === 429) {
+        throw new CLIError(ExitCode.GENERAL_ERROR, "Rate limited by hub. Try again later.");
+      }
+      const data = await res.json().catch(() => ({}));
+      throw new CLIError(
+        ExitCode.GENERAL_ERROR,
+        `Hub error (${res.status}): ${(data as { error?: string }).error || res.statusText}`,
+      );
+    }
+
+    const data = await res.json();
+    const packages: Array<{
+      name: string;
+      slug: string;
+      description: string;
+      author?: string;
+      starCount?: number;
+      downloadCount?: number;
+      latestVersion?: { semver: string };
+      tags?: string[];
+    }> = data.packages ?? data.results ?? (Array.isArray(data) ? data : []);
+
+    if (!isJson) spinner.stop(`Found ${packages.length} result(s)`);
+
+    if (packages.length === 0) {
+      if (isJson) {
+        console.log(JSON.stringify([]));
+      } else {
+        p.log.info(`No tools found for "${query}".`);
+      }
+      return;
+    }
+
+    if (isJson) {
+      console.log(JSON.stringify(packages, null, 2));
+      return;
+    }
+
+    const lines: string[] = [];
+    for (const pkg of packages) {
+      const version = pkg.latestVersion?.semver
+        ? pc.dim(`v${pkg.latestVersion.semver}`)
+        : pc.dim("—");
+      const stars = pkg.starCount != null ? `${pc.yellow("★")} ${pkg.starCount}` : "";
+      const downloads = pkg.downloadCount != null ? `${pc.dim("↓")} ${pkg.downloadCount}` : "";
+      const desc = pkg.description ? pc.dim(pkg.description.slice(0, 60)) : "";
+      lines.push(
+        `  ${pc.cyan(pkg.name.padEnd(25))} ${version.padEnd(20)} ${stars.padEnd(12)} ${downloads.padEnd(12)} ${desc}`,
+      );
+    }
+
+    p.note(lines.join("\n"), `Search results for "${query}" (${packages.length})`);
+    p.log.info(pc.dim(`Install with: dojops tools install <name>`));
+  } catch (err) {
+    if (err instanceof CLIError) throw err;
+    if (!isJson) spinner.stop("Search failed");
     throw new CLIError(
       ExitCode.GENERAL_ERROR,
       `Failed to connect to hub at ${DEFAULT_HUB_URL}: ${err instanceof Error ? err.message : String(err)}`,

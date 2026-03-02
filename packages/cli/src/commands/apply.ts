@@ -110,6 +110,28 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     p.log.warn("No previous results found. Running full execution.");
   }
 
+  // --tool flag: skip tasks not matching the specified tool
+  if (ctx.globalOpts.tool) {
+    const toolFilter = ctx.globalOpts.tool;
+    const matchingTools = plan.tasks.filter((t) => t.tool === toolFilter);
+    if (matchingTools.length === 0) {
+      const usedTools = [...new Set(plan.tasks.map((t) => t.tool))].join(", ");
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `No tasks use tool "${toolFilter}". Tools in this plan: ${usedTools}`,
+      );
+    }
+    const skippedIds = plan.tasks.filter((t) => t.tool !== toolFilter).map((t) => t.id);
+    for (const id of skippedIds) {
+      completedTaskIds.add(id);
+    }
+    if (!jsonOutput && skippedIds.length > 0) {
+      p.log.info(
+        `Filtering by tool: ${pc.bold(toolFilter)} — skipping ${skippedIds.length} task(s)`,
+      );
+    }
+  }
+
   // Pre-flight summary
   const totalCount = plan.tasks.length;
   const remainingCount = totalCount - completedTaskIds.size;

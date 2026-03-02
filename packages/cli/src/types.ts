@@ -10,6 +10,7 @@ export interface GlobalOptions {
   temperature?: number;
   timeout?: number;
   agent?: string;
+  tool?: string;
   fallbackProvider?: string;
   output: OutputFormat;
   raw: boolean;

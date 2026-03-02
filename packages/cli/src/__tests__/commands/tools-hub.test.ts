@@ -51,7 +51,7 @@ vi.mock("../../state", () => ({
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-import { toolsPublishCommand, toolsInstallCommand } from "../../commands/tools";
+import { toolsPublishCommand, toolsInstallCommand, toolsSearchCommand } from "../../commands/tools";
 import { parseDopsFile, parseDopsString, validateDopsModule } from "@dojops/runtime";
 import { CLIContext } from "../../types";
 import { CLIError } from "../../exit-codes";
@@ -663,5 +663,130 @@ describe("parseCommandPath — tools publish/install", () => {
     ]);
     expect(command).toEqual(["tools", "install"]);
     expect(positional).toEqual(["nginx-config", "--version", "1.0.0", "--global"]);
+  });
+});
+
+// ── Tests: toolsSearchCommand ─────────────────────────────────────
+
+describe("toolsSearchCommand", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.DOJOPS_HUB_URL;
+  });
+
+  it("rejects with no search query", async () => {
+    await expect(toolsSearchCommand([], makeCtx())).rejects.toThrow(CLIError);
+    await expect(toolsSearchCommand([], makeCtx())).rejects.toThrow("Search query required");
+  });
+
+  it("displays search results from hub", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        packages: [
+          {
+            name: "docker-helper",
+            slug: "docker-helper",
+            description: "Docker config generator",
+            starCount: 5,
+            downloadCount: 42,
+            latestVersion: { semver: "1.0.0" },
+          },
+          {
+            name: "docker-compose-pro",
+            slug: "docker-compose-pro",
+            description: "Advanced Docker Compose tool",
+            starCount: 12,
+            downloadCount: 100,
+            latestVersion: { semver: "2.1.0" },
+          },
+        ],
+      }),
+    });
+
+    await toolsSearchCommand(["docker"], makeCtx());
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("/api/search");
+    expect(url).toContain("q=docker");
+  });
+
+  it("handles empty search results", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ packages: [] }),
+    });
+
+    await toolsSearchCommand(["nonexistent-xyz"], makeCtx());
+
+    expect(mockLog.info).toHaveBeenCalledWith(
+      expect.stringContaining('No tools found for "nonexistent-xyz"'),
+    );
+  });
+
+  it("outputs JSON when --output json", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        packages: [
+          {
+            name: "test-tool",
+            slug: "test-tool",
+            description: "A test",
+            starCount: 1,
+            downloadCount: 10,
+          },
+        ],
+      }),
+    });
+
+    await toolsSearchCommand(["test"], makeCtx({ output: "json" }));
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    const output = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(output).toHaveLength(1);
+    expect(output[0].name).toBe("test-tool");
+
+    consoleSpy.mockRestore();
+  });
+
+  it("handles hub connection failure", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+    await expect(toolsSearchCommand(["docker"], makeCtx())).rejects.toThrow(
+      "Failed to connect to hub",
+    );
+  });
+
+  it("handles rate limiting (429)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: "Too many requests" }),
+    });
+
+    await expect(toolsSearchCommand(["docker"], makeCtx())).rejects.toThrow("Rate limited by hub");
+  });
+
+  it("respects --limit flag", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ packages: [] }),
+    });
+
+    await toolsSearchCommand(["docker", "--limit", "5"], makeCtx());
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("limit=5");
+  });
+
+  it("parses tools search as nested command", async () => {
+    const { parseCommandPath } = await import("../../parser");
+    const { command, positional } = parseCommandPath(["tools", "search", "docker"]);
+    expect(command).toEqual(["tools", "search"]);
+    expect(positional).toEqual(["docker"]);
   });
 });
