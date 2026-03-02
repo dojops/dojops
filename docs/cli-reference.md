@@ -274,6 +274,29 @@ dojops tools install nginx-config
 dojops tools install nginx-config --version 1.0.0 --global
 ```
 
+### Hub Publishing Setup
+
+Publishing tools to the [DojOps Hub](https://hub.dojops.ai) requires an API token:
+
+```bash
+# 1. Sign in at hub.dojops.ai → Settings → API Tokens
+# 2. Generate a token (format: dojops_<40-hex-chars>)
+# 3. Set the environment variable:
+export DOJOPS_HUB_TOKEN="dojops_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+
+# Publish a tool
+dojops tools publish my-tool.dops
+
+# Publish with changelog
+dojops tools publish my-tool.dops --changelog "v1.1.0: Added Redis support"
+
+# Install from hub (no token required)
+dojops tools install my-tool
+dojops tools install my-tool --version 1.0.0 --global
+```
+
+The CLI sends the token as a `Bearer` header. Tokens can be managed (created, viewed, revoked) from the Hub Settings page at `/settings/tokens`. See the [tools documentation](tools.md#hub-integration) for the full publish/install flow.
+
 ### Provider Management
 
 ```bash

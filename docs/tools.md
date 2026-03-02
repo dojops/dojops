@@ -564,14 +564,129 @@ dojops tools install nginx-config --version 1.0.0 --global
 
 The `publish` and `install` commands connect to the [DojOps Hub](https://hub.dojops.ai) — a tool marketplace where users share `.dops` tools.
 
-**Publish** computes a SHA-256 hash of the `.dops` file client-side before uploading. This hash is stored as the **publisher attestation** — the hub verifies the upload matches the declared hash and stores it alongside the file.
+##### Authentication Setup
 
-**Install** downloads the `.dops` file and the publisher's hash, recomputes the SHA-256 locally, and compares. If the hashes don't match, the install is aborted with an integrity error. This ensures the file has not been tampered with in transit or on the server.
+Publishing tools to the Hub requires an API token. Tokens follow the GitHub PAT model — shown once at creation, stored as SHA-256 hashes.
 
-| Environment Variable | Description                                         |
-| -------------------- | --------------------------------------------------- |
-| `DOJOPS_HUB_URL`     | Hub API base URL (default: `https://hub.dojops.ai`) |
-| `DOJOPS_HUB_TOKEN`   | Auth token for publishing (from hub session)        |
+**1. Sign in to the Hub** — Go to [hub.dojops.ai](https://hub.dojops.ai) and sign in with your GitHub account.
+
+**2. Generate a token** — Navigate to **Settings → API Tokens** (`/settings/tokens`), or click "Settings" in the navbar.
+
+**3. Create a named token** — Give your token a descriptive name (e.g. "My laptop", "CI/CD pipeline") and choose an expiration:
+
+| Expiration    | Duration | Use Case            |
+| ------------- | -------- | ------------------- |
+| 1 month       | 30 days  | Short-lived tasks   |
+| 3 months      | 90 days  | Regular development |
+| No expiration | Never    | CI/CD pipelines     |
+
+**4. Copy the token** — The raw token (format: `dojops_` + 40 hex chars) is displayed **once**. Copy it immediately — you won't be able to see it again.
+
+**5. Set the environment variable:**
+
+```bash
+# Add to your shell profile (~/.bashrc, ~/.zshrc)
+export DOJOPS_HUB_TOKEN="dojops_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+```
+
+You can manage up to 10 tokens per account. View active tokens, their last-used timestamps, and revoke compromised tokens from the Settings page at any time.
+
+##### Publishing a Tool
+
+The publish flow validates locally, computes a SHA-256 hash for integrity, and uploads to the Hub.
+
+```bash
+# Publish a .dops file
+dojops tools publish my-tool.dops
+
+# Publish with a changelog message
+dojops tools publish my-tool.dops --changelog "Added Docker support"
+
+# Publish by tool name (looks up in .dojops/tools/)
+dojops tools publish my-tool
+```
+
+**What happens during publish:**
+
+1. **Local validation** — The `.dops` file is parsed and validated against the v1 spec (frontmatter, sections, Zod schemas)
+2. **SHA-256 hash** — The CLI computes a SHA-256 hash of the file as a **publisher attestation**
+3. **Upload** — The file and hash are sent to the Hub via `POST /api/packages` with `Authorization: Bearer <token>`
+4. **Server verification** — The Hub recomputes the hash and compares it against the client-provided hash. Mismatches are rejected
+5. **Storage** — The Hub stores the file and the publisher's hash for download integrity verification
+
+**Example output:**
+
+```
+◇  Validated: my-tool v1.0.0
+◇  SHA256: a1b2c3d4e5f6...
+┌  Published new tool
+│  Name:    my-tool
+│  Version: v1.0.0
+│  Slug:    my-tool
+│  SHA256:  a1b2c3d4e5f6...
+│  URL:     https://hub.dojops.ai/packages/my-tool
+└
+```
+
+**Publishing a new version** of an existing tool uses the same command — the Hub detects the existing package and adds the new version:
+
+```bash
+# Update version in .dops frontmatter, then:
+dojops tools publish my-tool.dops --changelog "v1.1.0: Added Redis support"
+```
+
+##### Installing a Tool
+
+The install flow downloads the tool, verifies its integrity against the publisher's hash, and places it in your tools directory.
+
+```bash
+# Install latest version (project-local)
+dojops tools install nginx-config
+
+# Install a specific version
+dojops tools install nginx-config --version 1.0.0
+
+# Install globally (~/.dojops/tools/)
+dojops tools install nginx-config --global
+```
+
+**What happens during install:**
+
+1. **Fetch metadata** — The CLI queries `GET /api/packages/<slug>` to resolve the latest version (unless `--version` is specified)
+2. **Download** — The `.dops` file is downloaded from `GET /api/download/<slug>/<version>` with the publisher's SHA-256 hash in the `X-Checksum-Sha256` response header
+3. **Integrity check** — The CLI recomputes the SHA-256 hash locally and compares it against the publisher's hash. **Mismatches abort the install** with a tampering warning
+4. **Validation** — The downloaded file is parsed and validated as a `.dops` module
+5. **Write** — The file is saved to `.dojops/tools/<name>.dops` (project) or `~/.dojops/tools/<name>.dops` (global)
+
+**Example output:**
+
+```
+◇  Downloading nginx-config v1.0.0...
+┌  Tool installed
+│  Name:    nginx-config
+│  Version: v1.0.0
+│  Path:    .dojops/tools/nginx-config.dops
+│  Scope:   project
+│  SHA256:  f9e8d7c6b5a4...
+│  Verify:  OK — matches publisher hash
+└
+```
+
+**Integrity failure example** (file tampered with):
+
+```
+✖  SHA256 integrity check failed! The downloaded file does not match the publisher's hash.
+   Publisher: f9e8d7c6b5a4...
+   Download:  0000aaaa1111...
+   This may indicate the file was tampered with. Aborting install.
+```
+
+##### Environment Variables
+
+| Variable           | Description                                                | Default                 |
+| ------------------ | ---------------------------------------------------------- | ----------------------- |
+| `DOJOPS_HUB_URL`   | Hub API base URL                                           | `https://hub.dojops.ai` |
+| `DOJOPS_HUB_TOKEN` | API token for publishing (generated at `/settings/tokens`) | —                       |
 
 ### Tool Policy
 

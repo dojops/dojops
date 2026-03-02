@@ -636,7 +636,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
     throw new CLIError(
       ExitCode.GENERAL_ERROR,
       `No hub auth token. Set DOJOPS_HUB_TOKEN env variable.\n` +
-        `  Get one by signing into ${DEFAULT_HUB_URL} and generating an API token.`,
+        `  Generate one at ${DEFAULT_HUB_URL}/settings/tokens`,
     );
   }
 
@@ -681,7 +681,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
       method: "POST",
       headers: {
         "Content-Type": `multipart/form-data; boundary=${boundary}`,
-        Cookie: `next-auth.session-token=${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body,
     });

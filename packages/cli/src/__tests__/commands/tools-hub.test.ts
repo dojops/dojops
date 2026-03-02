@@ -208,8 +208,8 @@ describe("toolsPublishCommand", () => {
     expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining(SAMPLE_SHA256));
   });
 
-  it("sends the auth token as a session cookie", async () => {
-    process.env.DOJOPS_HUB_TOKEN = "my-session-token";
+  it("sends the auth token as a Bearer header", async () => {
+    process.env.DOJOPS_HUB_TOKEN = "dojops_abc123def456";
 
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
     vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
@@ -224,7 +224,8 @@ describe("toolsPublishCommand", () => {
     await toolsPublishCommand(["test.dops"], makeCtx());
 
     const [, opts] = mockFetch.mock.calls[0];
-    expect(opts.headers.Cookie).toBe("next-auth.session-token=my-session-token");
+    expect(opts.headers.Authorization).toBe("Bearer dojops_abc123def456");
+    expect(opts.headers.Cookie).toBeUndefined();
   });
 
   it("throws CLIError on hub error response", async () => {
