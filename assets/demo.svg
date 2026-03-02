@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" width="800" height="380">
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Terminal window -->
+  <rect x="0" y="0" width="800" height="380" rx="16" ry="16" fill="#080b12" stroke="#0a1520" stroke-width="1"/>
+
+  <!-- Header bar -->
+  <rect x="0" y="0" width="800" height="44" rx="16" ry="16" fill="#0c1018"/>
+  <rect x="0" y="28" width="800" height="16" fill="#0c1018"/>
+  <line x1="0" y1="44" x2="800" y2="44" stroke="#0a1520" stroke-width="1"/>
+
+  <!-- Window dots -->
+  <circle cx="24" cy="22" r="5" fill="#ff5f57" opacity="0.8"/>
+  <circle cx="44" cy="22" r="5" fill="#ffbd2e" opacity="0.8"/>
+  <circle cx="64" cy="22" r="5" fill="#28c840" opacity="0.8"/>
+
+  <!-- Title -->
+  <text x="400" y="27" text-anchor="middle" font-family="Menlo, Monaco, 'Courier New', monospace" font-size="12" fill="#4a5568" letter-spacing="2">DOJOPS</text>
+
+  <!-- Terminal content -->
+  <g font-family="Menlo, Monaco, 'Courier New', monospace" font-size="14">
+
+    <!-- $ dojops plan "..." -->
+    <text x="24" y="76" fill="#7b8ba3">$</text>
+    <text x="40" y="76" fill="#e8edf5">dojops plan</text>
+    <text x="160" y="76" fill="#00e5ff">"Set up CI/CD for Node.js with Docker"</text>
+
+    <!-- Blank line -->
+
+    <!-- Routing to specialist agent... -->
+    <text x="40" y="116" fill="#7b8ba3" opacity="0.7">Routing to specialist agent...</text>
+
+    <!-- ✓ Routed to cicd-specialist -->
+    <text x="40" y="140" fill="#10b981">&#x2713;</text>
+    <text x="58" y="140" fill="#10b981">Routed to cicd-specialist</text>
+
+    <!-- Blank line -->
+
+    <!-- Decomposing goal into tasks... -->
+    <text x="40" y="172" fill="#7b8ba3" opacity="0.7">Decomposing goal into tasks...</text>
+
+    <!-- ✓ 3 tasks planned (risk: LOW) -->
+    <text x="40" y="196" fill="#10b981">&#x2713;</text>
+    <text x="58" y="196" fill="#10b981">3 tasks planned</text>
+    <text x="196" y="196" fill="#10b981" opacity="0.7">(risk: LOW)</text>
+
+    <!-- Blank line -->
+
+    <!-- Task #1 -->
+    <text x="40" y="228" fill="#7b8ba3">#1</text>
+    <text x="72" y="228" fill="#00e5ff" opacity="0.8">github-actions</text>
+    <text x="232" y="228" fill="#7b8ba3">Create CI workflow</text>
+
+    <!-- Task #2 -->
+    <text x="40" y="252" fill="#7b8ba3">#2</text>
+    <text x="72" y="252" fill="#00e5ff" opacity="0.8">dockerfile</text>
+    <text x="232" y="252" fill="#7b8ba3">Build Docker image</text>
+
+    <!-- Task #3 -->
+    <text x="40" y="276" fill="#7b8ba3">#3</text>
+    <text x="72" y="276" fill="#00e5ff" opacity="0.8">docker-compose</text>
+    <text x="232" y="276" fill="#7b8ba3">Service orchestration</text>
+
+    <!-- Blank line -->
+
+    <!-- Ready line -->
+    <text x="40" y="316" fill="#00e5ff" font-weight="600">Ready.</text>
+    <text x="110" y="316" fill="#00e5ff" font-weight="600">Run</text>
+    <text x="148" y="316" fill="#e8edf5" font-weight="600">dojops apply</text>
+    <text x="280" y="316" fill="#00e5ff" font-weight="600">to execute.</text>
+
+    <!-- Cursor -->
+    <rect x="24" y="338" width="8" height="16" fill="#00e5ff" opacity="0.6"/>
+
+  </g>
+</svg>
