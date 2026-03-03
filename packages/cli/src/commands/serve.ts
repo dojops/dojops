@@ -9,7 +9,7 @@ import { createProvider, createRouter, createDebugger, createDiffAnalyzer } from
 import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { extractFlagValue, hasFlag } from "../parser";
-import { resolveToken, resolveOllamaHost, resolveOllamaTls } from "../config";
+import { resolveProvider, resolveToken, resolveOllamaHost, resolveOllamaTls } from "../config";
 import { findProjectRoot } from "../state";
 import { ExitCode } from "../exit-codes";
 
@@ -92,7 +92,10 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
 
   const { createApp, HistoryStore } = await import("@dojops/api");
 
-  const providerName = ctx.globalOpts.provider ?? ctx.config.defaultProvider ?? "openai";
+  // FEAT #1: --provider flag for serve command
+  const providerFlag = extractFlagValue(args, "--provider") ?? ctx.globalOpts.provider;
+  // BUG #1: Use resolveProvider() which checks CLI flag → env var → config → default
+  const providerName = resolveProvider(providerFlag, ctx.config);
   const model = ctx.globalOpts.model ?? ctx.config.defaultModel;
   const apiKey = resolveToken(providerName, ctx.config);
 
@@ -117,8 +120,17 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   }
 
   // A1: Require API key (or --no-auth) for non-local providers
+  // UX #8: When --no-auth is explicitly set, disable auth regardless of env/server.json
   // Auto-load from ~/.dojops/server.json when DOJOPS_API_KEY is not set
-  const serverApiKey = process.env.DOJOPS_API_KEY ?? loadServerApiKey();
+  const serverApiKey = noAuth ? undefined : (process.env.DOJOPS_API_KEY ?? loadServerApiKey());
+
+  // SEC #2: Warn when --no-auth disables authentication
+  if (noAuth) {
+    p.log.warn(
+      pc.bold(pc.yellow("WARNING:")) +
+        " API authentication disabled (--no-auth). Do not expose to untrusted networks.",
+    );
+  }
   if (!serverApiKey && !noAuth) {
     if (providerName === "ollama" || providerName === "github-copilot") {
       p.log.warn(

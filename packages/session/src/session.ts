@@ -118,8 +118,15 @@ export class ChatSession {
       this.state.summary,
     );
 
-    // Call LLM with history
-    const response = await agent.runWithHistory(contextMessages);
+    // UX #5: Call LLM with history — on failure, roll back user message to keep session clean
+    let response;
+    try {
+      response = await agent.runWithHistory(contextMessages);
+    } catch (err) {
+      // Remove the user message we just pushed so session state stays clean
+      this.state.messages.pop();
+      throw err;
+    }
 
     // Add assistant response to history
     const assistantMsg: ChatMessage = {
@@ -153,7 +160,14 @@ export class ChatSession {
   }
 
   pinAgent(agentName: string): void {
-    this.state.pinnedAgent = agentName;
+    // UX #4: Validate agent name against available agents
+    const agents = this.router.getAgents();
+    const match = agents.find((a) => a.name === agentName || a.name.startsWith(agentName));
+    if (!match) {
+      const available = agents.map((a) => a.name).join(", ");
+      throw new Error(`Unknown agent: "${agentName}". Available: ${available}`);
+    }
+    this.state.pinnedAgent = match.name;
   }
 
   unpinAgent(): void {

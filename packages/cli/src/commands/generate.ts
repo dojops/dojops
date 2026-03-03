@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
@@ -11,21 +10,7 @@ import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue, hasFlag } from "../parser";
 import { findProjectRoot, loadContext } from "../state";
-
-/**
- * F-8: Map tool keywords to likely existing file paths.
- * Used to detect existing configs and pass as context for update workflows.
- */
-const TOOL_FILE_MAP: Record<string, string[]> = {
-  dockerfile: ["Dockerfile", "Dockerfile.dev", "Dockerfile.prod"],
-  "docker-compose": ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"],
-  "github-actions": [".github/workflows/ci.yml", ".github/workflows/ci.yaml"],
-  "gitlab-ci": [".gitlab-ci.yml", ".gitlab-ci.yaml"],
-  terraform: ["main.tf"],
-  nginx: ["nginx.conf"],
-  makefile: ["Makefile"],
-  prometheus: ["prometheus.yml", "prometheus.yaml"],
-};
+import { TOOL_FILE_MAP, readExistingToolFile } from "../tool-file-map";
 
 export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const writePath = extractFlagValue(args, "--write");
@@ -205,24 +190,17 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   if (isUpdateRequest) {
     const cwd = process.cwd();
-    for (const [toolKey, filePaths] of Object.entries(TOOL_FILE_MAP)) {
+    for (const toolKey of Object.keys(TOOL_FILE_MAP)) {
       if (!lowerPrompt.includes(toolKey) && !lowerPrompt.includes(toolKey.replace("-", " "))) {
         continue;
       }
-      for (const fp of filePaths) {
-        const absPath = path.resolve(cwd, fp);
-        try {
-          const stat = fs.statSync(absPath);
-          if (stat.size <= 50 * 1024) {
-            const existingContent = fs.readFileSync(absPath, "utf-8");
-            augmentedPrompt += `\n\n[Existing ${fp} content for reference — update this rather than creating from scratch]:\n\`\`\`\n${existingContent}\n\`\`\``;
-            if (ctx.globalOpts.verbose) {
-              p.log.info(`Detected existing file: ${pc.cyan(fp)} (${stat.size} bytes)`);
-            }
-            break; // Only attach the first match per tool
-          }
-        } catch {
-          // File doesn't exist — skip
+      const existing = readExistingToolFile(toolKey, cwd);
+      if (existing) {
+        augmentedPrompt += `\n\n[Existing ${existing.filePath} content for reference — update this rather than creating from scratch]:\n\`\`\`\n${existing.content}\n\`\`\``;
+        if (ctx.globalOpts.verbose) {
+          p.log.info(
+            `Detected existing file: ${pc.cyan(existing.filePath)} (${existing.content.length} bytes)`,
+          );
         }
       }
     }

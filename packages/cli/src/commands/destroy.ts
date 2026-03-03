@@ -35,6 +35,23 @@ export async function cleanCommand(
   const planId = args.find((a) => !a.startsWith("-"));
   if (!planId) {
     p.log.info(`  ${pc.dim("$")} dojops clean <plan-id>`);
+
+    // UX #13: List available plans to help the user
+    const { listPlans } = await import("../state");
+    const plans = listPlans(root);
+    if (plans.length > 0) {
+      p.log.info("");
+      p.log.info(pc.bold("Available plans:"));
+      for (const plan of plans.slice(0, 10)) {
+        const status = plan.approvalStatus ?? "PENDING";
+        const date = new Date(plan.createdAt).toLocaleDateString();
+        p.log.info(`  ${pc.cyan(plan.id)} ${pc.dim(`(${status}, ${date})`)} ${plan.goal}`);
+      }
+      if (plans.length > 10) {
+        p.log.info(pc.dim(`  ...and ${plans.length - 10} more`));
+      }
+    }
+
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required for clean (safety measure).");
   }
 

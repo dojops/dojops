@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
 import { redactSecrets } from "./redact";
+import { augmentSystemPrompt } from "./schema-prompt";
 
 export class DeepSeekProvider implements LLMProvider {
   name = "deepseek";
@@ -14,9 +15,7 @@ export class DeepSeekProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
-    const systemContent = req.schema
-      ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
-      : (req.system ?? "");
+    const systemContent = augmentSystemPrompt(req.system, req.schema);
 
     const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = req.messages
       ?.length

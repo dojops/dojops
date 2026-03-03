@@ -157,14 +157,32 @@ export function createChatRouter(
     return session;
   }
 
-  // POST / — Send a message
+  // POST / — Send a message (UX #11: proper error handling for session.send())
   router.post("/", validateBody(ChatRequestSchema), async (req, res, next) => {
     const start = Date.now();
     try {
       const { sessionId, message, agent } = req.body;
       const session = getOrCreateSession(sessionId, agent);
 
-      const result = await session.send(message);
+      let result;
+      try {
+        result = await session.send(message);
+      } catch (sendErr) {
+        // Return 500 with error message rather than crashing the route
+        store.add({
+          type: "chat",
+          request: { sessionId: session.id, message },
+          response: null,
+          durationMs: Date.now() - start,
+          success: false,
+          error: sendErr instanceof Error ? sendErr.message : String(sendErr),
+        });
+        res.status(500).json({
+          error: sendErr instanceof Error ? sendErr.message : String(sendErr),
+          sessionId: session.id,
+        });
+        return;
+      }
       persistSession(rootDir, session);
 
       const response = {
@@ -258,9 +276,10 @@ export function createChatRouter(
   });
 
   // GET /sessions/:id — Get session state (A6: validate session ID)
+  // UX #6: Return generic "Session not found" instead of leaking ID format details
   router.get("/sessions/:id", (req, res) => {
     if (!isValidSessionId(req.params.id)) {
-      res.status(400).json({ error: "Invalid session ID format" });
+      res.status(404).json({ error: "Session not found" });
       return;
     }
     let session = sessions.get(req.params.id);
@@ -284,9 +303,10 @@ export function createChatRouter(
   });
 
   // DELETE /sessions/:id — Delete session (A6: validate session ID)
+  // UX #6: Return generic "Session not found" instead of leaking ID format details
   router.delete("/sessions/:id", (req, res) => {
     if (!isValidSessionId(req.params.id)) {
-      res.status(400).json({ error: "Invalid session ID format" });
+      res.status(404).json({ error: "Session not found" });
       return;
     }
     const deleted = sessions.delete(req.params.id);

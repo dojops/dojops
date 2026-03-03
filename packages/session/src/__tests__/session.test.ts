@@ -64,7 +64,8 @@ describe("ChatSession", () => {
     const { session } = createTestSession();
     session.pinAgent("terraform");
     const state = session.getState();
-    expect(state.pinnedAgent).toBe("terraform");
+    // pinAgent resolves partial names to full agent names (e.g. "terraform" → "terraform-specialist")
+    expect(state.pinnedAgent).toBe("terraform-specialist");
   });
 
   it("unpinAgent clears pinned agent", () => {

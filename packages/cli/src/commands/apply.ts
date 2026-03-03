@@ -30,6 +30,7 @@ import { cliApprovalHandler } from "../approval";
 import { getDojopsVersion } from "../state";
 import { getDriftWarnings } from "../drift-warning";
 import { validateReplayIntegrity, checkToolIntegrity } from "./replay-validator";
+import { readExistingToolFile } from "../tool-file-map";
 
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
@@ -40,6 +41,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const dryRun = hasFlag(args, "--dry-run");
   const resume = hasFlag(args, "--resume");
+  const retry = hasFlag(args, "--retry");
   const replay = hasFlag(args, "--replay");
   const installPackages = hasFlag(args, "--install-packages");
   const skipVerify = hasFlag(args, "--skip-verify");
@@ -68,8 +70,16 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     const session = loadSession(root);
     if (session.currentPlan) {
       plan = loadPlan(root, session.currentPlan);
+      // UX #14: Show which plan was auto-selected
+      if (plan && !jsonOutput) {
+        p.log.info(`Using session plan: ${pc.cyan(plan.id)}`);
+      }
     } else {
       plan = getLatestPlan(root);
+      // UX #14: Show which plan was auto-selected
+      if (plan && !jsonOutput) {
+        p.log.info(`Using latest plan: ${pc.cyan(plan.id)}`);
+      }
     }
     if (!plan) {
       throw new CLIError(
@@ -98,13 +108,27 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     // Mark all tasks except the target as completed so only it runs
     completedTaskIds = new Set(plan.tasks.filter((t) => t.id !== singleTaskId).map((t) => t.id));
   } else if (resume && plan.results?.length) {
+    // FEAT #3: --retry also retries failed tasks (not just pending ones)
     completedTaskIds = new Set(
       plan.results
-        .filter((r) => r.status === "completed" && r.executionStatus === "completed")
+        .filter((r) => {
+          if (r.status === "completed" && r.executionStatus === "completed") return true;
+          // With --retry, don't skip failed tasks — let them re-run
+          if (retry && (r.status === "failed" || r.executionStatus === "failed")) return false;
+          return false;
+        })
         .map((r) => r.taskId),
     );
     if (completedTaskIds.size > 0) {
       p.log.info(`Resuming: skipping ${completedTaskIds.size} completed task(s)`);
+    }
+    if (retry) {
+      const failedCount = plan.results.filter(
+        (r) => r.status === "failed" || r.executionStatus === "failed",
+      ).length;
+      if (failedCount > 0) {
+        p.log.info(`Retrying ${failedCount} previously failed task(s)`);
+      }
     }
   } else if (resume) {
     p.log.warn("No previous results found. Running full execution.");
@@ -408,13 +432,23 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     // Reconstruct task graph for executor
     const graph = {
       goal: plan.goal,
-      tasks: plan.tasks.map((t) => ({
-        id: t.id,
-        tool: t.tool,
-        description: t.description,
-        dependsOn: t.dependsOn,
-        input: t.input ?? {},
-      })),
+      tasks: plan.tasks.map((t) => {
+        const input = { ...(t.input ?? {}) };
+        // BUG #3: Enrich task inputs with existingContent if the target file exists
+        if (!input.existingContent) {
+          const existing = readExistingToolFile(t.tool, root);
+          if (existing) {
+            input.existingContent = existing.content;
+          }
+        }
+        return {
+          id: t.id,
+          tool: t.tool,
+          description: t.description,
+          dependsOn: t.dependsOn,
+          input,
+        };
+      }),
     };
 
     const taskTimers = new Map<string, number>();
@@ -434,10 +468,12 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         if (error) {
           p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
         } else {
-          p.log.success(`${pc.blue(id)}: ${statusText(status)}`);
+          // BUG #2: Use "generated" instead of "completed" since SafeExecutor hasn't run yet
+          const label = status === "completed" ? "generated" : statusText(status);
+          p.log.info(`${pc.blue(id)}: ${label}`);
         }
         if (ctx.globalOpts.verbose) {
-          p.log.info(`  Completed in ${elapsed}ms`);
+          p.log.info(`  Generated in ${elapsed}ms`);
         }
       },
     });
@@ -618,6 +654,13 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       p.log.warn(pc.bold("Plan partially applied. Use `dojops apply --resume` to continue."));
     } else {
       p.log.error(pc.bold("Plan application failed."));
+    }
+
+    // UX #12 / FEAT: Non-zero exit code when apply fails
+    if (status === "FAILURE") {
+      throw new CLIError(ExitCode.GENERAL_ERROR, "All tasks failed.");
+    } else if (status === "PARTIAL") {
+      throw new CLIError(ExitCode.GENERAL_ERROR, "Some tasks failed. Use --resume to retry.");
     }
 
     // Token budget display (verbose mode)

@@ -37,7 +37,7 @@ describe("scanNpm", () => {
     mockExistsSync.mockReturnValue(false);
     const result = await scanNpm("/project");
     expect(result.skipped).toBe(true);
-    expect(result.skipReason).toContain("No package-lock.json");
+    expect(result.skipReason).toContain("No package.json or lockfile found");
   });
 
   it("skips when npm not found (ENOENT)", async () => {

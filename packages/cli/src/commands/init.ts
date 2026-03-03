@@ -396,7 +396,18 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
     // No provider configured — that's fine
   }
 
-  if (provider) {
+  // UX #7: Skip LLM enrichment if no DevOps files and no primary language detected
+  const hasProjectSignals =
+    (ctx.devopsFiles && ctx.devopsFiles.length > 0) ||
+    ctx.primaryLanguage ||
+    ctx.ci.length > 0 ||
+    ctx.container.hasDockerfile ||
+    ctx.infra.hasTerraform ||
+    ctx.infra.hasKubernetes;
+
+  if (provider && !hasProjectSignals) {
+    p.log.info(pc.dim("No project files detected. Skipping LLM analysis."));
+  } else if (provider) {
     const enrichSpinner = p.spinner();
     if (!isStructured) enrichSpinner.start("Analyzing project with LLM...");
     try {

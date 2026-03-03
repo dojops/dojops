@@ -3,6 +3,7 @@ import axios from "axios";
 import { z } from "zod";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
+import { augmentSystemPrompt } from "./schema-prompt";
 
 const OLLAMA_TIMEOUT_MS = 120_000;
 
@@ -63,9 +64,7 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
-    const system = req.schema
-      ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
-      : req.system;
+    const system = augmentSystemPrompt(req.system, req.schema) || undefined;
 
     const format = req.schema ? z.toJSONSchema(req.schema) : undefined;
 

@@ -86,9 +86,10 @@ describe("Chat routes", () => {
     expect(res.body.id).toBe(id);
   });
 
-  it("GET /api/chat/sessions/:id returns 400 for invalid format", async () => {
+  it("GET /api/chat/sessions/:id returns 404 for invalid format", async () => {
+    // UX #6: Invalid format returns 404 (same as nonexistent) to avoid leaking ID format
     const res = await request(app).get("/api/chat/sessions/unknown-id");
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
   });
 
   it("GET /api/chat/sessions/:id returns 404 for valid format but nonexistent", async () => {
@@ -107,9 +108,10 @@ describe("Chat routes", () => {
     expect(getRes.status).toBe(404);
   });
 
-  it("DELETE /api/chat/sessions/:id returns 400 for invalid format", async () => {
+  it("DELETE /api/chat/sessions/:id returns 404 for invalid format", async () => {
+    // UX #6: Invalid format returns 404 (same as nonexistent) to avoid leaking ID format
     const res = await request(app).delete("/api/chat/sessions/unknown-id");
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
   });
 
   it("DELETE /api/chat/sessions/:id returns 404 for valid format but nonexistent", async () => {
@@ -208,12 +210,13 @@ describe("Chat session path traversal", () => {
     expect([400, 404]).toContain(res.status);
   });
 
-  it("returns 400 for session ID with encoded path traversal", async () => {
+  it("returns 404 for session ID with encoded path traversal", async () => {
     const app = createApp(createTestDeps());
 
     // URL-encoded path traversal attempt — rejected by session ID validation (A6)
+    // UX #6: Returns 404 (same as nonexistent) to avoid leaking ID format
     const res = await request(app).get("/api/chat/sessions/..%2F..%2Fetc%2Fpasswd");
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
   });
 
   it("DELETE with traversal ID does not affect other sessions", async () => {

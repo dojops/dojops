@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
 import { redactSecrets } from "./redact";
+import { augmentSystemPrompt } from "./schema-prompt";
 
 export class GeminiProvider implements LLMProvider {
   name = "gemini";
@@ -14,9 +15,7 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
-    const systemPrompt = req.schema
-      ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
-      : req.system;
+    const systemPrompt = augmentSystemPrompt(req.system, req.schema) || undefined;
 
     const contents = req.messages?.length
       ? req.messages

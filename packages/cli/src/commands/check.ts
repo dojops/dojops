@@ -5,6 +5,7 @@ import * as p from "@clack/prompts";
 import { DevOpsChecker } from "@dojops/core";
 import { CommandHandler } from "../types";
 import { wrapForNote } from "../formatter";
+import { hasFlag } from "../parser";
 import { findProjectRoot, loadContext, appendAudit, getCurrentUser } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
@@ -16,6 +17,10 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   if (_args[0] === "provider") {
     return checkProviderCommand(_args.slice(1), cliCtx);
   }
+
+  // FEAT #4: --fix flag for auto-remediation
+  const fixMode = hasFlag(_args, "--fix");
+  const autoApprove = hasFlag(_args, "--yes") || cliCtx.globalOpts.nonInteractive;
 
   const start = Date.now();
   const root = findProjectRoot();
@@ -161,6 +166,96 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     if (report.missingFiles.length > 0) {
       const missingLines = report.missingFiles.map((f) => `  ${pc.yellow("○")} ${f}`);
       p.note(wrapForNote(missingLines.join("\n")), "Recommended missing files");
+    }
+
+    // FEAT #4: --fix mode — auto-remediate high-severity findings
+    if (fixMode && report.findings.length > 0) {
+      const fixableFindings = report.findings.filter(
+        (f) => f.severity === "critical" || f.severity === "error",
+      );
+
+      if (fixableFindings.length === 0) {
+        p.log.info("No critical/error findings to fix.");
+      } else {
+        const fixSpinner = p.spinner();
+        fixSpinner.start(`Generating fixes for ${fixableFindings.length} finding(s)...`);
+
+        try {
+          const fixPrompt = [
+            "You are a DevOps configuration expert. Fix the following issues in the project files.",
+            "For each fix, output the complete corrected file content.",
+            "",
+            "Findings to fix:",
+            ...fixableFindings.map(
+              (f) =>
+                `- [${f.severity}] ${f.file}: ${f.message}\n  Recommendation: ${f.recommendation}`,
+            ),
+            "",
+            "Current file contents:",
+            ...fileContents
+              .filter((fc) => fixableFindings.some((f) => f.file === fc.path))
+              .map((fc) => `\n--- ${fc.path} ---\n${fc.content}`),
+          ].join("\n");
+
+          const fixResult = await provider.generate({
+            system:
+              "You are a DevOps expert. Generate corrected file contents to fix the identified issues. " +
+              "Output each fix as: FILE: <path>\n```\n<corrected content>\n```",
+            prompt: fixPrompt,
+          });
+
+          fixSpinner.stop("Fixes generated.");
+
+          // Parse and display fixes — LLMResponse has { content: string }
+          const fixContent = fixResult.content;
+
+          p.note(wrapForNote(fixContent), "Proposed Fixes");
+
+          // Apply fixes with approval
+          let approved = autoApprove;
+          if (!approved) {
+            const confirm = await p.confirm({
+              message: `Apply ${fixableFindings.length} fix(es)?`,
+            });
+            if (p.isCancel(confirm)) {
+              p.log.info("Fixes cancelled.");
+            } else {
+              approved = confirm;
+            }
+          }
+
+          if (approved) {
+            // Parse FILE: <path> blocks and write them
+            const fileRegex = /FILE:\s*(.+?)\n```[^\n]*\n([\s\S]*?)```/g;
+            let match;
+            let filesFixed = 0;
+            while ((match = fileRegex.exec(fixContent)) !== null) {
+              const filePath = match[1].trim();
+              const content = match[2];
+              const absPath = path.join(root, filePath);
+              try {
+                // Create backup
+                if (fs.existsSync(absPath)) {
+                  fs.copyFileSync(absPath, absPath + ".bak");
+                }
+                fs.writeFileSync(absPath, content, "utf-8");
+                p.log.success(`Fixed: ${pc.cyan(filePath)}`);
+                filesFixed++;
+              } catch (writeErr) {
+                p.log.warn(
+                  `Failed to write ${filePath}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`,
+                );
+              }
+            }
+            if (filesFixed === 0) {
+              p.log.info("No files were modified (could not parse fix output).");
+            }
+          }
+        } catch (fixErr) {
+          fixSpinner.stop("Fix generation failed.");
+          p.log.error(`Fix failed: ${fixErr instanceof Error ? fixErr.message : String(fixErr)}`);
+        }
+      }
     }
 
     // Audit

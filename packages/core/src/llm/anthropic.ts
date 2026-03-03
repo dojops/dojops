@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
 import { redactSecrets } from "./redact";
+import { augmentSystemPrompt } from "./schema-prompt";
 
 export class AnthropicProvider implements LLMProvider {
   name = "anthropic";
@@ -14,9 +15,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
-    const system = req.schema
-      ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
-      : req.system;
+    const system = augmentSystemPrompt(req.system, req.schema) || undefined;
 
     const messages: Anthropic.MessageParam[] = req.messages?.length
       ? [

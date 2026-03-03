@@ -6,6 +6,7 @@ import {
   saveConfig,
   getConfigPath,
   validateProvider,
+  resolveProvider,
   VALID_PROVIDERS,
   DojOpsConfig,
 } from "../config";
@@ -17,8 +18,14 @@ import { createProvider } from "@dojops/api";
 import { isCopilotAuthenticated, copilotLogin } from "@dojops/core";
 
 function showConfig(config: DojOpsConfig): void {
+  // UX #10: Show effective provider (including env var override) if it differs from config
+  const effectiveProvider = resolveProvider(undefined, config);
+  const providerDisplay =
+    process.env.DOJOPS_PROVIDER && process.env.DOJOPS_PROVIDER !== config.defaultProvider
+      ? `${config.defaultProvider ?? pc.dim("(not set)")} ${pc.yellow(`(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER} → ${effectiveProvider})`)}`
+      : (config.defaultProvider ?? pc.dim("(not set)"));
   const lines = [
-    `${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`,
+    `${pc.bold("Provider:")}  ${providerDisplay}`,
     `${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`,
     `${pc.bold("Temperature:")} ${config.defaultTemperature != null ? String(config.defaultTemperature) : pc.dim("(not set)")}`,
     `${pc.bold("Ollama host:")} ${config.ollamaHost ?? pc.dim("(default)")}`,

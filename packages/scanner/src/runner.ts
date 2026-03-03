@@ -125,8 +125,31 @@ export async function runScan(
     return s.applicable(context);
   });
 
+  // FEAT #5: Per-scanner timeout (default from env or 60s)
+  const scannerTimeoutMs = parseInt(process.env.DOJOPS_SCAN_TIMEOUT_MS ?? "60000", 10);
+
+  function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`timeout after ${Math.round(timeoutMs / 1000)}s`));
+      }, timeoutMs);
+      promise.then(
+        (val) => {
+          clearTimeout(timer);
+          resolve(val);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
+    });
+  }
+
   // Run all selected scanners concurrently (allSettled to avoid one failure killing the scan)
-  const settled = await Promise.allSettled(selected.map((s) => s.fn(projectPath)));
+  const settled = await Promise.allSettled(
+    selected.map((s) => withTimeout(s.fn(projectPath), scannerTimeoutMs)),
+  );
   const errors: string[] = [];
   const results: ScannerResult[] = [];
   for (let i = 0; i < settled.length; i++) {
@@ -136,13 +159,16 @@ export async function runScan(
     } else {
       const reason =
         outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-      errors.push(`${selected[i].name} crashed: ${reason}`);
-      // Push an empty result so the scanner is still tracked as skipped
+      const isTimeout = reason.startsWith("timeout after");
+      const skipReason = isTimeout
+        ? `Scanner ${isTimeout ? "timed out" : "crashed"}: ${reason}`
+        : `Scanner crashed: ${reason}`;
+      errors.push(`${selected[i].name}: ${skipReason}`);
       results.push({
         tool: selected[i].name,
         findings: [],
         skipped: true,
-        skipReason: `Scanner crashed: ${reason}`,
+        skipReason,
       });
     }
   }

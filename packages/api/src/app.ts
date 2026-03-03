@@ -211,6 +211,13 @@ export function createApp(deps: AppDependencies): Express {
     });
   };
 
+  // BUG #4: Register version middleware BEFORE health routes so /api/v1/health gets X-API-Version header
+  const versionMiddleware = (_req: express.Request, res: express.Response, next: NextFunction) => {
+    res.setHeader("X-API-Version", "1");
+    next();
+  };
+  app.use("/api/v1/", versionMiddleware);
+
   // Mount health at both /api/ and /api/v1/ paths
   app.get("/api/health", healthHandler);
   app.get("/api/v1/health", healthHandler);
@@ -243,11 +250,7 @@ export function createApp(deps: AppDependencies): Express {
     app.use(`${prefix}/chat`, llmLimiter, chatRouter);
   };
 
-  // #27: API versioning — /api/v1/ is the canonical prefix
-  app.use("/api/v1/", (_req, res, next) => {
-    res.setHeader("X-API-Version", "1");
-    next();
-  });
+  // #27: API versioning — /api/v1/ is the canonical prefix (middleware registered above health routes)
   mountRoutes("/api/v1");
   mountRoutes("/api");
 

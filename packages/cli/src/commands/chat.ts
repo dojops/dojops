@@ -78,8 +78,13 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     mode,
   });
 
+  // UX #4: Validate --agent flag and show available agents on error
   if (agentFlag) {
-    session.pinAgent(agentFlag);
+    try {
+      session.pinAgent(agentFlag);
+    } catch (err) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
+    }
   }
 
   // Inject project context
@@ -193,8 +198,12 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
         session.unpinAgent();
         p.log.info("Agent unpinned — auto-routing enabled.");
       } else {
-        session.pinAgent(agentName);
-        p.log.info(`Agent pinned to ${pc.cyan(agentName)}`);
+        try {
+          session.pinAgent(agentName);
+          p.log.info(`Agent pinned to ${pc.cyan(agentName)}`);
+        } catch (err) {
+          p.log.error((err as Error).message);
+        }
       }
       continue;
     }

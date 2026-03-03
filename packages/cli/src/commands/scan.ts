@@ -115,6 +115,57 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     p.log.warn(`Scanners skipped:\n  ${report.scannersSkipped.join("\n  ")}`);
   }
 
+  // UX #9: Prominent warning when no scanners ran at all
+  if (report.scannersRun.length === 0) {
+    p.note(
+      wrapForNote(
+        [
+          `${pc.bold(pc.yellow("No scanners were executed."))}`,
+          "",
+          "Possible reasons:",
+          `  ${pc.dim("•")} Scanner binaries not installed (trivy, checkov, hadolint, etc.)`,
+          `  ${pc.dim("•")} No applicable scanners for this project structure`,
+          `  ${pc.dim("•")} Scanner type filter (--security, --deps, etc.) excludes all scanners`,
+          "",
+          `Run ${pc.cyan("dojops status")} to check which scanners are available.`,
+        ].join("\n"),
+      ),
+      "Warning",
+    );
+  }
+
+  // FEAT #6: Show install hints for scanners skipped due to missing binaries
+  if (report.scannersSkipped.length > 0) {
+    const INSTALL_HINTS: Record<string, string> = {
+      trivy:
+        "brew install trivy | apt-get install trivy | https://trivy.dev/latest/getting-started/installation/",
+      checkov: "pip install checkov | brew install checkov",
+      hadolint:
+        "brew install hadolint | apt-get install hadolint | https://github.com/hadolint/hadolint",
+      gitleaks: "brew install gitleaks | https://github.com/gitleaks/gitleaks",
+      shellcheck: "brew install shellcheck | apt-get install shellcheck",
+      semgrep: "pip install semgrep | brew install semgrep",
+      "trivy-sbom": "brew install trivy | apt-get install trivy",
+      "trivy-license": "brew install trivy | apt-get install trivy",
+    };
+
+    const hints: string[] = [];
+    for (const skipped of report.scannersSkipped) {
+      // Extract scanner name from "tool: reason" format
+      const scannerName = skipped.split(":")[0].trim();
+      if (skipped.includes("not found") && INSTALL_HINTS[scannerName]) {
+        hints.push(`  ${pc.cyan(scannerName)}: ${pc.dim(INSTALL_HINTS[scannerName])}`);
+      }
+    }
+
+    if (hints.length > 0) {
+      p.note(
+        wrapForNote([`${pc.bold("Install missing scanners:")}`, "", ...hints].join("\n")),
+        "Install Hints",
+      );
+    }
+  }
+
   // Display summary
   const { summary } = report;
   if (summary.total === 0) {

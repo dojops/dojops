@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { ScannerResult, ScanFinding } from "../types";
 import { discoverProjectDirs } from "../discovery";
@@ -34,12 +35,72 @@ export async function scanNpm(projectPath: string): Promise<ScannerResult> {
     "yarn.lock",
     "pnpm-lock.yaml",
   ]);
+
+  // FEAT #2: If no lockfile exists but package.json does, generate a temporary lockfile
   if (projectDirs.length === 0) {
+    const pkgJsonDirs = discoverProjectDirs(projectPath, ["package.json"]);
+    if (pkgJsonDirs.length === 0) {
+      return {
+        tool: "npm-audit",
+        findings: [],
+        skipped: true,
+        skipReason: "No package.json or lockfile found",
+      };
+    }
+
+    // Try generating a temporary lockfile in a temp directory
+    const tmpDirs: string[] = [];
+    for (const dir of pkgJsonDirs) {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-audit-"));
+      try {
+        fs.copyFileSync(path.join(dir, "package.json"), path.join(tmpDir, "package.json"));
+        await execFileAsync("npm", ["install", "--package-lock-only", "--ignore-scripts"], {
+          encoding: "utf-8",
+          timeout: 60_000,
+          cwd: tmpDir,
+        });
+        tmpDirs.push(tmpDir);
+      } catch {
+        // Clean up on failure
+        try {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        } catch {
+          // ignore cleanup failure
+        }
+      }
+    }
+
+    if (tmpDirs.length === 0) {
+      return {
+        tool: "npm-audit",
+        findings: [],
+        skipped: true,
+        skipReason: "No lockfile found and failed to generate temporary lockfile for audit",
+      };
+    }
+
+    // Audit the temporary directories, then clean them up
+    const allFindings: ScanFinding[] = [];
+    let combinedRawOutput = "";
+    for (const tmpDir of tmpDirs) {
+      try {
+        const result = await auditDir(tmpDir, projectPath, "npm");
+        if (!result.skipped) {
+          allFindings.push(...result.findings);
+          if (result.rawOutput) combinedRawOutput += result.rawOutput + "\n";
+        }
+      } finally {
+        try {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        } catch {
+          // ignore cleanup failure
+        }
+      }
+    }
     return {
       tool: "npm-audit",
-      findings: [],
-      skipped: true,
-      skipReason: "No package-lock.json, yarn.lock, or pnpm-lock.yaml found",
+      findings: allFindings,
+      rawOutput: combinedRawOutput || undefined,
     };
   }
 

@@ -2,7 +2,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
 import { maskToken } from "../formatter";
-import { getConfigPath } from "../config";
+import { getConfigPath, resolveProvider } from "../config";
 import { findProjectRoot, loadSession } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
@@ -15,8 +15,18 @@ export async function inspectCommand(args: string[], ctx: CLIContext): Promise<v
     case "session":
       return inspectSession(ctx);
     default:
-      p.log.info("Available: config, session");
-      throw new CLIError(ExitCode.VALIDATION_ERROR, `Unknown inspect target: ${sub ?? "(none)"}`);
+      if (!sub) {
+        p.log.info(`  ${pc.dim("$")} dojops inspect config`);
+        p.log.info(`  ${pc.dim("$")} dojops inspect session`);
+        throw new CLIError(
+          ExitCode.VALIDATION_ERROR,
+          "No inspect target specified. Available: config, session",
+        );
+      }
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Unknown inspect target: "${sub}". Available: config, session`,
+      );
   }
 }
 
@@ -33,8 +43,14 @@ function inspectConfig(ctx: CLIContext): void {
     return;
   }
 
+  // UX #2: Show effective provider including env var
+  const effectiveProvider = resolveProvider(undefined, config);
+  const providerDisplay =
+    process.env.DOJOPS_PROVIDER && process.env.DOJOPS_PROVIDER !== config.defaultProvider
+      ? `${effectiveProvider} ${pc.dim(`(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER})`)}`
+      : effectiveProvider;
   const lines = [
-    `${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`,
+    `${pc.bold("Provider:")}  ${providerDisplay}`,
     `${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`,
     `${pc.bold("Tokens:")}`,
     `  openai:    ${maskToken(config.tokens?.openai)}`,

@@ -1,6 +1,12 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { loadConfig, saveConfig, getConfigPath, validateProvider } from "../config";
+import {
+  loadConfig,
+  saveConfig,
+  getConfigPath,
+  validateProvider,
+  resolveProvider,
+} from "../config";
 import { createProvider } from "@dojops/api";
 import { copilotLogin, clearCopilotAuth, isCopilotAuthenticated } from "@dojops/core";
 import { CLIContext } from "../types";
@@ -254,8 +260,14 @@ async function authStatus(): Promise<void> {
     ? pc.green("authenticated") + " " + pc.dim("(OAuth)")
     : pc.dim("(not set)");
 
+  // UX #3: Show effective provider including env var
+  const effectiveProvider = resolveProvider(undefined, config);
+  const providerDisplay =
+    process.env.DOJOPS_PROVIDER && process.env.DOJOPS_PROVIDER !== config.defaultProvider
+      ? `${effectiveProvider} ${pc.dim(`(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER})`)}`
+      : (config.defaultProvider ?? pc.dim("(not set)"));
   const lines = [
-    `${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`,
+    `${pc.bold("Provider:")}  ${providerDisplay}`,
     `${pc.bold("Tokens:")}`,
     `  openai:          ${tokenSource("openai")}`,
     `  anthropic:       ${tokenSource("anthropic")}`,

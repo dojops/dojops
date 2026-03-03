@@ -8,7 +8,7 @@ import {
   isToolSupportedOnCurrentPlatform,
 } from "@dojops/core";
 import { CLIContext } from "../types";
-import { getConfigPath, resolveOllamaHost } from "../config";
+import { getConfigPath, resolveProvider, resolveOllamaHost } from "../config";
 import { ExitCode } from "../exit-codes";
 import {
   findProjectRoot,
@@ -45,12 +45,19 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     detail: `v${nodeVersion}${major < 18 ? " (requires >= 18)" : ""}`,
   });
 
-  // Provider configured
-  const provider = ctx.config.defaultProvider;
+  // Provider configured — UX #1: use resolveProvider() to include DOJOPS_PROVIDER env var
+  const provider = resolveProvider(ctx.globalOpts.provider, ctx.config);
+  const providerSource = ctx.globalOpts.provider
+    ? "(CLI flag)"
+    : process.env.DOJOPS_PROVIDER
+      ? "(env: DOJOPS_PROVIDER)"
+      : ctx.config.defaultProvider
+        ? "(config)"
+        : "(default)";
   checks.push({
     name: "Provider configured",
     status: provider ? "pass" : "warn",
-    detail: provider ?? "Not set (defaults to openai)",
+    detail: `${provider} ${providerSource}`,
   });
 
   // API key present

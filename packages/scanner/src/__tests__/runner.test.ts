@@ -449,7 +449,7 @@ describe("scanner crash isolation (Promise.allSettled)", () => {
 
     // The crash reason should be captured in the errors array
     expect(report.errors).toBeDefined();
-    expect(report.errors!.some((e) => e.includes("trivy crashed"))).toBe(true);
+    expect(report.errors!.some((e) => e.includes("trivy") && e.includes("crashed"))).toBe(true);
     expect(report.errors!.some((e) => e.includes("trivy segfault: signal 11"))).toBe(true);
 
     // Other scanners should still have run successfully

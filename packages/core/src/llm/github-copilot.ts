@@ -3,6 +3,7 @@ import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
 import { redactSecrets } from "./redact";
 import { getValidCopilotToken } from "./copilot-auth";
+import { augmentSystemPrompt } from "./schema-prompt";
 
 const COPILOT_HEADERS: Record<string, string> = {
   "editor-version": "vscode/1.95.0",
@@ -40,9 +41,7 @@ export class GitHubCopilotProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
-    const systemContent = req.schema
-      ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
-      : (req.system ?? "");
+    const systemContent = augmentSystemPrompt(req.system, req.schema);
 
     const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = req.messages
       ?.length
