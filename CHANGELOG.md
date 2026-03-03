@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`.dops` v2 Format**: New `.dops v2` module format that replaces `input.fields` and `output` blocks with a `context` block containing `technology`, `fileFormat`, `outputGuidance`, `bestPractices`, and `context7Libraries`. The LLM generates raw file content directly (no JSON→serialize step), producing cleaner output with less schema overhead
+- **`DopsRuntimeV2`**: New runtime class (`packages/runtime/src/runtime.ts`) for processing v2 modules — compiles prompts with `compilePromptV2()`, strips code fences from raw LLM output via `stripCodeFences()`, and integrates with Context7 via the `DocProvider` interface
+- **All 12 Built-in Tools Converted to v2**: All built-in `.dops` modules in `packages/runtime/modules/` now use v2 format with `context` blocks, best practices, and Context7 library references
+- **Version-Detecting Parsers**: `parseDopsStringAny()` and `parseDopsFileAny()` (`packages/runtime/src/parser.ts`) automatically detect the `dops` version field and route to `DopsRuntime` (v1) or `DopsRuntimeV2` (v2)
+- **v2 Prompt Variables**: New template variables for v2 prompts — `{outputGuidance}` (from `context.outputGuidance`), `{bestPractices}` (numbered list from `context.bestPractices`), `{context7Docs}` (documentation fetched at runtime via Context7), `{projectContext}` (project scanner context)
+- **`DocProvider` Interface**: Duck-typed interface (`{ augmentPrompt() }`) for Context7 documentation augmentation in v2 tools, injected into `DopsRuntimeV2` at construction time
+- **Hub v1/v2 Backward Compatibility**: Hub database extended with `dopsVersion` and `contextBlock` columns on the `Version` model, supporting both v1 and v2 `.dops` format uploads and downloads
+- **93 New v2 Tests**: Comprehensive test coverage for v2 parsing, prompt compilation, raw content generation, code fence stripping, Context7 integration, and version detection (total: 1931 → 2140 tests)
 - **Context7 Documentation Augmentation (`@dojops/context`)**: New package that fetches up-to-date documentation from [Context7](https://context7.com) and injects it into LLM system prompts during generation — improving output accuracy even when the LLM's training data is stale. Covers all 12 built-in tool domains and specialist agent domains via static library mapping. Opt-in via `DOJOPS_CONTEXT_ENABLED=true`.
 - **Context7 REST Client**: Native `fetch()` client for Context7 API (`/v2/libs/search` + `/v2/context`) with configurable timeout (10s default), optional API key auth (`DOJOPS_CONTEXT7_API_KEY`), and in-memory TTL cache (5 min default, configurable via `DOJOPS_CONTEXT_CACHE_TTL`)
 - **Documentation-Augmented Agent Routing**: `SpecialistAgent.run()` and `runWithHistory()` now accept an optional duck-typed `docAugmenter` and prepend a `## Reference Documentation` section to the system prompt with current syntax references
@@ -28,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Tool Generation Model**: Built-in tools now generate raw file content directly via LLM instead of structured JSON objects that required serialization. This produces more natural output and eliminates the JSON→serialize step
+- **`docker-compose` Risk Level**: Changed from `MEDIUM` to `LOW` — Compose changes are local development configurations
+- **Tool Registry v2 Routing**: `ToolRegistry` now uses `parseDopsFileAny()` for version detection and routes v2 modules to `DopsRuntimeV2` via `isV2Module()` check
 - **`serve` Provider Resolution**: `dojops serve` now uses `resolveProvider()` to correctly respect `DOJOPS_PROVIDER` env var (previously ignored it)
 - **`--no-auth` Safety Warning**: `dojops serve --no-auth` now displays a prominent warning: "API authentication disabled. Do not expose to untrusted networks."
 - **Apply Exit Codes**: `dojops apply` now exits with code 1 on FAILURE or PARTIAL status instead of 0, enabling CI integration

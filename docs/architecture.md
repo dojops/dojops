@@ -34,7 +34,7 @@ Execution Engine (Sandboxed, policy-enforced, approval-gated, audit-logged)
 
 DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, CommonJS). All packages use the `@dojops/*` scope.
 
-### 10 Packages
+### 11 Packages
 
 ```
 @dojops/cli            CLI entry point + rich TUI (@clack/prompts)
@@ -42,10 +42,10 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/tool-registry  Tool registry + custom tool system (discovers built-in + custom tools)
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/runtime        12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
-                       Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
+@dojops/runtime        12 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
 @dojops/scanner        10 security scanners + remediation engine
 @dojops/session        Chat session management + memory + context injection
+@dojops/context        Context7 documentation augmentation for v2 tools
 @dojops/core           LLM abstraction + 6 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
 ```
@@ -137,15 +137,16 @@ See [DevOps Tools](tools.md) for the tool pattern.
 
 ### 4b. DOPS Runtime (`@dojops/runtime`)
 
-The DOPS runtime processes `.dops` module files — a declarative format combining YAML frontmatter with markdown prompt sections. Each `.dops` file defines a complete tool: input/output schemas, file specs, prompt templates, and metadata.
+The DOPS runtime processes `.dops` module files — a declarative format combining YAML frontmatter with markdown prompt sections. Two format versions are supported: **v1** (structured JSON output with serialization) and **v2** (raw content generation with Context7 integration).
 
-**Frontmatter sections** (all optional except `meta`, `output`, `files`):
+**Frontmatter sections** (all optional except `meta`, `files`):
 
 | Section        | Purpose                                                                               |
 | -------------- | ------------------------------------------------------------------------------------- |
 | `meta`         | Name, version, description, author, license, tags, repository                         |
-| `input`        | Field definitions with types, constraints, defaults                                   |
-| `output`       | JSON Schema for LLM output validation                                                 |
+| `input`        | v1 only: Field definitions with types, constraints, defaults                          |
+| `output`       | v1 only: JSON Schema for LLM output validation                                        |
+| `context`      | v2: Technology context, output guidance, best practices, Context7 library references  |
 | `files`        | Output file specs with path templates, format, serialization options                  |
 | `scope`        | Write boundary — explicit list of allowed write paths (enforced at file-write time)   |
 | `risk`         | Self-classification: `LOW` / `MEDIUM` / `HIGH` with rationale string                  |
@@ -159,15 +160,19 @@ The DOPS runtime processes `.dops` module files — a declarative format combini
 
 **Key runtime features**:
 
-- `DopsRuntime.risk` — Returns declared risk or defaults to `{ level: "LOW", rationale: "No risk classification declared" }`
-- `DopsRuntime.executionMode` — Returns declared execution semantics or defaults to `{ mode: "generate", deterministic: false, idempotent: false }`
+- `DopsRuntime` (v1) / `DopsRuntimeV2` (v2) — Two runtime classes for their respective format versions
+- `parseDopsFileAny()` / `parseDopsStringAny()` — Version-detecting parsers that route to the correct runtime
+- `compilePromptV2()` — Compiles v2 prompts with `{outputGuidance}`, `{bestPractices}`, `{context7Docs}`, `{projectContext}` variables
+- `stripCodeFences()` — Strips markdown code fences from raw LLM output before writing
+- `DocProvider` interface — Enables Context7 documentation augmentation for v2 tools
+- `DopsRuntime.risk` / `DopsRuntimeV2.risk` — Returns declared risk or defaults to `{ level: "LOW", rationale: "No risk classification declared" }`
 - `DopsRuntime.metadata` — Includes `riskLevel`, `systemPromptHash`, `toolHash` for audit integration
 - **Scope enforcement** — `writeFiles()` validates resolved paths against `scope.write` patterns after `{var}` expansion; out-of-scope writes throw
 - **Update strategy** — `preserve_structure` injects additional prompt instructions to maintain existing config organization
 
 ### 5. DevOps Tools (`@dojops/runtime`)
 
-12 built-in tools covering CI/CD, IaC, containers, monitoring, and system services. Each follows the same file pattern: `schemas.ts` -> `detector.ts` -> `generator.ts` -> `verifier.ts` -> `*-tool.ts`. All tools support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. YAML generators use sorted keys for idempotent output. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
+12 built-in tools covering CI/CD, IaC, containers, monitoring, and system services. All 12 are now `.dops v2` modules in `packages/runtime/modules/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All tools support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
 
 See [DevOps Tools](tools.md) for the full tool list.
 
@@ -175,7 +180,9 @@ See [DevOps Tools](tools.md) for the full tool list.
 
 Unified registry layer between consumers (Planner, Executor, CLI, API) and tool implementations. Combines all 12 built-in tools with custom tools discovered from disk:
 
-- **Custom tool discovery** — Scans `~/.dojops/tools/` (global) and `.dojops/tools/` (project) for `tool.yaml` manifests
+- **`.dops` module discovery** — Discovers `.dops` modules alongside `tool.yaml` manifests; uses `parseDopsFileAny()` for version detection
+- **v2 module routing** — `isV2Module()` check routes v2 modules to `DopsRuntimeV2` instantiation
+- **Custom tool discovery** — Scans `~/.dojops/tools/` (global) and `.dojops/tools/` (project) for `tool.yaml` manifests and `.dops` files
 - **Manifest validation** — Zod schema validates tool manifests; JSON Schema inputs are converted to Zod at runtime
 - **CustomTool adapter** — Converts declarative `tool.yaml` into a `DevOpsTool`-compatible object with generate/execute/verify
 - **Tool policy** — `.dojops/policy.yaml` supports `allowedTools` and `blockedTools` lists

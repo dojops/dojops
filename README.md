@@ -138,10 +138,10 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ### Tools
 
 - **12 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
-- **Declarative tool metadata** — `.dops` modules declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
+- **Declarative tool metadata** — `.dops` modules declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, `context` block (v2: technology context, output guidance, best practices, Context7 libraries), and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
 - **Custom tool system** — Extend DojOps with custom tools via declarative `tool.yaml` manifests + JSON Schema. Drop a tool into `~/.dojops/tools/` or `.dojops/tools/` and it's automatically available to all commands. Scaffold new tools with `dojops tools init <name>`. Tool isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
-- **Schema-validated** — Every tool input and LLM output is validated against Zod schemas before execution
+- **Schema-validated** — Every tool input is validated against Zod schemas before execution. v1 tools also validate LLM output; v2 tools generate raw content directly
 - **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Use `--skip-verify` to disable
 - **Idempotent YAML output** — YAML keys are sorted alphabetically (GitHub Actions uses conventional key ordering) for deterministic, diff-friendly output
 - **Structured output** — Provider-native JSON modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, Gemini `responseMimeType`)
@@ -187,10 +187,10 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 @dojops/tool-registry  Tool registry + custom tool system + custom agent discovery
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/runtime        12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
-                       Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@dojops/scanner        9 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint,
-                       shellcheck, trivy-sbom, semgrep) + remediation
+@dojops/runtime        12 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
+@dojops/scanner        10 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint,
+                       shellcheck, trivy-sbom, trivy-license, semgrep) + remediation
+@dojops/context        Context7 documentation augmentation for v2 tools
 @dojops/session        Chat session management + memory + context injection
 @dojops/core           LLM abstraction + 6 providers + 16 built-in specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
@@ -203,6 +203,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 cli -> api -> tool-registry -> runtime -> core -> sdk
           -> planner -> executor
           -> scanner
+          -> context -> core
           -> session -> core
 ```
 
@@ -468,7 +469,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | ---                  |
 | Systemd        | INI                | `{name}.service`                    | ---                  |
 
-All tools follow the `BaseTool<T>` pattern: `schemas.ts` -> `detector.ts` (optional) -> `generator.ts` -> `verifier.ts` (optional) -> `*-tool.ts` -> tests. Tools auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename). YAML tools produce sorted keys for idempotent output.
+All 12 built-in tools are `.dops v2` modules in `packages/runtime/modules/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM. Tools auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename).
 
 ---
 
@@ -614,7 +615,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 1931 tests
+pnpm test               # Run all 2140 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -640,7 +641,7 @@ packages/
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
   tools/            12 built-in DevOps tools
-  scanner/          9 security scanners + LLM-powered remediation
+  scanner/          10 security scanners + LLM-powered remediation
   session/          Chat session management + memory + context injection
   sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
@@ -649,17 +650,18 @@ packages/
 
 | Package                 | Tests    |
 | ----------------------- | -------- |
-| `@dojops/runtime`       | 481      |
-| `@dojops/core`          | 465      |
-| `@dojops/cli`           | 247      |
+| `@dojops/runtime`       | 578      |
+| `@dojops/core`          | 485      |
+| `@dojops/cli`           | 284      |
+| `@dojops/tool-registry` | 250      |
 | `@dojops/api`           | 236      |
-| `@dojops/tool-registry` | 224      |
 | `@dojops/scanner`       | 110      |
 | `@dojops/executor`      | 67       |
 | `@dojops/planner`       | 39       |
 | `@dojops/session`       | 38       |
+| `@dojops/context`       | 29       |
 | `@dojops/sdk`           | 24       |
-| **Total**               | **1931** |
+| **Total**               | **2140** |
 
 ---
 
@@ -672,7 +674,7 @@ npm login
 pnpm publish-packages    # Build + publish in dependency order
 ```
 
-Publish order: `sdk` -> `core` -> `executor` -> `planner` -> `tools` -> `tool-registry` -> `scanner` -> `session` -> `api` -> `cli`
+Publish order: `sdk` -> `core` -> `context` -> `executor` -> `planner` -> `tools` -> `tool-registry` -> `scanner` -> `session` -> `api` -> `cli`
 
 ---
 

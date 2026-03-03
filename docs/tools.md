@@ -6,38 +6,44 @@ DojOps includes 12 built-in DevOps tools covering CI/CD, infrastructure-as-code,
 
 ## Tool Overview
 
-| Tool           | Serialization      | Output Files                        | Detector | Verifier             |
-| -------------- | ------------------ | ----------------------------------- | -------- | -------------------- |
-| GitHub Actions | YAML               | `.github/workflows/ci.yml`          | Yes      | Structure lint       |
-| Terraform      | HCL                | `main.tf`, `variables.tf`           | Yes      | `terraform validate` |
-| Kubernetes     | YAML               | K8s manifests                       | --       | `kubectl --dry-run`  |
-| Helm           | YAML               | `Chart.yaml`, `values.yaml`         | --       | --                   |
-| Ansible        | YAML               | `{name}.yml`                        | --       | --                   |
-| Docker Compose | YAML               | `docker-compose.yml`                | Yes      | --                   |
-| Dockerfile     | Dockerfile syntax  | `Dockerfile`, `.dockerignore`       | Yes      | `hadolint`           |
-| Nginx          | Nginx conf         | `nginx.conf`                        | --       | --                   |
-| Makefile       | Make syntax (tabs) | `Makefile`                          | Yes      | --                   |
-| GitLab CI      | YAML               | `.gitlab-ci.yml`                    | Yes      | Structure lint       |
-| Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | --       | --                   |
-| Systemd        | INI                | `{name}.service`                    | --       | --                   |
+| Tool           | Output Format     | Output Files                        | Detector | Verifier             |
+| -------------- | ----------------- | ----------------------------------- | -------- | -------------------- |
+| GitHub Actions | YAML (raw)        | `.github/workflows/ci.yml`          | Yes      | Structure lint       |
+| Terraform      | HCL (raw)         | `main.tf`, `variables.tf`           | Yes      | `terraform validate` |
+| Kubernetes     | YAML (raw)        | K8s manifests                       | --       | `kubectl --dry-run`  |
+| Helm           | YAML (raw)        | `Chart.yaml`, `values.yaml`         | --       | --                   |
+| Ansible        | YAML (raw)        | `{name}.yml`                        | --       | --                   |
+| Docker Compose | YAML (raw)        | `docker-compose.yml`                | Yes      | --                   |
+| Dockerfile     | Dockerfile (raw)  | `Dockerfile`, `.dockerignore`       | Yes      | `hadolint`           |
+| Nginx          | Nginx conf (raw)  | `nginx.conf`                        | --       | --                   |
+| Makefile       | Make syntax (raw) | `Makefile`                          | Yes      | --                   |
+| GitLab CI      | YAML (raw)        | `.gitlab-ci.yml`                    | Yes      | Structure lint       |
+| Prometheus     | YAML (raw)        | `prometheus.yml`, `alert-rules.yml` | --       | --                   |
+| Systemd        | INI (raw)         | `{name}.service`                    | --       | --                   |
 
 ---
 
 ## Tool Pattern
 
-Every tool follows the same file structure:
+All 12 built-in tools are defined as `.dops v2` module files in `packages/runtime/modules/`. Each module is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
 
 ```
-tool-name/
-  schemas.ts      Zod input/output schemas (includes optional existingContent field)
-  detector.ts     (optional) Filesystem detection of project context
-  generator.ts    LLM call with structured schema -> serialization (YAML/HCL/custom)
-                  Accepts optional existingContent param to switch between "generate new" and "update existing" prompts
-  verifier.ts     (optional) External tool validation
-  *-tool.ts       BaseTool subclass: generate() auto-detects existing files, verify() validates, execute() backs up + writes
-  index.ts        Barrel exports
-  *.test.ts       Vitest tests
+packages/runtime/modules/
+  github-actions.dops    GitHub Actions workflow generator
+  terraform.dops         Terraform HCL generator
+  kubernetes.dops        Kubernetes manifest generator
+  helm.dops              Helm chart generator
+  ansible.dops           Ansible playbook generator
+  docker-compose.dops    Docker Compose generator
+  dockerfile.dops        Dockerfile generator
+  nginx.dops             Nginx config generator
+  makefile.dops           Makefile generator
+  gitlab-ci.dops         GitLab CI pipeline generator
+  prometheus.dops        Prometheus monitoring generator
+  systemd.dops           Systemd service unit generator
 ```
+
+> **Legacy pattern (v1):** Prior to v2, built-in tools used a TypeScript file structure (`schemas.ts` → `detector.ts` → `generator.ts` → `verifier.ts` → `*-tool.ts`). This pattern is still supported for custom tools via `tool.yaml` manifests.
 
 ### BaseTool Abstract Class
 
@@ -60,9 +66,11 @@ abstract class BaseTool<TInput> {
 }
 ```
 
-### Schemas (`schemas.ts`)
+### Schemas (`schemas.ts`) — v1 Legacy
 
-Each tool defines Zod schemas for its input and output:
+> **Note:** v2 tools use the `context` block instead of separate input/output schemas. The LLM generates raw file content directly — there is no output schema validation step.
+
+In v1, each tool defines Zod schemas for its input and output:
 
 - **Input schema** — Validates user/planner input before generation. All input schemas include an optional `existingContent` field for passing existing config content to update/enhance
 - **Output schema** — Validates LLM response structure before serialization
@@ -78,11 +86,13 @@ Optional filesystem detector that identifies project context:
 - `MakefileDetector` — Checks for existing Makefile
 - `GitLabCIDetector` — Checks for `.gitlab-ci.yml`
 
-### Generator (`generator.ts`)
+### Generator (`generator.ts`) — v1 Legacy
 
-Calls the LLM with a structured Zod schema, parses the response, and serializes to the target format (YAML, HCL, Dockerfile syntax, INI, etc.).
+> **Note:** v2 tools define generation prompts in the `.dops` file's `## Prompt` section. The LLM generates raw file content directly, and `DopsRuntimeV2` strips code fences before writing.
 
-All generators accept an optional `existingContent?: string` parameter. When provided:
+In v1, generators call the LLM with a structured Zod schema, parse the response, and serialize to the target format (YAML, HCL, Dockerfile syntax, INI, etc.).
+
+All v1 generators accept an optional `existingContent?: string` parameter. When provided:
 
 - The **system prompt** switches from "Generate a new config" to "Update the existing config. Preserve existing structure and settings."
 - The **user prompt** appends the existing content in a delimited block (`--- EXISTING CONFIGURATION ---`)
@@ -349,44 +359,87 @@ To add a new tool to DojOps:
 
 ## DOPS Module Format
 
-Built-in tools can also be defined as `.dops` module files — a declarative format combining YAML frontmatter with markdown prompt sections. The `@dojops/runtime` package processes these modules through a unified runtime engine (`DopsRuntime`).
+Built-in tools are defined as `.dops` module files — a declarative format combining YAML frontmatter with markdown prompt sections. The `@dojops/runtime` package processes these modules through two runtime engines: `DopsRuntime` (v1) and `DopsRuntimeV2` (v2). Version detection is automatic via `parseDopsStringAny()` and `parseDopsFileAny()`.
 
 ### Frontmatter Sections
 
 All sections are defined in YAML between `---` delimiters:
 
-| Section        | Required | Description                                                           |
-| -------------- | -------- | --------------------------------------------------------------------- |
-| `dops`         | Yes      | Version identifier (`v1`)                                             |
-| `kind`         | No       | Module kind (`tool`, default: `tool`)                                 |
-| `meta`         | Yes      | Tool name, version, description, author, license, tags, repository    |
-| `input`        | No       | Input field definitions with types, constraints, defaults             |
-| `output`       | Yes      | JSON Schema for LLM output validation                                 |
-| `files`        | Yes      | Output file specs (path templates, format, serialization options)     |
-| `scope`        | No       | Write boundary — explicit list of allowed write paths                 |
-| `risk`         | No       | Tool risk self-classification (`LOW` / `MEDIUM` / `HIGH` + rationale) |
-| `execution`    | No       | Mutation semantics (mode, deterministic, idempotent flags)            |
-| `update`       | No       | Structured update behavior (strategy, inputSource, injectAs)          |
-| `detection`    | No       | Existing file detection paths for auto-update mode                    |
-| `verification` | No       | Structural rules + optional binary verification command               |
-| `permissions`  | No       | Filesystem, child_process, and network permission declarations        |
+| Section        | Required    | Description                                                           |
+| -------------- | ----------- | --------------------------------------------------------------------- |
+| `dops`         | Yes         | Version identifier (`v1` or `v2`)                                     |
+| `kind`         | No          | Module kind (`tool`, default: `tool`)                                 |
+| `meta`         | Yes         | Tool name, version, description, author, license, tags, repository    |
+| `input`        | v1 only     | Input field definitions with types, constraints, defaults             |
+| `output`       | v1 only     | JSON Schema for LLM output validation                                 |
+| `context`      | v2 required | Technology context, output guidance, best practices, Context7 libs    |
+| `files`        | Yes         | Output file specs (path templates, format, serialization options)     |
+| `scope`        | No          | Write boundary — explicit list of allowed write paths                 |
+| `risk`         | No          | Tool risk self-classification (`LOW` / `MEDIUM` / `HIGH` + rationale) |
+| `execution`    | No          | Mutation semantics (mode, deterministic, idempotent flags)            |
+| `update`       | No          | Structured update behavior (strategy, inputSource, injectAs)          |
+| `detection`    | No          | Existing file detection paths for auto-update mode                    |
+| `verification` | No          | Structural rules + optional binary verification command               |
+| `permissions`  | No          | Filesystem, child_process, and network permission declarations        |
+
+> **Version detection:** `parseDopsStringAny()` and `parseDopsFileAny()` read the `dops` field to determine format version. v1 modules use `DopsRuntime`; v2 modules use `DopsRuntimeV2`.
+
+### Context Block (v2)
+
+The `context` block replaces v1's `input` and `output` sections. It provides technology context and generation guidance to the LLM:
+
+```yaml
+context:
+  technology: "GitHub Actions"
+  fileFormat: yaml
+  outputGuidance: "Generate a complete GitHub Actions workflow YAML file..."
+  bestPractices:
+    - "Use matrix strategy for multi-version testing"
+    - "Pin action versions with full SHA hashes"
+  context7Libraries:
+    - name: "github-actions"
+      query: "workflow syntax and configuration"
+```
+
+| Field               | Type     | Description                                                |
+| ------------------- | -------- | ---------------------------------------------------------- |
+| `technology`        | string   | Technology name (e.g. "GitHub Actions", "Terraform")       |
+| `fileFormat`        | string   | Output file format (e.g. `yaml`, `hcl`, `raw`)             |
+| `outputGuidance`    | string   | Instructions for the LLM on what to generate               |
+| `bestPractices`     | string[] | Best practices injected into the prompt                    |
+| `context7Libraries` | array    | Context7 library references for documentation augmentation |
+
+### Prompt Variables (v2)
+
+v2 prompts support additional template variables:
+
+| Variable           | Source                    | Description                                    |
+| ------------------ | ------------------------- | ---------------------------------------------- |
+| `{outputGuidance}` | `context.outputGuidance`  | Generation instructions from the context block |
+| `{bestPractices}`  | `context.bestPractices`   | Numbered list of best practices                |
+| `{context7Docs}`   | Context7 API (runtime)    | Documentation fetched via `DocProvider`        |
+| `{projectContext}` | Project scanner (runtime) | Detected project context information           |
+
+The `DocProvider` interface enables Context7 integration for v2 tools, fetching relevant documentation at runtime based on `context7Libraries` entries.
 
 ### File Spec Fields
 
 Each entry in the `files` array defines an output file:
 
-| Field           | Type    | Default | Description                                      |
-| --------------- | ------- | ------- | ------------------------------------------------ |
-| `path`          | string  | —       | Output path (supports `{var}` templates)         |
-| `format`        | string  | `raw`   | `hcl`, `yaml`, `json`, `raw`, `ini`, `toml`      |
-| `source`        | string  | `llm`   | `llm` (LLM-generated) or `template` (static)     |
-| `content`       | string  | —       | Static content when `source: template`           |
-| `multiDocument` | boolean | —       | Multi-document YAML (`---` separated)            |
-| `dataPath`      | string  | —       | JSON path to extract from LLM output             |
-| `conditional`   | boolean | —       | Only write if LLM produces content for this file |
-| `options`       | object  | —       | Serialization options (see below)                |
+| Field           | Type    | Default | Description                                           |
+| --------------- | ------- | ------- | ----------------------------------------------------- |
+| `path`          | string  | —       | Output path (supports `{var}` templates)              |
+| `format`        | string  | `raw`   | `hcl`, `yaml`, `json`, `raw`, `ini`, `toml`           |
+| `source`        | string  | `llm`   | v1 only: `llm` (LLM-generated) or `template` (static) |
+| `content`       | string  | —       | v1 only: Static content when `source: template`       |
+| `multiDocument` | boolean | —       | v1 only: Multi-document YAML (`---` separated)        |
+| `dataPath`      | string  | —       | v1 only: JSON path to extract from LLM output         |
+| `conditional`   | boolean | —       | Only write if LLM produces content for this file      |
+| `options`       | object  | —       | v1 only: Serialization options (see below)            |
 
-**Serialization options** (`options`):
+> **v2 note:** v2 tools use `format: "raw"` exclusively. The LLM generates raw file content directly, and `DopsRuntimeV2` strips code fences via `stripCodeFences()` before writing.
+
+**Serialization options** (`options`, v1 only):
 
 | Field           | Type     | Description                          |
 | --------------- | -------- | ------------------------------------ |
@@ -468,7 +521,7 @@ After the closing `---` delimiter, markdown sections define prompts:
 | kubernetes     | MEDIUM | Cluster configuration changes affect running services |
 | helm           | MEDIUM | Chart changes affect Kubernetes deployments           |
 | dockerfile     | MEDIUM | Build image changes may affect production runtime     |
-| docker-compose | MEDIUM | Service stack changes affect running containers       |
+| docker-compose | LOW    | Compose changes are local development configurations  |
 | ansible        | MEDIUM | Playbook changes execute on remote hosts              |
 | nginx          | MEDIUM | Web server config changes affect traffic routing      |
 | systemd        | MEDIUM | Service unit changes affect system processes          |
@@ -628,7 +681,7 @@ dojops tools publish my-tool
 
 **What happens during publish:**
 
-1. **Local validation** — The `.dops` file is parsed and validated against the v1 spec (frontmatter, sections, Zod schemas)
+1. **Local validation** — The `.dops` file is parsed and validated against the .dops spec (v1 or v2 — frontmatter, sections, Zod schemas)
 2. **SHA-256 hash** — The CLI computes a SHA-256 hash of the file as a **publisher attestation**
 3. **Upload** — The file and hash are sent to the Hub via `POST /api/packages` with `Authorization: Bearer <token>`
 4. **Server verification** — The Hub recomputes the hash and compares it against the client-provided hash. Mismatches are rejected
@@ -747,6 +800,8 @@ Custom tool executions include additional audit metadata:
 - `systemPromptHash` — SHA-256 hash of the custom tool's system prompt for reproducibility tracking
 
 ### Supported Serializers
+
+> **Note:** v2 tools output raw content directly from the LLM — serializers are not used. These serializers apply to v1 tools and custom `tool.yaml` tools.
 
 | Serializer | Description                        |
 | ---------- | ---------------------------------- |
