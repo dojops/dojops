@@ -1,6 +1,6 @@
 {
   "name": "@dojops/cli",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "CLI for DojOps — AI DevOps Automation Engine",
   "license": "MIT",
   "repository": {

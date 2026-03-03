@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-03-03
+
+### Added
+
+- **Primary Keywords**: Specialist agents now support `primaryKeywords` — high-signal keywords that receive a confidence boost (+0.1 per match) during routing, improving agent selection accuracy
+- **Project-Context Biased Routing**: Agent routing now considers project domains detected by `dojops init`, boosting confidence (+0.15) for agents whose domain matches the project context
+- **Agent Retry & Timeout**: `SpecialistAgent.run()` and `runWithHistory()` now support configurable timeout (default 120s) and automatic single retry on transient errors (network/5xx/429)
+- **Message Size Validation**: `runWithHistory()` now filters out oversized messages (>128KB) to prevent LLM context overflow
+
+### Changed
+
+- **TUI Output Limits**: Increased `formatOutput` line limit from 20 to 50 and apply preview limit from 2000 to 5000 characters for better visibility of large outputs
+- **TUI Word Wrapping**: Added `wrapForNote()` utility for ANSI-safe word-wrapping in `p.note()` boxes, applied across check, debug, analyze, explain, plan, apply, and scan commands — fixes broken box-drawing characters when content exceeds terminal width
+
+### Fixed
+
+- **Project-Aware Tool Filtering**: `init`, `status`/`doctor`, and `check` commands now filter optional tool suggestions by detected project domains — no more suggesting Makefile for Java projects or Terraform for Node.js apps
+- **Check Command Relevance**: The `check` command now includes project-type constraints in the LLM system prompt, producing domain-relevant maturity findings only
+- **Message Sanitization**: `runWithHistory()` now sanitizes all message roles (not just user messages) for consistent input handling
+
+### Removed
+
+- **Unused Icon Asset**: Removed `packages/cli/assets/dojops-icon.png` and its copy logic from `initProject()` — the CLI never displayed it; the dashboard uses its own icon from `api/public/icons/`
+
 ## [1.0.3] - 2026-03-02
 
 ### Fixed

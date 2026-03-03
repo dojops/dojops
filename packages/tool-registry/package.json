@@ -1,6 +1,6 @@
 {
   "name": "@dojops/tool-registry",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Tool registry with plugin system for DojOps — discovers, loads, and manages built-in and plugin tools",
   "license": "MIT",
   "repository": {
