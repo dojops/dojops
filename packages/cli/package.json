@@ -48,7 +48,7 @@
     "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
   },
   "dependencies": {
-    "@clack/prompts": "^0.11.0",
+    "@clack/prompts": "^1.1.0",
     "@dojops/api": "workspace:*",
     "@dojops/context": "workspace:*",
     "@dojops/core": "workspace:*",
