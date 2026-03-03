@@ -21,11 +21,21 @@ export * from "./agent-loader";
 export * from "./agent-schema";
 export * from "./prompt-validator";
 
+export interface CreateToolRegistryOptions {
+  /** Optional documentation augmenter for injecting up-to-date docs into tool prompts */
+  docAugmenter?: {
+    augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
+  };
+}
+
 /**
  * Load built-in .dops modules from @dojops/runtime/modules/.
  * Returns DopsRuntime instances for each valid module.
  */
-export function loadBuiltInDopsModules(provider: LLMProvider): DopsRuntime[] {
+export function loadBuiltInDopsModules(
+  provider: LLMProvider,
+  options?: CreateToolRegistryOptions,
+): DopsRuntime[] {
   const modulesDir = path.join(__dirname, "../../runtime/modules");
   const runtimes: DopsRuntime[] = [];
 
@@ -39,7 +49,11 @@ export function loadBuiltInDopsModules(provider: LLMProvider): DopsRuntime[] {
         const module = parseDopsFile(path.join(modulesDir, file));
         const validation = validateDopsModule(module);
         if (validation.valid) {
-          runtimes.push(new DopsRuntime(module, provider));
+          runtimes.push(
+            new DopsRuntime(module, provider, {
+              docAugmenter: options?.docAugmenter,
+            }),
+          );
         }
       } catch {
         // Skip invalid modules silently
@@ -58,6 +72,7 @@ export function loadBuiltInDopsModules(provider: LLMProvider): DopsRuntime[] {
 export function loadUserDopsModules(
   provider: LLMProvider,
   projectPath?: string,
+  options?: CreateToolRegistryOptions,
 ): { runtimes: DopsRuntime[]; warnings: string[] } {
   const dopsFiles = discoverUserDopsFiles(projectPath);
   const runtimes: DopsRuntime[] = [];
@@ -68,7 +83,11 @@ export function loadUserDopsModules(
       const module = parseDopsFile(entry.filePath);
       const validation = validateDopsModule(module);
       if (validation.valid) {
-        runtimes.push(new DopsRuntime(module, provider));
+        runtimes.push(
+          new DopsRuntime(module, provider, {
+            docAugmenter: options?.docAugmenter,
+          }),
+        );
       } else {
         warnings.push(
           `Invalid .dops file ${entry.filePath}: ${(validation.errors ?? []).join(", ")}`,
@@ -88,9 +107,13 @@ export function loadUserDopsModules(
  * Convenience factory: builds a ToolRegistry with all built-in .dops modules
  * plus any valid, policy-allowed custom tools.
  */
-export function createToolRegistry(provider: LLMProvider, projectPath?: string): ToolRegistry {
+export function createToolRegistry(
+  provider: LLMProvider,
+  projectPath?: string,
+  options?: CreateToolRegistryOptions,
+): ToolRegistry {
   // 1. Built-in .dops modules (sole built-in tool source)
-  const builtInTools: DevOpsTool[] = loadBuiltInDopsModules(provider);
+  const builtInTools: DevOpsTool[] = loadBuiltInDopsModules(provider, options);
 
   // 2. Discover legacy custom tools (tool.yaml manifests)
   const toolEntries = discoverTools(projectPath);
@@ -114,7 +137,7 @@ export function createToolRegistry(provider: LLMProvider, projectPath?: string):
   );
 
   // 5. Load user .dops files (treated as custom tools, can override built-in)
-  const { runtimes: userDopsRuntimes } = loadUserDopsModules(provider, projectPath);
+  const { runtimes: userDopsRuntimes } = loadUserDopsModules(provider, projectPath, options);
   const allowedDops = userDopsRuntimes.filter((rt) => isToolAllowed(rt.name, policy));
 
   // Add user .dops runtimes as built-in tools (they'll override by name in registry)

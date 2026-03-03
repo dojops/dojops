@@ -41,6 +41,9 @@ export class SpecialistAgent {
   constructor(
     private provider: LLMProvider,
     private config: SpecialistConfig,
+    private docAugmenter?: {
+      augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
+    },
   ) {}
 
   get name(): string {
@@ -71,10 +74,24 @@ export class SpecialistAgent {
     request: Omit<LLMRequest, "system">,
     opts?: { timeoutMs?: number },
   ): Promise<LLMResponse> {
+    let systemPrompt = this.config.systemPrompt;
+    if (this.docAugmenter) {
+      try {
+        const keywords = [this.config.domain, ...this.config.keywords.slice(0, 3)];
+        systemPrompt = await this.docAugmenter.augmentPrompt(
+          systemPrompt,
+          keywords,
+          request.prompt,
+        );
+      } catch {
+        // Graceful degradation: proceed without docs
+      }
+    }
+
     const fullRequest = {
       ...request,
       prompt: sanitizeUserInput(request.prompt),
-      system: this.config.systemPrompt,
+      system: systemPrompt,
     };
 
     const validation = validateRequestSize(fullRequest);
@@ -95,6 +112,24 @@ export class SpecialistAgent {
         ...m,
         content: m.role === "user" ? sanitizeUserInput(m.content) : m.content,
       }));
+
+    let systemPrompt = this.config.systemPrompt;
+    if (this.docAugmenter && sanitizedMessages.length > 0) {
+      try {
+        const lastUserMsg = [...sanitizedMessages].reverse().find((m) => m.role === "user");
+        if (lastUserMsg) {
+          const keywords = [this.config.domain, ...this.config.keywords.slice(0, 3)];
+          systemPrompt = await this.docAugmenter.augmentPrompt(
+            systemPrompt,
+            keywords,
+            lastUserMsg.content,
+          );
+        }
+      } catch {
+        // Graceful degradation: proceed without docs
+      }
+    }
+
     const { timeoutMs, ...llmOpts } = opts ?? {};
     return this.executeWithRetry(
       () =>
@@ -102,7 +137,7 @@ export class SpecialistAgent {
           ...llmOpts,
           prompt: "",
           messages: sanitizedMessages,
-          system: this.config.systemPrompt,
+          system: systemPrompt,
         }),
       timeoutMs,
     );

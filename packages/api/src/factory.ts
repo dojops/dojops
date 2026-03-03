@@ -108,9 +108,14 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
  *
  * @param provider - LLM provider for tool generation
  * @param projectPath - Optional project path for plugin discovery
+ * @param docAugmenter - Optional documentation augmenter for tool prompts
  */
-export function createTools(provider: LLMProvider, projectPath?: string): DevOpsTool[] {
-  return createToolRegistry(provider, projectPath).getAll();
+export function createTools(
+  provider: LLMProvider,
+  projectPath?: string,
+  docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> },
+): DevOpsTool[] {
+  return createToolRegistry(provider, projectPath, { docAugmenter }).getAll();
 }
 
 export interface CreateRouterResult {
@@ -118,7 +123,11 @@ export interface CreateRouterResult {
   customAgentNames: Set<string>;
 }
 
-export function createRouter(provider: LLMProvider, projectPath?: string): CreateRouterResult {
+export function createRouter(
+  provider: LLMProvider,
+  projectPath?: string,
+  docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> },
+): CreateRouterResult {
   const customAgents = discoverCustomAgents(projectPath);
   const customConfigs: SpecialistConfig[] = customAgents.map((entry) => ({
     name: entry.config.name,
@@ -139,7 +148,7 @@ export function createRouter(provider: LLMProvider, projectPath?: string): Creat
     customAgentNames.add(config.name);
   }
 
-  const router = new AgentRouter(provider, Array.from(configMap.values()));
+  const router = new AgentRouter(provider, Array.from(configMap.values()), docAugmenter);
   return { router, customAgentNames };
 }
 

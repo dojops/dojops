@@ -108,6 +108,9 @@ importers:
       '@dojops/api':
         specifier: workspace:*
         version: link:../api
+      '@dojops/context':
+        specifier: workspace:*
+        version: link:../context
       '@dojops/core':
         specifier: workspace:*
         version: link:../core
@@ -142,6 +145,8 @@ importers:
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
+
+  packages/context: {}
 
   packages/core:
     dependencies:

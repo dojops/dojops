@@ -12,6 +12,10 @@ import { writeFiles, serializeForFile, detectExistingContent } from "./file-writ
 export interface DopsRuntimeOptions {
   /** Base path for file detection (defaults to cwd) */
   basePath?: string;
+  /** Optional documentation augmenter for injecting up-to-date docs into prompts */
+  docAugmenter?: {
+    augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
+  };
 }
 
 export interface ToolMetadata {
@@ -90,7 +94,22 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
         input,
         updateConfig: this.module.frontmatter.update,
       };
-      const systemPrompt = compilePrompt(this.module.sections, context);
+      let systemPrompt = compilePrompt(this.module.sections, context);
+
+      // 2b. Augment with documentation if available
+      if (this.options.docAugmenter) {
+        try {
+          const keywords = this.keywords.slice(0, 3);
+          const userPrompt = this.buildUserPrompt(input, !!existingContent);
+          systemPrompt = await this.options.docAugmenter.augmentPrompt(
+            systemPrompt,
+            keywords,
+            userPrompt,
+          );
+        } catch {
+          // Graceful degradation: proceed without docs
+        }
+      }
 
       // 3. Build user prompt
       const isUpdate = !!existingContent;

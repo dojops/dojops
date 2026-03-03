@@ -19,8 +19,11 @@ export class AgentRouter {
   constructor(
     private provider: LLMProvider,
     configs: SpecialistConfig[] = ALL_SPECIALIST_CONFIGS,
+    private docAugmenter?: {
+      augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
+    },
   ) {
-    this.agents = configs.map((c) => new SpecialistAgent(provider, c));
+    this.agents = configs.map((c) => new SpecialistAgent(provider, c, docAugmenter));
   }
 
   /**

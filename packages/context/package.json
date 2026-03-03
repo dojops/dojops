@@ -1,0 +1,41 @@
+{
+  "name": "@dojops/context",
+  "version": "1.0.4",
+  "description": "Context7 documentation augmentation for DojOps — injects up-to-date docs into LLM prompts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dojops/dojops.git",
+    "directory": "packages/context"
+  },
+  "keywords": [
+    "devops",
+    "documentation",
+    "context7",
+    "llm",
+    "augmentation"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
+  }
+}

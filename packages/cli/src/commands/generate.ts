@@ -26,10 +26,25 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const provider = ctx.getProvider();
   const projectRoot = findProjectRoot() ?? undefined;
 
+  // Context7 documentation augmentation (opt-in)
+  let docAugmenter:
+    | { augmentPrompt(s: string, kw: string[], q: string): Promise<string> }
+    | undefined;
+  if (process.env.DOJOPS_CONTEXT_ENABLED === "true") {
+    try {
+      const { createDocAugmenter } = await import("@dojops/context");
+      docAugmenter = createDocAugmenter({
+        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
+      });
+    } catch {
+      // Context package not available — continue without
+    }
+  }
+
   // --tool flag: bypass agent routing, use a specific tool directly
   const toolName = ctx.globalOpts.tool;
   if (toolName) {
-    const registry = createToolRegistry(provider, projectRoot);
+    const registry = createToolRegistry(provider, projectRoot, { docAugmenter });
     const tool = registry.get(toolName);
     if (!tool) {
       const available = registry
@@ -99,7 +114,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     return;
   }
 
-  const { router } = createRouter(provider, projectRoot);
+  const { router } = createRouter(provider, projectRoot, docAugmenter);
 
   // Load project domains for context-biased routing
   const projectDomains: string[] = projectRoot

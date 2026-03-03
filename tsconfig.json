@@ -19,7 +19,8 @@
       "@dojops/scanner/*": ["packages/scanner/src/*"],
       "@dojops/session/*": ["packages/session/src/*"],
       "@dojops/tool-registry/*": ["packages/tool-registry/src/*"],
-      "@dojops/runtime/*": ["packages/runtime/src/*"]
+      "@dojops/runtime/*": ["packages/runtime/src/*"],
+      "@dojops/context/*": ["packages/context/src/*"]
     }
   }
 }

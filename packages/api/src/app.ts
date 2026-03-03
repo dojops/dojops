@@ -35,6 +35,8 @@ export interface AppDependencies {
   customAgentNames?: Set<string>;
   corsOrigin?: string | string[];
   apiKey?: string | string[];
+  /** Optional documentation augmenter (Context7) for injecting up-to-date docs */
+  docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 }
 
 /**

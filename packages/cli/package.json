@@ -50,6 +50,7 @@
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "@dojops/api": "workspace:*",
+    "@dojops/context": "workspace:*",
     "@dojops/core": "workspace:*",
     "@dojops/runtime": "workspace:*",
     "@dojops/executor": "workspace:*",

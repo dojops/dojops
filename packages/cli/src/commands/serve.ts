@@ -177,10 +177,25 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     }
   }
 
+  // Context7 documentation augmentation (opt-in)
+  let docAugmenter:
+    | { augmentPrompt(s: string, kw: string[], q: string): Promise<string> }
+    | undefined;
+  if (process.env.DOJOPS_CONTEXT_ENABLED === "true") {
+    try {
+      const { createDocAugmenter } = await import("@dojops/context");
+      docAugmenter = createDocAugmenter({
+        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
+      });
+    } catch {
+      // Context package not available — continue without
+    }
+  }
+
   const projectRoot = findProjectRoot() ?? undefined;
-  const registry = createToolRegistry(provider, projectRoot);
+  const registry = createToolRegistry(provider, projectRoot, { docAugmenter });
   const tools = registry.getAll();
-  const { router, customAgentNames } = createRouter(provider, projectRoot);
+  const { router, customAgentNames } = createRouter(provider, projectRoot, docAugmenter);
   const debugger_ = createDebugger(provider);
   const diffAnalyzer = createDiffAnalyzer(provider);
   const store = new HistoryStore();

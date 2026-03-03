@@ -30,7 +30,23 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   const provider = ctx.getProvider();
-  const { router } = createRouter(provider, rootDir);
+
+  // Context7 documentation augmentation (opt-in)
+  let docAugmenter:
+    | { augmentPrompt(s: string, kw: string[], q: string): Promise<string> }
+    | undefined;
+  if (process.env.DOJOPS_CONTEXT_ENABLED === "true") {
+    try {
+      const { createDocAugmenter } = await import("@dojops/context");
+      docAugmenter = createDocAugmenter({
+        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
+      });
+    } catch {
+      // Context package not available — continue without
+    }
+  }
+
+  const { router } = createRouter(provider, rootDir, docAugmenter);
 
   // Load or create session
   let state: ChatSessionState | undefined;

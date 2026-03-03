@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-03-03
+
+### Added
+
+- **Context7 Documentation Augmentation (`@dojops/context`)**: New package that fetches up-to-date documentation from [Context7](https://context7.com) and injects it into LLM system prompts during generation — improving output accuracy even when the LLM's training data is stale. Covers all 12 built-in tool domains and specialist agent domains via static library mapping. Opt-in via `DOJOPS_CONTEXT_ENABLED=true`.
+- **Context7 REST Client**: Native `fetch()` client for Context7 API (`/v2/libs/search` + `/v2/context`) with configurable timeout (10s default), optional API key auth (`DOJOPS_CONTEXT7_API_KEY`), and in-memory TTL cache (5 min default, configurable via `DOJOPS_CONTEXT_CACHE_TTL`)
+- **Documentation-Augmented Agent Routing**: `SpecialistAgent.run()` and `runWithHistory()` now accept an optional duck-typed `docAugmenter` and prepend a `## Reference Documentation` section to the system prompt with current syntax references
+- **Documentation-Augmented Tool Generation**: `DopsRuntime.generate()` augments the compiled system prompt with Context7 docs after `compilePrompt()`, giving all 12 built-in tools and user `.dops` files access to current documentation
+- **Augmenter Threading**: `createRouter()` and `createToolRegistry()` factories accept an optional `docAugmenter` param; CLI creates the augmenter in `generate`, `chat`, and `serve` commands when enabled
+- **Schema Injection for LLM Providers**: All 6 providers (OpenAI, Anthropic, DeepSeek, Gemini, GitHub Copilot, Ollama) now embed the full JSON Schema in the system prompt via `augmentSystemPrompt()`, dramatically improving structured output accuracy — especially for providers without native schema enforcement
+- **Scanner Install Hints**: `dojops scan` now displays per-scanner install instructions (brew/apt/pip/URL) when scanners are skipped due to missing binaries
+- **npm-audit Without Lockfile**: `dojops scan --deps` now generates a temporary lockfile when only `package.json` exists, enabling dependency auditing without a committed lockfile
+- **`--provider` Flag for `serve`**: `dojops serve --provider=<name>` overrides the LLM provider for the API server session
+- **Plan Retry (`--retry`)**: `dojops apply --resume --retry` now retries failed tasks (previously only skipped completed tasks)
+- **`check --fix` Auto-Remediation**: `dojops check --fix` sends HIGH/CRITICAL findings to the LLM for auto-remediation and generates file patches with approval
+- **Scanner Timeout Handling**: Scanners now respect a per-scanner timeout (default 60s, configurable via `DOJOPS_SCAN_TIMEOUT_MS`); timed-out scanners are reported in `scannersSkipped`
+- **`config profile use default`**: Reset to base configuration after switching to a named profile
+- **Available Plans in `clean`**: `dojops clean` without a plan ID now lists available plans with status and date to help users pick the right one
+
+### Changed
+
+- **`serve` Provider Resolution**: `dojops serve` now uses `resolveProvider()` to correctly respect `DOJOPS_PROVIDER` env var (previously ignored it)
+- **`--no-auth` Safety Warning**: `dojops serve --no-auth` now displays a prominent warning: "API authentication disabled. Do not expose to untrusted networks."
+- **Apply Exit Codes**: `dojops apply` now exits with code 1 on FAILURE or PARTIAL status instead of 0, enabling CI integration
+- **Apply Plan Auto-Selection**: `dojops apply` now shows which plan was auto-selected ("Using session plan: ..." or "Using latest plan: ...")
+- **`config show` Active Profile**: `dojops config show` now displays the active profile name in the title when a non-default profile is active
+- **`config show` Effective Provider**: `dojops config show` displays effective provider with env var override details when `DOJOPS_PROVIDER` differs from config
+- **Inspect Error Messages**: `dojops inspect` now shows distinct error messages for no subcommand vs unknown subcommand, with usage examples
+- **Session ID Error**: API chat session lookup now returns generic "Session not found" (404) instead of leaking implementation details about ID format
+- **Chat Send Error Handling**: API `POST /api/chat` now returns 500 with error message on `session.send()` failure instead of crashing the route
+
+### Fixed
+
+- **`chat --agent` Validation**: `dojops chat --agent=<invalid>` now correctly rejects unknown agent names and lists available agents — previously silently fell through to default routing because `--agent` was consumed by the global parser but `chat.ts` tried to re-extract it from args
+- **`tools init` Flag Parsing**: `dojops tools init --yes` no longer treats `--yes` as the tool name; flags are now filtered from positional arguments before extracting the tool name
+- **`toolchain install` Exit Code**: `dojops toolchain install` now exits with code 1 on failure (e.g., missing `unzip`) instead of silently exiting 0
+- **Schema Transform Crash**: `augmentSystemPrompt()` no longer crashes when a Zod schema contains `.transform()` or `.pipe()` — gracefully falls back to generic JSON instruction
+- **API 404 JSON Response**: Unmatched `/api/*` routes now return `{"error":"Not found"}` (JSON) instead of Express default HTML error page
+- **`serve` Provider Bug**: `dojops serve` now correctly uses `resolveProvider()` instead of ignoring the `DOJOPS_PROVIDER` environment variable
+- **`--no-auth` Flag Override**: `dojops serve --no-auth` now correctly disables auth even when `server.json` or env var sets an API key
+- **API Version Header**: `X-API-Version: 1` header is now correctly set on `/api/v1/health` endpoint (middleware registration order fix)
+- **`doctor`/`status` Provider Display**: Now uses `resolveProvider()` to show effective provider including env var overrides
+- **`auth status` Provider Display**: Now uses `resolveProvider()` to show effective provider including env var overrides
+- **`init` Empty Directory**: Skips LLM enrichment when no project files are detected, avoiding wasted API calls
+- **Scan No-Scanners Warning**: Displays a prominent warning when all scanners are skipped instead of silently showing empty results
+- **Apply Task Status Wording**: PlannerExecutor now reports tasks as "generated" instead of "completed" to avoid confusion with the full lifecycle status
+
 ## [1.0.4] - 2026-03-03
 
 ### Added
