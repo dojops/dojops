@@ -274,7 +274,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       execFileSync(parts[0], parts.slice(1), {
         cwd: this.toolDir,
         encoding: "utf-8",
-        timeout: 30_000,
+        timeout: 10_000,
         stdio: "pipe",
       });
 

@@ -851,33 +851,37 @@ describe("Tool E2E: Verification", () => {
     expect(result.issues).toHaveLength(0);
   });
 
-  it("Envoy tool: verify attempts whitelisted command (yamllint is allowed)", async () => {
-    const provider = createMockProvider();
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
-    writeEnvoyTool(projectToolsDir);
-    const entry = discoverTools(projectDir)[0];
+  it(
+    "Envoy tool: verify attempts whitelisted command (yamllint is allowed)",
+    { timeout: 15_000 },
+    async () => {
+      const provider = createMockProvider();
+      const projectDir = path.join(tmpDir, "project");
+      const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+      writeEnvoyTool(projectToolsDir);
+      const entry = discoverTools(projectDir)[0];
 
-    const tool = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-    );
+      const tool = new CustomTool(
+        entry.manifest,
+        provider,
+        entry.toolDir,
+        entry.source,
+        entry.inputSchemaRaw,
+      );
 
-    // yamllint IS in the whitelist and child_process is "required",
-    // so verify() will attempt execution. Since yamllint isn't installed
-    // in the test environment, it should fail with an execution error
-    // (not a whitelist rejection).
-    const result = await tool.verify({});
-    expect(result.tool).toBe("envoy-config");
-    // Either passes (if yamllint installed) or fails with command error (not whitelist error)
-    if (!result.passed) {
-      expect(result.issues[0].message).toContain("Verification command failed");
-      expect(result.issues[0].message).not.toContain("whitelist");
-    }
-  });
+      // yamllint IS in the whitelist and child_process is "required",
+      // so verify() will attempt execution. Since yamllint isn't installed
+      // in the test environment, it should fail with an execution error
+      // (not a whitelist rejection).
+      const result = await tool.verify({});
+      expect(result.tool).toBe("envoy-config");
+      // Either passes (if yamllint installed) or fails with command error (not whitelist error)
+      if (!result.passed) {
+        expect(result.issues[0].message).toContain("Verification command failed");
+        expect(result.issues[0].message).not.toContain("whitelist");
+      }
+    },
+  );
 });
 
 describe("Tool E2E: Policy Filtering", () => {

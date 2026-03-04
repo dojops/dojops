@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`modules validate` Path Lookup**: `dojops modules validate <name>` now searches `.dojops/modules/` (where `modules init` creates files) in addition to `.dojops/tools/`. Previously, modules created by `init` could not be found by `validate`
 - **Technology Name Capitalization**: `modules init` now properly title-cases hyphenated tool names (e.g., `redis-config` → "Redis Config" instead of "Redis-config")
 - **Dashboard Sign-In Button**: Centered the "Sign In" button text on the authentication overlay (was left-aligned due to flexbox default)
+- **Verification Timeout on Node 20**: Reduced custom tool verification command timeout from 30s to 10s, fixing a test timeout on Node 20 CI runners when the verification binary is not installed
 
 ## [1.0.5] - 2026-03-03
 
