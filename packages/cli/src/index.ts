@@ -63,6 +63,7 @@ import { chatCommand } from "./commands/chat";
 import { checkCommand } from "./commands/check";
 import { verifyCommand } from "./commands/verify";
 import { providerCommand } from "./commands/provider";
+import { upgradeCommand } from "./commands/upgrade";
 import { prependToolchainBinToPath } from "./toolchain-sandbox";
 
 registerCommand("init", initCommand);
@@ -78,6 +79,7 @@ registerCommand("scan", scanCommand);
 registerCommand("chat", chatCommand);
 registerCommand("check", checkCommand);
 registerCommand("verify", verifyCommand);
+registerCommand("upgrade", upgradeCommand);
 
 // `dojops help <command>` → show per-command help
 registerCommand("help", async (args) => {
@@ -261,6 +263,7 @@ async function main() {
     "chat",
     "check",
     "verify",
+    "upgrade",
     "agents",
     "history",
     "serve",

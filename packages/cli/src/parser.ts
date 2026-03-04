@@ -136,6 +136,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "check",
     "verify",
     "provider",
+    "upgrade",
     "help",
   ]);
 

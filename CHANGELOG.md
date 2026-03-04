@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-03-04
+
+### Added
+
+- **`dojops upgrade` Command**: New CLI command to check for and install CLI updates. Fetches the latest version from the npm registry, compares with the current version, and runs `npm install -g @dojops/cli@<version>` with interactive confirmation. Supports `--check` flag (check-only, exit 1 if update available), `--yes` for auto-approval, `--non-interactive` mode, and `--output json` for structured output
+
 ## [1.0.5] - 2026-03-03
 
 ### Added

@@ -4,7 +4,7 @@ import * as crypto from "crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { discoverTools, discoverUserDopsFiles, validateManifest } from "@dojops/tool-registry";
-import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
+import { parseDopsFileAny, validateDopsModuleAny } from "@dojops/runtime";
 import * as yaml from "js-yaml";
 import { CommandHandler } from "../types";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -35,7 +35,7 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
 
   for (const entry of dopsFiles) {
     try {
-      const module = parseDopsFile(entry.filePath);
+      const module = parseDopsFileAny(entry.filePath);
       dopsEntries.push({
         name: module.frontmatter.meta.name,
         version: module.frontmatter.meta.version,
@@ -239,8 +239,8 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
 
 function validateDopsFile(filePath: string): void {
   try {
-    const module = parseDopsFile(filePath);
-    const result = validateDopsModule(module);
+    const module = parseDopsFileAny(filePath);
+    const result = validateDopsModuleAny(module);
 
     if (result.valid) {
       p.log.success(
@@ -612,8 +612,8 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
 
   let module;
   try {
-    module = parseDopsFile(dopsPath);
-    const result = validateDopsModule(module);
+    module = parseDopsFileAny(dopsPath);
+    const result = validateDopsModuleAny(module);
     if (!result.valid) {
       spinner.stop("Validation failed");
       throw new CLIError(
@@ -845,7 +845,7 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
     if (fs.existsSync(destPath)) {
       // Read existing version for comparison
       try {
-        const existing = parseDopsFile(destPath);
+        const existing = parseDopsFileAny(destPath);
         p.log.info(
           pc.dim(
             `Upgrading ${existing.frontmatter.meta.name} v${existing.frontmatter.meta.version} -> v${version}`,

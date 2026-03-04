@@ -42,6 +42,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("clean")}              Remove generated artifacts from a plan`);
   console.log(`  ${pc.dim("  destroy")}            ${pc.dim("Deprecated alias for clean")}`);
   console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
+  console.log(`  ${pc.cyan("upgrade")}            Check for and install CLI updates`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
   console.log(

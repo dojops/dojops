@@ -31,8 +31,10 @@ vi.mock("@clack/prompts", () => ({
 // Mock @dojops/runtime
 vi.mock("@dojops/runtime", () => ({
   parseDopsFile: vi.fn(),
+  parseDopsFileAny: vi.fn(),
   parseDopsString: vi.fn(),
   validateDopsModule: vi.fn(),
+  validateDopsModuleAny: vi.fn(),
 }));
 
 // Mock @dojops/tool-registry
@@ -52,7 +54,7 @@ const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 import { toolsPublishCommand, toolsInstallCommand, toolsSearchCommand } from "../../commands/tools";
-import { parseDopsFile, parseDopsString, validateDopsModule } from "@dojops/runtime";
+import { parseDopsFileAny, parseDopsString, validateDopsModuleAny } from "@dojops/runtime";
 import { CLIContext } from "../../types";
 import { CLIError } from "../../exit-codes";
 
@@ -160,7 +162,7 @@ describe("toolsPublishCommand", () => {
 
   it("rejects if validation fails", async () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFile).mockImplementation(() => {
+    vi.mocked(parseDopsFileAny).mockImplementation(() => {
       throw new Error("Invalid YAML frontmatter");
     });
 
@@ -169,8 +171,8 @@ describe("toolsPublishCommand", () => {
 
   it("rejects if no DOJOPS_HUB_TOKEN is set", async () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
     vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 
     await expect(toolsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow(
@@ -182,8 +184,8 @@ describe("toolsPublishCommand", () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
 
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
     vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 
     mockFetch.mockResolvedValue({
@@ -212,8 +214,8 @@ describe("toolsPublishCommand", () => {
     process.env.DOJOPS_HUB_TOKEN = "dojops_abc123def456";
 
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
     vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 
     mockFetch.mockResolvedValue({
@@ -232,8 +234,8 @@ describe("toolsPublishCommand", () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
 
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
     vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 
     mockFetch.mockResolvedValue({
@@ -251,8 +253,8 @@ describe("toolsPublishCommand", () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
 
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
     vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 
     mockFetch.mockResolvedValue({
@@ -274,8 +276,8 @@ describe("toolsPublishCommand", () => {
     vi.mocked(fs.existsSync).mockImplementation((p) => {
       return String(p) === path.join("/mock/project", ".dojops", "tools", "my-tool.dops");
     });
-    vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
     vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 
     mockFetch.mockResolvedValue({
@@ -291,8 +293,8 @@ describe("toolsPublishCommand", () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
 
     vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
     vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 
     mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
