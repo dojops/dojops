@@ -25,6 +25,10 @@ context:
     - Separate CI and CD into distinct jobs with appropriate dependencies
     - Use environment protection rules for deployment jobs
     - Add concurrency groups to prevent duplicate workflow runs
+    - Each job must specify runs-on
+    - Steps should have descriptive names
+    - Always include a name for the workflow
+    - Use pull_request trigger for PRs (not pull_request_target unless needed)
   context7Libraries:
     - name: github-actions
       query: "GitHub Actions workflow syntax, jobs, steps, matrix strategy, caching"
@@ -85,64 +89,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a CI/CD expert. Update the existing GitHub Actions workflow.
-Preserve existing structure and settings. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "CI workflow for a Node.js project with linting, testing, and building"
-
-```yaml
-name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [18, 20]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint
-        run: npm run lint
-      - name: Test
-        run: npm test
-      - name: Build
-        run: npm run build
-```
-
-## Constraints
-
-- Each job must specify runs-on
-- Steps should have descriptive names
-- Use concurrency groups to cancel outdated runs
-- Always include a name for the workflow
-- Use pull_request trigger for PRs (not pull_request_target unless needed)
 
 ## Keywords
 

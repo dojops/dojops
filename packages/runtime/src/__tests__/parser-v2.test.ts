@@ -124,23 +124,53 @@ You are a Terraform expert. {outputGuidance}
 Best practices:
 {bestPractices}
 
+## Keywords
+
+terraform, hcl, infrastructure, aws
+`;
+
+// Backward-compat fixture: a v2 file with the old sections still present
+const FULL_V2_DOPS_WITH_OLD_SECTIONS = `---
+dops: v2
+kind: tool
+meta:
+  name: old-v2-tool
+  version: 1.0.0
+  description: "A v2 tool with old sections"
+context:
+  technology: Terraform
+  fileFormat: hcl
+  outputGuidance: |
+    Generate valid HCL code.
+  bestPractices:
+    - Use modules
+    - Tag resources
+files:
+  - path: "main.tf"
+    format: raw
+---
+# Old V2 Tool
+
+## Prompt
+
+Generate Terraform config. {outputGuidance}
+
 ## Update Prompt
 
-Update existing Terraform config: {existingContent}
+Update existing config: {existingContent}
 
 ## Constraints
 
 - Use Terraform 1.5+ syntax
-- Include required providers block
 
 ## Examples
 
-Given: "S3 bucket with versioning"
+Given: "S3 bucket"
 Output: resource "aws_s3_bucket" { ... }
 
 ## Keywords
 
-terraform, hcl, infrastructure, aws
+terraform, hcl
 `;
 
 describe("parseDopsStringAny", () => {
@@ -186,10 +216,21 @@ describe("parseDopsStringAny", () => {
     expect(module.frontmatter.execution!.idempotent).toBe(true);
     expect(module.frontmatter.scope!.write).toEqual(["*.tf"]);
     expect(module.frontmatter.verification!.binary!.parser).toBe("terraform-json");
-    expect(module.sections.updatePrompt).toContain("Update existing Terraform config");
+    expect(module.sections.prompt).toContain("Terraform expert");
+    expect(module.sections.keywords).toContain("terraform, hcl");
+    expect(module.raw).toBe(FULL_V2_DOPS);
+  });
+
+  it("parses v2 file with old sections (backward compat)", () => {
+    const module = parseDopsStringAny(FULL_V2_DOPS_WITH_OLD_SECTIONS) as DopsModuleV2;
+    expect(isV2Module(module)).toBe(true);
+    expect(module.frontmatter.meta.name).toBe("old-v2-tool");
+    // Parser still extracts old sections (needed for v1 compat), they're just ignored by compiler
+    expect(module.sections.updatePrompt).toContain("Update existing config");
     expect(module.sections.constraints).toContain("Terraform 1.5+");
     expect(module.sections.examples).toContain("S3 bucket");
-    expect(module.raw).toBe(FULL_V2_DOPS);
+    expect(module.sections.prompt).toContain("Generate Terraform config");
+    expect(module.sections.keywords).toContain("terraform, hcl");
   });
 
   it("throws on invalid v2 frontmatter", () => {

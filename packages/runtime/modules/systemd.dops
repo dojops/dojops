@@ -26,6 +26,8 @@ context:
     - Configure proper dependency ordering with After/Wants
     - Set appropriate TimeoutStartSec and TimeoutStopSec
     - Use ProtectSystem and ProtectHome for security hardening
+    - Include [Unit], [Service], and [Install] sections
+    - Include security hardening directives
   context7Libraries:
     - name: systemd
       query: "systemd unit file syntax, service directives, security hardening, resource limits"
@@ -81,64 +83,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a Linux systems expert. Update the existing systemd unit file.
-Preserve existing directives. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Systemd service for a Node.js application"
-
-```ini
-[Unit]
-Description=Node.js Application
-Documentation=https://example.com/docs
-After=network.target
-Wants=network.target
-
-[Service]
-Type=simple
-User=nodeapp
-Group=nodeapp
-WorkingDirectory=/opt/app
-ExecStart=/usr/bin/node /opt/app/dist/index.js
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=nodeapp
-EnvironmentFile=/opt/app/.env
-
-# Security hardening
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-NoNewPrivileges=yes
-ReadWritePaths=/opt/app/data
-
-# Resource limits
-LimitNOFILE=65536
-MemoryMax=512M
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Constraints
-
-- Include [Unit], [Service], and [Install] sections
-- Set Restart policy for production services
-- Run as non-root user when possible
-- Include security hardening directives
-- Set appropriate resource limits
 
 ## Keywords
 

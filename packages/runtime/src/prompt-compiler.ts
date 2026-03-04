@@ -138,8 +138,17 @@ export interface PromptContextV2 {
   contextBlock: ContextBlock;
 }
 
+// Note: compilePromptV2 intentionally ignores sections.updatePrompt,
+// sections.constraints, and sections.examples — these are v1-only features.
+// v2 uses context.bestPractices for constraints, Context7 for examples,
+// and the generic update fallback for update mode.
+
 /**
  * Compile markdown sections into an optimized LLM system prompt for v2 modules.
+ *
+ * v2 only uses ## Prompt + ## Keywords from markdown sections.
+ * Constraints belong in context.bestPractices, examples are replaced by Context7 docs,
+ * and update mode always uses the generic fallback.
  *
  * Supports v2-specific variables:
  * - {outputGuidance} — from context.outputGuidance
@@ -151,18 +160,10 @@ export interface PromptContextV2 {
 export function compilePromptV2(sections: MarkdownSections, context: PromptContextV2): string {
   const parts: string[] = [];
 
-  // 1. Main prompt section
+  // Main prompt section — always use ## Prompt with generic update fallback
   const isUpdate = !!context.existingContent;
 
-  if (isUpdate && sections.updatePrompt) {
-    let prompt = sections.updatePrompt;
-    prompt = substituteV2Variables(prompt, context);
-    if (context.updateConfig?.strategy === "preserve_structure") {
-      prompt +=
-        "\n\nIMPORTANT: Preserve the overall structure and organization of the existing configuration.";
-    }
-    parts.push(prompt);
-  } else if (isUpdate) {
+  if (isUpdate) {
     let prompt = substituteV2Variables(sections.prompt, context);
     const preserveInstruction =
       context.updateConfig?.strategy === "preserve_structure"
@@ -179,27 +180,6 @@ export function compilePromptV2(sections: MarkdownSections, context: PromptConte
     parts.push(prompt);
   } else {
     parts.push(substituteV2Variables(sections.prompt, context));
-  }
-
-  // 2. Constraints section
-  if (sections.constraints) {
-    const constraintLines = sections.constraints
-      .split("\n")
-      .map((line) => line.replace(/^[-*]\s*/, "").trim())
-      .filter((line) => line.length > 0);
-
-    if (constraintLines.length > 0) {
-      parts.push("\nCONSTRAINTS:");
-      constraintLines.forEach((line, i) => {
-        parts.push(`${i + 1}. ${line}`);
-      });
-    }
-  }
-
-  // 3. Examples section
-  if (sections.examples) {
-    parts.push("\nEXAMPLES:");
-    parts.push(sections.examples);
   }
 
   return parts.join("\n");

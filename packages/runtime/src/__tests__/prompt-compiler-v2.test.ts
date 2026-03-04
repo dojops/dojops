@@ -88,9 +88,9 @@ describe("compilePromptV2", () => {
     expect(result).not.toContain("{projectContext}");
   });
 
-  it("uses update prompt when existingContent is provided", () => {
+  it("always uses generic update fallback (ignores updatePrompt)", () => {
     const sections: MarkdownSections = {
-      prompt: "Generate new Terraform config.",
+      prompt: "Generate new Terraform config. {outputGuidance}",
       updatePrompt: "Update existing config. Current: {existingContent}",
       keywords: "test",
     };
@@ -98,9 +98,13 @@ describe("compilePromptV2", () => {
       sections,
       makeContext({ existingContent: 'resource "aws_s3_bucket" {}' }),
     );
-    expect(result).toContain("Update existing config.");
+    // Should use the generic fallback, not the updatePrompt
+    expect(result).toContain("Generate new Terraform config.");
+    expect(result).toContain("UPDATING an existing configuration");
     expect(result).toContain('resource "aws_s3_bucket" {}');
-    expect(result).not.toContain("Generate new Terraform config.");
+    expect(result).toContain("--- EXISTING CONFIGURATION ---");
+    // Should NOT use the dedicated update prompt
+    expect(result).not.toContain("Update existing config. Current:");
   });
 
   it("falls back to prompt + generic update suffix when no update prompt", () => {
@@ -116,20 +120,6 @@ describe("compilePromptV2", () => {
     expect(result).toContain("UPDATING an existing configuration");
     expect(result).toContain("old config content");
     expect(result).toContain("--- EXISTING CONFIGURATION ---");
-  });
-
-  it("substitutes {existingContent} in update prompt", () => {
-    const sections: MarkdownSections = {
-      prompt: "Generate config.",
-      updatePrompt: "Merge with existing:\n{existingContent}\n\nApply changes.",
-      keywords: "test",
-    };
-    const result = compilePromptV2(
-      sections,
-      makeContext({ existingContent: 'variable "name" {}' }),
-    );
-    expect(result).toContain('variable "name" {}');
-    expect(result).toContain("Apply changes.");
   });
 
   it("handles missing optional variables gracefully", () => {
@@ -151,33 +141,51 @@ describe("compilePromptV2", () => {
     expect(result).not.toContain("{projectContext}");
   });
 
-  it("appends constraints as numbered list", () => {
+  it("ignores constraints section when present", () => {
     const sections: MarkdownSections = {
       prompt: "Generate config. {outputGuidance}",
       constraints: "- Use Terraform 1.5+ syntax\n- Include required providers block",
       keywords: "test",
     };
     const result = compilePromptV2(sections, makeContext());
-    expect(result).toContain("CONSTRAINTS:");
-    expect(result).toContain("1. Use Terraform 1.5+ syntax");
-    expect(result).toContain("2. Include required providers block");
+    expect(result).not.toContain("CONSTRAINTS:");
+    expect(result).not.toContain("Use Terraform 1.5+ syntax");
+    expect(result).not.toContain("Include required providers block");
   });
 
-  it("appends examples section", () => {
+  it("ignores examples section when present", () => {
     const sections: MarkdownSections = {
       prompt: "Generate config. {outputGuidance}",
       examples: 'Given: "S3 bucket"\nOutput: resource "aws_s3_bucket" { ... }',
       keywords: "test",
     };
     const result = compilePromptV2(sections, makeContext());
-    expect(result).toContain("EXAMPLES:");
-    expect(result).toContain("S3 bucket");
+    expect(result).not.toContain("EXAMPLES:");
+    expect(result).not.toContain("S3 bucket");
   });
 
-  it("adds preserve_structure instruction when configured in update mode", () => {
+  it("ignores all three removed sections when present together", () => {
     const sections: MarkdownSections = {
       prompt: "Generate config. {outputGuidance}",
-      updatePrompt: "Update config. {existingContent}",
+      updatePrompt: "Update existing: {existingContent}",
+      constraints: "- Must use v1.5+ syntax",
+      examples: "Example: some output here",
+      keywords: "test",
+    };
+    const result = compilePromptV2(sections, makeContext({ existingContent: "old content" }));
+    // Should use generic fallback, not updatePrompt
+    expect(result).toContain("UPDATING an existing configuration");
+    expect(result).not.toContain("Update existing:");
+    // Should not include constraints or examples
+    expect(result).not.toContain("CONSTRAINTS:");
+    expect(result).not.toContain("Must use v1.5+ syntax");
+    expect(result).not.toContain("EXAMPLES:");
+    expect(result).not.toContain("Example: some output here");
+  });
+
+  it("adds preserve_structure instruction in update mode", () => {
+    const sections: MarkdownSections = {
+      prompt: "Generate config. {outputGuidance}",
       keywords: "test",
     };
     const result = compilePromptV2(

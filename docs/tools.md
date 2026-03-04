@@ -501,17 +501,16 @@ update:
   injectAs: existingContent # variable name for existing content in prompts
 ```
 
-When `strategy` is `preserve_structure`, the prompt compiler injects additional instructions to maintain the existing configuration's organization. The `injectAs` field controls the variable name used in `## Update Prompt` sections (default: `existingContent`).
+When `strategy` is `preserve_structure`, the prompt compiler injects additional instructions to maintain the existing configuration's organization. The `injectAs` field controls the variable name used in update prompts (default: `existingContent`).
 
 ### Markdown Sections
 
 After the closing `---` delimiter, markdown sections define prompts:
 
 - `## Prompt` (required) — Main generation prompt with `{var}` template substitution
-- `## Update Prompt` (optional) — Used instead of `## Prompt` when updating existing content
-- `## Examples` (optional) — Example outputs for the LLM
-- `## Constraints` (optional) — Rules the LLM must follow
 - `## Keywords` (required) — Comma-separated keywords for agent routing
+
+> **v1 note:** v1 tools may also include `## Update Prompt`, `## Examples`, and `## Constraints`. These sections are not used by the v2 prompt compiler — use `context.bestPractices` for constraints and Context7 for documentation examples.
 
 ### Built-in Module Risk Levels
 

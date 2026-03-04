@@ -27,6 +27,11 @@ context:
     - Set meaningful alert labels and annotations
     - Use honor_labels and honor_timestamps appropriately
     - Configure appropriate retention and storage settings
+    - Scrape interval should be between 5s and 60s
+    - Alert rules must have severity labels
+    - Alert annotations should include summary and description
+    - Use job_name to identify each scrape target
+    - Recording rule names should follow naming conventions
   context7Libraries:
     - name: prometheus
       query: "Prometheus configuration, scrape_configs, alerting rules, relabeling, recording rules"
@@ -88,38 +93,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a Prometheus expert. Update the existing Prometheus configuration.
-Preserve existing scrape configs and alert rules. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Prometheus config for monitoring a Node.js app and PostgreSQL"
-
-```json
-{
-  "files": {
-    "prometheus.yml": "global:\n  scrape_interval: 15s\n  evaluation_interval: 15s\n\nrule_files:\n  - alert-rules.yml\n\nscrape_configs:\n  - job_name: node-app\n    static_configs:\n      - targets: ['localhost:3000']\n    metrics_path: /metrics\n\n  - job_name: postgres\n    static_configs:\n      - targets: ['localhost:9187']\n",
-    "alert-rules.yml": "groups:\n  - name: app-alerts\n    rules:\n      - alert: HighErrorRate\n        expr: rate(http_requests_total{status=~\"5..\"}[5m]) > 0.1\n        for: 5m\n        labels:\n          severity: critical\n        annotations:\n          summary: High error rate detected\n"
-  }
-}
-```
-
-## Constraints
-
-- Scrape interval should be between 5s and 60s
-- Alert rules must have severity labels
-- Alert annotations should include summary and description
-- Use job_name to identify each scrape target
-- Recording rule names should follow naming conventions
 
 ## Keywords
 

@@ -26,6 +26,9 @@ context:
     - Organize resources logically with clear naming conventions
     - Define outputs for values needed by other configurations
     - Use data sources instead of hardcoding resource references
+    - Variable and resource names must use snake_case
+    - No hardcoded credentials (AWS keys, passwords, tokens)
+    - Maximum 50 resources per generation
   context7Libraries:
     - name: terraform
       query: "Terraform HCL syntax, resource blocks, provider configuration, state management"
@@ -81,77 +84,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a Terraform expert. Update the existing Terraform configuration.
-Preserve existing resources and settings. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "S3 bucket with versioning on AWS"
-
-```hcl
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
-variable "aws_region" {
-  type        = string
-  default     = "us-east-1"
-  description = "AWS region for resources"
-}
-
-variable "bucket_name" {
-  type        = string
-  description = "Name of the S3 bucket"
-}
-
-resource "aws_s3_bucket" "main" {
-  bucket = var.bucket_name
-
-  tags = {
-    Environment = "production"
-    ManagedBy   = "terraform"
-  }
-}
-
-resource "aws_s3_bucket_versioning" "main" {
-  bucket = aws_s3_bucket.main.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-output "bucket_arn" {
-  value       = aws_s3_bucket.main.arn
-  description = "ARN of the S3 bucket"
-}
-```
-
-## Constraints
-
-- Maximum 50 resources per generation
-- Variable names must use snake_case
-- Resource names must use snake_case
-- No hardcoded credentials (AWS keys, passwords, tokens)
-- Use snake_case for all identifiers
 
 ## Keywords
 

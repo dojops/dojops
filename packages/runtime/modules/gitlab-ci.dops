@@ -25,6 +25,8 @@ context:
     - Use parallel and matrix for multi-version testing
     - Set appropriate timeouts for each job
     - Use environment keywords for deployment tracking
+    - Pipeline must define stages
+    - Jobs should have descriptive names
   context7Libraries:
     - name: gitlab-ci
       query: "GitLab CI YAML syntax, stages, jobs, rules, caching, artifacts, environments"
@@ -81,74 +83,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a GitLab CI/CD expert. Update the existing GitLab CI pipeline.
-Preserve existing stages and jobs. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "GitLab CI pipeline for a Node.js project"
-
-```yaml
-stages:
-  - build
-  - test
-  - deploy
-
-variables:
-  NODE_VERSION: "20"
-
-default:
-  image: node:${NODE_VERSION}-alpine
-  cache:
-    key: ${CI_COMMIT_REF_SLUG}
-    paths:
-      - node_modules/
-
-build:
-  stage: build
-  script:
-    - npm ci
-    - npm run build
-  artifacts:
-    paths:
-      - dist/
-    expire_in: 1 hour
-
-test:
-  stage: test
-  script:
-    - npm ci
-    - npm run lint
-    - npm test
-  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
-
-deploy:
-  stage: deploy
-  script:
-    - npm run deploy
-  environment:
-    name: production
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-      when: manual
-```
-
-## Constraints
-
-- Pipeline must define stages
-- Jobs should have descriptive names
-- Use rules for job conditions (not only/except)
-- Cache dependencies between pipeline runs
-- Set appropriate timeouts for long-running jobs
 
 ## Keywords
 

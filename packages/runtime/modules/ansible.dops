@@ -25,6 +25,10 @@ context:
     - Use become (sudo) only when necessary and specify become_user
     - Include tags for selective task execution
     - Use ansible-vault for sensitive data references
+    - Each task must have a descriptive name
+    - Use fully qualified collection names (e.g., ansible.builtin.apt)
+    - Tasks should be idempotent
+    - No hardcoded passwords or secrets
   context7Libraries:
     - name: ansible
       query: "Ansible playbook syntax, modules, handlers, variables, roles, tasks"
@@ -80,68 +84,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are an Ansible expert. Update the existing Ansible playbook.
-Preserve existing tasks and handlers. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Install and configure Nginx on Ubuntu servers"
-
-```yaml
----
-- name: Configure Nginx web server
-  hosts: webservers
-  become: true
-  vars:
-    nginx_port: 80
-    server_name: example.com
-
-  handlers:
-    - name: Restart nginx
-      ansible.builtin.service:
-        name: nginx
-        state: restarted
-
-  tasks:
-    - name: Install Nginx
-      ansible.builtin.apt:
-        name: nginx
-        state: present
-        update_cache: true
-      tags: [install]
-
-    - name: Configure Nginx site
-      ansible.builtin.template:
-        src: templates/nginx.conf.j2
-        dest: /etc/nginx/sites-available/default
-        mode: "0644"
-      notify: Restart nginx
-      tags: [configure]
-
-    - name: Enable Nginx service
-      ansible.builtin.service:
-        name: nginx
-        state: started
-        enabled: true
-      tags: [service]
-```
-
-## Constraints
-
-- Each task must have a descriptive name
-- Use fully qualified collection names (e.g., ansible.builtin.apt)
-- Handlers should be used for service restarts
-- Tasks should be idempotent
-- No hardcoded passwords or secrets
 
 ## Keywords
 

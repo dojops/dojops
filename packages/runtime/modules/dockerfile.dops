@@ -25,6 +25,7 @@ context:
     - Minimize number of layers by combining RUN commands
     - Include HEALTHCHECK for production images
     - Never embed secrets or credentials in the image
+    - Copy dependency files before source for layer caching
   context7Libraries:
     - name: docker
       query: "Dockerfile syntax, multi-stage builds, best practices, HEALTHCHECK, USER directive"
@@ -80,50 +81,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a Docker expert. Update the existing Dockerfile.
-Preserve existing structure. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Dockerfile for a Node.js application with multi-stage build"
-
-```dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM node:20-alpine
-RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
-WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-EXPOSE 3000
-HEALTHCHECK CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
-USER appuser
-CMD ["node", "dist/index.js"]
-```
-
-## Constraints
-
-- Use specific base image tags (no :latest)
-- Include HEALTHCHECK for production images
-- Run as non-root user
-- Minimize number of layers (combine RUN commands)
-- Copy dependency files before source for layer caching
-- No secrets or credentials in the image
 
 ## Keywords
 

@@ -26,6 +26,8 @@ context:
     - Use @ prefix for commands that should not be echoed
     - Include a clean target for removing build artifacts
     - Use .DEFAULT_GOAL to set the default target
+    - Use tabs for recipe indentation (not spaces)
+    - Variable names should be UPPER_CASE
   context7Libraries:
     - name: gnu-make
       query: "Makefile syntax, targets, prerequisites, variables, pattern rules, .PHONY"
@@ -81,60 +83,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a build automation expert. Update the existing Makefile.
-Preserve existing targets and settings. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Makefile for a Go project with build, test, lint, and Docker targets"
-
-```makefile
-.DEFAULT_GOAL := help
-.PHONY: help build test lint clean docker-build docker-push
-
-APP_NAME := myapp
-VERSION := $(shell git describe --tags --always --dirty)
-DOCKER_IMAGE := $(APP_NAME):$(VERSION)
-
-help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-
-build: ## Build the application
-	go build -ldflags "-X main.version=$(VERSION)" -o bin/$(APP_NAME) ./cmd/$(APP_NAME)
-
-test: ## Run tests
-	go test -race -coverprofile=coverage.out ./...
-
-lint: ## Run linters
-	golangci-lint run ./...
-
-clean: ## Remove build artifacts
-	rm -rf bin/ coverage.out
-
-docker-build: ## Build Docker image
-	docker build -t $(DOCKER_IMAGE) .
-
-docker-push: docker-build ## Push Docker image
-	docker push $(DOCKER_IMAGE)
-```
-
-## Constraints
-
-- Use tabs for recipe indentation (not spaces)
-- Declare .PHONY for non-file targets
-- Include a help target
-- Variable names should be UPPER_CASE
-- Include a clean target
 
 ## Keywords
 

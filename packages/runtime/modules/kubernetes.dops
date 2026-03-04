@@ -26,6 +26,9 @@ context:
     - Define PodDisruptionBudgets for high-availability workloads
     - Use ConfigMaps and Secrets for configuration (never hardcode)
     - Set appropriate security contexts and network policies
+    - Use specific image tags, not :latest in production
+    - Labels must be consistent between Deployment and Service selectors
+    - Use namespaces to isolate workloads
   context7Libraries:
     - name: kubernetes
       query: "Kubernetes Deployment, Service, Pod spec, resource limits, probes, security context"
@@ -88,82 +91,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a Kubernetes expert. Update the existing Kubernetes manifests.
-Preserve existing resources and settings. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Deployment and Service for a web app on port 8080 with 3 replicas"
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: web-app
-  labels:
-    app: web-app
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: web-app
-  template:
-    metadata:
-      labels:
-        app: web-app
-    spec:
-      containers:
-        - name: web-app
-          image: web-app:latest
-          ports:
-            - containerPort: 8080
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: 8080
-            initialDelaySeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: web-app
-spec:
-  type: ClusterIP
-  selector:
-    app: web-app
-  ports:
-    - port: 80
-      targetPort: 8080
-```
-
-## Constraints
-
-- All containers must have resource limits defined
-- Use specific image tags, not :latest in production
-- Include health check probes for all long-running containers
-- Labels must be consistent between Deployment and Service selectors
-- Use namespaces to isolate workloads
 
 ## Keywords
 

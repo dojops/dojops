@@ -26,6 +26,9 @@ context:
     - Define health check probes in deployment template
     - Make image tag configurable via values
     - Include NOTES.txt with post-install instructions
+    - Image tags should be specific versions, not :latest
+    - Chart name must be lowercase alphanumeric with hyphens
+    - values.yaml must include image, service, and resources sections
   context7Libraries:
     - name: helm
       query: "Helm chart structure, values.yaml, Go template functions, Chart.yaml"
@@ -89,39 +92,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a Helm chart expert. Update the existing Helm chart values and templates.
-Preserve existing configuration. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Helm chart for nginx with 3 replicas on port 80"
-
-```json
-{
-  "files": {
-    "Chart.yaml": "apiVersion: v2\nname: nginx\ndescription: A Helm chart for nginx\ntype: application\nversion: 0.1.0\nappVersion: \"1.25\"\n",
-    "values.yaml": "replicaCount: 3\n\nimage:\n  repository: nginx\n  tag: \"1.25\"\n  pullPolicy: IfNotPresent\n\nservice:\n  type: ClusterIP\n  port: 80\n\nresources:\n  limits:\n    cpu: 500m\n    memory: 256Mi\n  requests:\n    cpu: 100m\n    memory: 128Mi\n",
-    "templates/deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ include \"nginx.fullname\" . }}\n  labels:\n    {{- include \"nginx.labels\" . | nindent 4 }}\nspec:\n  replicas: {{ .Values.replicaCount }}\n  selector:\n    matchLabels:\n      {{- include \"nginx.selectorLabels\" . | nindent 6 }}\n  template:\n    metadata:\n      labels:\n        {{- include \"nginx.selectorLabels\" . | nindent 8 }}\n    spec:\n      containers:\n        - name: {{ .Chart.Name }}\n          image: \"{{ .Values.image.repository }}:{{ .Values.image.tag }}\"\n          imagePullPolicy: {{ .Values.image.pullPolicy }}\n          ports:\n            - name: http\n              containerPort: {{ .Values.service.port }}\n          resources:\n            {{- toYaml .Values.resources | nindent 12 }}\n"
-  }
-}
-```
-
-## Constraints
-
-- Image tags should be specific versions, not :latest
-- Resource limits must be defined for production readiness
-- Service port must be a valid port number (1-65535)
-- Chart name must be lowercase alphanumeric with hyphens
-- values.yaml must include image, service, and resources sections
 
 ## Keywords
 

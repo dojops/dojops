@@ -25,6 +25,7 @@ context:
     - Define explicit networks for service isolation
     - Pin image versions (never use :latest in production)
     - Use depends_on with condition for service ordering
+    - Never hardcode production secrets in compose files
   context7Libraries:
     - name: docker-compose
       query: "Docker Compose file syntax, services, volumes, networks, health checks"
@@ -84,77 +85,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are a Docker Compose expert. Update the existing Docker Compose configuration.
-Preserve existing services and settings. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Docker Compose for a Node.js app with PostgreSQL and Redis"
-
-```yaml
-services:
-  app:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgres://postgres:password@db:5432/app
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: app
-      POSTGRES_PASSWORD: password
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  pgdata:
-  redisdata:
-```
-
-## Constraints
-
-- Services must define health checks for production use
-- Use named volumes for persistent data
-- Pin all image versions
-- Never hardcode production secrets in compose files
-- Use depends_on with condition for proper startup ordering
 
 ## Keywords
 

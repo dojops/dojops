@@ -25,6 +25,8 @@ context:
     - Set appropriate timeouts for proxy connections
     - Include security headers (X-Frame-Options, X-Content-Type-Options, etc.)
     - Use try_files for static file serving with fallback
+    - Server blocks must specify listen directive
+    - Proxy configurations must include appropriate headers
   context7Libraries:
     - name: nginx
       query: "Nginx configuration syntax, server blocks, location, upstream, proxy_pass, SSL/TLS"
@@ -80,66 +82,6 @@ Follow these best practices:
 {context7Docs}
 
 Project context: {projectContext}
-
-## Update Prompt
-
-You are an Nginx expert. Update the existing Nginx configuration.
-Preserve existing server blocks and settings. Only add/modify what is requested.
-
-{outputGuidance}
-
---- EXISTING CONFIGURATION ---
-{existingContent}
---- END EXISTING CONFIGURATION ---
-
-## Examples
-
-Given: "Nginx reverse proxy for a Node.js app on port 3000"
-
-```nginx
-upstream app_backend {
-    server 127.0.0.1:3000;
-}
-
-server {
-    listen 80;
-    server_name example.com;
-
-    access_log /var/log/nginx/app.access.log;
-    error_log /var/log/nginx/app.error.log;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    # Gzip compression
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript;
-
-    location / {
-        proxy_pass http://app_backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /static/ {
-        alias /var/www/static/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-}
-```
-
-## Constraints
-
-- Server blocks must specify listen directive
-- Proxy configurations must include appropriate headers
-- Enable gzip compression for text content
-- Include security headers in server blocks
-- Use upstream blocks for backend servers
 
 ## Keywords
 
