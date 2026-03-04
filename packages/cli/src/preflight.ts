@@ -384,7 +384,7 @@ export async function offerSystemToolInstall(options?: {
 
   const lines = missing.map(
     (tool) =>
-      `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${pc.dim(`dojops modules install ${tool.name}`)}`,
+      `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${pc.dim(`dojops toolchain install ${tool.name}`)}`,
   );
   p.log.warn(`${missing.length} system tool(s) not found:\n${lines.join("\n")}`);
 

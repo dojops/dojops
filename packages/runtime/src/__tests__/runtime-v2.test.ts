@@ -360,6 +360,67 @@ describe("DopsRuntimeV2.verify", () => {
     expect(result.passed).toBe(true);
     expect(result.issues).toHaveLength(0);
   });
+
+  it("extracts generated content from { generated, isUpdate } object", async () => {
+    const module = createV2Module({
+      context: {
+        technology: "GitHub Actions",
+        fileFormat: "yaml",
+        outputGuidance: "Generate valid YAML",
+        bestPractices: [],
+      },
+      verification: {
+        structural: [
+          { path: "on", required: true, message: "Missing required 'on' trigger" },
+          { path: "jobs", required: true, message: "Missing required 'jobs' section" },
+        ],
+      },
+    });
+    const provider = createMockProvider("");
+    const runtime = new DopsRuntimeV2(module, provider);
+
+    // Simulate what SafeExecutor passes: the generate() output data object
+    const dataObject = {
+      generated:
+        "name: CI\non:\n  push:\n    branches: [main]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4",
+      isUpdate: false,
+    };
+
+    const result = await runtime.verify(dataObject);
+    expect(result.passed).toBe(true);
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it("fails structural validation when generated content is missing required fields", async () => {
+    const module = createV2Module({
+      context: {
+        technology: "GitHub Actions",
+        fileFormat: "yaml",
+        outputGuidance: "Generate valid YAML",
+        bestPractices: [],
+      },
+      verification: {
+        structural: [
+          { path: "on", required: true, message: "Missing required 'on' trigger" },
+          { path: "jobs", required: true, message: "Missing required 'jobs' section" },
+        ],
+      },
+    });
+    const provider = createMockProvider("");
+    const runtime = new DopsRuntimeV2(module, provider);
+
+    // Missing "on" and "jobs" from the YAML
+    const dataObject = {
+      generated: "name: CI\nsteps:\n  - run: echo hello",
+      isUpdate: true,
+    };
+
+    const result = await runtime.verify(dataObject);
+    expect(result.passed).toBe(false);
+    const messages = result.issues.map((i) => i.message);
+    expect(messages).toContain("Missing required 'on' trigger");
+    expect(messages).toContain("Missing required 'jobs' section");
+  });
 });
 
 describe("stripCodeFences", () => {

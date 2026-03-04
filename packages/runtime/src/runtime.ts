@@ -537,8 +537,14 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
     const verificationConfig = this.module.frontmatter.verification;
     const permissions = this.module.frontmatter.permissions ?? {};
 
-    // For v2, data is a raw string. Parse it for structural validation.
-    const rawContent = typeof data === "string" ? data : String(data);
+    // For v2, data may be a raw string or a { generated, isUpdate } object from generate().
+    // Extract the generated content string for verification.
+    const rawContent =
+      typeof data === "string"
+        ? data
+        : data && typeof data === "object" && "generated" in data
+          ? String((data as Record<string, unknown>).generated)
+          : String(data);
     const fileFormat = this.module.frontmatter.context.fileFormat;
     const parsed = parseRawContent(rawContent, fileFormat);
 

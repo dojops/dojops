@@ -193,7 +193,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
       detail = "Unsupported on this platform";
     } else {
       status = "warn";
-      detail = `Not found — run: dojops modules install ${tool.name}`;
+      detail = `Not found — run: dojops toolchain install ${tool.name}`;
     }
 
     checks.push({ name: `System: ${tool.name}`, status, detail });

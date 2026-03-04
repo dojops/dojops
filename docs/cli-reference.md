@@ -49,12 +49,13 @@ Complete reference for the `dojops` command-line interface.
 
 ### Interactive
 
-| Command                      | Description                              |
-| ---------------------------- | ---------------------------------------- |
-| `dojops chat`                | Interactive multi-turn AI DevOps session |
-| `dojops chat --session=NAME` | Resume or create a named session         |
-| `dojops chat --resume`       | Resume the most recent session           |
-| `dojops chat --agent=NAME`   | Pin conversation to a specialist agent   |
+| Command                      | Description                                            |
+| ---------------------------- | ------------------------------------------------------ |
+| `dojops chat`                | Interactive multi-turn AI DevOps session               |
+| `dojops chat --session=NAME` | Resume or create a named session                       |
+| `dojops chat --resume`       | Resume the most recent session                         |
+| `dojops chat --agent=NAME`   | Pin conversation to a specialist agent                 |
+| `dojops chat --message=TEXT` | Send a single message and exit (scriptable, also `-m`) |
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
 
@@ -116,6 +117,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops auth login`                 | Authenticate with LLM provider                                                  |
 | `dojops auth status`                | Show saved tokens and default provider                                          |
 | `dojops serve [--port=N]`           | Start API server + web dashboard                                                |
+| `dojops serve --no-auth`            | Start server without API key authentication (local dev only)                    |
 | `dojops serve credentials`          | Generate API key for dashboard/API authentication                               |
 | `dojops init`                       | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security) |
 | `dojops doctor`                     | System health diagnostics + project metrics                                     |
@@ -275,6 +277,10 @@ dojops chat --session=infra --agent=terraform
 
 # Resume the most recent session
 dojops chat --resume
+
+# Single message (non-interactive, scriptable)
+dojops chat --message "What tools are missing in this project?"
+dojops chat -m "Explain the CI pipeline" --output json
 ```
 
 ### Toolchain Management
@@ -386,6 +392,9 @@ dojops serve --port=8080
 # Generate API credentials and start with auth
 dojops serve credentials             # generates key, saves to ~/.dojops/server.json
 dojops serve                         # auto-loads key from server.json
+
+# Start without authentication (local development only)
+dojops serve --no-auth
 
 # Configuration profiles
 dojops config profile create staging
