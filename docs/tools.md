@@ -531,22 +531,24 @@ After the closing `---` delimiter, markdown sections define prompts:
 
 ---
 
-## Custom Tool System
+## Custom Module System
 
-DojOps supports custom tools via the `@dojops/tool-registry` custom tool system. Custom tools are discovered automatically and behave exactly like built-in tools — they go through the same Planner, Executor, verification, and audit pipeline.
+DojOps supports custom modules via the `@dojops/tool-registry` custom module system. Custom modules are discovered automatically and behave exactly like built-in modules — they go through the same Planner, Executor, verification, and audit pipeline.
 
-### Custom Tool Discovery
+### Custom Module Discovery
 
-Custom tools are discovered from two locations:
+Custom modules are discovered from three locations (in priority order):
 
-1. **Global:** `~/.dojops/tools/<name>/tool.yaml`
-2. **Project:** `.dojops/tools/<name>/tool.yaml` (overrides global if same name)
+1. **Project modules:** `.dojops/modules/<name>/tool.yaml` (highest priority)
+2. **Project tools (fallback):** `.dojops/tools/<name>/tool.yaml`
+3. **Global modules:** `~/.dojops/modules/<name>/tool.yaml`
+4. **Global tools (fallback):** `~/.dojops/tools/<name>/tool.yaml`
 
-Custom tool discovery happens automatically on every command — no manual registration needed.
+Project modules override global modules of the same name. Custom module discovery happens automatically on every command — no manual registration needed.
 
-### Tool Manifest (`tool.yaml`)
+### Module Manifest (`tool.yaml`)
 
-Each custom tool is a directory containing a `tool.yaml` manifest and a JSON Schema file:
+Each custom module is a directory containing a `tool.yaml` manifest and a JSON Schema file:
 
 ```yaml
 spec: 1
@@ -606,39 +608,39 @@ A JSON Schema file defining the custom tool's input parameters:
 
 JSON Schema inputs are converted to Zod schemas at runtime, ensuring full compatibility with the Planner's `zodSchemaToText()` and the Executor's validation pipeline.
 
-### Custom Tool CLI Commands
+### Custom Module CLI Commands
 
 ```bash
-# List all discovered custom tools (global + project)
-dojops tools list
+# List all discovered custom modules (global + project)
+dojops modules list
 
-# Validate a tool manifest
-dojops tools validate .dojops/tools/my-tool/
+# Validate a module manifest
+dojops modules validate .dojops/modules/my-module/
 
-# Scaffold a new custom tool with template files
-dojops tools init my-tool
+# Scaffold a new custom module with template files
+dojops modules init my-module
 
-# Publish a .dops tool to DojOps Hub (requires DOJOPS_HUB_TOKEN)
-dojops tools publish my-tool.dops
-dojops tools publish my-tool.dops --changelog "Added Docker support"
+# Publish a .dops module to DojOps Hub (requires DOJOPS_HUB_TOKEN)
+dojops modules publish my-module.dops
+dojops modules publish my-module.dops --changelog "Added Docker support"
 
-# Install a .dops tool from DojOps Hub
-dojops tools install nginx-config
-dojops tools install nginx-config --version 1.0.0 --global
+# Install a .dops module from DojOps Hub
+dojops modules install nginx-config
+dojops modules install nginx-config --version 1.0.0 --global
 
-# Search the DojOps Hub for tools
-dojops tools search docker
-dojops tools search terraform --limit 5
-dojops tools search k8s --output json
+# Search the DojOps Hub for modules
+dojops modules search docker
+dojops modules search terraform --limit 5
+dojops modules search k8s --output json
 ```
 
 #### Hub Integration
 
-The `publish` and `install` commands connect to the [DojOps Hub](https://hub.dojops.ai) — a tool marketplace where users share `.dops` tools.
+The `publish` and `install` commands connect to the [DojOps Hub](https://hub.dojops.ai) — a module marketplace where users share `.dops` modules.
 
 ##### Authentication Setup
 
-Publishing tools to the Hub requires an API token. Tokens follow the GitHub PAT model — shown once at creation, stored as SHA-256 hashes.
+Publishing modules to the Hub requires an API token. Tokens follow the GitHub PAT model — shown once at creation, stored as SHA-256 hashes.
 
 **1. Sign in to the Hub** — Go to [hub.dojops.ai](https://hub.dojops.ai) and sign in with your GitHub account.
 
@@ -663,19 +665,19 @@ export DOJOPS_HUB_TOKEN="dojops_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
 
 You can manage up to 10 tokens per account. View active tokens, their last-used timestamps, and revoke compromised tokens from the Settings page at any time.
 
-##### Publishing a Tool
+##### Publishing a Module
 
 The publish flow validates locally, computes a SHA-256 hash for integrity, and uploads to the Hub.
 
 ```bash
 # Publish a .dops file
-dojops tools publish my-tool.dops
+dojops modules publish my-module.dops
 
 # Publish with a changelog message
-dojops tools publish my-tool.dops --changelog "Added Docker support"
+dojops modules publish my-module.dops --changelog "Added Docker support"
 
-# Publish by tool name (looks up in .dojops/tools/)
-dojops tools publish my-tool
+# Publish by module name (looks up in .dojops/modules/)
+dojops modules publish my-module
 ```
 
 **What happens during publish:**
@@ -700,26 +702,26 @@ dojops tools publish my-tool
 └
 ```
 
-**Publishing a new version** of an existing tool uses the same command — the Hub detects the existing package and adds the new version:
+**Publishing a new version** of an existing module uses the same command — the Hub detects the existing package and adds the new version:
 
 ```bash
 # Update version in .dops frontmatter, then:
-dojops tools publish my-tool.dops --changelog "v1.1.0: Added Redis support"
+dojops modules publish my-module.dops --changelog "v1.1.0: Added Redis support"
 ```
 
-##### Installing a Tool
+##### Installing a Module
 
-The install flow downloads the tool, verifies its integrity against the publisher's hash, and places it in your tools directory.
+The install flow downloads the module, verifies its integrity against the publisher's hash, and places it in your modules directory.
 
 ```bash
 # Install latest version (project-local)
-dojops tools install nginx-config
+dojops modules install nginx-config
 
 # Install a specific version
-dojops tools install nginx-config --version 1.0.0
+dojops modules install nginx-config --version 1.0.0
 
-# Install globally (~/.dojops/tools/)
-dojops tools install nginx-config --global
+# Install globally (~/.dojops/modules/)
+dojops modules install nginx-config --global
 ```
 
 **What happens during install:**
@@ -728,7 +730,7 @@ dojops tools install nginx-config --global
 2. **Download** — The `.dops` file is downloaded from `GET /api/download/<slug>/<version>` with the publisher's SHA-256 hash in the `X-Checksum-Sha256` response header
 3. **Integrity check** — The CLI recomputes the SHA-256 hash locally and compares it against the publisher's hash. **Mismatches abort the install** with a tampering warning
 4. **Validation** — The downloaded file is parsed and validated as a `.dops` module
-5. **Write** — The file is saved to `.dojops/tools/<name>.dops` (project) or `~/.dojops/tools/<name>.dops` (global)
+5. **Write** — The file is saved to `.dojops/modules/<name>.dops` (project) or `~/.dojops/modules/<name>.dops` (global)
 
 **Example output:**
 
@@ -737,7 +739,7 @@ dojops tools install nginx-config --global
 ┌  Tool installed
 │  Name:    nginx-config
 │  Version: v1.0.0
-│  Path:    .dojops/tools/nginx-config.dops
+│  Path:    .dojops/modules/nginx-config.dops
 │  Scope:   project
 │  SHA256:  f9e8d7c6b5a4...
 │  Verify:  OK — matches publisher hash
@@ -760,9 +762,9 @@ dojops tools install nginx-config --global
 | `DOJOPS_HUB_URL`   | Hub API base URL                                           | `https://hub.dojops.ai` |
 | `DOJOPS_HUB_TOKEN` | API token for publishing (generated at `/settings/tokens`) | —                       |
 
-### Tool Policy
+### Module Policy
 
-Control which custom tools are allowed via `.dojops/policy.yaml`:
+Control which custom modules are allowed via `.dojops/policy.yaml`:
 
 ```yaml
 # Only allow specific tools
@@ -775,28 +777,28 @@ blockedTools:
   - untrusted-tool
 ```
 
-### Tool Isolation
+### Module Isolation
 
-Custom tools are sandboxed with the same guardrails as built-in tools, plus additional controls:
+Custom modules are sandboxed with the same guardrails as built-in modules, plus additional controls:
 
 - **Verification command whitelist** — Only 16 known DevOps binaries are allowed (terraform, kubectl, helm, ansible-lint, docker, hadolint, yamllint, jsonlint, shellcheck, tflint, kubeval, conftest, checkov, trivy, kube-score, polaris). Non-whitelisted commands are rejected at runtime
 - **Permission enforcement** — The `permissions.child_process` field must be `"required"` for verification commands to execute. Omitted or `"none"` means the command is silently skipped (default-safe)
 - **Path traversal prevention** — File paths in `files[].path` and `detector.path` cannot contain `..` segments, preventing writes outside the project directory
 - **Execution guardrails** — Custom tools execute through the same `SafeExecutor` pipeline as built-in tools, inheriting `maxFileSize` (1MB default), `timeoutMs` (30s default), DevOps write allowlist enforcement, and per-file audit logging
 
-### Tool Specification
+### Module Specification
 
-The v1 custom tool contract is documented and frozen in [Tool Specification v1](TOOL_SPEC_v1.md). This spec covers manifest schema, discovery paths, input/output schemas, verification command whitelist, security constraints, and the compatibility promise.
+The v1 custom module contract is documented and frozen in [Tool Specification v1](TOOL_SPEC_v1.md). This spec covers manifest schema, discovery paths, input/output schemas, verification command whitelist, security constraints, and the compatibility promise.
 
-### Custom Tool Audit Trail
+### Custom Module Audit Trail
 
-Custom tool executions include additional audit metadata:
+Custom module executions include additional audit metadata:
 
-- `toolType: "custom"` — distinguishes from built-in tools
-- `toolSource: "global" | "project"` — where the custom tool was discovered
+- `toolType: "custom"` — distinguishes from built-in modules
+- `toolSource: "global" | "project"` — where the custom module was discovered
 - `toolVersion` — version from the manifest
-- `toolHash` — SHA-256 hash of tool directory for integrity verification
-- `systemPromptHash` — SHA-256 hash of the custom tool's system prompt for reproducibility tracking
+- `toolHash` — SHA-256 hash of module directory for integrity verification
+- `systemPromptHash` — SHA-256 hash of the custom module's system prompt for reproducibility tracking
 
 ### Supported Serializers
 

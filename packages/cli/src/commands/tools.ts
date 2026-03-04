@@ -56,8 +56,8 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
       console.log("[]");
       return;
     }
-    p.log.info("No custom tools discovered.");
-    p.log.info(pc.dim("Place tools in ~/.dojops/tools/<name>/ or .dojops/tools/<name>.dops"));
+    p.log.info("No custom modules discovered.");
+    p.log.info(pc.dim("Place modules in ~/.dojops/modules/<name>/ or .dojops/modules/<name>.dops"));
     return;
   }
 
@@ -106,7 +106,7 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
     );
   }
 
-  p.note(lines.join("\n"), `Tools (${totalCount})`);
+  p.note(lines.join("\n"), `Modules (${totalCount})`);
 };
 
 /**
@@ -115,8 +115,8 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
 export const toolsValidateCommand: CommandHandler = async (args) => {
   const toolPath = args[0];
   if (!toolPath) {
-    p.log.info(`  ${pc.dim("$")} dojops tools validate <name-or-path>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Tool name or path required.");
+    p.log.info(`  ${pc.dim("$")} dojops modules validate <name-or-path>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name or path required.");
   }
 
   // Check if it's a .dops file (by extension or by discovering it)
@@ -216,7 +216,7 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
 
     if (result.valid) {
       p.log.success(
-        `Tool manifest is valid: ${result.manifest!.name} v${result.manifest!.version}`,
+        `Module manifest is valid: ${result.manifest!.name} v${result.manifest!.version}`,
       );
 
       const inputSchemaPath = path.join(resolvedDir, result.manifest!.inputSchema);
@@ -226,13 +226,13 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
         p.log.success("Input schema file exists.");
       }
     } else {
-      throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid tool manifest: ${result.error}`);
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid module manifest: ${result.error}`);
     }
   } catch (err) {
     if (err instanceof CLIError) throw err;
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `Failed to parse tool manifest: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to parse module manifest: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 };
@@ -294,7 +294,7 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   // Interactive wizard when no name provided and not in non-interactive mode
   if (!toolName && !isNonInteractive) {
     const nameInput = await p.text({
-      message: "Tool name (lowercase, hyphens allowed):",
+      message: "Module name (lowercase, hyphens allowed):",
       placeholder: "my-tool",
       validate: (val) => {
         if (!val) return "Name is required";
@@ -342,14 +342,14 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   }
 
   if (!toolName) {
-    p.log.info(`  ${pc.dim("$")} dojops tools init <name>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Tool name required.");
+    p.log.info(`  ${pc.dim("$")} dojops modules init <name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name required.");
   }
 
   if (!/^[a-z0-9-]+$/.test(toolName)) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      "Tool name must be lowercase alphanumeric with hyphens.",
+      "Module name must be lowercase alphanumeric with hyphens.",
     );
   }
 
@@ -365,11 +365,11 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   }
 
   // Default: scaffold .dops file
-  const toolsDir = path.resolve(".dojops", "tools");
+  const toolsDir = path.resolve(".dojops", "modules");
   const dopsPath = path.join(toolsDir, `${toolName}.dops`);
 
   if (fs.existsSync(dopsPath)) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Tool already exists: ${dopsPath}`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Module already exists: ${dopsPath}`);
   }
 
   fs.mkdirSync(toolsDir, { recursive: true });
@@ -430,8 +430,8 @@ ${toolName}
 
   fs.writeFileSync(dopsPath, dopsContent, "utf-8");
 
-  p.log.success(`Tool scaffolded at ${pc.underline(dopsPath)}`);
-  p.log.info(`  ${pc.dim("Edit the .dops file to customize your tool.")}`);
+  p.log.success(`Module scaffolded at ${pc.underline(dopsPath)}`);
+  p.log.info(`  ${pc.dim("Edit the .dops file to customize your module.")}`);
 };
 
 function scaffoldLegacyTool(
@@ -441,9 +441,9 @@ function scaffoldLegacyTool(
   systemPrompt: string,
   filePath: string,
 ): void {
-  const toolDir = path.resolve(".dojops", "tools", toolName);
+  const toolDir = path.resolve(".dojops", "modules", toolName);
   if (fs.existsSync(toolDir)) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Tool directory already exists: ${toolDir}`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Module directory already exists: ${toolDir}`);
   }
 
   fs.mkdirSync(toolDir, { recursive: true });
@@ -486,7 +486,7 @@ function scaffoldLegacyTool(
     "utf-8",
   );
 
-  p.log.success(`Tool scaffolded at ${pc.underline(toolDir)}`);
+  p.log.success(`Module scaffolded at ${pc.underline(toolDir)}`);
   p.log.info(
     `  ${pc.dim("Edit")} tool.yaml ${pc.dim("and")} input.schema.json ${pc.dim("to customize.")}`,
   );
@@ -498,8 +498,8 @@ function scaffoldLegacyTool(
 export const toolsLoadCommand: CommandHandler = async (args) => {
   const sourcePath = args[0];
   if (!sourcePath) {
-    p.log.info(`  ${pc.dim("$")} dojops tools load <path>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Tool directory path required.");
+    p.log.info(`  ${pc.dim("$")} dojops modules load <path>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module directory path required.");
   }
 
   const resolvedSource = path.resolve(sourcePath);
@@ -522,7 +522,7 @@ export const toolsLoadCommand: CommandHandler = async (args) => {
   const result = validateManifest(data);
 
   if (!result.valid) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid tool manifest: ${result.error}`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid module manifest: ${result.error}`);
   }
 
   const toolName = result.manifest!.name;
@@ -539,14 +539,14 @@ export const toolsLoadCommand: CommandHandler = async (args) => {
   // Copy to .dojops/tools/<name>/
   const destDir = path.resolve(".dojops", "tools", toolName);
   if (fs.existsSync(destDir)) {
-    p.log.warn(`Tool "${toolName}" already exists at ${destDir}. Overwriting.`);
+    p.log.warn(`Module "${toolName}" already exists at ${destDir}. Overwriting.`);
     fs.rmSync(destDir, { recursive: true, force: true });
   }
 
   fs.cpSync(resolvedSource, destDir, { recursive: true });
 
   p.log.success(
-    `Tool "${toolName}" v${result.manifest!.version} loaded to ${pc.underline(destDir)}`,
+    `Module "${toolName}" v${result.manifest!.version} loaded to ${pc.underline(destDir)}`,
   );
 };
 
@@ -564,8 +564,8 @@ export const toolsLoadCommand: CommandHandler = async (args) => {
 export const toolsPublishCommand: CommandHandler = async (args) => {
   const target = args[0];
   if (!target) {
-    p.log.info(`  ${pc.dim("$")} dojops tools publish <file.dops | name>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Path to .dops file or tool name required.");
+    p.log.info(`  ${pc.dim("$")} dojops modules publish <file.dops | name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Path to .dops file or module name required.");
   }
 
   // Extract --changelog flag
@@ -709,7 +709,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
         `${pc.dim("SHA256:")}  ${hash}`,
         `${pc.dim("URL:")}     ${DEFAULT_HUB_URL}/packages/${data.slug}`,
       ].join("\n"),
-      data.created ? "Published new tool" : "Published new version",
+      data.created ? "Published new module" : "Published new version",
     );
   } catch (err) {
     if (err instanceof CLIError) throw err;
@@ -734,8 +734,8 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
 export const toolsInstallCommand: CommandHandler = async (args) => {
   const toolName = args[0];
   if (!toolName) {
-    p.log.info(`  ${pc.dim("$")} dojops tools install <name>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Tool name required.");
+    p.log.info(`  ${pc.dim("$")} dojops modules install <name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name required.");
   }
 
   // Parse flags
@@ -759,7 +759,7 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
       if (!infoRes.ok) {
         spinner.stop("Not found");
         if (infoRes.status === 404) {
-          throw new CLIError(ExitCode.VALIDATION_ERROR, `Tool "${toolName}" not found on hub.`);
+          throw new CLIError(ExitCode.VALIDATION_ERROR, `Module "${toolName}" not found on hub.`);
         }
         const data = await infoRes.json().catch(() => ({}));
         throw new CLIError(
@@ -774,7 +774,7 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
         spinner.stop("No versions");
         throw new CLIError(
           ExitCode.VALIDATION_ERROR,
-          `Tool "${toolName}" has no published versions.`,
+          `Module "${toolName}" has no published versions.`,
         );
       }
     }
@@ -872,7 +872,7 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
       ]
         .filter(Boolean)
         .join("\n"),
-      "Tool installed",
+      "Module installed",
     );
   } catch (err) {
     if (err instanceof CLIError) throw err;
@@ -897,7 +897,7 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
 export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
   const query = args.filter((a) => !a.startsWith("-")).join(" ");
   if (!query) {
-    p.log.info(`  ${pc.dim("$")} dojops tools search <query>`);
+    p.log.info(`  ${pc.dim("$")} dojops modules search <query>`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Search query required.");
   }
 
@@ -942,7 +942,7 @@ export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
       if (isJson) {
         console.log(JSON.stringify([]));
       } else {
-        p.log.info(`No tools found for "${query}".`);
+        p.log.info(`No modules found for "${query}".`);
       }
       return;
     }
@@ -966,7 +966,7 @@ export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
     }
 
     p.note(lines.join("\n"), `Search results for "${query}" (${packages.length})`);
-    p.log.info(pc.dim(`Install with: dojops tools install <name>`));
+    p.log.info(pc.dim(`Install with: dojops modules install <name>`));
   } catch (err) {
     if (err instanceof CLIError) throw err;
     if (!isJson) spinner.stop("Search failed");

@@ -289,10 +289,12 @@ describe("gitlab-ci.dops", () => {
     expect(rules.some((r) => r.path === "stages")).toBe(true);
   });
 
-  it("has no binary verification (structural only)", () => {
+  it("has binary verification via yamllint", () => {
     const module = parseV2Module("gitlab-ci.dops");
-    expect(module.frontmatter.verification?.binary).toBeUndefined();
-    expect(module.frontmatter.permissions?.child_process).toBe("none");
+    expect(module.frontmatter.verification?.binary).toBeDefined();
+    expect(module.frontmatter.verification?.binary?.command).toContain("yamllint");
+    expect(module.frontmatter.verification?.binary?.parser).toBe("generic-stderr");
+    expect(module.frontmatter.permissions?.child_process).toBe("required");
   });
 });
 

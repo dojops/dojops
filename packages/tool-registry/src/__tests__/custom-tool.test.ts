@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { CustomTool, isVerificationCommandAllowed } from "../custom-tool";
+import {
+  CustomTool,
+  isVerificationCommandAllowed,
+  ALLOWED_VERIFICATION_BINARIES,
+} from "../custom-tool";
 import { ToolManifest, ToolSource } from "../types";
 import { LLMProvider, LLMRequest, LLMResponse } from "@dojops/core";
 
@@ -410,5 +414,38 @@ describe("CustomTool — absolute path guard (H5 fix)", () => {
 
     const result = await tool.execute({ outputPath: "output", description: "test" });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("ALLOWED_VERIFICATION_BINARIES whitelist sync", () => {
+  it("has exactly 33 binaries (must stay in sync with binary-verifier.ts)", () => {
+    // If this count changes, update ALLOWED_VERIFICATION_BINARIES in
+    // packages/runtime/src/binary-verifier.ts to match.
+    expect(ALLOWED_VERIFICATION_BINARIES).toHaveLength(33);
+  });
+
+  it("includes all new binaries", () => {
+    const newBinaries = [
+      "actionlint",
+      "ansible-playbook",
+      "caddy",
+      "haproxy",
+      "nomad",
+      "podman",
+      "fluentd",
+      "opa",
+      "vault",
+      "circleci",
+      "npx",
+      "tsc",
+      "cfn-lint",
+      "nginx",
+      "promtool",
+      "systemd-analyze",
+      "make",
+    ];
+    for (const bin of newBinaries) {
+      expect(ALLOWED_VERIFICATION_BINARIES).toContain(bin);
+    }
   });
 });

@@ -147,7 +147,7 @@ describe("toolsPublishCommand", () => {
   it("rejects with no arguments", async () => {
     await expect(toolsPublishCommand([], makeCtx())).rejects.toThrow(CLIError);
     await expect(toolsPublishCommand([], makeCtx())).rejects.toThrow(
-      "Path to .dops file or tool name required",
+      "Path to .dops file or module name required",
     );
   });
 
@@ -315,7 +315,7 @@ describe("toolsInstallCommand", () => {
 
   it("rejects with no arguments", async () => {
     await expect(toolsInstallCommand([], makeCtx())).rejects.toThrow(CLIError);
-    await expect(toolsInstallCommand([], makeCtx())).rejects.toThrow("Tool name required");
+    await expect(toolsInstallCommand([], makeCtx())).rejects.toThrow("Module name required");
   });
 
   it("fetches package info and downloads latest version", async () => {
@@ -367,7 +367,7 @@ describe("toolsInstallCommand", () => {
     });
 
     await expect(toolsInstallCommand(["nonexistent"], makeCtx())).rejects.toThrow(
-      'Tool "nonexistent" not found on hub',
+      'Module "nonexistent" not found on hub',
     );
   });
 
@@ -723,7 +723,7 @@ describe("toolsSearchCommand", () => {
     await toolsSearchCommand(["nonexistent-xyz"], makeCtx());
 
     expect(mockLog.info).toHaveBeenCalledWith(
-      expect.stringContaining('No tools found for "nonexistent-xyz"'),
+      expect.stringContaining('No modules found for "nonexistent-xyz"'),
     );
   });
 

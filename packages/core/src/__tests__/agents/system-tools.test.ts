@@ -89,9 +89,94 @@ describe("system-tools", () => {
     });
   });
 
+  describe("new system tools", () => {
+    it("finds helm", () => {
+      const tool = findSystemTool("helm");
+      expect(tool).toBeDefined();
+      expect(tool!.archiveType).toBe("tar.gz");
+      expect(tool!.binaryName).toBe("helm");
+      expect(tool!.binaryPathInArchive).toBeDefined();
+    });
+
+    it("finds shellcheck with tar.xz archive", () => {
+      const tool = findSystemTool("shellcheck");
+      expect(tool).toBeDefined();
+      expect(tool!.archiveType).toBe("tar.xz");
+      expect(tool!.binaryName).toBe("shellcheck");
+      expect(tool!.binaryPathInArchive).toContain("shellcheck");
+    });
+
+    it("finds actionlint", () => {
+      const tool = findSystemTool("actionlint");
+      expect(tool).toBeDefined();
+      expect(tool!.archiveType).toBe("tar.gz");
+      expect(tool!.binaryName).toBe("actionlint");
+      expect(tool!.binaryPathInArchive).toBeUndefined();
+    });
+
+    it("finds promtool", () => {
+      const tool = findSystemTool("promtool");
+      expect(tool).toBeDefined();
+      expect(tool!.archiveType).toBe("tar.gz");
+      expect(tool!.binaryName).toBe("promtool");
+      expect(tool!.binaryPathInArchive).toContain("promtool");
+    });
+
+    it("finds circleci", () => {
+      const tool = findSystemTool("circleci");
+      expect(tool).toBeDefined();
+      expect(tool!.archiveType).toBe("tar.gz");
+      expect(tool!.binaryName).toBe("circleci");
+      expect(tool!.binaryPathInArchive).toContain("circleci");
+    });
+
+    it("builds correct helm download URL", () => {
+      const tool = findSystemTool("helm")!;
+      const url = buildDownloadUrl(tool, "3.17.3");
+      expect(url).toBeDefined();
+      expect(url).toContain("get.helm.sh");
+      expect(url).toContain("3.17.3");
+      expect(url).toContain(".tar.gz");
+    });
+
+    it("builds correct shellcheck download URL", () => {
+      const tool = findSystemTool("shellcheck")!;
+      const url = buildDownloadUrl(tool, "0.10.0");
+      expect(url).toBeDefined();
+      expect(url).toContain("koalaman/shellcheck");
+      expect(url).toContain("0.10.0");
+      expect(url).toContain(".tar.xz");
+    });
+
+    it("builds correct actionlint download URL", () => {
+      const tool = findSystemTool("actionlint")!;
+      const url = buildDownloadUrl(tool, "1.7.7");
+      expect(url).toBeDefined();
+      expect(url).toContain("rhysd/actionlint");
+      expect(url).toContain("1.7.7");
+      expect(url).toContain(".tar.gz");
+    });
+
+    it("builds correct promtool download URL", () => {
+      const tool = findSystemTool("promtool")!;
+      const url = buildDownloadUrl(tool, "2.55.1");
+      expect(url).toBeDefined();
+      expect(url).toContain("prometheus/prometheus");
+      expect(url).toContain("2.55.1");
+    });
+
+    it("builds correct circleci download URL", () => {
+      const tool = findSystemTool("circleci")!;
+      const url = buildDownloadUrl(tool, "0.1.31364");
+      expect(url).toBeDefined();
+      expect(url).toContain("CircleCI-Public/circleci-cli");
+      expect(url).toContain("0.1.31364");
+    });
+  });
+
   describe("SYSTEM_TOOLS registry", () => {
-    it("contains 7 tool definitions", () => {
-      expect(SYSTEM_TOOLS).toHaveLength(7);
+    it("contains 12 tool definitions", () => {
+      expect(SYSTEM_TOOLS).toHaveLength(12);
     });
 
     it("all tools have required fields", () => {
@@ -103,6 +188,12 @@ describe("system-tools", () => {
         expect(tool.verifyCommand.length).toBeGreaterThan(0);
         expect(tool.supportedTargets.length).toBeGreaterThan(0);
       }
+    });
+
+    it("includes tar.xz as a valid archive type", () => {
+      const tarXzTools = SYSTEM_TOOLS.filter((t) => t.archiveType === "tar.xz");
+      expect(tarXzTools.length).toBeGreaterThan(0);
+      expect(tarXzTools[0].name).toBe("shellcheck");
     });
   });
 });

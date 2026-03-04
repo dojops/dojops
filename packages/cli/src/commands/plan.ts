@@ -56,11 +56,11 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       const available = tools.map((t) => t.name).join(", ");
       throw new CLIError(
         ExitCode.VALIDATION_ERROR,
-        `Tool "${toolName}" not found. Available: ${available}`,
+        `Module "${toolName}" not found. Available: ${available}`,
       );
     }
     tools = [match];
-    if (!isJson) p.log.info(`Using tool: ${pc.bold(toolName)}`);
+    if (!isJson) p.log.info(`Using module: ${pc.bold(toolName)}`);
   }
   const s = p.spinner();
   if (!isJson) s.start("Decomposing goal into tasks...");

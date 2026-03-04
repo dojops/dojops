@@ -9,7 +9,7 @@ import os from "node:os";
 
 export type Platform = "linux" | "darwin" | "win32";
 export type Arch = "x64" | "arm64";
-export type ArchiveType = "zip" | "tar.gz" | "standalone" | "pipx";
+export type ArchiveType = "zip" | "tar.gz" | "tar.xz" | "standalone" | "pipx";
 
 export interface SystemTool {
   name: string;
@@ -168,6 +168,99 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       { platform: "darwin", arch: "x64" },
       { platform: "darwin", arch: "arm64" },
     ],
+  },
+  {
+    name: "helm",
+    description: "Kubernetes package manager for deploying and managing applications",
+    latestVersion: "3.17.3",
+    archiveType: "tar.gz",
+    binaryName: "helm",
+    verifyCommand: ["helm", "version", "--short"],
+    urlTemplate: "https://get.helm.sh/helm-v{{version}}-{{platform}}-{{arch}}.tar.gz",
+    platformMap: { linux: "linux", darwin: "darwin", win32: "windows" },
+    archMap: { x64: "amd64", arm64: "arm64" },
+    supportedTargets: [
+      { platform: "linux", arch: "x64" },
+      { platform: "linux", arch: "arm64" },
+      { platform: "darwin", arch: "x64" },
+      { platform: "darwin", arch: "arm64" },
+    ],
+    binaryPathInArchive: "{{platform}}-{{arch}}/helm",
+  },
+  {
+    name: "shellcheck",
+    description: "Static analysis tool for shell scripts",
+    latestVersion: "0.10.0",
+    archiveType: "tar.xz",
+    binaryName: "shellcheck",
+    verifyCommand: ["shellcheck", "--version"],
+    urlTemplate:
+      "https://github.com/koalaman/shellcheck/releases/download/v{{version}}/shellcheck-v{{version}}.{{platform}}.{{arch}}.tar.xz",
+    platformMap: { linux: "linux", darwin: "darwin", win32: "win32" },
+    archMap: { x64: "x86_64", arm64: "aarch64" },
+    supportedTargets: [
+      { platform: "linux", arch: "x64" },
+      { platform: "linux", arch: "arm64" },
+      { platform: "darwin", arch: "x64" },
+      { platform: "darwin", arch: "arm64" },
+    ],
+    binaryPathInArchive: "shellcheck-v{{version}}/shellcheck",
+  },
+  {
+    name: "actionlint",
+    description: "Static checker for GitHub Actions workflow files",
+    latestVersion: "1.7.7",
+    archiveType: "tar.gz",
+    binaryName: "actionlint",
+    verifyCommand: ["actionlint", "--version"],
+    urlTemplate:
+      "https://github.com/rhysd/actionlint/releases/download/v{{version}}/actionlint_{{version}}_{{platform}}_{{arch}}.tar.gz",
+    platformMap: { linux: "linux", darwin: "darwin", win32: "windows" },
+    archMap: { x64: "amd64", arm64: "arm64" },
+    supportedTargets: [
+      { platform: "linux", arch: "x64" },
+      { platform: "linux", arch: "arm64" },
+      { platform: "darwin", arch: "x64" },
+      { platform: "darwin", arch: "arm64" },
+    ],
+  },
+  {
+    name: "promtool",
+    description: "Prometheus configuration and rules validation tool",
+    latestVersion: "2.55.1",
+    archiveType: "tar.gz",
+    binaryName: "promtool",
+    verifyCommand: ["promtool", "--version"],
+    urlTemplate:
+      "https://github.com/prometheus/prometheus/releases/download/v{{version}}/prometheus-{{version}}.{{platform}}-{{arch}}.tar.gz",
+    platformMap: { linux: "linux", darwin: "darwin", win32: "win32" },
+    archMap: { x64: "amd64", arm64: "arm64" },
+    supportedTargets: [
+      { platform: "linux", arch: "x64" },
+      { platform: "linux", arch: "arm64" },
+      { platform: "darwin", arch: "x64" },
+      { platform: "darwin", arch: "arm64" },
+    ],
+    binaryPathInArchive: "prometheus-{{version}}.{{platform}}-{{arch}}/promtool",
+  },
+  {
+    name: "circleci",
+    description: "CircleCI CLI for configuration validation and local execution",
+    latestVersion: "0.1.31364",
+    archiveType: "tar.gz",
+    binaryName: "circleci",
+    verifyCommand: ["circleci", "version"],
+    urlTemplate:
+      "https://github.com/CircleCI-Public/circleci-cli/releases/download/v{{version}}/circleci-cli_{{version}}_{{platform}}_{{arch}}.tar.gz",
+    platformMap: { linux: "linux", darwin: "darwin", win32: "win32" },
+    archMap: { x64: "amd64", arm64: "arm64" },
+    supportedTargets: [
+      { platform: "linux", arch: "x64" },
+      { platform: "linux", arch: "arm64" },
+      { platform: "darwin", arch: "x64" },
+      { platform: "darwin", arch: "arm64" },
+    ],
+    binaryPathInArchive: "circleci-cli_{{version}}_{{platform}}_{{arch}}/circleci",
   },
 ];
 

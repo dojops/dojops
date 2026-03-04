@@ -27,6 +27,7 @@ describe("getParser", () => {
       "make-dryrun",
       "ansible-syntax",
       "docker-compose-config",
+      "actionlint",
     ];
     for (const name of knownParsers) {
       expect(getParser(name)).toBeDefined();
@@ -43,7 +44,7 @@ describe("getAvailableParsers", () => {
     expect(parsers).toContain("nginx-stderr");
   });
 
-  it("returns 12 parsers", () => {
-    expect(getAvailableParsers()).toHaveLength(12);
+  it("returns 13 parsers", () => {
+    expect(getAvailableParsers()).toHaveLength(13);
   });
 });

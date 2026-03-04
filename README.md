@@ -139,7 +139,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 - **12 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
 - **Declarative tool metadata** — `.dops` modules declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, `context` block (v2: technology context, output guidance, best practices, Context7 libraries), and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
-- **Custom tool system** — Extend DojOps with custom tools via declarative `tool.yaml` manifests + JSON Schema. Drop a tool into `~/.dojops/tools/` or `.dojops/tools/` and it's automatically available to all commands. Scaffold new tools with `dojops tools init <name>`. Tool isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
+- **Custom module system** — Extend DojOps with custom modules via declarative `tool.yaml` manifests + JSON Schema. Drop a module into `~/.dojops/modules/` or `.dojops/modules/` and it's automatically available to all commands. Scaffold new modules with `dojops modules init <name>`. Module isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
 - **Schema-validated** — Every tool input is validated against Zod schemas before execution. v1 tools also validate LLM output; v2 tools generate raw content directly
 - **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Use `--skip-verify` to disable
@@ -258,7 +258,7 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
 
-#### Agents & Tools
+#### Agents & Modules
 
 | Command                           | Description                                           |
 | --------------------------------- | ----------------------------------------------------- |
@@ -267,12 +267,12 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                 |
 | `dojops agents create --manual`   | Create a custom agent interactively                   |
 | `dojops agents remove <name>`     | Remove a custom agent                                 |
-| `dojops tools list`               | List discovered custom tools (global + project)       |
-| `dojops tools validate <path>`    | Validate a custom tool manifest                       |
-| `dojops tools init <name>`        | Scaffold a new custom tool with template files        |
-| `dojops tools publish <file>`     | Publish a .dops tool to the DojOps Hub                |
-| `dojops tools install <name>`     | Install a .dops tool from the DojOps Hub              |
-| `dojops tools search <query>`     | Search the DojOps Hub for tools                       |
+| `dojops modules list`             | List discovered custom modules (global + project)     |
+| `dojops modules validate <path>`  | Validate a custom module manifest                     |
+| `dojops modules init <name>`      | Scaffold a new custom module with template files      |
+| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub              |
+| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub            |
+| `dojops modules search <query>`   | Search the DojOps Hub for modules                     |
 | `dojops toolchain list`           | List system toolchain binaries with install status    |
 | `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
 | `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
@@ -324,7 +324,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `--model=NAME`      | LLM model override                                                                    |
 | `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility                               |
 | `--profile=NAME`    | Use named config profile                                                              |
-| `--tool=NAME`       | Force a specific tool for `generate`, `plan`, or `apply` (bypasses agent routing)     |
+| `--module=NAME`     | Force a specific module for `generate`, `plan`, or `apply` (bypasses agent routing)   |
 | `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                                             |
 | `--verbose`         | Verbose output                                                                        |
 | `--debug`           | Debug-level output with stack traces                                                  |
@@ -391,25 +391,25 @@ dojops chat --session myproject --agent terraform
 dojops toolchain install terraform
 dojops toolchain install kubectl
 
-# Custom tool management
-dojops tools list
-dojops tools init my-tool
-dojops tools validate .dojops/tools/my-tool/
+# Custom module management
+dojops modules list
+dojops modules init my-module
+dojops modules validate .dojops/modules/my-module/
 
-# Search the DojOps Hub for tools
-dojops tools search docker
-dojops tools search terraform --limit 5
-dojops tools search k8s --output json
+# Search the DojOps Hub for modules
+dojops modules search docker
+dojops modules search terraform --limit 5
+dojops modules search k8s --output json
 
-# Publish & install tools from DojOps Hub (https://hub.dojops.ai)
-dojops tools publish my-tool.dops --changelog "Initial release"
-dojops tools install nginx-config
-dojops tools install nginx-config --version 1.0.0 --global
+# Publish & install modules from DojOps Hub (https://hub.dojops.ai)
+dojops modules publish my-module.dops --changelog "Initial release"
+dojops modules install nginx-config
+dojops modules install nginx-config --version 1.0.0 --global
 
-# Force a specific tool (bypass agent routing)
-dojops --tool=terraform "Create an S3 bucket with versioning"
-dojops --tool=kubernetes "Create a deployment for nginx"
-dojops --tool=terraform plan "Set up S3 with CloudFront"
+# Force a specific module (bypass agent routing)
+dojops --module=terraform "Create an S3 bucket with versioning"
+dojops --module=kubernetes "Create a deployment for nginx"
+dojops --module=terraform plan "Set up S3 with CloudFront"
 
 # Custom agents
 dojops agents create "an SRE specialist for incident response"

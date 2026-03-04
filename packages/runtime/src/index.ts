@@ -77,7 +77,12 @@ export { serialize, SerializerOptions } from "./serializer";
 export { validateStructure } from "./structural-validator";
 
 // Binary verifier
-export { verifyWithBinary, runVerification, BinaryVerifierInput } from "./binary-verifier";
+export {
+  verifyWithBinary,
+  runVerification,
+  BinaryVerifierInput,
+  ALLOWED_VERIFICATION_BINARIES,
+} from "./binary-verifier";
 
 // File writer
 export {

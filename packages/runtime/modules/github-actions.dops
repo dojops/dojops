@@ -52,10 +52,15 @@ verification:
     - path: "name"
       required: true
       message: "Workflow must have a name"
+  binary:
+    command: "actionlint workflow.yml"
+    parser: actionlint
+    timeout: 30000
+    cwd: output
 
 permissions:
   filesystem: write
-  child_process: none
+  child_process: required
   network: none
 
 scope:

@@ -58,7 +58,7 @@ Complete reference for the `dojops` command-line interface.
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
 
-### Agents & Tools
+### Agents & Modules
 
 | Command                           | Description                                           |
 | --------------------------------- | ----------------------------------------------------- |
@@ -67,12 +67,12 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                 |
 | `dojops agents create --manual`   | Create a custom agent interactively                   |
 | `dojops agents remove <name>`     | Remove a custom agent                                 |
-| `dojops tools list`               | List discovered custom tools (global + project)       |
-| `dojops tools validate <path>`    | Validate a custom tool manifest                       |
-| `dojops tools init <name>`        | Scaffold a new custom tool with template files        |
-| `dojops tools publish <file>`     | Publish a .dops tool to the DojOps Hub                |
-| `dojops tools install <name>`     | Install a .dops tool from the DojOps Hub              |
-| `dojops tools search <query>`     | Search the DojOps Hub for tools                       |
+| `dojops modules list`             | List discovered custom modules (global + project)     |
+| `dojops modules validate <path>`  | Validate a custom module manifest                     |
+| `dojops modules init <name>`      | Scaffold a new custom module with template files      |
+| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub              |
+| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub            |
+| `dojops modules search <query>`   | Search the DojOps Hub for modules                     |
 | `dojops toolchain list`           | List system toolchain binaries with install status    |
 | `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
 | `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
@@ -132,7 +132,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `--temperature=N`          | LLM temperature (0-2) for deterministic reproducibility                               |
 | `--fallback-provider=NAME` | Fallback LLM provider (used when primary fails)                                       |
 | `--profile=NAME`           | Use named config profile                                                              |
-| `--tool=NAME`              | Force a specific tool for `generate`, `plan`, or `apply` (bypasses agent routing)     |
+| `--module=NAME`            | Force a specific module for `generate`, `plan`, or `apply` (bypasses agent routing)   |
 | `--agent=NAME`             | Force a specific agent for `generate` (bypasses keyword routing)                      |
 | `--timeout=MS`             | Global timeout in milliseconds                                                        |
 | `--output=FORMAT`          | Output: `table` (default), `json`, `yaml`                                             |
@@ -183,9 +183,9 @@ dojops "Add an S3 bucket to the existing Terraform config"
 dojops --provider=anthropic "Create a Helm chart for Redis"
 dojops --model=gpt-4o "Design a VPC with public and private subnets"
 
-# Force a specific tool (bypass agent routing)
-dojops --tool=terraform "Create an S3 bucket with versioning"
-dojops --tool=kubernetes "Create a deployment for nginx"
+# Force a specific module (bypass agent routing)
+dojops --module=terraform "Create an S3 bucket with versioning"
+dojops --module=kubernetes "Create a deployment for nginx"
 ```
 
 ### Planning and Execution
@@ -207,9 +207,9 @@ dojops apply --resume --yes     # resume failed tasks, auto-approve
 dojops apply --replay           # deterministic: temp=0, validate env match
 dojops apply --replay --yes     # force replay despite mismatches
 
-# Force a specific tool for planning or execution
-dojops --tool=terraform plan "Set up S3 with CloudFront"
-dojops apply plan-abc --tool=terraform   # only run terraform tasks from plan
+# Force a specific module for planning or execution
+dojops --module=terraform plan "Set up S3 with CloudFront"
+dojops apply plan-abc --module=terraform   # only run terraform tasks from plan
 ```
 
 ### Diagnostics
@@ -292,34 +292,34 @@ dojops toolchain install hadolint
 dojops toolchain clean
 ```
 
-### Custom Tool Management
+### Custom Module Management
 
 ```bash
-# List discovered custom tools (global + project)
-dojops tools list
+# List discovered custom modules (global + project)
+dojops modules list
 
-# Search the DojOps Hub for tools
-dojops tools search docker
-dojops tools search terraform --limit 5
-dojops tools search k8s --output json
+# Search the DojOps Hub for modules
+dojops modules search docker
+dojops modules search terraform --limit 5
+dojops modules search k8s --output json
 
-# Scaffold a new custom tool
-dojops tools init my-tool
+# Scaffold a new custom module
+dojops modules init my-module
 
-# Validate a custom tool manifest
-dojops tools validate .dojops/tools/my-tool/
+# Validate a custom module manifest
+dojops modules validate .dojops/modules/my-module/
 
-# Publish a tool to DojOps Hub (requires DOJOPS_HUB_TOKEN)
-dojops tools publish my-tool.dops --changelog "Initial release"
+# Publish a module to DojOps Hub (requires DOJOPS_HUB_TOKEN)
+dojops modules publish my-module.dops --changelog "Initial release"
 
-# Install a tool from DojOps Hub
-dojops tools install nginx-config
-dojops tools install nginx-config --version 1.0.0 --global
+# Install a module from DojOps Hub
+dojops modules install nginx-config
+dojops modules install nginx-config --version 1.0.0 --global
 ```
 
 ### Hub Publishing Setup
 
-Publishing tools to the [DojOps Hub](https://hub.dojops.ai) requires an API token:
+Publishing modules to the [DojOps Hub](https://hub.dojops.ai) requires an API token:
 
 ```bash
 # 1. Sign in at hub.dojops.ai → Settings → API Tokens
@@ -327,15 +327,15 @@ Publishing tools to the [DojOps Hub](https://hub.dojops.ai) requires an API toke
 # 3. Set the environment variable:
 export DOJOPS_HUB_TOKEN="dojops_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
 
-# Publish a tool
-dojops tools publish my-tool.dops
+# Publish a module
+dojops modules publish my-module.dops
 
 # Publish with changelog
-dojops tools publish my-tool.dops --changelog "v1.1.0: Added Redis support"
+dojops modules publish my-module.dops --changelog "v1.1.0: Added Redis support"
 
 # Install from hub (no token required)
-dojops tools install my-tool
-dojops tools install my-tool --version 1.0.0 --global
+dojops modules install my-module
+dojops modules install my-module --version 1.0.0 --global
 ```
 
 The CLI sends the token as a `Bearer` header. Tokens can be managed (created, viewed, revoked) from the Hub Settings page at `/settings/tokens`. See the [tools documentation](tools.md#hub-integration) for the full publish/install flow.

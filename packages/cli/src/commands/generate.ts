@@ -88,12 +88,12 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
         .join(", ");
       throw new CLIError(
         ExitCode.VALIDATION_ERROR,
-        `Tool "${toolName}" not found. Available: ${available}`,
+        `Module "${toolName}" not found. Available: ${available}`,
       );
     }
 
     if (ctx.globalOpts.output !== "json") {
-      p.log.info(`Using tool: ${pc.bold(toolName)} (forced via --tool)`);
+      p.log.info(`Using module: ${pc.bold(toolName)} (forced via --module)`);
     }
 
     const isStructured =

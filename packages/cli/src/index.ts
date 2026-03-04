@@ -106,7 +106,16 @@ registerSubcommand("history", "audit", (args, ctx) => historyCommand(["audit", .
 registerSubcommand("history", "repair", (args, ctx) => historyCommand(["repair", ...args], ctx));
 registerCommand("provider", providerCommand);
 
-// Nested: tools <sub> (manifest-based custom tools)
+// Nested: modules <sub> (manifest-based custom modules, .dops files)
+registerSubcommand("modules", "list", toolsListCommand);
+registerSubcommand("modules", "init", toolsInitCommand);
+registerSubcommand("modules", "validate", toolsValidateCommand);
+registerSubcommand("modules", "load", toolsLoadCommand);
+registerSubcommand("modules", "publish", toolsPublishCommand);
+registerSubcommand("modules", "install", toolsInstallCommand);
+registerSubcommand("modules", "search", toolsSearchCommand);
+
+// Backward compat: "tools" alias → modules
 registerSubcommand("tools", "list", toolsListCommand);
 registerSubcommand("tools", "init", toolsInitCommand);
 registerSubcommand("tools", "validate", toolsValidateCommand);
@@ -264,6 +273,7 @@ async function main() {
     "check",
     "verify",
     "upgrade",
+    "modules",
     "agents",
     "history",
     "serve",

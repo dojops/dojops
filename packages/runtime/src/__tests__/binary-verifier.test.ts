@@ -6,7 +6,7 @@ vi.mock("node:child_process", () => ({
   execFileSync: (...args: unknown[]) => mockExecFileSync(...args),
 }));
 
-import { verifyWithBinary } from "../binary-verifier";
+import { verifyWithBinary, ALLOWED_VERIFICATION_BINARIES } from "../binary-verifier";
 
 describe("verifyWithBinary", () => {
   beforeEach(() => {
@@ -164,5 +164,55 @@ describe("verifyWithBinary", () => {
     });
     expect(result.passed).toBe(true);
     expect(result.issues.some((i) => i.message.includes("not found"))).toBe(true);
+  });
+});
+
+describe("ALLOWED_VERIFICATION_BINARIES whitelist sync", () => {
+  it("contains all expected binaries", () => {
+    const expected = [
+      "terraform",
+      "kubectl",
+      "helm",
+      "ansible-lint",
+      "ansible-playbook",
+      "docker",
+      "hadolint",
+      "yamllint",
+      "jsonlint",
+      "shellcheck",
+      "tflint",
+      "kubeval",
+      "conftest",
+      "checkov",
+      "trivy",
+      "kube-score",
+      "polaris",
+      "nginx",
+      "promtool",
+      "systemd-analyze",
+      "make",
+      "actionlint",
+      "caddy",
+      "haproxy",
+      "nomad",
+      "podman",
+      "fluentd",
+      "opa",
+      "vault",
+      "circleci",
+      "npx",
+      "tsc",
+      "cfn-lint",
+    ];
+    for (const bin of expected) {
+      expect(ALLOWED_VERIFICATION_BINARIES.has(bin)).toBe(true);
+    }
+    expect(ALLOWED_VERIFICATION_BINARIES.size).toBe(expected.length);
+  });
+
+  it("has exactly 33 binaries (must stay in sync with custom-tool.ts)", () => {
+    // If this count changes, update ALLOWED_VERIFICATION_BINARIES in
+    // packages/tool-registry/src/custom-tool.ts to match.
+    expect(ALLOWED_VERIFICATION_BINARIES.size).toBe(33);
   });
 });

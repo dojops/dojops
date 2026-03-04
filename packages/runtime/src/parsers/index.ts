@@ -11,6 +11,7 @@ import { parseSystemdAnalyze } from "./systemd-analyze";
 import { parseMakeDryrun } from "./make-dryrun";
 import { parseAnsibleSyntax } from "./ansible-syntax";
 import { parseDockerComposeConfig } from "./docker-compose-config";
+import { parseActionlint } from "./actionlint";
 
 export type VerificationParser = (
   output: string,
@@ -36,6 +37,7 @@ const PARSERS: Record<string, VerificationParser> = {
   "make-dryrun": parseMakeDryrun,
   "ansible-syntax": parseAnsibleSyntax,
   "docker-compose-config": parseDockerComposeConfig,
+  actionlint: parseActionlint,
 };
 
 export function getParser(name: string): VerificationParser | undefined {

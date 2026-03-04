@@ -5,6 +5,7 @@ import * as yaml from "js-yaml";
 import { validateManifest } from "./manifest-schema";
 import { ToolEntry, ToolManifest, ToolSource } from "./types";
 
+const MODULE_DIR_NAME = "modules";
 const TOOL_DIR_NAME = "tools";
 const LEGACY_DIR_NAME = "plugins";
 const MANIFEST_FILE = "tool.yaml";
@@ -12,6 +13,12 @@ const LEGACY_MANIFEST_FILE = "plugin.yaml";
 
 /** Maximum allowed file size for manifest and schema files (64KB). */
 const MAX_MANIFEST_FILE_SIZE = 65_536;
+
+function getGlobalModulesDir(): string | null {
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  if (!home) return null;
+  return path.join(home, ".dojops", MODULE_DIR_NAME);
+}
 
 function getGlobalToolsDir(): string | null {
   const home = process.env.HOME ?? process.env.USERPROFILE;
@@ -23,6 +30,10 @@ function getGlobalLegacyDir(): string | null {
   const home = process.env.HOME ?? process.env.USERPROFILE;
   if (!home) return null;
   return path.join(home, ".dojops", LEGACY_DIR_NAME);
+}
+
+function getProjectModulesDir(projectPath: string): string {
+  return path.join(projectPath, ".dojops", MODULE_DIR_NAME);
 }
 
 function getProjectToolsDir(projectPath: string): string {
@@ -180,21 +191,33 @@ export function discoverDopsFiles(dir: string, location: "global" | "project"): 
 export function discoverUserDopsFiles(projectPath?: string): DopsFileEntry[] {
   const byName = new Map<string, DopsFileEntry>();
 
-  // Global
-  const globalDir = getGlobalToolsDir();
-  if (globalDir) {
-    for (const entry of discoverDopsFiles(globalDir, "global")) {
+  // Global: modules/ (primary), then tools/ (fallback)
+  const globalModDir = getGlobalModulesDir();
+  if (globalModDir) {
+    for (const entry of discoverDopsFiles(globalModDir, "global")) {
       const name = path.basename(entry.filePath, ".dops");
       byName.set(name, entry);
     }
   }
+  const globalDir = getGlobalToolsDir();
+  if (globalDir) {
+    for (const entry of discoverDopsFiles(globalDir, "global")) {
+      const name = path.basename(entry.filePath, ".dops");
+      if (!byName.has(name)) byName.set(name, entry);
+    }
+  }
 
-  // Project (overrides global)
+  // Project (overrides global): modules/ (primary), then tools/ (fallback)
   if (projectPath) {
+    const projectModDir = getProjectModulesDir(projectPath);
+    for (const entry of discoverDopsFiles(projectModDir, "project")) {
+      const name = path.basename(entry.filePath, ".dops");
+      byName.set(name, entry);
+    }
     const projectDir = getProjectToolsDir(projectPath);
     for (const entry of discoverDopsFiles(projectDir, "project")) {
       const name = path.basename(entry.filePath, ".dops");
-      byName.set(name, entry);
+      if (!byName.has(name)) byName.set(name, entry);
     }
   }
 
@@ -233,9 +256,9 @@ function discoverFromDir(
 }
 
 /**
- * Discovers tool manifests from global (~/.dojops/tools/) and project (.dojops/tools/) directories.
- * Falls back to legacy directories (~/.dojops/plugins/, .dojops/plugins/) for backward compatibility.
- * Project tools override global tools of the same name.
+ * Discovers tool manifests from global and project directories.
+ * Search order: modules/ (primary) → tools/ (fallback) → plugins/ (legacy).
+ * Project entries override global entries of the same name.
  */
 export function discoverTools(projectPath?: string): ToolEntry[] {
   return discoverToolsWithWarnings(projectPath).tools;
@@ -245,7 +268,11 @@ export function discoverToolsWithWarnings(projectPath?: string): ToolDiscoveryRe
   const tools = new Map<string, ToolEntry>();
   const warnings: string[] = [];
 
-  // 1. Global tools (new path first, fallback to legacy)
+  // 1. Global: modules/ (primary), tools/ (fallback), plugins/ (legacy)
+  const globalModDir = getGlobalModulesDir();
+  if (globalModDir) {
+    discoverFromDir(globalModDir, "global", tools, warnings);
+  }
   const globalDir = getGlobalToolsDir();
   if (globalDir) {
     discoverFromDir(globalDir, "global", tools, warnings);
@@ -255,11 +282,12 @@ export function discoverToolsWithWarnings(projectPath?: string): ToolDiscoveryRe
     discoverFromDir(globalLegacyDir, "global", tools, warnings);
   }
 
-  // 2. Project tools (override global)
+  // 2. Project (overrides global): modules/ (primary), tools/ (fallback), plugins/ (legacy)
   if (projectPath) {
+    const projectModDir = getProjectModulesDir(projectPath);
+    discoverFromDir(projectModDir, "project", tools, warnings);
     const projectDir = getProjectToolsDir(projectPath);
     discoverFromDir(projectDir, "project", tools, warnings);
-    // Fallback to legacy project dir
     const projectLegacy = getProjectLegacyDir(projectPath);
     discoverFromDir(projectLegacy, "project", tools, warnings);
   }

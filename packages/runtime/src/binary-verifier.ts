@@ -9,11 +9,12 @@ import { getParser, SeverityMapping } from "./parsers/index";
 /**
  * Allowed verification binaries — same whitelist as custom-tool.ts in tool-registry.
  */
-const ALLOWED_VERIFICATION_BINARIES = new Set([
+export const ALLOWED_VERIFICATION_BINARIES = new Set([
   "terraform",
   "kubectl",
   "helm",
   "ansible-lint",
+  "ansible-playbook",
   "docker",
   "hadolint",
   "yamllint",
@@ -30,6 +31,18 @@ const ALLOWED_VERIFICATION_BINARIES = new Set([
   "promtool",
   "systemd-analyze",
   "make",
+  "actionlint",
+  "caddy",
+  "haproxy",
+  "nomad",
+  "podman",
+  "fluentd",
+  "opa",
+  "vault",
+  "circleci",
+  "npx",
+  "tsc",
+  "cfn-lint",
 ]);
 
 function isVerificationCommandAllowed(command: string): boolean {

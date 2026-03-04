@@ -9,11 +9,28 @@ vi.mock("node:child_process", () => ({
 
 // Mock @clack/prompts to suppress TUI output in tests
 vi.mock("@clack/prompts", () => ({
-  log: { warn: vi.fn(), error: vi.fn() },
+  log: { warn: vi.fn(), error: vi.fn(), success: vi.fn(), info: vi.fn() },
+  spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+  multiselect: vi.fn(),
+  isCancel: vi.fn(() => false),
+}));
+
+// Mock toolchain-sandbox for system tool tests
+vi.mock("../toolchain-sandbox", () => ({
+  TOOLCHAIN_BIN_DIR: "/mock/.dojops/toolchain/bin",
+  loadToolchainRegistry: vi.fn(() => ({ tools: [], updatedAt: "" })),
+  installSystemTool: vi.fn(),
+  verifyTool: vi.fn(),
 }));
 
 import { execFileSync } from "node:child_process";
-import { resolveBinary, runPreflight, preflightCheck } from "../preflight";
+import {
+  resolveBinary,
+  runPreflight,
+  preflightCheck,
+  SYSTEM_TOOL_DOMAINS,
+  collectMissingSystemToolsForDomains,
+} from "../preflight";
 
 const mockedExecFileSync = vi.mocked(execFileSync);
 
@@ -139,5 +156,128 @@ describe("preflightCheck", () => {
     expect(result).toBe(true);
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+describe("SYSTEM_TOOL_DOMAINS", () => {
+  it("maps all 12 system tools to domains", () => {
+    const expectedTools = [
+      "terraform",
+      "kubectl",
+      "gh",
+      "hadolint",
+      "trivy",
+      "gitleaks",
+      "ansible",
+      "helm",
+      "shellcheck",
+      "actionlint",
+      "promtool",
+      "circleci",
+    ];
+    for (const tool of expectedTools) {
+      expect(SYSTEM_TOOL_DOMAINS[tool]).toBeDefined();
+      expect(SYSTEM_TOOL_DOMAINS[tool].length).toBeGreaterThan(0);
+    }
+  });
+
+  it("uses valid specialist domain strings", () => {
+    const validDomains = new Set([
+      "orchestration",
+      "infrastructure",
+      "container-orchestration",
+      "ci-cd",
+      "security",
+      "observability",
+      "containerization",
+      "cloud-architecture",
+      "networking",
+      "data-storage",
+      "gitops",
+      "compliance",
+      "ci-debugging",
+      "application-security",
+      "shell-scripting",
+      "python-scripting",
+    ]);
+
+    for (const [, domains] of Object.entries(SYSTEM_TOOL_DOMAINS)) {
+      for (const domain of domains) {
+        expect(validDomains.has(domain)).toBe(true);
+      }
+    }
+  });
+
+  it("maps shellcheck to shell-scripting (not infrastructure)", () => {
+    expect(SYSTEM_TOOL_DOMAINS.shellcheck).toContain("shell-scripting");
+    expect(SYSTEM_TOOL_DOMAINS.shellcheck).not.toContain("infrastructure");
+  });
+});
+
+describe("collectMissingSystemToolsForDomains", () => {
+  beforeEach(() => {
+    // Make all binaries appear as "not found" so domain filtering is the only factor
+    mockedExecFileSync.mockImplementation(() => {
+      throw new Error("not found");
+    });
+  });
+
+  it("returns only tools matching the given domains", () => {
+    const result = collectMissingSystemToolsForDomains(["container-orchestration"]);
+    const names = result.map((t) => t.name);
+    // kubectl and helm are in "container-orchestration"
+    expect(names).toContain("kubectl");
+    expect(names).toContain("helm");
+    // terraform is in "infrastructure", not "container-orchestration"
+    expect(names).not.toContain("terraform");
+    // actionlint is in "ci-cd", not "container-orchestration"
+    expect(names).not.toContain("actionlint");
+  });
+
+  it("returns ci-cd tools for ci-cd domain", () => {
+    const result = collectMissingSystemToolsForDomains(["ci-cd"]);
+    const names = result.map((t) => t.name);
+    expect(names).toContain("gh");
+    expect(names).toContain("shellcheck");
+    expect(names).toContain("actionlint");
+    expect(names).toContain("circleci");
+    // terraform is not in ci-cd
+    expect(names).not.toContain("terraform");
+  });
+
+  it("returns observability tools for observability domain", () => {
+    const result = collectMissingSystemToolsForDomains(["observability"]);
+    const names = result.map((t) => t.name);
+    expect(names).toContain("promtool");
+    expect(names).not.toContain("terraform");
+    expect(names).not.toContain("helm");
+  });
+
+  it("returns empty array for unknown domain", () => {
+    const result = collectMissingSystemToolsForDomains(["nonexistent-domain"]);
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns tools across multiple domains", () => {
+    const result = collectMissingSystemToolsForDomains(["infrastructure", "security"]);
+    const names = result.map((t) => t.name);
+    expect(names).toContain("terraform");
+    expect(names).toContain("trivy");
+    expect(names).toContain("gitleaks");
+  });
+
+  it("excludes tools already on PATH", () => {
+    // Make only terraform resolvable
+    mockedExecFileSync.mockImplementation((cmd: unknown, args: unknown) => {
+      const argsArr = args as string[];
+      if (argsArr[0] === "terraform") {
+        return Buffer.from("/usr/bin/terraform\n");
+      }
+      throw new Error("not found");
+    });
+
+    const result = collectMissingSystemToolsForDomains(["infrastructure"]);
+    const names = result.map((t) => t.name);
+    expect(names).not.toContain("terraform");
   });
 });

@@ -196,6 +196,17 @@ export function extractTarGz(archivePath: string, destDir: string): void {
 }
 
 /**
+ * Extract a tar.xz archive using system `tar`.
+ */
+export function extractTarXz(archivePath: string, destDir: string): void {
+  fs.mkdirSync(destDir, { recursive: true });
+  execFileSync("tar", ["xJf", archivePath, "-C", destDir], {
+    timeout: 60_000,
+    stdio: "pipe",
+  });
+}
+
+/**
  * Install a system tool into ~/.dojops/toolchain/bin/.
  */
 export async function installSystemTool(
@@ -226,6 +237,12 @@ export async function installSystemTool(
       binarySource = tmpFile;
     } else if (tool.archiveType === "zip") {
       extractZip(tmpFile, extractDir);
+      const archiveBinPath = buildBinaryPathInArchive(tool, ver);
+      binarySource = archiveBinPath
+        ? path.join(extractDir, archiveBinPath)
+        : path.join(extractDir, tool.binaryName);
+    } else if (tool.archiveType === "tar.xz") {
+      extractTarXz(tmpFile, extractDir);
       const archiveBinPath = buildBinaryPathInArchive(tool, ver);
       binarySource = archiveBinPath
         ? path.join(extractDir, archiveBinPath)

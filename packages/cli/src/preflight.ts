@@ -340,6 +340,11 @@ export const SYSTEM_TOOL_DOMAINS: Record<string, string[]> = {
   trivy: ["security", "application-security"],
   gitleaks: ["security", "application-security"],
   ansible: ["infrastructure"],
+  helm: ["container-orchestration"],
+  shellcheck: ["shell-scripting", "ci-cd"],
+  actionlint: ["ci-cd", "ci-debugging"],
+  promtool: ["observability"],
+  circleci: ["ci-cd"],
 };
 
 /**
@@ -379,7 +384,7 @@ export async function offerSystemToolInstall(options?: {
 
   const lines = missing.map(
     (tool) =>
-      `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${pc.dim(`dojops tools install ${tool.name}`)}`,
+      `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${pc.dim(`dojops modules install ${tool.name}`)}`,
   );
   p.log.warn(`${missing.length} system tool(s) not found:\n${lines.join("\n")}`);
 

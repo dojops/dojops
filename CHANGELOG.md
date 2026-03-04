@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Simplified `.dops` v2 Format**: v2 `.dops` files now only require `## Prompt` and `## Keywords` markdown sections. Removed `## Examples` (replaced by Context7 runtime docs), `## Constraints` (merged into `context.bestPractices`), and `## Update Prompt` (generic update fallback is always used). This makes it much easier for users to contribute new `.dops` tool files
+- **Simplified `.dops` v2 Format**: v2 `.dops` files now only require `## Prompt` and `## Keywords` markdown sections. Removed `## Examples` (replaced by Context7 runtime docs), `## Constraints` (merged into `context.bestPractices`), and `## Update Prompt` (generic update fallback is always used). This makes it much easier for users to contribute new `.dops` modules
 - **All 12 Built-in Modules Updated**: Constraints merged into `context.bestPractices` arrays; `## Examples`, `## Constraints`, and `## Update Prompt` sections removed from all built-in `.dops` modules
-- **36 Community Tools Updated**: All tools in `dojops-dops-tools` updated to the simplified v2 format
+- **36 Community Modules Updated**: All modules in `dojops-dops-tools` updated to the simplified v2 format
+- **Tool → Module Rename**: User-facing CLI commands renamed from `dojops tools` to `dojops modules` (with `tools` as backward-compatible alias). `--tool` flag renamed to `--module` (with `--tool` alias). Custom module discovery now searches `.dojops/modules/` as the primary path with `.dojops/tools/` as fallback. Internal TypeScript types (`BaseTool`, `ToolRegistry`, etc.) are unchanged. All documentation, website, and community repos updated
 
 ## [1.0.5] - 2026-03-03
 

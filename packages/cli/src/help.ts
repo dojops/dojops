@@ -33,7 +33,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
   console.log(`  ${pc.cyan("check")}              LLM-powered DevOps config quality check`);
   console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
-  console.log(`  ${pc.cyan("tools")}              Manage DevOps tools (custom + marketplace)`);
+  console.log(`  ${pc.cyan("modules")}            Manage DevOps modules (custom + marketplace)`);
   console.log(`  ${pc.cyan("toolchain")}          Manage system toolchain (~/.dojops/toolchain/)`);
   console.log(
     `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
@@ -751,41 +751,44 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
+    case "modules":
     case "tools":
-      console.log(`\n${pc.bold("dojops tools")} — Manage DevOps tools (custom + marketplace)`);
+      console.log(`\n${pc.bold("dojops modules")} — Manage DevOps modules (custom + marketplace)`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops tools [list|init|validate|load|publish|install]`);
+      console.log(`  ${pc.dim("$")} dojops modules [list|init|validate|load|publish|install]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
-      console.log(`  ${pc.cyan("list")}              List all custom tools ${pc.dim("(default)")}`);
       console.log(
-        `  ${pc.cyan("init <name>")}      Scaffold a new tool (tool.yaml + input.schema.json)`,
+        `  ${pc.cyan("list")}              List all custom modules ${pc.dim("(default)")}`,
       );
-      console.log(`  ${pc.cyan("validate <name>")}  Validate a tool manifest`);
-      console.log(`  ${pc.cyan("load <path>")}      Load a tool from a local directory`);
-      console.log(`  ${pc.cyan("publish <file>")}   Publish a .dops tool to the DojOps Hub`);
-      console.log(`  ${pc.cyan("install <name>")}   Install a .dops tool from the DojOps Hub`);
+      console.log(`  ${pc.cyan("init <name>")}      Scaffold a new .dops module`);
+      console.log(`  ${pc.cyan("validate <name>")}  Validate a module manifest`);
+      console.log(`  ${pc.cyan("load <path>")}      Load a module from a local directory`);
+      console.log(`  ${pc.cyan("publish <file>")}   Publish a .dops module to the DojOps Hub`);
+      console.log(`  ${pc.cyan("install <name>")}   Install a .dops module from the DojOps Hub`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
       console.log(`  ${pc.cyan("--changelog")}     Changelog message for publish`);
       console.log(`  ${pc.cyan("--version")}       Specific version to install`);
-      console.log(`  ${pc.cyan("--global")}        Install to ~/.dojops/tools/ instead of project`);
-      console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Custom tools are declarative manifests (tool.yaml) that define LLM-powered`);
-      console.log(`  configuration generators. Tools are discovered from:`);
-      console.log(`    - ~/.dojops/tools/<name>/    (global)`);
-      console.log(`    - .dojops/tools/<name>/      (project, overrides global)`);
-      console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} dojops tools`);
-      console.log(`  ${pc.dim("$")} dojops tools list`);
-      console.log(`  ${pc.dim("$")} dojops tools init my-tool`);
-      console.log(`  ${pc.dim("$")} dojops tools validate my-tool`);
-      console.log(`  ${pc.dim("$")} dojops tools load /path/to/tool`);
       console.log(
-        `  ${pc.dim("$")} dojops tools publish my-tool.dops --changelog "Initial release"`,
+        `  ${pc.cyan("--global")}        Install to ~/.dojops/modules/ instead of project`,
       );
-      console.log(`  ${pc.dim("$")} dojops tools install nginx-config`);
-      console.log(`  ${pc.dim("$")} dojops tools install nginx-config --version 1.0.0 --global`);
-      console.log(`  ${pc.dim("$")} dojops tools list --output json`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Modules are .dops files that define LLM-powered configuration generators.`);
+      console.log(`  Modules are discovered from:`);
+      console.log(`    - ~/.dojops/modules/<name>/    (global)`);
+      console.log(`    - .dojops/modules/<name>/      (project, overrides global)`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops modules`);
+      console.log(`  ${pc.dim("$")} dojops modules list`);
+      console.log(`  ${pc.dim("$")} dojops modules init my-module`);
+      console.log(`  ${pc.dim("$")} dojops modules validate my-module`);
+      console.log(`  ${pc.dim("$")} dojops modules load /path/to/module`);
+      console.log(
+        `  ${pc.dim("$")} dojops modules publish my-module.dops --changelog "Initial release"`,
+      );
+      console.log(`  ${pc.dim("$")} dojops modules install nginx-config`);
+      console.log(`  ${pc.dim("$")} dojops modules install nginx-config --version 1.0.0 --global`);
+      console.log(`  ${pc.dim("$")} dojops modules list --output json`);
       console.log();
       break;
 

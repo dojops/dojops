@@ -30,7 +30,7 @@ describe("CLI", () => {
       expect(output).toContain("--execute");
       expect(output).toContain("debug ci");
       expect(output).toContain("analyze diff");
-      expect(output).toContain("tools");
+      expect(output).toContain("modules");
       expect(output).toContain("--port=N");
       expect(output).toContain("--model=NAME");
       expect(output).toContain("--provider=NAME");
@@ -229,13 +229,19 @@ describe("CLI", () => {
       expect(output).toContain("risk");
     });
 
-    it("shows tools-specific help with dojops tools --help", () => {
-      const output = run("tools", "--help");
-      expect(output).toContain("dojops tools");
+    it("shows modules-specific help with dojops modules --help", () => {
+      const output = run("modules", "--help");
+      expect(output).toContain("dojops modules");
       expect(output).toContain("list");
       expect(output).toContain("init");
       expect(output).toContain("validate");
       expect(output).toContain("load");
+    });
+
+    it("shows modules help via tools alias with dojops tools --help", () => {
+      const output = run("tools", "--help");
+      expect(output).toContain("dojops modules");
+      expect(output).toContain("list");
     });
   });
 
@@ -257,11 +263,16 @@ describe("CLI", () => {
       expect(output.includes("initialized") || output.includes("Initialized")).toBe(true);
     });
 
-    it("tools list runs without error", () => {
+    it("modules list runs without error", () => {
+      const output = run("modules", "list");
+      // modules list shows custom manifest-based modules (not system binaries)
+      // In a test environment with no custom modules, it reports none found
+      expect(output).toContain("No custom modules discovered");
+    });
+
+    it("tools list alias still works", () => {
       const output = run("tools", "list");
-      // tools list now shows custom manifest-based tools (not system binaries)
-      // In a test environment with no custom tools, it reports none found
-      expect(output).toContain("No custom tools discovered");
+      expect(output).toContain("No custom modules discovered");
     });
   });
 });
