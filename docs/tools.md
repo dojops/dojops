@@ -617,8 +617,11 @@ dojops modules list
 # Validate a module manifest
 dojops modules validate .dojops/modules/my-module/
 
-# Scaffold a new custom module with template files
+# Scaffold a new v2 .dops module (uses AI when provider is configured)
 dojops modules init my-module
+
+# Scaffold with legacy v1 format
+dojops modules init my-module --legacy
 
 # Publish a .dops module to DojOps Hub (requires DOJOPS_HUB_TOKEN)
 dojops modules publish my-module.dops

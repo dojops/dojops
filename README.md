@@ -94,7 +94,7 @@ dojops "Create a Terraform config for S3 with versioning"
 dojops "Create a Terraform config for S3 with versioning"
 dojops "Create a Dockerfile for a Node.js Express app"
 dojops debug ci "ERROR: tsc failed with exit code 1..."
-dojops analyze diff "terraform plan output..."
+dojops analyze diff --file plan.diff
 ```
 
 DojOps routes to the right specialist agent, enforces structured JSON output via Zod schemas, and returns validated configs.
@@ -241,7 +241,7 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 | `dojops check`               | LLM-powered DevOps config quality check (score 0-100) |
 | `dojops check --fix`         | Auto-remediate HIGH/CRITICAL findings via LLM         |
 | `dojops debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)       |
-| `dojops analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security)    |
+| `dojops analyze diff --file` | Analyze infrastructure diff (risk, cost, security)    |
 | `dojops scan`                | Security scan: vulnerabilities, deps, IaC, secrets    |
 | `dojops scan --security`     | Run security scanners only (trivy, gitleaks)          |
 | `dojops scan --deps`         | Run dependency audit only (npm, pip)                  |
@@ -265,24 +265,24 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 #### Agents & Modules
 
-| Command                           | Description                                           |
-| --------------------------------- | ----------------------------------------------------- |
-| `dojops agents list`              | List all agents (built-in + custom)                   |
-| `dojops agents info <name>`       | Show agent details and tool dependencies              |
-| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                 |
-| `dojops agents create --manual`   | Create a custom agent interactively                   |
-| `dojops agents remove <name>`     | Remove a custom agent                                 |
-| `dojops modules list`             | List discovered custom modules (global + project)     |
-| `dojops modules validate <path>`  | Validate a custom module manifest                     |
-| `dojops modules init <name>`      | Scaffold a new custom module with template files      |
-| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub              |
-| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub            |
-| `dojops modules search <query>`   | Search the DojOps Hub for modules                     |
-| `dojops toolchain list`           | List system toolchain binaries with install status    |
-| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
-| `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
-| `dojops toolchain clean`          | Remove all toolchain binaries                         |
-| `dojops inspect <target>`         | Inspect config or session state                       |
+| Command                           | Description                                                |
+| --------------------------------- | ---------------------------------------------------------- |
+| `dojops agents list`              | List all agents (built-in + custom)                        |
+| `dojops agents info <name>`       | Show agent details (supports partial names)                |
+| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                      |
+| `dojops agents create --manual`   | Create a custom agent interactively                        |
+| `dojops agents remove <name>`     | Remove a custom agent                                      |
+| `dojops modules list`             | List discovered custom modules (global + project)          |
+| `dojops modules validate <path>`  | Validate a custom module manifest                          |
+| `dojops modules init <name>`      | Scaffold a v2 `.dops` module (with optional AI generation) |
+| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub                   |
+| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub                 |
+| `dojops modules search <query>`   | Search the DojOps Hub for modules                          |
+| `dojops toolchain list`           | List system toolchain binaries with install status         |
+| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)      |
+| `dojops toolchain remove <name>`  | Remove a toolchain binary                                  |
+| `dojops toolchain clean`          | Remove all toolchain binaries                              |
+| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)        |
 
 #### History & Audit
 
@@ -380,7 +380,7 @@ dojops apply --replay                    # Deterministic replay (temp=0, validat
 
 # Diagnose and analyze
 dojops debug ci "ERROR: tsc failed with exit code 1..."
-dojops analyze diff "terraform plan output..."
+dojops analyze diff --file plan.diff
 dojops explain last
 
 # DevOps quality check
@@ -403,8 +403,9 @@ dojops toolchain install kubectl
 
 # Custom module management
 dojops modules list
-dojops modules init my-module
-dojops modules validate .dojops/modules/my-module/
+dojops modules init my-module               # v2 .dops scaffold (AI-powered when provider is configured)
+dojops modules init my-module --legacy      # v1 tool.yaml scaffold
+dojops modules validate my-module
 
 # Search the DojOps Hub for modules
 dojops modules search docker
@@ -425,7 +426,7 @@ dojops --module=terraform plan "Set up S3 with CloudFront"
 dojops agents create "an SRE specialist for incident response"
 dojops agents create --manual
 dojops agents list
-dojops agents info sre-specialist
+dojops agents info sre                      # partial name match
 dojops agents remove sre-specialist
 
 # Provider management

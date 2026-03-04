@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`modules init` v2 Scaffold with LLM**: `dojops modules init <name>` now generates `.dops v2` files by default (was v1). When an LLM provider is configured, offers AI-powered generation of best practices, output guidance, prompt templates, keywords, risk classification, detection paths, and Context7 library references. Falls back to sensible defaults when no provider is available. Use `--legacy` flag to generate v1 `tool.yaml` format
+- **`agents info` Partial Name Matching**: `dojops agents info` now supports prefix matching (`terraform` → `terraform-specialist`), segment matching (`security` → `security-auditor`, `cloud` → `cloud-architect`), and "Did you mean?" suggestions when no match is found
+- **`inspect` Default Summary**: `dojops inspect` with no target now shows both config and session state instead of erroring
+
+### Changed
+
+- **`analyze diff` Help Text**: Reordered usage to recommend `--file` first for multiline diffs, added note about shell escaping limitations with inline arguments
+
+### Fixed
+
+- **`modules validate` Path Lookup**: `dojops modules validate <name>` now searches `.dojops/modules/` (where `modules init` creates files) in addition to `.dojops/tools/`. Previously, modules created by `init` could not be found by `validate`
+- **Technology Name Capitalization**: `modules init` now properly title-cases hyphenated tool names (e.g., `redis-config` → "Redis Config" instead of "Redis-config")
+
 ## [1.0.6] - 2026-03-04
 
 ### Added

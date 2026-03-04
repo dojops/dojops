@@ -37,7 +37,7 @@ Complete reference for the `dojops` command-line interface.
 | `dojops check --fix`          | Auto-remediate HIGH/CRITICAL findings via LLM                          |
 | `dojops check provider`       | Test LLM provider connectivity and list models                         |
 | `dojops debug ci <log>`       | Diagnose CI/CD log failures (root cause, fixes)                        |
-| `dojops analyze diff <diff>`  | Analyze infrastructure diff (risk, cost, security)                     |
+| `dojops analyze diff --file`  | Analyze infrastructure diff (risk, cost, security)                     |
 | `dojops scan`                 | Security scan: vulnerabilities, deps, IaC, secrets                     |
 | `dojops scan --security`      | Run security scanners only (trivy, gitleaks)                           |
 | `dojops scan --deps`          | Run dependency audit only (npm, pip)                                   |
@@ -63,26 +63,26 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Agents & Modules
 
-| Command                           | Description                                           |
-| --------------------------------- | ----------------------------------------------------- |
-| `dojops agents list`              | List all agents (built-in + custom)                   |
-| `dojops agents info <name>`       | Show agent details and tool dependencies              |
-| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                 |
-| `dojops agents create --manual`   | Create a custom agent interactively                   |
-| `dojops agents remove <name>`     | Remove a custom agent                                 |
-| `dojops modules load <path>`      | Copy a local tool.yaml module into `.dojops/tools/`   |
-| `dojops modules list`             | List discovered custom modules (global + project)     |
-| `dojops modules validate <path>`  | Validate a custom module manifest                     |
-| `dojops modules init <name>`      | Scaffold a new custom module with template files      |
-| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub              |
-| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub            |
-| `dojops modules search <query>`   | Search the DojOps Hub for modules                     |
-| `dojops toolchain list`           | List system toolchain binaries with install status    |
-| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
-| `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
-| `dojops toolchain clean`          | Remove all toolchain binaries                         |
-| `dojops inspect <target>`         | Inspect config or session state                       |
-| `dojops verify`                   | Verify audit log hash chain integrity (standalone)    |
+| Command                           | Description                                                |
+| --------------------------------- | ---------------------------------------------------------- |
+| `dojops agents list`              | List all agents (built-in + custom)                        |
+| `dojops agents info <name>`       | Show agent details (supports partial names)                |
+| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                      |
+| `dojops agents create --manual`   | Create a custom agent interactively                        |
+| `dojops agents remove <name>`     | Remove a custom agent                                      |
+| `dojops modules load <path>`      | Copy a local tool.yaml module into `.dojops/tools/`        |
+| `dojops modules list`             | List discovered custom modules (global + project)          |
+| `dojops modules validate <path>`  | Validate a custom module manifest                          |
+| `dojops modules init <name>`      | Scaffold a v2 `.dops` module (with optional AI generation) |
+| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub                   |
+| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub                 |
+| `dojops modules search <query>`   | Search the DojOps Hub for modules                          |
+| `dojops toolchain list`           | List system toolchain binaries with install status         |
+| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)      |
+| `dojops toolchain remove <name>`  | Remove a toolchain binary                                  |
+| `dojops toolchain clean`          | Remove all toolchain binaries                              |
+| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)        |
+| `dojops verify`                   | Verify audit log hash chain integrity (standalone)         |
 
 ### History & Audit
 
@@ -227,8 +227,9 @@ dojops apply plan-abc --module=terraform   # only run terraform tasks from plan
 dojops debug ci "ERROR: tsc failed with exit code 1..."
 dojops debug ci "npm ERR! ERESOLVE unable to resolve dependency tree"
 
-# Analyze infrastructure diffs
-dojops analyze diff "terraform plan output..."
+# Analyze infrastructure diffs (--file recommended for multiline)
+dojops analyze diff --file plan.diff
+terraform plan | dojops analyze diff
 dojops explain last
 ```
 
@@ -319,11 +320,14 @@ dojops modules search docker
 dojops modules search terraform --limit 5
 dojops modules search k8s --output json
 
-# Scaffold a new custom module
+# Scaffold a new v2 .dops module (uses AI when provider is configured)
 dojops modules init my-module
 
-# Validate a custom module manifest
-dojops modules validate .dojops/modules/my-module/
+# Scaffold with legacy v1 format
+dojops modules init my-module --legacy
+
+# Validate a custom module
+dojops modules validate my-module
 
 # Publish a module to DojOps Hub (requires DOJOPS_HUB_TOKEN)
 dojops modules publish my-module.dops --changelog "Initial release"
@@ -383,9 +387,10 @@ dojops provider remove deepseek
 dojops status                          # canonical command
 dojops doctor                          # alias
 
-# Browse agents
+# Browse agents (partial names supported: terraform, docker, security, etc.)
 dojops agents list
-dojops agents info terraform-specialist
+dojops agents info terraform            # matches terraform-specialist
+dojops agents info security             # matches security-auditor
 
 # Create custom agents
 dojops agents create "an SRE specialist for incident response"

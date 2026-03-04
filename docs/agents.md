@@ -92,8 +92,11 @@ Some agents declare external tool dependencies that enhance their capabilities:
 # List all agents
 dojops agents list
 
-# Show agent details
-dojops agents info terraform-specialist
+# Show agent details (partial names supported)
+dojops agents info terraform              # matches terraform-specialist
+dojops agents info security               # matches security-auditor
+dojops agents info cloud                  # matches cloud-architect
+dojops agents info terraform-specialist   # exact name also works
 
 # Pin chat to an agent
 dojops chat --agent=terraform
