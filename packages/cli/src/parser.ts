@@ -41,7 +41,7 @@ function parseTemperature(raw: string): number {
 /** Parse and validate a timeout value. */
 function parseTimeout(raw: string): number {
   const t = Number.parseInt(raw, 10);
-  if (isNaN(t) || t <= 0)
+  if (Number.isNaN(t) || t <= 0)
     throw new Error(
       `Invalid --timeout value: "${raw}". Must be a positive integer (milliseconds).`,
     );
@@ -88,14 +88,14 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
     // String-valued flags
     const consumed = consumeSimpleStringFlag(args, i, globalOpts);
     if (consumed >= 0) {
-      i = consumed;
+      i = consumed; // NOSONAR - intentional loop variable update to skip consumed flag value
       continue;
     }
 
     // Validated flags (temperature, timeout, output)
     const validated = consumeValidatedFlag(args, i, globalOpts);
     if (validated >= 0) {
-      i = validated;
+      i = validated; // NOSONAR - intentional loop variable update to skip consumed flag value
       continue;
     }
 

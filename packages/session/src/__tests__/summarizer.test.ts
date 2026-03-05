@@ -27,7 +27,7 @@ describe("SessionSummarizer", () => {
     const result = await summarizer.summarize(messages);
     expect(result).toBe("Summary of the conversation.");
     expect(provider.generate).toHaveBeenCalledOnce();
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
     expect(call.system).toContain("summarizer");
     expect(call.prompt).toContain("Terraform");
   });

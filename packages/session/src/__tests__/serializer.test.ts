@@ -204,7 +204,8 @@ describe("serializer", () => {
     const sessions = listSessions(tmpDir);
     expect(sessions).toHaveLength(3);
     const sessionIds = sessions.map((s) => s.id).sort((a, b) => a.localeCompare(b));
-    expect(sessionIds).toEqual(ids.sort((a, b) => a.localeCompare(b)));
+    const sortedIds = [...ids].sort((a, b) => a.localeCompare(b));
+    expect(sessionIds).toEqual(sortedIds);
   });
 
   it("listSessions filters out files with non-hex session IDs", () => {

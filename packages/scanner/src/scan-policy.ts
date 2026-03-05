@@ -122,13 +122,13 @@ function parseScanPolicyYaml(content: string): ScanPolicy {
 
     if (inThresholds && stripped.startsWith("critical:")) {
       const val = Number.parseInt(stripped.split(":")[1].trim(), 10);
-      if (!isNaN(val)) policy.thresholds!.critical = val;
+      if (!Number.isNaN(val)) policy.thresholds!.critical = val;
       continue;
     }
 
     if (inThresholds && stripped.startsWith("high:")) {
       const val = Number.parseInt(stripped.split(":")[1].trim(), 10);
-      if (!isNaN(val)) policy.thresholds!.high = val;
+      if (!Number.isNaN(val)) policy.thresholds!.high = val;
       continue;
     }
 

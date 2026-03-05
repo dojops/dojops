@@ -576,7 +576,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     expect(data.generated).toEqual({ caddyfile: caddyfileContent });
 
     // Check the LLM was called with the user prompt template
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
     expect(call.prompt).toContain("example.com");
     expect(call.prompt).toContain("Reverse proxy to Node app");
     expect(call.system).toContain("Caddy");

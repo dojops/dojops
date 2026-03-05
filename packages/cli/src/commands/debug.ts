@@ -28,7 +28,7 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
     }
   }
 
-  if (!logContent || !logContent.trim()) {
+  if (!logContent?.trim()) {
     p.log.info(`  ${pc.dim("$")} dojops debug ci <log-content>`);
     p.log.info(`  ${pc.dim("$")} dojops debug ci --file <path>`);
     p.log.info(`  ${pc.dim("$")} cat ci.log | dojops debug ci`);

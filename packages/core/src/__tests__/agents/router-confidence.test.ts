@@ -58,7 +58,7 @@ describe("Router confidence formula (H-3)", () => {
       // "alpha beta gamma" matches 3 of 4 keywords
       // confidence = 3 * 0.25 + (3/4) * 0.25 + 0.15 = 0.75 + 0.1875 + 0.15 = min(1.0875, 1.0) = 1.0
       const result = router.route("alpha beta gamma query");
-      expect(result.confidence).toBe(1.0);
+      expect(result.confidence).toBe(1);
       expect(result.agent.domain).toBe("testing");
     });
 
@@ -66,7 +66,7 @@ describe("Router confidence formula (H-3)", () => {
       const router = new AgentRouter(mockProvider(), configs);
       // 4 of 4: confidence = 4*0.25 + 1.0*0.25 + 0.15 = 1.0 + 0.25 + 0.15 = min(1.4, 1.0) = 1.0
       const result = router.route("alpha beta gamma delta");
-      expect(result.confidence).toBe(1.0);
+      expect(result.confidence).toBe(1);
       expect(result.agent.domain).toBe("testing");
     });
 

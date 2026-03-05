@@ -190,23 +190,23 @@ export function compilePromptV2(sections: MarkdownSections, context: PromptConte
 function substituteV2Variables(prompt: string, context: PromptContextV2): string {
   let result = prompt;
 
-  // {outputGuidance}
+  // Substitute outputGuidance placeholder
   result = result.replaceAll("{outputGuidance}", context.contextBlock.outputGuidance);
 
-  // {bestPractices} — numbered list
+  // Substitute bestPractices placeholder with numbered list
   const bestPracticesList = context.contextBlock.bestPractices
     .map((bp, i) => `${i + 1}. ${bp}`)
     .join("\n");
   result = result.replaceAll("{bestPractices}", bestPracticesList);
 
-  // {context7Docs}
+  // Substitute context7Docs placeholder
   if (context.context7Docs === undefined) {
     result = result.replaceAll("{context7Docs}", "No additional documentation available.");
   } else {
     result = result.replaceAll("{context7Docs}", context.context7Docs);
   }
 
-  // {projectContext}
+  // Substitute projectContext placeholder
   if (context.projectContext === undefined) {
     result = result.replaceAll("{projectContext}", "No project context available.");
   } else {

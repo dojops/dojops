@@ -140,6 +140,27 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
 
 const MAX_SCRIPTS = 200;
 
+function hasShellShebang(filePath: string): boolean {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(filePath, "r");
+    const buf = Buffer.alloc(64);
+    fs.readSync(fd, buf, 0, 64, 0);
+    const head = buf.toString("utf-8");
+    return /^#!\s*\/(?:usr\/)?(?:bin\/(?:env\s+)?)?(?:ba)?sh\b/.test(head);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 function findShellScripts(projectPath: string): string[] {
   const results: string[] = [];
   const seen = new Set<string>();
@@ -161,27 +182,6 @@ function findShellScripts(projectPath: string): string[] {
       return real.startsWith(projectRoot + path.sep) || real === projectRoot;
     } catch {
       return false;
-    }
-  }
-
-  function hasShellShebang(filePath: string): boolean {
-    let fd: number | undefined;
-    try {
-      fd = fs.openSync(filePath, "r");
-      const buf = Buffer.alloc(64);
-      fs.readSync(fd, buf, 0, 64, 0);
-      const head = buf.toString("utf-8");
-      return /^#!\s*\/(?:usr\/)?(?:bin\/(?:env\s+)?)?(?:ba)?sh\b/.test(head);
-    } catch {
-      return false;
-    } finally {
-      if (fd !== undefined) {
-        try {
-          fs.closeSync(fd);
-        } catch {
-          /* ignore */
-        }
-      }
     }
   }
 
@@ -242,11 +242,10 @@ function mapLevel(level: string): ScanSeverity {
   switch (level) {
     case "error":
       return "HIGH";
-    case "warning":
-      return "MEDIUM";
     case "info":
     case "style":
       return "LOW";
+    case "warning":
     default:
       return "MEDIUM";
   }

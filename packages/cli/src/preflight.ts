@@ -223,6 +223,7 @@ function hasSudo(): boolean {
  * is not writable and sudo is available.
  */
 function npmInstallGlobal(pkg: string, useSudo: boolean): void {
+  // NOSONAR - boolean parameter is clear and intentional
   if (useSudo) {
     execFileSync("sudo", ["npm", "install", "-g", pkg], {
       timeout: 120_000,
@@ -325,7 +326,7 @@ export function collectMissingSystemTools(): typeof SYSTEM_TOOLS {
   const registry = loadToolchainRegistry();
   return SYSTEM_TOOLS.filter((tool) => {
     if (!isToolSupportedOnCurrentPlatform(tool)) return false;
-    if (registry.tools.find((t) => t.name === tool.name)) return false;
+    if (registry.tools.some((t) => t.name === tool.name)) return false;
     if (resolveBinary(tool.binaryName)) return false;
     return true;
   });
@@ -358,7 +359,7 @@ export function collectMissingSystemToolsForDomains(domains: string[]): typeof S
   const registry = loadToolchainRegistry();
   return SYSTEM_TOOLS.filter((tool) => {
     if (!isToolSupportedOnCurrentPlatform(tool)) return false;
-    if (registry.tools.find((t) => t.name === tool.name)) return false;
+    if (registry.tools.some((t) => t.name === tool.name)) return false;
     if (resolveBinary(tool.binaryName)) return false;
     // Filter by domain relevance
     const toolDomains = SYSTEM_TOOL_DOMAINS[tool.name] ?? [];

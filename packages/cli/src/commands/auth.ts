@@ -94,7 +94,7 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
   const firstProviderSuffix = providerFlag ? "" : " (first configured provider)";
   const defaultNote = isDefault
     ? `${pc.bold("Default:")}  ${pc.cyan("yes")}${firstProviderSuffix}`
-    : `${pc.bold("Default:")}  no (default is ${pc.bold(config.defaultProvider!)})`;
+    : `${pc.bold("Default:")}  no (default is ${pc.bold(config.defaultProvider ?? "")})`;
 
   const noteLines = [
     `${pc.bold("Provider:")} ${provider}`,

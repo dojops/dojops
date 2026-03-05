@@ -290,9 +290,9 @@ function interpolate(template: string, tool: SystemTool, version: string): strin
   const mappedArch = tool.archMap[arch] ?? arch;
 
   return template
-    .replace(/\{\{version\}\}/g, version)
-    .replace(/\{\{platform\}\}/g, mappedPlatform)
-    .replace(/\{\{arch\}\}/g, mappedArch);
+    .replaceAll("{{version}}", version)
+    .replaceAll("{{platform}}", mappedPlatform)
+    .replaceAll("{{arch}}", mappedArch);
 }
 
 /**

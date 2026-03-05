@@ -20,10 +20,7 @@ export interface JSONSchemaObject {
  * Rejects patterns with nested quantifiers (common ReDoS vectors).
  */
 function safeRegex(pattern: string): RegExp {
-  if (
-    /(\+|\*|\{)\s*\??(\+|\*|\{)/.test(pattern) ||
-    /\([^)]*(\+|\*)\)[^)]*(\+|\*|\{)/.test(pattern)
-  ) {
+  if (/[+*{]\s*\??[+*{]/.test(pattern) || /\([^)]*[+*]\)[^)]*[+*{]/.test(pattern)) {
     throw new Error(`Potentially unsafe regex pattern rejected: "${pattern}"`);
   }
   try {

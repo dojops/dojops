@@ -79,7 +79,7 @@ function mockAuthReqRes(path: string, headers: Record<string, string> = {}) {
 
 describe("authMiddleware", () => {
   it("passes through when no apiKey configured", () => {
-    const middleware = authMiddleware(undefined);
+    const middleware = authMiddleware();
     const { req, res, next } = mockAuthReqRes("/api/generate");
     middleware(req, res, next);
     expect(next).toHaveBeenCalled();
@@ -195,26 +195,26 @@ describe("authMiddleware", () => {
   });
 });
 
+function mockLoggerReqRes(reqPath: string, headers: Record<string, string> = {}) {
+  const req = {
+    method: "GET",
+    path: reqPath,
+    headers: { "x-request-id": "test-req-id", ...headers },
+  } as unknown as Request;
+
+  const finishCallbacks: Array<() => void> = [];
+  const res = {
+    statusCode: 200,
+    on: vi.fn((event: string, cb: () => void) => {
+      if (event === "finish") finishCallbacks.push(cb);
+    }),
+  } as unknown as Response;
+
+  const next = vi.fn() as NextFunction;
+  return { req, res, next, finishCallbacks };
+}
+
 describe("T-9: requestLogger CRLF injection prevention", () => {
-  function mockLoggerReqRes(reqPath: string, headers: Record<string, string> = {}) {
-    const req = {
-      method: "GET",
-      path: reqPath,
-      headers: { "x-request-id": "test-req-id", ...headers },
-    } as unknown as Request;
-
-    const finishCallbacks: Array<() => void> = [];
-    const res = {
-      statusCode: 200,
-      on: vi.fn((event: string, cb: () => void) => {
-        if (event === "finish") finishCallbacks.push(cb);
-      }),
-    } as unknown as Response;
-
-    const next = vi.fn() as NextFunction;
-    return { req, res, next, finishCallbacks };
-  }
-
   it("does not emit raw CRLF in non-production logged output", () => {
     const origEnv = process.env.NODE_ENV;
     delete process.env.NODE_ENV;
@@ -265,25 +265,6 @@ describe("T-9: requestLogger CRLF injection prevention", () => {
 });
 
 describe("T-14: requestLogger secret leakage via query parameters", () => {
-  function mockLoggerReqRes(reqPath: string) {
-    const req = {
-      method: "GET",
-      path: reqPath,
-      headers: { "x-request-id": "secret-leak-test" },
-    } as unknown as Request;
-
-    const finishCallbacks: Array<() => void> = [];
-    const res = {
-      statusCode: 200,
-      on: vi.fn((event: string, cb: () => void) => {
-        if (event === "finish") finishCallbacks.push(cb);
-      }),
-    } as unknown as Response;
-
-    const next = vi.fn() as NextFunction;
-    return { req, res, next, finishCallbacks };
-  }
-
   it("logs only req.path which does not include query params in Express", () => {
     const origEnv = process.env.NODE_ENV;
     delete process.env.NODE_ENV;

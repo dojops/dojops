@@ -115,10 +115,7 @@ export async function runScan(
   // Select applicable scanners
   const selected = SCANNERS.filter((s) => {
     // Filter by scan type
-    if (
-      scanType !== "all" &&
-      !s.categories.includes(scanType as "deps" | "security" | "iac" | "sbom" | "license")
-    ) {
+    if (scanType !== "all" && !s.categories.includes(scanType)) {
       return false;
     }
     // Filter by project context
@@ -177,8 +174,7 @@ export async function runScan(
   const scannersSkipped: string[] = [];
   const sbomOutputs: string[] = [];
 
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i];
+  for (const result of results) {
     if (result.skipped) {
       scannersSkipped.push(`${result.tool}: ${result.skipReason}`);
     } else {

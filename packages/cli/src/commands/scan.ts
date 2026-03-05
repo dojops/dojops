@@ -249,7 +249,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     const currentHash = crypto.createHash("sha256").update(combinedSbom).digest("hex");
 
     for (const sbom of report.sbomOutputs) {
-      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      const ts = new Date().toISOString().replaceAll(/[:.]/g, "-");
       const sbomFilePath = path.join(sbomDir, `sbom-${ts}.json`);
       fs.writeFileSync(sbomFilePath, sbom);
       p.log.success(`SBOM saved: ${pc.dim(sbomFilePath)}`);
@@ -383,13 +383,13 @@ function severityLabel(severity: ScanFinding["severity"]): string {
 
 function throwOnSeverity(
   report: ScanReport,
-  threshold?: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+  threshold: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" = "HIGH",
 ): void {
   // SBOM scans always pass (no findings to assess)
   if (report.scanType === "sbom") {
     return;
   }
-  const severity = threshold ?? "HIGH"; // default: fail on HIGH+
+  const severity = threshold;
   const levels = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
   const minIndex = levels.indexOf(severity);
   for (let i = levels.length - 1; i >= minIndex; i--) {

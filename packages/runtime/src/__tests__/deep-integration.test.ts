@@ -1727,7 +1727,7 @@ describe("Built-in Module Regression: New Sections", () => {
   const MODULES_DIR = path.join(__dirname, "../../modules");
   const moduleFiles = fs.readdirSync(MODULES_DIR).filter((f) => f.endsWith(".dops"));
 
-  const MEDIUM_RISK_TOOLS = [
+  const MEDIUM_RISK_TOOLS = new Set([
     "terraform",
     "kubernetes",
     "helm",
@@ -1735,14 +1735,14 @@ describe("Built-in Module Regression: New Sections", () => {
     "ansible",
     "nginx",
     "systemd",
-  ];
-  const LOW_RISK_TOOLS = [
+  ]);
+  const LOW_RISK_TOOLS = new Set([
     "github-actions",
     "gitlab-ci",
     "makefile",
     "prometheus",
     "docker-compose",
-  ];
+  ]);
 
   it("has exactly 12 built-in modules", () => {
     expect(moduleFiles.length).toBe(12);
@@ -1773,9 +1773,9 @@ describe("Built-in Module Regression: New Sections", () => {
         expect(module.frontmatter.risk).toBeDefined();
         expect(module.frontmatter.risk!.rationale.length).toBeGreaterThan(0);
 
-        if (MEDIUM_RISK_TOOLS.includes(moduleName)) {
+        if (MEDIUM_RISK_TOOLS.has(moduleName)) {
           expect(module.frontmatter.risk!.level).toBe("MEDIUM");
-        } else if (LOW_RISK_TOOLS.includes(moduleName)) {
+        } else if (LOW_RISK_TOOLS.has(moduleName)) {
           expect(module.frontmatter.risk!.level).toBe("LOW");
         }
       });
@@ -1882,7 +1882,8 @@ describe("Cross-Module Integration", () => {
     expect(outputResult.success).toBe(true);
 
     // 6. Structural verification
-    const issues = validateStructure(mockOutput, module.frontmatter.verification!.structural!);
+    const structural = module.frontmatter.verification?.structural;
+    const issues = structural ? validateStructure(mockOutput, structural) : [];
     expect(issues).toHaveLength(0);
 
     // 7. Serialize

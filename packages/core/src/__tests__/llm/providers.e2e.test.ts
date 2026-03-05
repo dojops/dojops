@@ -9,7 +9,7 @@ const HAS_KEY = !!process.env.ANTHROPIC_API_KEY;
 const MODEL = "claude-haiku-4-5-20251001";
 
 function createProvider(): AnthropicProvider {
-  return new AnthropicProvider(process.env.ANTHROPIC_API_KEY!, MODEL);
+  return new AnthropicProvider(process.env.ANTHROPIC_API_KEY ?? "", MODEL);
 }
 
 describe.skipIf(!HAS_KEY)("AnthropicProvider contract tests", () => {

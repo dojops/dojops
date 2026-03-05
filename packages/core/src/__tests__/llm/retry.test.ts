@@ -44,9 +44,8 @@ describe("withRetry()", () => {
   // resolve sleep() and the next generate() throws before the retry loop's
   // catch block processes the rejection. This is a known Node.js/Vitest
   // limitation with fake timers + async throws and does not affect test correctness.
-  const suppressedRejections: unknown[] = [];
-  const rejectionHandler = (reason: unknown) => {
-    suppressedRejections.push(reason);
+  const rejectionHandler = () => {
+    // Suppressed PromiseRejectionHandledWarning — see comment above.
   };
 
   beforeEach(() => {
@@ -58,7 +57,6 @@ describe("withRetry()", () => {
 
   afterEach(() => {
     process.removeListener("unhandledRejection", rejectionHandler);
-    suppressedRejections.length = 0;
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -520,7 +518,7 @@ describe("withRetry()", () => {
     const generate = async (): Promise<LLMResponse> => {
       if (!called) {
         called = true;
-        throw "plain string error";
+        throw new Error("plain string error");
       }
       return OK_RESPONSE;
     };
@@ -528,7 +526,7 @@ describe("withRetry()", () => {
     const provider = mockProvider(generateSpy);
     const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000 });
 
-    await expect(retried.generate({ prompt: "hello" })).rejects.toBe("plain string error");
+    await expect(retried.generate({ prompt: "hello" })).rejects.toThrow("plain string error");
     expect(generateSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -539,7 +537,7 @@ describe("withRetry()", () => {
     let callCount = 0;
     const generate = async (): Promise<LLMResponse> => {
       callCount++;
-      if (callCount === 1) throw "503 service unavailable";
+      if (callCount === 1) throw new Error("503 service unavailable");
       return OK_RESPONSE;
     };
     const generateSpy = vi.fn(generate);

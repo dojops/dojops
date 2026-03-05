@@ -163,7 +163,8 @@ function renderTemplate(template: string, data: unknown): string {
 
   return template.replaceAll(/\{\{\s*\.Values\.(\w+)\s*\}\}/g, (_match, key: string) => {
     // NOSONAR - capture group regex
-    return obj[key] === undefined ? "" : String(obj[key]);
+    const val = obj[key];
+    return val === undefined ? "" : String(val);
   });
 }
 
@@ -242,7 +243,9 @@ export function matchesScopePattern(
     if (normalizedExpanded.includes("*")) {
       const regexStr =
         "^" +
-        normalizedExpanded.replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`).replaceAll("*", "[^/]*") +
+        normalizedExpanded
+          .replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`)
+          .replaceAll("*", "[^/]*") +
         "$"; // NOSONAR - escape-for-regex pattern
       if (new RegExp(regexStr).test(normalizedResolved)) return true;
     }

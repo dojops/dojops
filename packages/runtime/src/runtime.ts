@@ -45,6 +45,37 @@ export interface ToolMetadata {
   icon?: string;
 }
 
+// ── Shared helpers for DopsRuntime and DopsRuntimeV2 ──
+
+function validateInput(schema: z.ZodType, input: unknown): { valid: boolean; error?: string } {
+  const result = schema.safeParse(input);
+  if (result.success) return { valid: true };
+  return { valid: false, error: result.error.message };
+}
+
+const DEFAULT_RISK: DopsRisk = { level: "LOW", rationale: "No risk classification declared" };
+
+function getRisk(frontmatter: { risk?: DopsRisk }): DopsRisk {
+  return frontmatter.risk ?? DEFAULT_RISK;
+}
+
+const DEFAULT_EXECUTION: DopsExecution = {
+  mode: "generate",
+  deterministic: false,
+  idempotent: false,
+};
+
+function getExecutionMode(frontmatter: { execution?: DopsExecution }): DopsExecution {
+  return frontmatter.execution ?? DEFAULT_EXECUTION;
+}
+
+function parseKeywords(keywordsStr: string): string[] {
+  return keywordsStr
+    .split(",")
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+}
+
 /**
  * DopsRuntime: The unified tool runtime engine.
  * Processes all tools — built-in .dops modules and user .dops files — through one code path.
@@ -87,9 +118,7 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
   }
 
   validate(input: unknown): { valid: boolean; error?: string } {
-    const result = this.inputSchema.safeParse(input);
-    if (result.success) return { valid: true };
-    return { valid: false, error: result.error.message };
+    return validateInput(this.inputSchema, input);
   }
 
   async generate(input: Record<string, unknown>): Promise<ToolOutput> {
@@ -250,22 +279,11 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
   }
 
   get risk(): DopsRisk {
-    return (
-      this.module.frontmatter.risk ?? {
-        level: "LOW",
-        rationale: "No risk classification declared",
-      }
-    );
+    return getRisk(this.module.frontmatter);
   }
 
   get executionMode(): DopsExecution {
-    return (
-      this.module.frontmatter.execution ?? {
-        mode: "generate",
-        deterministic: false,
-        idempotent: false,
-      }
-    );
+    return getExecutionMode(this.module.frontmatter);
   }
 
   get isDeterministic(): boolean {
@@ -277,10 +295,7 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
   }
 
   get keywords(): string[] {
-    return this.module.sections.keywords
-      .split(",")
-      .map((k) => k.trim())
-      .filter((k) => k.length > 0);
+    return parseKeywords(this.module.sections.keywords);
   }
 
   get fileSpecs(): FileSpec[] {
@@ -339,7 +354,7 @@ export function stripCodeFences(content: string): string {
  * Parse raw content into an object for structural validation.
  * Returns null for formats that can't be parsed (raw, ini, toml, hcl).
  */
-export function parseRawContent(raw: string, format: string): unknown | null {
+export function parseRawContent(raw: string, format: string): unknown {
   try {
     if (format === "yaml") {
       return yaml.load(raw);
@@ -393,9 +408,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   }
 
   validate(input: unknown): { valid: boolean; error?: string } {
-    const result = this.inputSchema.safeParse(input);
-    if (result.success) return { valid: true };
-    return { valid: false, error: result.error.message };
+    return validateInput(this.inputSchema, input);
   }
 
   async generate(input: Record<string, unknown>): Promise<ToolOutput> {
@@ -593,22 +606,11 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   }
 
   get risk(): DopsRisk {
-    return (
-      this.module.frontmatter.risk ?? {
-        level: "LOW",
-        rationale: "No risk classification declared",
-      }
-    );
+    return getRisk(this.module.frontmatter);
   }
 
   get executionMode(): DopsExecution {
-    return (
-      this.module.frontmatter.execution ?? {
-        mode: "generate",
-        deterministic: false,
-        idempotent: false,
-      }
-    );
+    return getExecutionMode(this.module.frontmatter);
   }
 
   get isDeterministic(): boolean {
@@ -620,10 +622,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   }
 
   get keywords(): string[] {
-    return this.module.sections.keywords
-      .split(",")
-      .map((k) => k.trim())
-      .filter((k) => k.length > 0);
+    return parseKeywords(this.module.sections.keywords);
   }
 
   get fileSpecs(): FileSpecV2[] {

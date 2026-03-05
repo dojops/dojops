@@ -99,7 +99,7 @@ export function isDevOpsFile(filePath: string): boolean {
 
     const segments = relative.split("/");
     // Find the first segment that matches a known DevOps root
-    const devopsRoots = [
+    const devopsRoots = new Set([
       ".github",
       ".gitlab-ci.yml",
       "helm",
@@ -111,8 +111,8 @@ export function isDevOpsFile(filePath: string): boolean {
       "prometheus",
       "alertmanager",
       "systemd",
-    ];
-    const rootIdx = segments.findIndex((s) => devopsRoots.includes(s));
+    ]);
+    const rootIdx = segments.findIndex((s) => devopsRoots.has(s));
     if (rootIdx >= 0) {
       relative = segments.slice(rootIdx).join("/");
     }

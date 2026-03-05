@@ -1013,7 +1013,7 @@ export function scanRepo(root: string): RepoContext {
 
   const primaryLanguage =
     languages.length > 0
-      ? languages.reduce((a, b) => (a.confidence >= b.confidence ? a : b)).name
+      ? languages.reduce((a, b) => (a.confidence >= b.confidence ? a : b), languages[0]).name
       : null;
 
   return {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export { z };
+export { z } from "zod";
 
 export interface ToolOutput {
   success: boolean;

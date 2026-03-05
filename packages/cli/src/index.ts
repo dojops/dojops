@@ -338,14 +338,19 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  if (err instanceof CLIError) {
-    if (err.message) {
-      console.error(err.message);
+// Top-level async IIFE to avoid unhandled promise rejection
+(async () => {
+  try {
+    await main();
+  } catch (err) {
+    if (err instanceof CLIError) {
+      if (err.message) {
+        console.error(err.message);
+      }
+      process.exit(err.exitCode);
     }
-    process.exit(err.exitCode);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(msg);
+    process.exit(ExitCode.GENERAL_ERROR);
   }
-  const msg = err instanceof Error ? err.message : String(err);
-  console.error(msg);
-  process.exit(ExitCode.GENERAL_ERROR);
-});
+})();

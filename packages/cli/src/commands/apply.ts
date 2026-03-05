@@ -163,7 +163,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const summaryLines = [
     `${pc.bold("Plan:")}   ${plan.id}`,
     `${pc.bold("Goal:")}   ${plan.goal}`,
-    `${pc.bold("Tasks:")}  ${resume && completedTaskIds.size > 0 ? `${remainingCount} remaining / ${totalCount} total` : `${totalCount} tasks`}`,
+    `${pc.bold("Tasks:")}  ${resume && completedTaskIds.size > 0 ? remainingCount + " remaining / " + totalCount + " total" : totalCount + " tasks"}`,
     `${pc.bold("Risk:")}   ${plan.risk || "unknown"}`,
   ];
 
@@ -434,7 +434,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     const graph = {
       goal: plan.goal,
       tasks: plan.tasks.map((t) => {
-        const input = { ...(t.input ?? {}) };
+        const input = { ...t.input };
         // BUG #3: Enrich task inputs with existingContent if the target file exists
         if (!input.existingContent) {
           const existing = readExistingToolFile(t.tool, root);

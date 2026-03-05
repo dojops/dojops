@@ -209,24 +209,22 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
       }
     }
 
-    if (config.defaultProvider) {
-      if (config.defaultProvider !== name) {
-        saveConfig(config);
-        p.log.success(`${pc.bold(name)} is available.`);
-        const switchCmd212 = pc.cyan(`dojops provider default ${name}`);
-        p.log.info(
-          pc.dim(
-            `Default provider remains ${pc.bold(config.defaultProvider)}. Use ${switchCmd212} to switch.`,
-          ),
-        );
-      } else {
-        saveConfig(config);
-        p.log.info(`${pc.bold(name)} is already the default provider.`);
-      }
-    } else {
+    if (!config.defaultProvider) {
       config.defaultProvider = name;
       saveConfig(config);
       p.log.success(`${pc.bold(name)} set as default provider.`);
+    } else if (config.defaultProvider === name) {
+      saveConfig(config);
+      p.log.info(`${pc.bold(name)} is already the default provider.`);
+    } else {
+      saveConfig(config);
+      p.log.success(`${pc.bold(name)} is available.`);
+      const switchCmd212 = pc.cyan(`dojops provider default ${name}`);
+      p.log.info(
+        pc.dim(
+          `Default provider remains ${pc.bold(config.defaultProvider)}. Use ${switchCmd212} to switch.`,
+        ),
+      );
     }
     return;
   }
@@ -282,24 +280,22 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
     // Only ollama counts as "first" if no other provider has a token
     const hasOther = configured.some((p) => p !== "ollama");
 
-    if (config.defaultProvider || hasOther) {
-      if (config.defaultProvider !== name) {
-        saveConfig(config);
-        p.log.success(`${pc.bold(name)} is available.`);
-        const switchCmd282 = pc.cyan(`dojops provider default ${name}`);
-        p.log.info(
-          pc.dim(
-            `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd282} to switch.`,
-          ),
-        );
-      } else {
-        saveConfig(config);
-        p.log.info(`${pc.bold(name)} is already the default provider.`);
-      }
-    } else {
+    if (!config.defaultProvider && !hasOther) {
       config.defaultProvider = name;
       saveConfig(config);
       p.log.success(`${pc.bold(name)} set as default provider (first configured provider).`);
+    } else if (config.defaultProvider === name) {
+      saveConfig(config);
+      p.log.info(`${pc.bold(name)} is already the default provider.`);
+    } else {
+      saveConfig(config);
+      p.log.success(`${pc.bold(name)} is available.`);
+      const switchCmd282 = pc.cyan(`dojops provider default ${name}`);
+      p.log.info(
+        pc.dim(
+          `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd282} to switch.`,
+        ),
+      );
     }
     return;
   }

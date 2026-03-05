@@ -39,9 +39,8 @@ export class AgentRouter {
     }
     // Single-word: use word boundary matching
     // \b handles punctuation, hyphens, and whitespace boundaries
-    return new RegExp(
-      String.raw`\b${kw.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}\b`,
-    ).test(lower);
+    const escaped = kw.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+    return new RegExp(String.raw`\b${escaped}\b`).test(lower);
   }
 
   route(prompt: string, options?: RouteOptions): RouteResult {
@@ -69,7 +68,7 @@ export class AgentRouter {
           (matchedKeywords.length >= 3 ? 0.15 : 0) +
           primaryBonus +
           contextBonus,
-        1.0,
+        1,
       );
 
       scored.push({ agent, confidence, keywords: matchedKeywords });

@@ -14,7 +14,9 @@ export function buildSessionContext(rootDir: string): string {
       if (ctx.languages?.length) {
         const langs = Array.isArray(ctx.languages)
           ? ctx.languages
-              .map((l: { name?: string }) => (typeof l === "string" ? l : String(l?.name ?? l)))
+              .map((l: { name?: string }) =>
+                typeof l === "string" ? l : typeof l?.name === "string" ? l.name : "unknown",
+              )
               .join(", ")
           : String(ctx.languages);
         parts.push(`Languages: ${langs}`);

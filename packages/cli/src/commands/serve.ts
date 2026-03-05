@@ -64,7 +64,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     ? Number.parseInt(portArg, 10)
     : Number.parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
 
-  if (isNaN(port) || port < 1 || port > 65535) {
+  if (Number.isNaN(port) || port < 1 || port > 65535) {
     p.log.error(`Invalid port: "${portArg ?? process.env.DOJOPS_API_PORT}". Must be 1-65535.`);
     process.exit(ExitCode.VALIDATION_ERROR);
   }

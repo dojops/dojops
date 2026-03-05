@@ -29,10 +29,10 @@ else
 fi
 
 # --- Helpers ---
-info()  { printf "${CYAN}info${RESET}  %s\n" "$1"; }
-warn()  { printf "${YELLOW}warn${RESET}  %s\n" "$1"; }
-error() { printf "${RED}error${RESET} %s\n" "$1" >&2; }
-success() { printf "${GREEN}ok${RESET}    %s\n" "$1"; }
+info()  { local msg="$1"; printf "${CYAN}info${RESET}  %s\n" "$msg"; return 0; }
+warn()  { local msg="$1"; printf "${YELLOW}warn${RESET}  %s\n" "$msg"; return 0; }
+error() { local msg="$1"; printf "${RED}error${RESET} %s\n" "$msg" >&2; return 0; }
+success() { local msg="$1"; printf "${GREEN}ok${RESET}    %s\n" "$msg"; return 0; }
 
 # --- Parse arguments ---
 while [ $# -gt 0 ]; do

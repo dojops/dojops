@@ -60,14 +60,14 @@ function makeCtx(overrides?: Partial<CLIContext["globalOpts"]>): CLIContext {
 
 // Helper to mock global fetch
 function mockFetch(version: string) {
-  global.fetch = vi.fn().mockResolvedValue({
+  globalThis.fetch = vi.fn().mockResolvedValue({
     ok: true,
     json: () => Promise.resolve({ version }),
   });
 }
 
 function mockFetchError(status = 500) {
-  global.fetch = vi.fn().mockResolvedValue({
+  globalThis.fetch = vi.fn().mockResolvedValue({
     ok: false,
     status,
     json: () => Promise.resolve({}),
@@ -75,7 +75,7 @@ function mockFetchError(status = 500) {
 }
 
 function mockFetchNetworkError() {
-  global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed"));
+  globalThis.fetch = vi.fn().mockRejectedValue(new Error("fetch failed"));
 }
 
 describe("upgrade command", () => {

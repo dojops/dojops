@@ -186,8 +186,8 @@ async function verifyTerraformContent(hcl: string): Promise<VerificationResult> 
       };
     }
 
-    const issues = (parsed.diagnostics ?? []).map((d) => ({
-      severity: (d.severity === "error" ? "error" : "warning") as "error" | "warning",
+    const issues: VerificationResult["issues"] = (parsed.diagnostics ?? []).map((d) => ({
+      severity: d.severity === "error" ? "error" : "warning",
       message: d.detail ? `${d.summary}: ${d.detail}` : d.summary,
     }));
 
@@ -241,8 +241,8 @@ async function verifyHelmContent(
         .map((l) => l.trim())
         .filter((l) => l.startsWith("[ERROR]") || l.startsWith("[WARNING]"));
 
-      const issues = lines.map((line) => ({
-        severity: (line.startsWith("[ERROR]") ? "error" : "warning") as "error" | "warning",
+      const issues: VerificationResult["issues"] = lines.map((line) => ({
+        severity: line.startsWith("[ERROR]") ? "error" : "warning",
         message: line.replace(/^\[(ERROR|WARNING)\]\s*/, ""),
       }));
 

@@ -92,6 +92,78 @@ export function prependToolchainBinToPath(): void {
 }
 
 /**
+ * Follow redirects for an HTTPS download, writing to a temp file.
+ * Validates URLs for security (HTTPS-only, SSRF protection).
+ */
+function followRedirects(
+  currentUrl: string,
+  hops: number,
+  tmpFile: string,
+  resolve: (value: string) => void,
+  reject: (reason: Error) => void,
+): void {
+  if (hops > 5) {
+    reject(new Error("Too many redirects"));
+    return;
+  }
+
+  // Security: validate redirect URL as a proper HTTPS URL
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(currentUrl);
+  } catch {
+    reject(new Error(`Invalid redirect URL: ${currentUrl}`));
+    return;
+  }
+  if (parsedUrl.protocol !== "https:") {
+    reject(new Error(`Refusing to download over insecure protocol: ${currentUrl}`));
+    return;
+  }
+  // SSRF protection: block cloud metadata and link-local endpoints
+  const blockedHosts = ["169.254.169.254", "metadata.google.internal", "100.100.100.200"];
+  if (blockedHosts.includes(parsedUrl.hostname)) {
+    reject(
+      new Error(`SSRF protection: blocked download to metadata endpoint ${parsedUrl.hostname}`),
+    );
+    return;
+  }
+  https
+    .get(currentUrl, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        // Resolve relative Location headers against the current URL
+        let redirectTarget: string;
+        try {
+          redirectTarget = new URL(res.headers.location, currentUrl).href;
+        } catch {
+          reject(new Error(`Invalid redirect Location header: ${res.headers.location}`));
+          return;
+        }
+        followRedirects(redirectTarget, hops + 1, tmpFile, resolve, reject);
+        return;
+      }
+
+      if (!res.statusCode || res.statusCode !== 200) {
+        res.resume();
+        reject(new Error(`Download failed: HTTP ${res.statusCode} from ${currentUrl}`));
+        return;
+      }
+
+      const stream = fs.createWriteStream(tmpFile);
+      res.pipe(stream);
+      stream.on("finish", () => {
+        stream.close();
+        resolve(tmpFile);
+      });
+      stream.on("error", (err) => {
+        fs.unlinkSync(tmpFile);
+        reject(err);
+      });
+    })
+    .on("error", reject);
+}
+
+/**
  * Follow redirects and download a URL to a temp file.
  * Returns the temp file path.
  */
@@ -102,74 +174,7 @@ export function downloadToTemp(url: string): Promise<string> {
       `dojops-download-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
 
-    function follow(currentUrl: string, hops: number): void {
-      if (hops > 5) {
-        reject(new Error("Too many redirects"));
-        return;
-      }
-
-      // Security: validate redirect URL as a proper HTTPS URL
-      let parsedUrl: URL;
-      try {
-        parsedUrl = new URL(currentUrl);
-      } catch {
-        reject(new Error(`Invalid redirect URL: ${currentUrl}`));
-        return;
-      }
-      if (parsedUrl.protocol !== "https:") {
-        reject(new Error(`Refusing to download over insecure protocol: ${currentUrl}`));
-        return;
-      }
-      // SSRF protection: block cloud metadata and link-local endpoints
-      const blockedHosts = ["169.254.169.254", "metadata.google.internal", "100.100.100.200"];
-      if (blockedHosts.includes(parsedUrl.hostname)) {
-        reject(
-          new Error(`SSRF protection: blocked download to metadata endpoint ${parsedUrl.hostname}`),
-        );
-        return;
-      }
-      https
-        .get(currentUrl, (res) => {
-          if (
-            res.statusCode &&
-            res.statusCode >= 300 &&
-            res.statusCode < 400 &&
-            res.headers.location
-          ) {
-            res.resume();
-            // Resolve relative Location headers against the current URL
-            let redirectTarget: string;
-            try {
-              redirectTarget = new URL(res.headers.location, currentUrl).href;
-            } catch {
-              reject(new Error(`Invalid redirect Location header: ${res.headers.location}`));
-              return;
-            }
-            follow(redirectTarget, hops + 1);
-            return;
-          }
-
-          if (!res.statusCode || res.statusCode !== 200) {
-            res.resume();
-            reject(new Error(`Download failed: HTTP ${res.statusCode} from ${currentUrl}`));
-            return;
-          }
-
-          const stream = fs.createWriteStream(tmpFile);
-          res.pipe(stream);
-          stream.on("finish", () => {
-            stream.close();
-            resolve(tmpFile);
-          });
-          stream.on("error", (err) => {
-            fs.unlinkSync(tmpFile);
-            reject(err);
-          });
-        })
-        .on("error", reject);
-    }
-
-    follow(url, 0);
+    followRedirects(url, 0, tmpFile, resolve, reject);
   });
 }
 

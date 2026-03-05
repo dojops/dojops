@@ -122,7 +122,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     p.note(
       wrapForNote(
         [
-          `${pc.bold("Score:")} ${scoreColor(`${report.score}/100`)} ${pc.dim("(" + scoreLabel + ")")}`,
+          `${pc.bold("Score:")} ${scoreColor(`${report.score}/100`)} ${pc.dim(`(${scoreLabel})`)}`,
           "",
           report.summary,
         ].join("\n"),

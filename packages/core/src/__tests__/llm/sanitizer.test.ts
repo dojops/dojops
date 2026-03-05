@@ -67,7 +67,7 @@ describe("sanitizeSystemPrompt", () => {
   it("returns prompt unchanged when no existing content", () => {
     const prompt = "You are a Terraform expert.";
     expect(sanitizeSystemPrompt(prompt)).toBe(prompt);
-    expect(sanitizeSystemPrompt(prompt, undefined)).toBe(prompt);
+    expect(sanitizeSystemPrompt(prompt)).toBe(prompt);
   });
 
   it("appends existing content wrapped as data", () => {

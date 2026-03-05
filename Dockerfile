@@ -30,10 +30,9 @@ RUN pnpm prune --prod
 # ── Production stage ────────────────────────────────────────────────
 FROM node:20-slim AS production
 
-RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
-
-# Install common DevOps tools for verification
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Enable pnpm and install common DevOps tools for verification
+RUN corepack enable && corepack prepare pnpm@8.15.0 --activate \
+    && apt-get update && apt-get install -y --no-install-recommends \
     git \
     make \
     shellcheck \

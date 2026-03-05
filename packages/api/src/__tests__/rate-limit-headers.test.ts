@@ -35,6 +35,38 @@ function mockRes(): Response & { _headers: Record<string, string>; _status: numb
   return res as unknown as Response & { _headers: Record<string, string>; _status: number };
 }
 
+function createMockProvider(): LLMProvider {
+  return {
+    name: "mock",
+    generate: vi.fn().mockResolvedValue({
+      content: "Mock response",
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    } satisfies LLMResponse),
+  };
+}
+
+function createMockTool(): DevOpsTool {
+  return {
+    name: "mock-tool",
+    description: "A mock tool",
+    inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
+    validate: () => ({ valid: true }),
+    generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
+  };
+}
+
+function createTestDeps(): AppDependencies {
+  const provider = createMockProvider();
+  return {
+    provider,
+    tools: [createMockTool()],
+    router: new AgentRouter(provider),
+    debugger: new CIDebugger(provider),
+    diffAnalyzer: new InfraDiffAnalyzer(provider),
+    store: new HistoryStore(),
+  };
+}
+
 describe("createRateLimiter RFC headers (H-4)", () => {
   describe("headers on successful requests", () => {
     it("sets RateLimit-Limit on first request", () => {
@@ -284,38 +316,6 @@ describe("createRateLimiter RFC headers (H-4)", () => {
       expect(res._headers["RateLimit-Remaining"]).toBe("99");
     });
   });
-
-  function createMockProvider(): LLMProvider {
-    return {
-      name: "mock",
-      generate: vi.fn().mockResolvedValue({
-        content: "Mock response",
-        usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-      } satisfies LLMResponse),
-    };
-  }
-
-  function createMockTool(): DevOpsTool {
-    return {
-      name: "mock-tool",
-      description: "A mock tool",
-      inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
-      validate: () => ({ valid: true }),
-      generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
-    };
-  }
-
-  function createTestDeps(): AppDependencies {
-    const provider = createMockProvider();
-    return {
-      provider,
-      tools: [createMockTool()],
-      router: new AgentRouter(provider),
-      debugger: new CIDebugger(provider),
-      diffAnalyzer: new InfraDiffAnalyzer(provider),
-      store: new HistoryStore(),
-    };
-  }
 
   describe("integration: per-route limits (E-6)", () => {
     it("POST /api/generate has RateLimit headers", async () => {

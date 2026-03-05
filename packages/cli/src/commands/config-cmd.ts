@@ -61,8 +61,9 @@ function showConfig(config: DojOpsConfig): void {
 
   const activeProfile = getActiveProfile();
   const configPathDim = pc.dim(`(${getConfigPath()})`);
+  const profileBadge = activeProfile ? pc.yellow(`[profile: ${activeProfile}]`) : "";
   const title = activeProfile
-    ? `Configuration ${configPathDim} ${pc.yellow(`[profile: ${activeProfile}]`)}`
+    ? `Configuration ${configPathDim} ${profileBadge}`
     : `Configuration ${configPathDim}`;
   p.note(lines.join("\n"), title);
 }
@@ -224,7 +225,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
       },
       ollamaTls: ({ results }) => {
         const host = results.ollamaHost as string;
-        if (!host || !host.startsWith("https://")) return Promise.resolve(true);
+        if (!host?.startsWith("https://")) return Promise.resolve(true);
         return p.confirm({
           message: "Verify TLS certificates? (disable for self-signed certs)",
           initialValue: config.ollamaTlsRejectUnauthorized ?? true,
@@ -292,7 +293,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
                   defaultValue: config.defaultModel ?? "",
                 });
               }
-              return Promise.resolve(choice as string);
+              return choice as string;
             }
           } catch {
             // Fall back to text input on failure

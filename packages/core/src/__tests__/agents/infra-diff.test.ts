@@ -158,7 +158,7 @@ describe("InfraDiffAnalyzer edge cases", () => {
       securityImpact: [],
       rollbackComplexity: "trivial",
       recommendations: ["No action needed"],
-      confidence: 1.0,
+      confidence: 1,
     };
     const provider: LLMProvider = {
       name: "mock",

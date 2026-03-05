@@ -122,10 +122,7 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   // 3. Substring match on name segments (e.g., "docker" matches "docker-specialist")
   if (!config) {
     const segmentMatches = allConfigs.filter((c) =>
-      c.name
-        .toLowerCase()
-        .split("-")
-        .some((seg) => seg === lower),
+      c.name.toLowerCase().split("-").includes(lower),
     );
     if (segmentMatches.length === 1) config = segmentMatches[0];
   }
@@ -387,7 +384,7 @@ function writeAgentToDisk(name: string, readme: string, isGlobal: boolean): void
 }
 
 async function agentRemove(args: string[], ctx: CLIContext): Promise<void> {
-  const name = args.filter((a) => !a.startsWith("-"))[0];
+  const name = args.find((a) => !a.startsWith("-"));
   if (!name) {
     p.log.info(`  ${pc.dim("$")} dojops agents remove <name>`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Agent name required.");

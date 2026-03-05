@@ -93,7 +93,8 @@ function topologicalSort(tasks: TaskNode[]): TaskNode[] {
   const sorted: TaskNode[] = [];
   while (queue.length > 0) {
     const id = queue.shift()!;
-    sorted.push(taskMap.get(id)!);
+    const task = taskMap.get(id);
+    if (task) sorted.push(task);
     for (const neighbor of adjacency.get(id) ?? []) {
       const newDegree = (inDegree.get(neighbor) ?? 1) - 1;
       inDegree.set(neighbor, newDegree);
@@ -229,7 +230,15 @@ export class PlannerExecutor {
           }
 
           const output = await tool.generate(resolvedInput);
-          if (!output.success) {
+          if (output.success) {
+            const result: TaskResult = {
+              taskId: task.id,
+              status: "completed",
+              output: output.data,
+            };
+            results.set(task.id, result);
+            this.logger.taskEnd(task.id, "completed");
+          } else {
             failed.add(task.id);
             const result: TaskResult = {
               taskId: task.id,
@@ -238,14 +247,6 @@ export class PlannerExecutor {
             };
             results.set(task.id, result);
             this.logger.taskEnd(task.id, "failed", output.error);
-          } else {
-            const result: TaskResult = {
-              taskId: task.id,
-              status: "completed",
-              output: output.data,
-            };
-            results.set(task.id, result);
-            this.logger.taskEnd(task.id, "completed");
           }
         } catch (err) {
           failed.add(task.id);

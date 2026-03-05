@@ -137,7 +137,7 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
           message: `${prefix}${pkg.name}@${pkg.version}: ${vuln.id}${vuln.description ? " \u2014 " + vuln.description : ""}`,
           recommendation:
             vuln.fix_versions && vuln.fix_versions.length > 0
-              ? `Update to ${pkg.name}>=${vuln.fix_versions[vuln.fix_versions.length - 1]}`
+              ? `Update to ${pkg.name}>=${vuln.fix_versions.at(-1)}`
               : "No fix version available — review manually",
           autoFixAvailable: !!(vuln.fix_versions && vuln.fix_versions.length > 0),
         });

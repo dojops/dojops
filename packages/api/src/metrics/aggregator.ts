@@ -175,7 +175,7 @@ export class MetricsAggregator {
       expectedSeq = entry.seq + 1;
     }
 
-    const lastEntry = entries[entries.length - 1];
+    const lastEntry = entries.at(-1);
     return {
       valid: errorCount === 0,
       errors: errorCount,
@@ -345,7 +345,7 @@ export class MetricsAggregator {
       .slice(-30);
 
     // Scan history
-    const scanHistory = scanReports
+    const scanHistory = [...scanReports]
       .sort((a, b) => {
         const ta = new Date(a.timestamp).getTime();
         const tb = new Date(b.timestamp).getTime();

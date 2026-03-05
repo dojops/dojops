@@ -92,7 +92,7 @@ export const toolchainLoadCommand: CommandHandler = async () => {
 
   const installed = registry.tools.length;
   const system = SYSTEM_TOOLS.filter(
-    (t) => !registry.tools.find((r) => r.name === t.name) && resolveBinary(t.binaryName),
+    (t) => !registry.tools.some((r) => r.name === t.name) && resolveBinary(t.binaryName),
   ).length;
   const missing = SYSTEM_TOOLS.length - installed - system;
 
@@ -106,7 +106,7 @@ export const toolchainLoadCommand: CommandHandler = async () => {
 
   if (missing > 0) {
     const missingNames = SYSTEM_TOOLS.filter(
-      (t) => !registry.tools.find((r) => r.name === t.name) && !resolveBinary(t.binaryName),
+      (t) => !registry.tools.some((r) => r.name === t.name) && !resolveBinary(t.binaryName),
     ).map((t) => t.name);
     p.log.info(`Missing: ${pc.dim(missingNames.join(", "))}`);
     p.log.info(`Install with: ${pc.cyan("dojops toolchain install <name>")}`);
@@ -121,7 +121,7 @@ export const toolchainInstallCommand: CommandHandler = async (args, ctx) => {
     const available = SYSTEM_TOOLS.filter(
       (t) =>
         isToolSupportedOnCurrentPlatform(t) &&
-        !loadToolchainRegistry().tools.find((r) => r.name === t.name),
+        !loadToolchainRegistry().tools.some((r) => r.name === t.name),
     );
 
     if (available.length === 0) {

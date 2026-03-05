@@ -239,7 +239,7 @@ export function saveCopilotAuth(auth: StoredCopilotAuth): void {
 }
 
 // Validate GitHub token format (ghu_, gho_, ghp_ prefixes, or legacy tokens)
-const GITHUB_TOKEN_PATTERN = /^(gh[uposr]_[A-Za-z0-9_]{4,}|[a-f0-9]{40})$/;
+const GITHUB_TOKEN_PATTERN = /^(gh[uposr]_\w{4,}|[a-f0-9]{40})$/;
 
 export function loadCopilotAuth(): StoredCopilotAuth | null {
   try {

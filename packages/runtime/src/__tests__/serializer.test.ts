@@ -15,7 +15,7 @@ describe("serialize", () => {
       });
       const lines = result.split("\n").filter((l) => l.length > 0);
       const nameIdx = lines.findIndex((l) => l.startsWith("name:"));
-      const onIdx = lines.findIndex((l) => /^on:/.test(l) || /^'on':/.test(l));
+      const onIdx = lines.findIndex((l) => l.startsWith("on:") || l.startsWith("'on':"));
       const jobsIdx = lines.findIndex((l) => l.startsWith("jobs:"));
       expect(nameIdx).toBeGreaterThanOrEqual(0);
       expect(onIdx).toBeGreaterThanOrEqual(0);

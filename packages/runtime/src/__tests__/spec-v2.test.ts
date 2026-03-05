@@ -245,15 +245,15 @@ describe("DopsFrontmatterV2Schema", () => {
   });
 
   it("rejects missing context block", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { context: _context, ...noContext } = validFrontmatter;
-    void _context;
     const result = DopsFrontmatterV2Schema.safeParse(noContext);
     expect(result.success).toBe(false);
   });
 
   it("rejects missing files array", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { files: _files, ...noFiles } = validFrontmatter;
-    void _files;
     const result = DopsFrontmatterV2Schema.safeParse(noFiles);
     expect(result.success).toBe(false);
   });

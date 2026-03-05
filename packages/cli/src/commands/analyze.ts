@@ -28,7 +28,7 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
     }
   }
 
-  if (!content || !content.trim()) {
+  if (!content?.trim()) {
     p.log.info(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
     p.log.info(`  ${pc.dim("$")} dojops analyze diff --file <path>`);
     p.log.info(`  ${pc.dim("$")} cat diff.txt | dojops analyze diff`);

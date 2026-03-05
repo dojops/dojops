@@ -101,7 +101,8 @@ function historyList(args: string[], ctx: CLIContext): void {
     console.log("---");
     for (const plan of plans) {
       console.log(`- id: ${plan.id}`);
-      console.log(`  goal: "${plan.goal.replaceAll('"', String.raw`\"`)}"`);
+      const escapedGoal = plan.goal.replaceAll('"', String.raw`\"`);
+      console.log(`  goal: "${escapedGoal}"`);
       console.log(`  status: ${plan.approvalStatus}`);
       console.log(`  createdAt: ${plan.createdAt}`);
       console.log(`  tasks: ${plan.tasks.length}`);
@@ -188,7 +189,8 @@ function historyShow(args: string[], ctx: CLIContext): void {
   if (executions.length > 0) {
     const execLines = executions.map((e) => {
       const status = e.status === "SUCCESS" ? pc.green(e.status) : pc.red(e.status);
-      return `  ${status}  ${e.executedAt}  ${pc.dim(`(${e.durationMs}ms)`)}`;
+      const duration = pc.dim(`(${e.durationMs}ms)`);
+      return `  ${status}  ${e.executedAt}  ${duration}`;
     });
     p.note(execLines.join("\n"), "Execution History");
   }

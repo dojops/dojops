@@ -139,12 +139,10 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
       for (const line of content.split("\n")) {
         console.log(`  ${line}`);
       }
+    } else if (process.stdout.isTTY) {
+      p.log.message(content);
     } else {
-      if (process.stdout.isTTY) {
-        p.log.message(content);
-      } else {
-        process.stdout.write(content);
-      }
+      process.stdout.write(content);
     }
     return;
   }
@@ -314,11 +312,9 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     for (const line of result.content.split("\n")) {
       console.log(`  ${line}`);
     }
+  } else if (process.stdout.isTTY) {
+    p.log.message(result.content);
   } else {
-    if (process.stdout.isTTY) {
-      p.log.message(result.content);
-    } else {
-      process.stdout.write(result.content);
-    }
+    process.stdout.write(result.content);
   }
 }

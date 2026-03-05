@@ -28,6 +28,16 @@ import {
   SessionState,
 } from "../state";
 
+const makeAuditEntry = (command: string) => ({
+  timestamp: new Date().toISOString(),
+  user: "test",
+  command,
+  action: "test",
+  planId: "plan-test",
+  status: "success" as const,
+  durationMs: 100,
+});
+
 let tmpDir: string;
 
 beforeEach(() => {
@@ -269,15 +279,7 @@ describe("findProjectRoot", () => {
 });
 
 describe("audit hash chain", () => {
-  const makeEntry = (command: string) => ({
-    timestamp: new Date().toISOString(),
-    user: "test",
-    command,
-    action: "test",
-    planId: "plan-test",
-    status: "success" as const,
-    durationMs: 100,
-  });
+  const makeEntry = makeAuditEntry;
 
   it("appends entry with seq, hash, previousHash fields", () => {
     initProject(tmpDir);
@@ -457,15 +459,7 @@ describe("checkGitDirty", () => {
 });
 
 describe("S4: corrupt audit entry recovery", () => {
-  const makeEntry = (command: string) => ({
-    timestamp: new Date().toISOString(),
-    user: "test",
-    command,
-    action: "test",
-    planId: "plan-test",
-    status: "success" as const,
-    durationMs: 100,
-  });
+  const makeEntry = makeAuditEntry;
 
   it("recovers chain from corrupt last line by scanning backwards", () => {
     initProject(tmpDir);

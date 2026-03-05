@@ -46,7 +46,14 @@ function extractIssue(item: unknown): VerificationIssue {
     const obj = item as Record<string, unknown>;
     return {
       severity: mapSeverity(obj.severity ?? obj.level ?? obj.type),
-      message: String(obj.message ?? obj.summary ?? obj.error ?? JSON.stringify(item)),
+      message:
+        typeof obj.message === "string"
+          ? obj.message
+          : typeof obj.summary === "string"
+            ? obj.summary
+            : typeof obj.error === "string"
+              ? obj.error
+              : JSON.stringify(item),
       line: typeof obj.line === "number" ? obj.line : undefined,
       rule:
         typeof obj.rule === "string" || typeof obj.code === "string"

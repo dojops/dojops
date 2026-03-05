@@ -66,7 +66,7 @@ describe("BaseTool", () => {
 
     const tool = new VerifiableEchoTool();
     expect(tool.verify).toBeDefined();
-    const result = await tool.verify!({});
+    const result = await tool.verify?.({});
     expect(result.passed).toBe(true);
     expect(result.tool).toBe("echo-verify");
     expect(result.issues).toHaveLength(0);

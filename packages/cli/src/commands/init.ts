@@ -25,9 +25,8 @@ function formatScanSummary(ctx: RepoContext): string[] {
 
   // Package manager
   if (ctx.packageManager) {
-    lines.push(
-      `${pc.cyan("Pkg manager:")}   ${ctx.packageManager.name}${ctx.packageManager.lockfile ? ` (${ctx.packageManager.lockfile})` : ""}`,
-    );
+    const lockfileSuffix = ctx.packageManager.lockfile ? ` (${ctx.packageManager.lockfile})` : "";
+    lines.push(`${pc.cyan("Pkg manager:")}   ${ctx.packageManager.name}${lockfileSuffix}`);
   }
 
   // CI/CD
@@ -47,10 +46,11 @@ function formatScanSummary(ctx: RepoContext): string[] {
 
   // Infrastructure
   const infraParts: string[] = [];
-  if (ctx.infra.hasTerraform)
-    infraParts.push(
-      `Terraform${ctx.infra.tfProviders.length > 0 ? ` [${ctx.infra.tfProviders.join(", ")}]` : ""}`,
-    );
+  if (ctx.infra.hasTerraform) {
+    const providersSuffix =
+      ctx.infra.tfProviders.length > 0 ? ` [${ctx.infra.tfProviders.join(", ")}]` : "";
+    infraParts.push(`Terraform${providersSuffix}`);
+  }
   if (ctx.infra.hasKubernetes) infraParts.push("Kubernetes");
   if (ctx.infra.hasHelm) infraParts.push("Helm");
   if (ctx.infra.hasAnsible) infraParts.push("Ansible");
@@ -179,9 +179,8 @@ export function formatContextMarkdown(ctx: RepoContext): string {
   // Package Manager
   lines.push("", "## Package Manager", "");
   if (ctx.packageManager) {
-    lines.push(
-      `- ${ctx.packageManager.name}${ctx.packageManager.lockfile ? ` (${ctx.packageManager.lockfile})` : ""}`,
-    );
+    const lockfileSuffix = ctx.packageManager.lockfile ? ` (${ctx.packageManager.lockfile})` : "";
+    lines.push(`- ${ctx.packageManager.name}${lockfileSuffix}`);
   } else {
     lines.push("No package manager detected.");
   }

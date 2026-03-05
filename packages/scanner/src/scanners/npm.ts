@@ -304,12 +304,23 @@ function parsePnpmAudit(
   const advisories: Record<string, unknown> = audit.advisories ?? {};
   for (const advisory of Object.values(advisories) as Array<Record<string, unknown>>) {
     const prefix = subProject ? `${subProject}: ` : "";
-    const moduleName = String(advisory.module_name ?? advisory.name ?? "unknown");
-    const severity = mapSeverity(String(advisory.severity ?? "moderate"));
-    const title = String(advisory.title ?? advisory.overview ?? "vulnerability");
-    const patchedVersions = advisory.patched_versions
-      ? String(advisory.patched_versions)
-      : undefined;
+    const moduleName =
+      typeof advisory.module_name === "string"
+        ? advisory.module_name
+        : typeof advisory.name === "string"
+          ? advisory.name
+          : "unknown";
+    const severity = mapSeverity(
+      typeof advisory.severity === "string" ? advisory.severity : "moderate",
+    );
+    const title =
+      typeof advisory.title === "string"
+        ? advisory.title
+        : typeof advisory.overview === "string"
+          ? advisory.overview
+          : "vulnerability";
+    const patchedVersions =
+      typeof advisory.patched_versions === "string" ? advisory.patched_versions : undefined;
     const cves = Array.isArray(advisory.cves) ? advisory.cves : [];
 
     findings.push({
