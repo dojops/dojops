@@ -71,7 +71,7 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
     } else if (arg.startsWith("--module=") || arg.startsWith("--tool=")) {
       globalOpts.tool = arg.slice(arg.indexOf("=") + 1);
     } else if (arg === "--timeout" && i + 1 < args.length) {
-      const t = parseInt(args[++i], 10);
+      const t = Number.parseInt(args[++i], 10);
       if (isNaN(t) || t <= 0)
         throw new Error(
           `Invalid --timeout value: "${args[i]}". Must be a positive integer (milliseconds).`,
@@ -79,7 +79,7 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
       globalOpts.timeout = t;
     } else if (arg.startsWith("--timeout=")) {
       const raw = arg.slice("--timeout=".length);
-      const t = parseInt(raw, 10);
+      const t = Number.parseInt(raw, 10);
       if (isNaN(t) || t <= 0)
         throw new Error(
           `Invalid --timeout value: "${raw}". Must be a positive integer (milliseconds).`,

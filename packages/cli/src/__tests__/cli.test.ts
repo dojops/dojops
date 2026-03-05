@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { execFileSync } from "child_process";
-import * as path from "path";
+import { execFileSync } from "node:child_process";
+import * as path from "node:path";
 
 const CLI_PATH = path.resolve(__dirname, "..", "..", "dist", "index.js");
 

@@ -2,7 +2,7 @@ import { LLMProvider } from "@dojops/core";
 import { ChatMessage } from "./types";
 
 export class SessionSummarizer {
-  constructor(private provider: LLMProvider) {}
+  constructor(private readonly provider: LLMProvider) {}
 
   async summarize(messages: ChatMessage[]): Promise<string> {
     if (messages.length === 0) return "";

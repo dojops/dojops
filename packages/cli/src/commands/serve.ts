@@ -61,8 +61,8 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   const noAuth = hasFlag(args, "--no-auth");
   const portArg = extractFlagValue(args, "--port");
   const port = portArg
-    ? parseInt(portArg, 10)
-    : parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
+    ? Number.parseInt(portArg, 10)
+    : Number.parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
 
   if (isNaN(port) || port < 1 || port > 65535) {
     p.log.error(`Invalid port: "${portArg ?? process.env.DOJOPS_API_PORT}". Must be 1-65535.`);
@@ -232,17 +232,16 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     : app.listen(port, onListening);
 
   function onListening(): void {
+    const dashboardUrl = pc.underline(`${protocol}://localhost:${port}`);
     const noteLines = [
       `${pc.bold("Provider:")}  ${provider.name}`,
       `${pc.bold("Agents:")}    ${pc.cyan(String(router.getAgents().length))} specialist agents loaded`,
       `${pc.bold("Metrics:")}   ${projectRoot ? pc.green("enabled") : pc.yellow("disabled (no project root)")}`,
       `${pc.bold("TLS:")}       ${tlsOptions ? pc.green("enabled") : pc.yellow("disabled")}`,
-      `${pc.bold("Dashboard:")} ${pc.underline(`${protocol}://localhost:${port}`)}`,
+      `${pc.bold("Dashboard:")} ${dashboardUrl}`,
     ];
     p.note(noteLines.join("\n"), "Server Started");
-    p.log.success(
-      `DojOps API server running on ${pc.underline(`${protocol}://localhost:${port}`)}`,
-    );
+    p.log.success(`DojOps API server running on ${dashboardUrl}`);
 
     // E-1: Warn when serving over plain HTTP with auth enabled (API key in cleartext)
     if (!tlsOptions && serverApiKey) {

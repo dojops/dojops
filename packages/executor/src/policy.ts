@@ -1,4 +1,4 @@
-import * as path from "path";
+import * as path from "node:path";
 import { ExecutionPolicy } from "./types";
 
 export class PolicyViolationError extends Error {
@@ -61,7 +61,7 @@ export function matchesAllowlistPattern(filePath: string, pattern: string): bool
   // Handle * in filename (e.g. "Dockerfile.*", "docker-compose*.yml")
   if (pattern.includes("*")) {
     const regexStr =
-      "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$";
+      "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$"; // NOSONAR - replacement strings, not regex patterns
     const regex = new RegExp(regexStr);
     // Match against the full relative path or just the basename for simple patterns
     if (!pattern.includes("/")) {
@@ -95,7 +95,7 @@ export function isDevOpsFile(filePath: string): boolean {
       return false;
     }
     // Path is under cwd — extract relative portion
-    relative = resolved.slice(cwdPrefix.length).replace(/\\/g, "/");
+    relative = resolved.slice(cwdPrefix.length).replaceAll("\\", "/");
 
     const segments = relative.split("/");
     // Find the first segment that matches a known DevOps root

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import * as path from "path";
+import * as path from "node:path";
 
 const noPathTraversal = (val: string) => !val.split(/[/\\]/).includes("..");
 const isRelativePath = (val: string) => !path.isAbsolute(val);

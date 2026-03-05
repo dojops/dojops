@@ -8,8 +8,8 @@ import {
   isV2Module,
   DocProvider,
 } from "@dojops/runtime";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { ToolRegistry } from "./registry";
 import { CustomTool } from "./custom-tool";
 import { discoverTools, discoverUserDopsFiles } from "./tool-loader";

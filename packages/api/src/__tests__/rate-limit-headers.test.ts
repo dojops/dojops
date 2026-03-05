@@ -70,7 +70,7 @@ describe("createRateLimiter RFC headers (H-4)", () => {
 
       limiter(req, res as unknown as Response, next);
 
-      const resetValue = parseInt(res._headers["RateLimit-Reset"], 10);
+      const resetValue = Number.parseInt(res._headers["RateLimit-Reset"], 10);
       expect(resetValue).toBeGreaterThan(0);
       // Should be roughly now + 60 seconds
       const nowSeconds = Math.ceil(Date.now() / 1000);
@@ -87,7 +87,7 @@ describe("createRateLimiter RFC headers (H-4)", () => {
       for (let i = 0; i < 3; i++) {
         const res = mockRes();
         limiter(req, res as unknown as Response, next);
-        const remaining = parseInt(res._headers["RateLimit-Remaining"], 10);
+        const remaining = Number.parseInt(res._headers["RateLimit-Remaining"], 10);
         expect(remaining).toBeGreaterThanOrEqual(0);
       }
     });
@@ -135,7 +135,7 @@ describe("createRateLimiter RFC headers (H-4)", () => {
       limiter(req, res2 as unknown as Response, next);
       expect(res2._status).toBe(429);
       expect(res2._headers["Retry-After"]).toBeDefined();
-      const retryAfter = parseInt(res2._headers["Retry-After"], 10);
+      const retryAfter = Number.parseInt(res2._headers["Retry-After"], 10);
       expect(retryAfter).toBeGreaterThan(0);
       expect(retryAfter).toBeLessThanOrEqual(60);
     });

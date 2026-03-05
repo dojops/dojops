@@ -3,8 +3,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createDebugger } from "@dojops/api";
 import { CLIContext } from "../types";
-import { formatConfidence } from "../formatter";
-import { wrapForNote } from "../formatter";
+import { formatConfidence, wrapForNote } from "../formatter";
 import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { readStdin } from "../stdin";
@@ -22,7 +21,7 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
     }
   } else {
     const stdinContent = readStdin();
-    if (stdinContent && stdinContent.trim()) {
+    if (stdinContent?.trim()) {
       logContent = stdinContent;
     } else {
       logContent = args.filter((a) => !a.startsWith("-")).join(" ");
@@ -58,16 +57,14 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
   ];
 
   if (diagnosis.affectedFiles.length > 0) {
-    bodyLines.push("");
-    bodyLines.push(pc.bold("Affected Files:"));
+    bodyLines.push("", pc.bold("Affected Files:"));
     for (const f of diagnosis.affectedFiles) {
       bodyLines.push(`  ${pc.dim("-")} ${pc.underline(f)}`);
     }
   }
 
   if (diagnosis.suggestedFixes.length > 0) {
-    bodyLines.push("");
-    bodyLines.push(pc.bold("Suggested Fixes:"));
+    bodyLines.push("", pc.bold("Suggested Fixes:"));
     for (const fix of diagnosis.suggestedFixes) {
       bodyLines.push(`  ${formatConfidence(fix.confidence)} ${fix.description}`);
       if (fix.command) bodyLines.push(`       ${pc.dim("$")} ${pc.cyan(fix.command)}`);

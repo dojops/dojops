@@ -21,7 +21,7 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
     }
   } else {
     const stdinContent = readStdin();
-    if (stdinContent && stdinContent.trim()) {
+    if (stdinContent?.trim()) {
       content = stdinContent;
     } else {
       content = args.filter((a) => !a.startsWith("-")).join(" ");
@@ -58,8 +58,7 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
   ];
 
   if (analysis.changes.length > 0) {
-    bodyLines.push("");
-    bodyLines.push(pc.bold(`Changes (${analysis.changes.length}):`));
+    bodyLines.push("", pc.bold(`Changes (${analysis.changes.length}):`));
     for (const change of analysis.changes) {
       const detail = change.attribute ? pc.dim(` (${change.attribute})`) : "";
       const action = changeColor(change.action.toUpperCase());
@@ -68,24 +67,21 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
   }
 
   if (analysis.riskFactors.length > 0) {
-    bodyLines.push("");
-    bodyLines.push(pc.bold("Risk Factors:"));
+    bodyLines.push("", pc.bold("Risk Factors:"));
     for (const r of analysis.riskFactors) {
       bodyLines.push(`  ${pc.yellow("-")} ${r}`);
     }
   }
 
   if (analysis.securityImpact.length > 0) {
-    bodyLines.push("");
-    bodyLines.push(pc.bold("Security Impact:"));
+    bodyLines.push("", pc.bold("Security Impact:"));
     for (const si of analysis.securityImpact) {
       bodyLines.push(`  ${pc.red("-")} ${si}`);
     }
   }
 
   if (analysis.recommendations.length > 0) {
-    bodyLines.push("");
-    bodyLines.push(pc.bold("Recommendations:"));
+    bodyLines.push("", pc.bold("Recommendations:"));
     for (const rec of analysis.recommendations) {
       bodyLines.push(`  ${pc.blue("-")} ${rec}`);
     }

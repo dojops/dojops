@@ -25,12 +25,12 @@ export interface SendResult {
 }
 
 export class ChatSession {
-  private state: ChatSessionState;
-  private provider: LLMProvider;
-  private router: AgentRouter;
-  private memoryManager: MemoryManager;
-  private summarizer: SessionSummarizer;
-  private projectDomains: string[];
+  private readonly state: ChatSessionState;
+  private readonly provider: LLMProvider;
+  private readonly router: AgentRouter;
+  private readonly memoryManager: MemoryManager;
+  private readonly summarizer: SessionSummarizer;
+  private readonly projectDomains: string[];
 
   constructor(opts: ChatSessionOptions) {
     this.provider = opts.provider;

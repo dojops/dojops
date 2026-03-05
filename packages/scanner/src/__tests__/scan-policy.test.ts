@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import type { ScanReport, ScanFinding } from "../types";
-import { evaluatePolicy } from "../scan-policy";
-import type { ScanPolicy } from "../scan-policy";
 
 // Mock node:fs at module level so loadScanPolicy gets the mocked version
 vi.mock("node:fs", async (importOriginal) => {
@@ -15,7 +13,8 @@ vi.mock("node:fs", async (importOriginal) => {
 
 // Import after mock so loadScanPolicy uses the mocked fs
 import * as fs from "node:fs";
-import { loadScanPolicy } from "../scan-policy";
+import { evaluatePolicy, loadScanPolicy } from "../scan-policy";
+import type { ScanPolicy } from "../scan-policy";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -352,7 +351,7 @@ describe("loadScanPolicy", () => {
     mockedExistsSync.mockReturnValue(true);
     mockedReadFileSync.mockReturnValue("thresholds:\n  critical: abc\n");
     const policy = loadScanPolicy("/project");
-    // parseInt("abc") is NaN, so the value is not assigned
+    // Number.parseInt("abc") is NaN, so the value is not assigned
     expect(policy!.thresholds!.critical).toBeUndefined();
   });
 

@@ -25,13 +25,12 @@ import {
 import { parseGlobalOptions, parseCommandPath } from "./parser";
 import { remapLegacyArgs } from "./compat";
 import { printHelp, printCommandHelp, printBanner } from "./help";
-import { resolveCommand } from "./commands";
+import { resolveCommand, registerCommand, registerSubcommand } from "./commands";
 import { CLIContext } from "./types";
 import { ExitCode, CLIError } from "./exit-codes";
 import { getDojopsVersion } from "./state";
 
 // ── Late-registered commands (Phases 2-6) ──────────────────────────
-import { registerCommand, registerSubcommand } from "./commands";
 import { initCommand } from "./commands/init";
 import { applyCommand } from "./commands/apply";
 import { validateCommand } from "./commands/validate";

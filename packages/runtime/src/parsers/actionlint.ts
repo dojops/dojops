@@ -18,13 +18,13 @@ export function parseActionlint(output: string): VerificationIssue[] {
 
   for (const line of lines) {
     // Match actionlint format: file:line:col: message [rule]
-    const match = line.match(/^(.+?):(\d+):(\d+):\s+(.+)$/);
+    const match = /^(.+?):(\d+):(\d+):\s+(.+)$/.exec(line);
     if (match) {
       const message = match[4];
       issues.push({
         severity: "error",
         message: message.length > 200 ? message.slice(0, 200) + "..." : message,
-        line: parseInt(match[2], 10),
+        line: Number.parseInt(match[2], 10),
       });
     }
   }

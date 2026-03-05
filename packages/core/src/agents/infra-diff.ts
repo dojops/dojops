@@ -66,7 +66,7 @@ You MUST respond with valid JSON matching this schema:
 IMPORTANT: Do NOT ask follow-up questions or offer to continue the conversation. This is a single-shot interaction — the user cannot reply. Provide a complete, self-contained response.`;
 
 export class InfraDiffAnalyzer {
-  constructor(private provider: LLMProvider) {}
+  constructor(private readonly provider: LLMProvider) {}
 
   async analyze(diffContent: string): Promise<InfraDiffAnalysis> {
     const content = truncateInput(diffContent);

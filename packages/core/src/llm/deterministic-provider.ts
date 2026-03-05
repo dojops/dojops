@@ -6,7 +6,7 @@ import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
  */
 export class DeterministicProvider implements LLMProvider {
   name: string;
-  private inner: LLMProvider;
+  private readonly inner: LLMProvider;
 
   constructor(inner: LLMProvider) {
     this.inner = inner;

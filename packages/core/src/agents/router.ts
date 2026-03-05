@@ -14,12 +14,12 @@ export interface RouteOptions {
 }
 
 export class AgentRouter {
-  private agents: SpecialistAgent[];
+  private readonly agents: SpecialistAgent[];
 
   constructor(
-    private provider: LLMProvider,
+    private readonly provider: LLMProvider,
     configs: SpecialistConfig[] = ALL_SPECIALIST_CONFIGS,
-    private docAugmenter?: {
+    private readonly docAugmenter?: {
       augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
     },
   ) {
@@ -39,7 +39,7 @@ export class AgentRouter {
     }
     // Single-word: use word boundary matching
     // \b handles punctuation, hyphens, and whitespace boundaries
-    return new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lower);
+    return new RegExp(String.raw`\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\b`).test(lower);
   }
 
   route(prompt: string, options?: RouteOptions): RouteResult {

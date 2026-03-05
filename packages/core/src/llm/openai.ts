@@ -6,8 +6,8 @@ import { augmentSystemPrompt } from "./schema-prompt";
 
 export class OpenAIProvider implements LLMProvider {
   name = "openai";
-  private client: OpenAI;
-  private model: string;
+  private readonly client: OpenAI;
+  private readonly model: string;
 
   constructor(apiKey: string, model = "gpt-4o-mini") {
     this.client = new OpenAI({ apiKey });
@@ -81,7 +81,7 @@ export class OpenAIProvider implements LLMProvider {
           models.push(model.id);
         }
       }
-      return models.sort();
+      return models.sort((a, b) => a.localeCompare(b));
     } catch {
       return [];
     }
@@ -90,7 +90,7 @@ export class OpenAIProvider implements LLMProvider {
 
 function extractApiError(err: unknown): string {
   if (err instanceof Error) {
-    const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+    const jsonMatch = /\{[\s\S]*\}/.exec(err.message);
     if (jsonMatch) {
       try {
         const body = JSON.parse(jsonMatch[0]);

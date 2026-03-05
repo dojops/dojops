@@ -13,12 +13,12 @@ export async function planRemediation(
   }
 
   const findingsSummary = critical
-    .map(
-      (f) =>
-        `- [${f.id}] ${f.severity} (${f.category}) ${f.tool}: ${f.message}` +
-        (f.file ? ` in ${f.file}${f.line ? `:${f.line}` : ""}` : "") +
-        (f.recommendation ? `\n  Recommendation: ${f.recommendation}` : ""),
-    )
+    .map((f) => {
+      const lineSuffix = f.line ? `:${f.line}` : "";
+      const filePart = f.file ? ` in ${f.file}${lineSuffix}` : "";
+      const recommendPart = f.recommendation ? `\n  Recommendation: ${f.recommendation}` : "";
+      return `- [${f.id}] ${f.severity} (${f.category}) ${f.tool}: ${f.message}${filePart}${recommendPart}`;
+    })
     .join("\n");
 
   const response = await provider.generate({

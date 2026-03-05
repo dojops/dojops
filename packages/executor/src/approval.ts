@@ -18,7 +18,7 @@ export class AutoDenyHandler implements ApprovalHandler {
 }
 
 export class CallbackApprovalHandler implements ApprovalHandler {
-  constructor(private callback: (request: ApprovalRequest) => Promise<ApprovalDecision>) {}
+  constructor(private readonly callback: (request: ApprovalRequest) => Promise<ApprovalDecision>) {}
 
   async requestApproval(request: ApprovalRequest): Promise<ApprovalDecision> {
     return this.callback(request);
@@ -41,7 +41,7 @@ export function buildPreview(toolOutput: ToolOutput, toolName: string): Executio
     }
     if ("projectType" in data) {
       const pt = data.projectType as Record<string, unknown>;
-      summaryParts.push(`Detected project type: ${pt.type ?? "unknown"}.`);
+      summaryParts.push(`Detected project type: ${String(pt.type ?? "unknown")}.`);
     }
     if ("templates" in data && typeof data.templates === "object") {
       const templates = data.templates as Record<string, string>;

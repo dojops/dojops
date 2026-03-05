@@ -13,7 +13,7 @@ export class JsonValidationError extends Error {
 
 function stripMarkdownFences(text: string): string {
   // Match triple backticks or triple tildes (with optional language tag)
-  const fenced = text.match(/(?:```|~~~)(?:json)?\s*\n?([\s\S]*?)\n?\s*(?:```|~~~)/);
+  const fenced = /(?:```|~~~)(?:json)?\s*\n?([\s\S]*?)\n?\s*(?:```|~~~)/.exec(text);
   if (fenced) return fenced[1].trim();
   return text.trim();
 }

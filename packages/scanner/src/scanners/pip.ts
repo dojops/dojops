@@ -105,7 +105,7 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
         tool: "pip-audit",
         findings: [],
         skipped: true,
-        skipReason: `pip-audit failed${subProject ? ` (${subProject})` : ""}: ${execErr.stderr ?? "unknown error"}`,
+        skipReason: `pip-audit failed${subProject ? " (" + subProject + ")" : ""}: ${execErr.stderr ?? "unknown error"}`,
       };
     }
   }
@@ -124,10 +124,8 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
           category: "DEPENDENCY",
           file: subProject
             ? `${subProject}/${hasRequirements ? "requirements.txt" : "pyproject.toml"}`
-            : hasRequirements
-              ? "requirements.txt"
-              : "pyproject.toml",
-          message: `${prefix}${pkg.name}@${pkg.version}: ${vuln.id}${vuln.description ? ` — ${vuln.description}` : ""}`,
+            : (hasRequirements ? "requirements.txt" : "pyproject.toml"),
+          message: `${prefix}${pkg.name}@${pkg.version}: ${vuln.id}${vuln.description ? " \u2014 " + vuln.description : ""}`,
           recommendation:
             vuln.fix_versions && vuln.fix_versions.length > 0
               ? `Update to ${pkg.name}>=${vuln.fix_versions[vuln.fix_versions.length - 1]}`

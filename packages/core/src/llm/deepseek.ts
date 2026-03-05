@@ -6,8 +6,8 @@ import { augmentSystemPrompt } from "./schema-prompt";
 
 export class DeepSeekProvider implements LLMProvider {
   name = "deepseek";
-  private client: OpenAI;
-  private model: string;
+  private readonly client: OpenAI;
+  private readonly model: string;
 
   constructor(apiKey: string, model = "deepseek-chat") {
     this.client = new OpenAI({ apiKey, baseURL: "https://api.deepseek.com/v1" });
@@ -79,7 +79,7 @@ export class DeepSeekProvider implements LLMProvider {
       for await (const model of list) {
         models.push(model.id);
       }
-      return models.sort();
+      return models.sort((a, b) => a.localeCompare(b));
     } catch {
       return [];
     }
@@ -88,7 +88,7 @@ export class DeepSeekProvider implements LLMProvider {
 
 function extractApiError(err: unknown): string {
   if (err instanceof Error) {
-    const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+    const jsonMatch = /\{[\s\S]*\}/.exec(err.message);
     if (jsonMatch) {
       try {
         const body = JSON.parse(jsonMatch[0]);

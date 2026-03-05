@@ -69,7 +69,7 @@ function historyList(args: string[], ctx: CLIContext): void {
 
   // Apply --limit filter (after other filters)
   if (limitFilter) {
-    const limit = parseInt(limitFilter, 10);
+    const limit = Number.parseInt(limitFilter, 10);
     if (!isNaN(limit) && limit > 0) {
       plans = plans.slice(0, limit);
     }
@@ -101,7 +101,7 @@ function historyList(args: string[], ctx: CLIContext): void {
     console.log("---");
     for (const plan of plans) {
       console.log(`- id: ${plan.id}`);
-      console.log(`  goal: "${plan.goal.replace(/"/g, '\\"')}"`);
+      console.log(`  goal: "${plan.goal.replaceAll('"', '\\"')}"`);
       console.log(`  status: ${plan.approvalStatus}`);
       console.log(`  createdAt: ${plan.createdAt}`);
       console.log(`  tasks: ${plan.tasks.length}`);
@@ -110,14 +110,11 @@ function historyList(args: string[], ctx: CLIContext): void {
   }
 
   const lines = plans.map((plan) => {
-    const status =
-      plan.approvalStatus === "APPLIED"
-        ? pc.green(plan.approvalStatus)
-        : plan.approvalStatus === "DENIED"
-          ? pc.red(plan.approvalStatus)
-          : plan.approvalStatus === "PARTIAL"
-            ? pc.magenta(plan.approvalStatus)
-            : pc.yellow(plan.approvalStatus);
+    let status: string;
+    if (plan.approvalStatus === "APPLIED") status = pc.green(plan.approvalStatus);
+    else if (plan.approvalStatus === "DENIED") status = pc.red(plan.approvalStatus);
+    else if (plan.approvalStatus === "PARTIAL") status = pc.magenta(plan.approvalStatus);
+    else status = pc.yellow(plan.approvalStatus);
     const date = new Date(plan.createdAt).toLocaleDateString();
     return `  ${pc.cyan(plan.id.padEnd(16))} ${status.padEnd(20)} ${date}  ${pc.dim(plan.goal.slice(0, 50))}`;
   });
@@ -175,12 +172,8 @@ function historyShow(args: string[], ctx: CLIContext): void {
   if (plan.results && plan.results.length > 0) {
     infoLines.push("", pc.bold("Results:"));
     for (const r of plan.results) {
-      const st =
-        r.status === "completed"
-          ? pc.green(r.status)
-          : r.status === "failed"
-            ? pc.red(r.status)
-            : pc.yellow(r.status);
+      const stFailed = r.status === "failed" ? pc.red(r.status) : pc.yellow(r.status);
+      const st = r.status === "completed" ? pc.green(r.status) : stFailed;
       let line = `  ${pc.blue(r.taskId)} ${st}`;
       if (r.executionStatus) line += ` exec:${r.executionStatus}`;
       if (r.error) line += ` ${pc.red(r.error)}`;
@@ -227,12 +220,8 @@ function historyAudit(args: string[], ctx: CLIContext): void {
   }
 
   const lines = entries.map((entry: AuditEntry) => {
-    const statusColor =
-      entry.status === "success"
-        ? pc.green(entry.status)
-        : entry.status === "failure"
-          ? pc.red(entry.status)
-          : pc.yellow(entry.status);
+    const statusColorFail = entry.status === "failure" ? pc.red(entry.status) : pc.yellow(entry.status);
+    const statusColor = entry.status === "success" ? pc.green(entry.status) : statusColorFail;
     const seq =
       entry.seq != null ? pc.dim(`#${String(entry.seq).padStart(4, " ")}`) : pc.dim("#   ?");
     const ts = new Date(entry.timestamp).toLocaleString();

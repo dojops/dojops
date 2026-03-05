@@ -16,9 +16,9 @@
  * 10. Backward compat: legacy plugin.yaml + plugins/ directory still work
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import * as yaml from "js-yaml";
 
 import {

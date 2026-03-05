@@ -524,7 +524,7 @@ describe("SafeExecutor", () => {
 
       const log = executor.getAuditLog();
       expect(log).toHaveLength(2);
-      const taskIds = log.map((e) => e.taskId).sort();
+      const taskIds = log.map((e) => e.taskId).sort((a, b) => a.localeCompare(b));
       expect(taskIds).toEqual(["t1", "t2"]);
     });
 

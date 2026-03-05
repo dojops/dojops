@@ -6,8 +6,8 @@ import { augmentSystemPrompt } from "./schema-prompt";
 
 export class GeminiProvider implements LLMProvider {
   name = "gemini";
-  private client: GoogleGenAI;
-  private model: string;
+  private readonly client: GoogleGenAI;
+  private readonly model: string;
 
   constructor(apiKey: string, model = "gemini-2.5-flash") {
     this.client = new GoogleGenAI({ apiKey });
@@ -90,7 +90,7 @@ export class GeminiProvider implements LLMProvider {
           models.push(model.name.replace("models/", ""));
         }
       }
-      return models.sort();
+      return models.sort((a, b) => a.localeCompare(b));
     } catch {
       return [];
     }
@@ -99,7 +99,7 @@ export class GeminiProvider implements LLMProvider {
 
 function extractApiError(err: unknown): string {
   if (err instanceof Error) {
-    const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+    const jsonMatch = /\{[\s\S]*\}/.exec(err.message);
     if (jsonMatch) {
       try {
         const body = JSON.parse(jsonMatch[0]);

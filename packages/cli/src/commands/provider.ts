@@ -48,7 +48,7 @@ async function providerList(args: string[], ctx: CLIContext): Promise<void> {
       name,
       configured: configured.has(name),
       default: config.defaultProvider === name,
-      token: name === "ollama" ? null : config.tokens?.[name] ? "***" : null,
+      token: name === "ollama" ? null : (config.tokens?.[name] ? "***" : null),
       model: config.defaultProvider === name && config.defaultModel ? config.defaultModel : null,
     }));
     console.log(JSON.stringify(data, null, 2));
@@ -103,9 +103,8 @@ async function providerDefault(args: string[]): Promise<void> {
 
   // Warn if no token configured (but allow it)
   if (name !== "ollama" && name !== "github-copilot" && !config.tokens?.[name]) {
-    p.log.warn(
-      `No token configured for ${pc.bold(name)}. Use ${pc.dim(`dojops provider add ${name}`)} to add one.`,
-    );
+    const addCmd = pc.dim(`dojops provider add ${name}`);
+    p.log.warn(`No token configured for ${pc.bold(name)}. Use ${addCmd} to add one.`);
   }
 
   config.defaultProvider = name;
@@ -207,9 +206,10 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
     } else if (config.defaultProvider !== name) {
       saveConfig(config);
       p.log.success(`${pc.bold(name)} is available.`);
+      const switchCmd212 = pc.cyan(`dojops provider default ${name}`);
       p.log.info(
         pc.dim(
-          `Default provider remains ${pc.bold(config.defaultProvider)}. Use ${pc.cyan(`dojops provider default ${name}`)} to switch.`,
+          `Default provider remains ${pc.bold(config.defaultProvider)}. Use ${switchCmd212} to switch.`,
         ),
       );
     } else {
@@ -277,9 +277,10 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
     } else if (config.defaultProvider !== name) {
       saveConfig(config);
       p.log.success(`${pc.bold(name)} is available.`);
+      const switchCmd282 = pc.cyan(`dojops provider default ${name}`);
       p.log.info(
         pc.dim(
-          `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${pc.cyan(`dojops provider default ${name}`)} to switch.`,
+          `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd282} to switch.`,
         ),
       );
     } else {
@@ -329,9 +330,10 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
     saveConfig(config);
     p.log.success(`Token saved for ${pc.bold(name)}.`);
     if (config.defaultProvider !== name) {
+      const switchCmd334 = pc.cyan(`dojops provider default ${name}`);
       p.log.info(
         pc.dim(
-          `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${pc.cyan(`dojops provider default ${name}`)} to switch.`,
+          `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd334} to switch.`,
         ),
       );
     }
@@ -413,8 +415,9 @@ async function providerRemove(args: string[]): Promise<void> {
     if (wasDefault) {
       const remaining = getConfiguredProviders(config).filter((p) => p !== "ollama");
       if (remaining.length > 0) {
+        const newDefaultCmd417 = pc.cyan(`dojops provider default ${remaining[0]}`);
         p.log.warn(
-          `${pc.bold(name)} was the default provider. Use ${pc.cyan(`dojops provider default ${remaining[0]}`)} to set a new default.`,
+          `${pc.bold(name)} was the default provider. Use ${newDefaultCmd417} to set a new default.`,
         );
       } else {
         p.log.warn(
@@ -444,8 +447,9 @@ async function providerRemove(args: string[]): Promise<void> {
     // Suggest an alternative
     const remaining = getConfiguredProviders(config).filter((p) => p !== "ollama");
     if (remaining.length > 0) {
+      const newDefaultCmd448 = pc.cyan(`dojops provider default ${remaining[0]}`);
       p.log.warn(
-        `${pc.bold(name)} was the default provider. Use ${pc.cyan(`dojops provider default ${remaining[0]}`)} to set a new default.`,
+        `${pc.bold(name)} was the default provider. Use ${newDefaultCmd448} to set a new default.`,
       );
     } else {
       p.log.warn(

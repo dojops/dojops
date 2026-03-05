@@ -30,9 +30,9 @@ function isDopsRuntime(tool: DevOpsTool): tool is DopsRuntimeLike {
  * Provides a unified getAll() / get(name) interface for Planner, Executor, CLI, and API.
  */
 export class ToolRegistry {
-  private toolMap: Map<string, DevOpsTool>;
-  private builtIn: DevOpsTool[];
-  private customTools: CustomTool[];
+  private readonly toolMap: Map<string, DevOpsTool>;
+  private readonly builtIn: DevOpsTool[];
+  private readonly customTools: CustomTool[];
 
   constructor(builtInTools: DevOpsTool[], customTools: CustomTool[]) {
     this.builtIn = builtInTools;

@@ -21,9 +21,12 @@ import { isCopilotAuthenticated, copilotLogin } from "@dojops/core";
 function showConfig(config: DojOpsConfig): void {
   // UX #10: Show effective provider (including env var override) if it differs from config
   const effectiveProvider = resolveProvider(undefined, config);
+  const envOverrideLabel = pc.yellow(
+    `(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER} → ${effectiveProvider})`,
+  );
   const providerDisplay =
     process.env.DOJOPS_PROVIDER && process.env.DOJOPS_PROVIDER !== config.defaultProvider
-      ? `${config.defaultProvider ?? pc.dim("(not set)")} ${pc.yellow(`(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER} → ${effectiveProvider})`)}`
+      ? `${config.defaultProvider ?? pc.dim("(not set)")} ${envOverrideLabel}`
       : (config.defaultProvider ?? pc.dim("(not set)"));
   const lines = [
     `${pc.bold("Provider:")}  ${providerDisplay}`,
@@ -53,14 +56,14 @@ function showConfig(config: DojOpsConfig): void {
     }
   }
   if (envLines.length > 0) {
-    lines.push(`${pc.bold("Env tokens:")}`);
-    lines.push(...envLines);
+    lines.push(`${pc.bold("Env tokens:")}`, ...envLines);
   }
 
   const activeProfile = getActiveProfile();
+  const configPathDim = pc.dim(`(${getConfigPath()})`);
   const title = activeProfile
-    ? `Configuration ${pc.dim(`(${getConfigPath()})`)} ${pc.yellow(`[profile: ${activeProfile}]`)}`
-    : `Configuration ${pc.dim(`(${getConfigPath()})`)}`;
+    ? `Configuration ${configPathDim} ${pc.yellow(`[profile: ${activeProfile}]`)}`
+    : `Configuration ${configPathDim}`;
   p.note(lines.join("\n"), title);
 }
 
@@ -148,7 +151,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     }
 
     if (temperatureFlag) {
-      const temp = parseFloat(temperatureFlag);
+      const temp = Number.parseFloat(temperatureFlag);
       if (!Number.isFinite(temp) || temp < 0 || temp > 2) {
         throw new CLIError(
           ExitCode.VALIDATION_ERROR,
@@ -271,7 +274,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
             const models = await llm.listModels?.();
             if (!isStructured) s.stop("Models fetched.");
 
-            if (models && models.length > 0) {
+            if (models?.length) {
               const customValue = "__custom__";
               const choice = await p.select({
                 message: "Select default model:",

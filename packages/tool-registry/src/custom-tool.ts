@@ -1,7 +1,7 @@
-import * as crypto from "crypto";
-import * as fs from "fs";
-import * as path from "path";
-import { execFileSync } from "child_process";
+import * as crypto from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import { z } from "zod";
 import {
   DevOpsTool,
@@ -71,11 +71,11 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
   inputSchema: z.ZodType;
   source: ToolSource;
 
-  private manifest: ToolManifest;
-  private provider: LLMProvider;
-  private toolDir: string;
-  private projectDir: string;
-  private outputZodSchema?: z.ZodType;
+  private readonly manifest: ToolManifest;
+  private readonly provider: LLMProvider;
+  private readonly toolDir: string;
+  private readonly projectDir: string;
+  private readonly outputZodSchema?: z.ZodType;
 
   constructor(
     manifest: ToolManifest,
@@ -347,7 +347,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
     }
 
     // Check for unresolved template variables
-    const unresolvedMatch = resolved.match(/\{[^}]+\}/);
+    const unresolvedMatch = /\{[^}]+\}/.exec(resolved);
     if (unresolvedMatch) {
       throw new Error(
         `Unresolved template variable ${unresolvedMatch[0]} in file path "${templatePath}"`,

@@ -15,7 +15,7 @@ vi.mock("fs", async (importOriginal) => {
 import { DopsRuntimeV2, DocProvider, stripCodeFences, parseRawContent } from "../runtime";
 import { DopsModuleV2 } from "../spec";
 import type { LLMProvider } from "@dojops/core";
-import * as fs from "fs";
+import * as fs from "node:fs";
 
 function createV2Module(overrides?: Partial<DopsModuleV2["frontmatter"]>): DopsModuleV2 {
   return {

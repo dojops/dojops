@@ -2,7 +2,7 @@ import { ChatMessage } from "./types";
 import { ChatMessage as CoreChatMessage } from "@dojops/core";
 
 export class MemoryManager {
-  constructor(private maxMessages: number = 20) {}
+  constructor(private readonly maxMessages: number = 20) {}
 
   getContextMessages(allMessages: ChatMessage[], summary?: string): CoreChatMessage[] {
     const result: CoreChatMessage[] = [];

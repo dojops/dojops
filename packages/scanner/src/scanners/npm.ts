@@ -155,7 +155,7 @@ async function auditDir(dir: string, rootPath: string, pm: PackageManager): Prom
         tool: "npm-audit",
         findings: [],
         skipped: true,
-        skipReason: `${pm} audit failed${subProject ? ` (${subProject})` : ""}: ${execErr.stderr ?? "unknown error"}`,
+        skipReason: `${pm} audit failed${subProject ? " (" + subProject + ")" : ""}: ${execErr.stderr ?? "unknown error"}`,
       };
     }
   }
@@ -237,9 +237,9 @@ function parseNpmAudit(
         file: subProject ? `${subProject}/${lockFile}` : lockFile,
         message: `${prefix}${name}: ${viaMessages || vuln.severity} vulnerability`,
         recommendation: vuln.fixAvailable
-          ? typeof vuln.fixAvailable === "object"
+          ? (typeof vuln.fixAvailable === "object"
             ? `Update to ${vuln.fixAvailable.name}@${vuln.fixAvailable.version}`
-            : "Run npm audit fix"
+            : "Run npm audit fix")
           : "No automatic fix available — review manually",
         autoFixAvailable: !!vuln.fixAvailable,
       });
@@ -270,9 +270,9 @@ function parseYarnAudit(
         severity: mapSeverity(advisory.severity ?? "moderate"),
         category: "DEPENDENCY",
         file: subProject ? `${subProject}/${lockFile}` : lockFile,
-        message: `${prefix}${advisory.module_name}: ${advisory.title ?? advisory.severity ?? "vulnerability"}`,
+        message: `${prefix}${String(advisory.module_name)}: ${String(advisory.title ?? advisory.severity ?? "vulnerability")}`,
         recommendation: advisory.patched_versions
-          ? `Update to ${advisory.module_name}@${advisory.patched_versions}`
+          ? `Update to ${String(advisory.module_name)}@${String(advisory.patched_versions)}`
           : "No automatic fix available — review manually",
         autoFixAvailable: !!advisory.patched_versions,
         cve: advisory.cves?.[0] || undefined,

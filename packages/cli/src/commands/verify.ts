@@ -93,14 +93,12 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
   if (result.issues.length > 0) {
     console.log();
     for (const issue of result.issues) {
-      const label =
-        issue.severity === "error"
-          ? pc.red("ERROR")
-          : issue.severity === "warning"
-            ? pc.yellow("WARN ")
-            : pc.dim("INFO ");
-      const lineInfo = issue.line ? ` ${pc.dim(`line ${issue.line}`)}` : "";
-      const ruleInfo = issue.rule ? ` ${pc.dim(`[${issue.rule}]`)}` : "";
+      const labelInner = issue.severity === "warning" ? pc.yellow("WARN ") : pc.dim("INFO ");
+      const label = issue.severity === "error" ? pc.red("ERROR") : labelInner;
+      const lineDim = issue.line ? pc.dim(`line ${issue.line}`) : null;
+      const lineInfo = lineDim ? ` ${lineDim}` : "";
+      const ruleDim = issue.rule ? pc.dim(`[${issue.rule}]`) : null;
+      const ruleInfo = ruleDim ? ` ${ruleDim}` : "";
       console.log(`  ${label}${lineInfo}${ruleInfo}  ${issue.message}`);
     }
     console.log();
@@ -488,7 +486,7 @@ function verifyGitLabCI(yamlContent: string): VerificationResult {
         if (!stages.includes(job.stage as string)) {
           issues.push({
             severity: "warning",
-            message: `Job '${jobName}' references undeclared stage '${job.stage}'`,
+            message: `Job '${jobName}' references undeclared stage '${String(job.stage)}'`,
           });
         }
       }

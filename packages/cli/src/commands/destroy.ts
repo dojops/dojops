@@ -45,7 +45,8 @@ export async function cleanCommand(
       for (const plan of plans.slice(0, 10)) {
         const status = plan.approvalStatus ?? "PENDING";
         const date = new Date(plan.createdAt).toLocaleDateString();
-        p.log.info(`  ${pc.cyan(plan.id)} ${pc.dim(`(${status}, ${date})`)} ${plan.goal}`);
+        const planMeta = pc.dim(`(${status}, ${date})`);
+        p.log.info(`  ${pc.cyan(plan.id)} ${planMeta} ${plan.goal}`);
       }
       if (plans.length > 10) {
         p.log.info(pc.dim(`  ...and ${plans.length - 10} more`));

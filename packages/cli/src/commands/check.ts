@@ -107,27 +107,22 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     }
 
     // Maturity score
-    const scoreColor =
-      report.score >= 76
-        ? pc.green
-        : report.score >= 51
-          ? pc.cyan
-          : report.score >= 26
-            ? pc.yellow
-            : pc.red;
-    const scoreLabel =
-      report.score >= 76
-        ? "Excellent"
-        : report.score >= 51
-          ? "Good"
-          : report.score >= 26
-            ? "Basic"
-            : "Minimal";
+    let scoreColor: (s: string) => string;
+    if (report.score >= 76) scoreColor = pc.green;
+    else if (report.score >= 51) scoreColor = pc.cyan;
+    else if (report.score >= 26) scoreColor = pc.yellow;
+    else scoreColor = pc.red;
+
+    let scoreLabel: string;
+    if (report.score >= 76) scoreLabel = "Excellent";
+    else if (report.score >= 51) scoreLabel = "Good";
+    else if (report.score >= 26) scoreLabel = "Basic";
+    else scoreLabel = "Minimal";
 
     p.note(
       wrapForNote(
         [
-          `${pc.bold("Score:")} ${scoreColor(`${report.score}/100`)} ${pc.dim(`(${scoreLabel})`)}`,
+          `${pc.bold("Score:")} ${scoreColor(`${report.score}/100`)} ${pc.dim("(" + scoreLabel + ")")}`,
           "",
           report.summary,
         ].join("\n"),
@@ -152,8 +147,10 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
         const color = severityColors[sev];
         lines.push(`${color(pc.bold(sev.toUpperCase()))} (${items.length})`);
         for (const f of items) {
-          lines.push(`  ${color("●")} ${pc.cyan(f.file)} — ${f.message}`);
-          lines.push(`    ${pc.dim("→")} ${f.recommendation}`);
+          lines.push(
+            `  ${color("●")} ${pc.cyan(f.file)} — ${f.message}`,
+            `    ${pc.dim("→")} ${f.recommendation}`,
+          );
         }
         lines.push("");
       }

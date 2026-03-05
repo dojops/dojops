@@ -15,7 +15,7 @@ const REQUIRED_SECTIONS = ["Domain", "Description", "System Prompt", "Keywords"]
  * Returns null if the content is empty or missing required sections.
  */
 export function parseAgentReadme(content: string, dirName: string): CustomAgentConfig | null {
-  if (!content || !content.trim()) return null;
+  if (!content?.trim()) return null;
 
   const sections = new Map<string, string>();
 
@@ -25,7 +25,7 @@ export function parseAgentReadme(content: string, dirName: string): CustomAgentC
   let currentContent: string[] = [];
 
   for (const line of lines) {
-    const headingMatch = line.match(/^##\s+(.+)$/);
+    const headingMatch = /^##\s+(.+)$/.exec(line);
     if (headingMatch) {
       // Save previous section
       if (currentSection) {
@@ -45,7 +45,7 @@ export function parseAgentReadme(content: string, dirName: string): CustomAgentC
   // Check all required sections exist and are non-empty
   for (const section of REQUIRED_SECTIONS) {
     const value = sections.get(section);
-    if (!value || !value.trim()) return null;
+    if (!value?.trim()) return null;
   }
 
   const domain = sections.get("Domain")!.trim();
@@ -87,16 +87,16 @@ export function validateAgentConfig(config: CustomAgentConfig): {
 } {
   const errors: string[] = [];
 
-  if (!config.name || !config.name.trim()) {
+  if (!config.name?.trim()) {
     errors.push("name is required");
   }
-  if (!config.domain || !config.domain.trim()) {
+  if (!config.domain?.trim()) {
     errors.push("domain is required");
   }
-  if (!config.description || !config.description.trim()) {
+  if (!config.description?.trim()) {
     errors.push("description is required");
   }
-  if (!config.systemPrompt || !config.systemPrompt.trim()) {
+  if (!config.systemPrompt?.trim()) {
     errors.push("systemPrompt is required");
   }
   if (!config.keywords || config.keywords.length === 0) {

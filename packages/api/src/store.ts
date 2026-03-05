@@ -17,15 +17,15 @@ export interface HistoryEntry {
  */
 export class HistoryStore {
   private entries: HistoryEntry[] = [];
-  private idIndex = new Map<string, HistoryEntry>();
-  private maxEntries: number;
+  private readonly idIndex = new Map<string, HistoryEntry>();
+  private readonly maxEntries: number;
 
   constructor(maxEntries = 1000) {
     this.maxEntries = maxEntries;
   }
 
   private generateId(): string {
-    return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    return crypto.randomUUID().replaceAll("-", "").slice(0, 12);
   }
 
   add(entry: Omit<HistoryEntry, "id" | "timestamp">): HistoryEntry {

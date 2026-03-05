@@ -1,6 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
-import * as crypto from "crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as crypto from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { z } from "zod";
@@ -137,16 +137,18 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
   for (const t of legacyTools) {
     const loc = t.source.location === "project" ? pc.green("project") : pc.blue("global");
     const fmt = pc.dim("legacy");
+    const legacyVersion = pc.dim(`v${t.manifest.version}`);
     lines.push(
-      `  ${pc.cyan(t.manifest.name.padEnd(20))} ${pc.dim(`v${t.manifest.version}`).padEnd(20)} ${fmt.padEnd(20)} ${loc.padEnd(20)} ${pc.dim(t.manifest.description)}`,
+      `  ${pc.cyan(t.manifest.name.padEnd(20))} ${legacyVersion.padEnd(20)} ${fmt.padEnd(20)} ${loc.padEnd(20)} ${pc.dim(t.manifest.description)}`,
     );
   }
 
   for (const d of dopsEntries) {
     const loc = d.location === "project" ? pc.green("project") : pc.blue("global");
     const fmt = pc.yellow("dops");
+    const dopsVersion = pc.dim(`v${d.version}`);
     lines.push(
-      `  ${pc.cyan(d.name.padEnd(20))} ${pc.dim(`v${d.version}`).padEnd(20)} ${fmt.padEnd(20)} ${loc.padEnd(20)} ${pc.dim(d.description)}`,
+      `  ${pc.cyan(d.name.padEnd(20))} ${dopsVersion.padEnd(20)} ${fmt.padEnd(20)} ${loc.padEnd(20)} ${pc.dim(d.description)}`,
     );
   }
 
@@ -574,17 +576,25 @@ function buildV2Template(params: V2TemplateParams): string {
         `    - "Use secure defaults where applicable"`,
       ].join("\n");
 
-  const context7Block = llm?.context7Libraries?.length
-    ? `  context7Libraries:\n${llm.context7Libraries.map((lib: { name: string; query: string }) => `    - name: ${lib.name}\n      query: "${escapeYaml(lib.query)}"`).join("\n")}`
-    : `  context7Libraries:\n    - name: ${name}\n      query: "${technology} configuration syntax and best practices"`;
+  const context7LibraryLines = llm?.context7Libraries?.length
+    ? llm.context7Libraries
+        .map(
+          (lib: { name: string; query: string }) =>
+            `    - name: ${lib.name}\n      query: "${escapeYaml(lib.query)}"`,
+        )
+        .join("\n")
+    : `    - name: ${name}\n      query: "${technology} configuration syntax and best practices"`;
+  const context7Block = `  context7Libraries:\n${context7LibraryLines}`;
 
-  const detectionPaths = llm?.detectionPaths
-    ? `[${llm.detectionPaths.map((d: string) => `"${d}"`).join(", ")}]`
-    : `["${outputFilePath}"]`;
+  const detectionPathItems = llm?.detectionPaths
+    ? llm.detectionPaths.map((d: string) => `"${d}"`).join(", ")
+    : `"${outputFilePath}"`;
+  const detectionPaths = `[${detectionPathItems}]`;
 
-  const scopeWrite = llm?.scopePatterns
-    ? `[${llm.scopePatterns.map((s: string) => `"${s}"`).join(", ")}]`
-    : `["${outputFilePath}"]`;
+  const scopeWriteItems = llm?.scopePatterns
+    ? llm.scopePatterns.map((s: string) => `"${s}"`).join(", ")
+    : `"${outputFilePath}"`;
+  const scopeWrite = `[${scopeWriteItems}]`;
 
   const riskLevel = llm?.riskLevel ?? "LOW";
   const riskRationale = llm?.riskRationale
@@ -592,7 +602,12 @@ function buildV2Template(params: V2TemplateParams): string {
     : "Generates a single configuration file";
 
   const structuralBlock = llm?.structuralRules?.length
-    ? `\nverification:\n  structural:\n${llm.structuralRules.map((r: { path: string; required: boolean; message: string }) => `    - path: "${r.path}"\n      required: ${r.required}\n      message: "${escapeYaml(r.message)}"`).join("\n")}\n`
+    ? `\nverification:\n  structural:\n${llm.structuralRules
+        .map(
+          (r: { path: string; required: boolean; message: string }) =>
+            `    - path: "${r.path}"\n      required: ${r.required}\n      message: "${escapeYaml(r.message)}"`,
+        )
+        .join("\n")}\n`
     : "";
 
   const prompt = llm?.prompt
@@ -663,7 +678,7 @@ ${keywords}
 }
 
 function escapeYaml(s: string): string {
-  return s.replace(/"/g, '\\"');
+  return s.replaceAll('"', '\\"');
 }
 
 function indent(text: string, spaces: number): string {
@@ -903,8 +918,8 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
       `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
     ),
   );
-  parts.push(fileBuffer);
   parts.push(
+    fileBuffer,
     Buffer.from(
       `\r\n--${boundary}\r\nContent-Disposition: form-data; name="sha256"\r\n\r\n${hash}`,
     ),
@@ -990,7 +1005,7 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
   spinner.start(`Fetching ${pc.cyan(toolName)} from hub...`);
 
   // Resolve slug (tool name is the slug in the hub)
-  const slug = toolName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const slug = toolName.toLowerCase().replace(/[^a-z0-9-]/g, "-"); // NOSONAR - character class pattern
 
   try {
     // 1. Get package info to find the latest version if none specified
@@ -1142,7 +1157,7 @@ export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
   }
 
   const limitStr = extractFlagValue(args, "--limit");
-  const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 20, 1), 50) : 20;
+  const limit = limitStr ? Math.min(Math.max(Number.parseInt(limitStr, 10) || 20, 1), 50) : 20;
   const isJson = ctx.globalOpts.output === "json";
 
   const spinner = p.spinner();

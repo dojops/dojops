@@ -382,10 +382,10 @@ export async function offerSystemToolInstall(options?: {
     return [];
   }
 
-  const lines = missing.map(
-    (tool) =>
-      `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${pc.dim(`dojops toolchain install ${tool.name}`)}`,
-  );
+  const lines = missing.map((tool) => {
+    const installCmd = pc.dim(`dojops toolchain install ${tool.name}`);
+    return `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${installCmd}`;
+  });
   p.log.warn(`${missing.length} system tool(s) not found:\n${lines.join("\n")}`);
 
   if (options?.nonInteractive) {

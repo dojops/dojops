@@ -32,7 +32,7 @@ const debugger_ = createDebugger(provider);
 const diffAnalyzer = createDiffAnalyzer(provider);
 const store = new HistoryStore();
 
-const port = parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
+const port = Number.parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
 const apiKey = loadServerApiKey();
 
 const app = createApp({

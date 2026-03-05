@@ -11,8 +11,10 @@ export interface DecomposeOptions {
 
 export function buildContextSection(ctx: RepoContext): string {
   const parts: string[] = [];
-  parts.push("\n## Project Context (from repo scan)\n");
-  parts.push("Use this context to choose correct file paths and tool inputs.\n");
+  parts.push(
+    "\n## Project Context (from repo scan)\n",
+    "Use this context to choose correct file paths and tool inputs.\n",
+  );
 
   if (ctx.primaryLanguage) {
     parts.push(`- Primary language: ${ctx.primaryLanguage}`);
@@ -46,11 +48,7 @@ export function buildContextSection(ctx: RepoContext): string {
 
   parts.push(
     `\nIMPORTANT: Set projectPath to "." (project root) unless the project structure suggests a subdirectory. For existing CI platforms, use matching config paths (e.g. if GitHub Actions already exist at .github/workflows/, place new workflows there).`,
-  );
-  parts.push(
     `\nTools automatically detect and read existing config files. For update/enhance tasks, just set the correct projectPath/outputPath — the tool handles existing file reading and preserves current configuration.`,
-  );
-  parts.push(
     `\nCanonical output paths by tool:
 - github-actions: projectPath="." (tool auto-creates .github/workflows/)
 - kubernetes: outputPath="k8s" (Kubernetes manifests go in k8s/ directory)

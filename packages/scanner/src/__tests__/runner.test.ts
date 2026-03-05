@@ -102,6 +102,15 @@ vi.mock("../scanners/trivy-license", () => ({
   }),
 }));
 
+vi.mock("../scanners/semgrep", () => ({
+  scanSemgrep: vi.fn().mockResolvedValue({
+    tool: "semgrep",
+    findings: [],
+    skipped: true,
+    skipReason: "semgrep not found",
+  }),
+}));
+
 vi.mock("../scan-policy", () => ({
   loadScanPolicy: vi.fn().mockReturnValue(undefined),
   evaluatePolicy: vi.fn(),
@@ -515,12 +524,14 @@ describe("scanner crash isolation (Promise.allSettled)", () => {
     const { scanGitleaks } = await import("../scanners/gitleaks");
     const { scanHadolint } = await import("../scanners/hadolint");
     const { scanCheckov } = await import("../scanners/checkov");
+    const { scanSemgrep } = await import("../scanners/semgrep");
 
     vi.mocked(scanTrivy).mockRejectedValueOnce(new Error("crash"));
     vi.mocked(scanNpm).mockRejectedValueOnce(new Error("crash"));
     vi.mocked(scanGitleaks).mockRejectedValueOnce(new Error("crash"));
     vi.mocked(scanHadolint).mockRejectedValueOnce(new Error("crash"));
     vi.mocked(scanCheckov).mockRejectedValueOnce(new Error("crash"));
+    vi.mocked(scanSemgrep).mockRejectedValueOnce(new Error("crash"));
 
     const report = await runScan("/project", "security");
 

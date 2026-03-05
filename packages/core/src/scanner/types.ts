@@ -87,7 +87,7 @@ const AgentEntrySchema = z.union([
   z.record(z.string(), z.unknown()).transform((o) => {
     // Try common field names the LLM might use
     for (const key of ["name", "agent", "agentName", "value", "id"]) {
-      if (typeof o[key] === "string") return o[key] as string;
+      if (typeof o[key] === "string") return o[key];
     }
     // Fall back to first string value
     const first = Object.values(o).find((v) => typeof v === "string");

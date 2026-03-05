@@ -3,8 +3,8 @@ import { sanitizeUserInput } from "./llm/sanitizer";
 
 export class DevOpsAgent {
   constructor(
-    private provider: LLMProvider,
-    private systemPrompt = "You are an expert DevOps engineer.",
+    private readonly provider: LLMProvider,
+    private readonly systemPrompt = "You are an expert DevOps engineer.",
   ) {}
 
   async run(prompt: string) {

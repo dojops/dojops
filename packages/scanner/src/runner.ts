@@ -126,7 +126,7 @@ export async function runScan(
   });
 
   // FEAT #5: Per-scanner timeout (default from env or 60s)
-  const scannerTimeoutMs = parseInt(process.env.DOJOPS_SCAN_TIMEOUT_MS ?? "60000", 10);
+  const scannerTimeoutMs = Number.parseInt(process.env.DOJOPS_SCAN_TIMEOUT_MS ?? "60000", 10);
 
   function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
     return new Promise((resolve, reject) => {
@@ -161,7 +161,7 @@ export async function runScan(
         outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
       const isTimeout = reason.startsWith("timeout after");
       const skipReason = isTimeout
-        ? `Scanner ${isTimeout ? "timed out" : "crashed"}: ${reason}`
+        ? `Scanner timed out: ${reason}`
         : `Scanner crashed: ${reason}`;
       errors.push(`${selected[i].name}: ${skipReason}`);
       results.push({
@@ -249,13 +249,13 @@ export function deduplicateByCve(findings: ScanFinding[]): ScanFinding[] {
       continue;
     }
     const existing = byCve.get(f.cve);
-    if (!existing) {
-      byCve.set(f.cve, f);
-    } else {
+    if (existing) {
       // Keep the one with the higher severity
       if ((SEVERITY_RANK[f.severity] ?? 0) > (SEVERITY_RANK[existing.severity] ?? 0)) {
         byCve.set(f.cve, f);
       }
+    } else {
+      byCve.set(f.cve, f);
     }
   }
 

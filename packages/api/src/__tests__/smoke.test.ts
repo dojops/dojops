@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import request from "supertest";
-import { vi } from "vitest";
 import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
 import { createApp, AppDependencies } from "../app";

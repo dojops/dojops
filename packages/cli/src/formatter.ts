@@ -34,7 +34,10 @@ export function formatOutput(content: string): string {
   const preview = lines.slice(0, limit);
   const formatted = preview.map((l) => `    ${pc.dim(l)}`).join("\n");
   if (lines.length > limit) {
-    return `${formatted}\n    ${pc.dim(`... (${lines.length - limit} more lines — use --output json for full content)`)}`;
+    const truncationNote = pc.dim(
+      `... (${lines.length - limit} more lines — use --output json for full content)`,
+    );
+    return `${formatted}\n    ${truncationNote}`;
   }
   return formatted;
 }
@@ -99,7 +102,7 @@ export function maskToken(token: string | undefined): string {
 /** Strip ANSI escape codes for accurate width measurement. */
 function stripAnsi(s: string): string {
   // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;]*m/g, "");
+  return s.replace(/\x1b\[[0-9;]*m/g, ""); // NOSONAR - complex regex, cannot use replaceAll
 }
 
 /**
@@ -111,7 +114,7 @@ function wrapLine(line: string, maxWidth: number): string[] {
   if (visible.length <= maxWidth) return [line];
 
   // Detect leading plain-text indent
-  const indentMatch = visible.match(/^(\s*)/);
+  const indentMatch = /^(\s*)/.exec(visible);
   const indent = indentMatch ? indentMatch[1] : "";
 
   const words = visible.split(/(\s+)/);

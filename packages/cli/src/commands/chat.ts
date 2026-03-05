@@ -113,7 +113,10 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     if (!isStructuredOutput) s.start("Thinking...");
     try {
       const result = await session.send(messageFlag);
-      if (!isStructuredOutput) s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
+      if (!isStructuredOutput) {
+        const agentLabel = pc.dim(`(${result.agent})`);
+        s.stop(`${pc.green("Agent")} ${agentLabel}`);
+      }
 
       if (ctx.globalOpts.output === "json") {
         console.log(JSON.stringify({ agent: result.agent, content: result.content }));
@@ -288,7 +291,8 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
       // Bridge commands are only processed from user-typed slash commands
       // (handled above in the slash-command section), never from LLM responses.
 
-      s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
+      const agentLabel294 = pc.dim(`(${result.agent})`);
+      s.stop(`${pc.green("Agent")} ${agentLabel294}`);
       p.log.message(result.content);
 
       // Context window warning: estimate tokens from message length

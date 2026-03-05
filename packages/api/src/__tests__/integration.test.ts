@@ -275,7 +275,7 @@ describe("API integration", () => {
     });
   });
 
-  describe("parseInt NaN guards", () => {
+  describe("Number.parseInt NaN guards", () => {
     it("returns 200 with defaults for invalid limit/offset", async () => {
       const app = createApp(deps);
       const res = await request(app).get("/api/history?limit=abc&offset=xyz").expect(200);

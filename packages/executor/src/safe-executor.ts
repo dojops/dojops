@@ -10,10 +10,10 @@ export interface SafeExecutorOptions {
 }
 
 export class SafeExecutor {
-  private policy: ExecutionPolicy;
-  private approvalHandler: ApprovalHandler;
-  private auditLog: ExecutionAuditEntry[] = [];
-  private tokenUsage = { prompt: 0, completion: 0, total: 0 };
+  private readonly policy: ExecutionPolicy;
+  private readonly approvalHandler: ApprovalHandler;
+  private readonly auditLog: ExecutionAuditEntry[] = [];
+  private readonly tokenUsage = { prompt: 0, completion: 0, total: 0 };
 
   constructor(options: SafeExecutorOptions = {}) {
     this.policy = { ...DEFAULT_POLICY, ...options.policy };
@@ -49,11 +49,8 @@ export class SafeExecutor {
     } catch (err) {
       const isTimeout = err instanceof PolicyViolationError && err.rule === "timeoutMs";
       const status = isTimeout ? ("timeout" as const) : ("failed" as const);
-      const error = isTimeout
-        ? "Generate phase timed out"
-        : err instanceof Error
-          ? err.message
-          : String(err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const error = isTimeout ? "Generate phase timed out" : errorMessage;
       return this.buildResult(taskId, tool.name, status, startTime, {
         error,
         filesWritten,
@@ -255,11 +252,8 @@ export class SafeExecutor {
     } catch (err) {
       const isTimeout = err instanceof PolicyViolationError && err.rule === "timeoutMs";
       const status = isTimeout ? ("timeout" as const) : ("failed" as const);
-      const error = isTimeout
-        ? "Execute phase timed out"
-        : err instanceof Error
-          ? err.message
-          : String(err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const error = isTimeout ? "Execute phase timed out" : errorMessage;
       return this.buildResult(taskId, tool.name, status, startTime, {
         error,
         approval,

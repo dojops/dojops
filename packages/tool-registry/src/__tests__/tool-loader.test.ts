@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import * as yaml from "js-yaml";
 import { discoverTools } from "../tool-loader";
 
@@ -154,7 +154,7 @@ describe("discoverTools", () => {
 
     const tools = discoverTools(projectDir);
     expect(tools).toHaveLength(2);
-    const names = tools.map((t) => t.manifest.name).sort();
+    const names = tools.map((t) => t.manifest.name).sort((a, b) => a.localeCompare(b));
     expect(names).toEqual(["tool-a", "tool-b"]);
   });
 

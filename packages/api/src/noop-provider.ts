@@ -8,7 +8,7 @@ import type { LLMProvider, LLMRequest, LLMResponse } from "@dojops/core";
 export class NoopProvider implements LLMProvider {
   name = "noop";
 
-  private message: string;
+  private readonly message: string;
 
   constructor(message?: string) {
     this.message =

@@ -1,6 +1,6 @@
-import * as crypto from "crypto";
-import * as fs from "fs";
-import * as path from "path";
+import * as crypto from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as yaml from "js-yaml";
 import { LLMProvider, parseAndValidate } from "@dojops/core";
 import type { DevOpsTool, ToolOutput, VerificationResult, VerificationIssue } from "@dojops/sdk";
@@ -215,7 +215,7 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
 
       // Extract filename from path template (use a reasonable default)
       const pathParts = primaryFile.path.split("/");
-      filename = pathParts[pathParts.length - 1].replace(/\{[^}]+\}/g, "output");
+      filename = pathParts[pathParts.length - 1].replace(/\{[^}]+\}/g, "output"); // NOSONAR
     }
 
     return runVerification(
@@ -327,7 +327,7 @@ export function stripCodeFences(content: string): string {
   const trimmed = content.trim();
 
   // Match ```<optional-lang>\n...\n``` or ~~~<optional-lang>\n...\n~~~
-  const fenceMatch = trimmed.match(/^(?:```|~~~)\w*\n([\s\S]*?)\n(?:```|~~~)$/);
+  const fenceMatch = /^(?:```|~~~)\w*\n([\s\S]*?)\n(?:```|~~~)$/.exec(trimmed);
   if (fenceMatch) {
     return fenceMatch[1];
   }
@@ -539,12 +539,11 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
 
     // For v2, data may be a raw string or a { generated, isUpdate } object from generate().
     // Extract the generated content string for verification.
-    const rawContent =
-      typeof data === "string"
-        ? data
-        : data && typeof data === "object" && "generated" in data
-          ? String((data as Record<string, unknown>).generated)
-          : String(data);
+    const rawContentFallback =
+      data && typeof data === "object" && "generated" in data
+        ? String((data as Record<string, unknown>).generated)
+        : String(data);
+    const rawContent = typeof data === "string" ? data : rawContentFallback;
     const fileFormat = this.module.frontmatter.context.fileFormat;
     const parsed = parseRawContent(rawContent, fileFormat);
 
@@ -559,7 +558,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
     if (this.module.frontmatter.files.length > 0) {
       const primaryFile = this.module.frontmatter.files[0];
       const pathParts = primaryFile.path.split("/");
-      filename = pathParts[pathParts.length - 1].replace(/\{[^}]+\}/g, "output");
+      filename = pathParts[pathParts.length - 1].replace(/\{[^}]+\}/g, "output"); // NOSONAR
     }
 
     return runVerification(

@@ -29,7 +29,7 @@ export function createPlanRouter(
 
       let result;
       if (execute) {
-        const timeoutMs = parseInt(process.env.DOJOPS_PLAN_TIMEOUT_MS ?? "300000", 10);
+        const timeoutMs = Number.parseInt(process.env.DOJOPS_PLAN_TIMEOUT_MS ?? "300000", 10);
 
         // A9: Use AbortController instead of Promise.race to avoid abandoned promises
         const controller = new AbortController();

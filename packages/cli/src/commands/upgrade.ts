@@ -86,7 +86,8 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
       );
       return;
     }
-    p.log.success(`Already up to date — ${pc.cyan(`v${currentVersion}`)}`);
+    const currentVersionLabel = pc.cyan(`v${currentVersion}`);
+    p.log.success(`Already up to date — ${currentVersionLabel}`);
     return;
   }
 
@@ -102,25 +103,27 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
       );
       return;
     }
-    p.log.info(
-      `Update available: ${pc.dim(`v${currentVersion}`)} → ${pc.cyan(`v${latestVersion}`)}`,
-    );
+    const currentDim = pc.dim(`v${currentVersion}`);
+    const latestCyan = pc.cyan(`v${latestVersion}`);
+    p.log.info(`Update available: ${currentDim} → ${latestCyan}`);
     p.log.info(`Run ${pc.cyan("dojops upgrade")} to install.`);
     throw new CLIError(ExitCode.GENERAL_ERROR);
   }
 
   // Interactive confirmation
   if (!autoYes) {
-    p.log.info(
-      `Update available: ${pc.dim(`v${currentVersion}`)} → ${pc.cyan(`v${latestVersion}`)}`,
-    );
+    const currentDim = pc.dim(`v${currentVersion}`);
+    const latestCyan = pc.cyan(`v${latestVersion}`);
+    p.log.info(`Update available: ${currentDim} → ${latestCyan}`);
     const shouldProceed = await p.confirm({ message: "Install update?" });
     if (p.isCancel(shouldProceed) || !shouldProceed) {
       p.log.info("Upgrade cancelled.");
       return;
     }
   } else if (!isJson) {
-    p.log.info(`Upgrading: ${pc.dim(`v${currentVersion}`)} → ${pc.cyan(`v${latestVersion}`)}`);
+    const currentDim = pc.dim(`v${currentVersion}`);
+    const latestCyan = pc.cyan(`v${latestVersion}`);
+    p.log.info(`Upgrading: ${currentDim} → ${latestCyan}`);
   }
 
   // Run npm install
@@ -152,5 +155,6 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
     return;
   }
 
-  p.log.success(`Upgraded to ${pc.cyan(`v${latestVersion}`)}`);
+  const upgradedVersion = pc.cyan(`v${latestVersion}`);
+  p.log.success(`Upgraded to ${upgradedVersion}`);
 }

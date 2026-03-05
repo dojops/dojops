@@ -73,7 +73,7 @@ export function validateReplayIntegrity(
     if (!task.systemPromptHash) continue;
 
     const metadata = registry.getToolMetadata(task.tool);
-    if (!metadata || metadata.toolType !== "custom") continue;
+    if (metadata?.toolType !== "custom") continue;
     if (!metadata.systemPromptHash) continue;
 
     if (task.systemPromptHash !== metadata.systemPromptHash) {

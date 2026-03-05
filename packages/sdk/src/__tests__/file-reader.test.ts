@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import { readExistingConfig, backupFile, atomicWriteFileSync, restoreBackup } from "../file-reader";
 
 describe("readExistingConfig", () => {

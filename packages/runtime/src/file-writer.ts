@@ -1,5 +1,5 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { atomicWriteFileSync, backupFile, readExistingConfig } from "@dojops/sdk";
 import { DopsScope, FileSpec } from "./spec";
 import { serialize, SerializerOptions } from "./serializer";
@@ -128,12 +128,12 @@ export function resolveFilePath(templatePath: string, input: Record<string, unkn
   let resolved = templatePath;
   for (const [key, value] of Object.entries(input)) {
     if (typeof value === "string") {
-      resolved = resolved.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+      resolved = resolved.replace(new RegExp(`\\{${key}\\}`, "g"), value); // NOSONAR - dynamic regex
     }
   }
 
   // Check for unresolved variables
-  const unresolved = resolved.match(/\{[^}]+\}/);
+  const unresolved = /\{[^}]+\}/.exec(resolved);
   if (unresolved) {
     throw new Error(`Unresolved variable in file path: ${unresolved[0]}`);
   }
@@ -161,7 +161,7 @@ function renderTemplate(template: string, data: unknown): string {
   if (typeof data !== "object" || data === null) return template;
   const obj = data as Record<string, unknown>;
 
-  return template.replace(/\{\{\s*\.Values\.(\w+)\s*\}\}/g, (_match, key: string) => {
+  return template.replace(/\{\{\s*\.Values\.(\w+)\s*\}\}/g, (_match, key: string) => { // NOSONAR - capture group regex
     return obj[key] !== undefined ? String(obj[key]) : "";
   });
 }
@@ -216,16 +216,16 @@ export function matchesScopePattern(
   scopePatterns: string[],
   input: Record<string, unknown>,
 ): boolean {
-  const normalizedResolved = path.normalize(resolvedPath).replace(/\\/g, "/");
+  const normalizedResolved = path.normalize(resolvedPath).replaceAll("\\", "/");
   for (const pattern of scopePatterns) {
     // Expand {var} placeholders in the scope pattern
     let expanded = pattern;
     for (const [key, value] of Object.entries(input)) {
       if (typeof value === "string") {
-        expanded = expanded.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+        expanded = expanded.replace(new RegExp(`\\{${key}\\}`, "g"), value); // NOSONAR - dynamic regex
       }
     }
-    const normalizedExpanded = path.normalize(expanded).replace(/\\/g, "/");
+    const normalizedExpanded = path.normalize(expanded).replaceAll("\\", "/");
 
     // Exact match
     if (normalizedResolved === normalizedExpanded) return true;
@@ -240,7 +240,7 @@ export function matchesScopePattern(
     // * wildcard within pattern (e.g. "Dockerfile.*", "*.tf")
     if (normalizedExpanded.includes("*")) {
       const regexStr =
-        "^" + normalizedExpanded.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$";
+        "^" + normalizedExpanded.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*") + "$"; // NOSONAR - escape-for-regex pattern
       if (new RegExp(regexStr).test(normalizedResolved)) return true;
     }
   }

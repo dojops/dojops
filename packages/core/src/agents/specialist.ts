@@ -39,9 +39,9 @@ function isTransientError(err: unknown): boolean {
 
 export class SpecialistAgent {
   constructor(
-    private provider: LLMProvider,
-    private config: SpecialistConfig,
-    private docAugmenter?: {
+    private readonly provider: LLMProvider,
+    private readonly config: SpecialistConfig,
+    private readonly docAugmenter?: {
       augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
     },
   ) {}

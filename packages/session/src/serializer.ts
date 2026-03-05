@@ -15,7 +15,7 @@ function sessionsDir(rootDir: string): string {
 }
 
 export function generateSessionId(): string {
-  return `chat-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  return `chat-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
 }
 
 export function saveSession(rootDir: string, session: ChatSessionState): void {
@@ -83,7 +83,7 @@ export function cleanExpiredSessions(rootDir: string, ttlMs?: number): number {
   const ttl =
     ttlMs ??
     (process.env.DOJOPS_SESSION_TTL_MS
-      ? parseInt(process.env.DOJOPS_SESSION_TTL_MS, 10)
+      ? Number.parseInt(process.env.DOJOPS_SESSION_TTL_MS, 10)
       : DEFAULT_SESSION_TTL_MS);
 
   if (!Number.isFinite(ttl) || ttl <= 0) return 0;

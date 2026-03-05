@@ -185,10 +185,11 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     console.log();
     for (const finding of report.findings) {
       const sev = severityLabel(finding.severity);
-      const loc = finding.file ? `${finding.file}${finding.line ? `:${finding.line}` : ""}` : "";
+      const fileLine = finding.line ? `:${finding.line}` : "";
+      const loc = finding.file ? `${finding.file}${fileLine}` : "";
+      const toolLabel = pc.dim(`[${finding.tool}]`);
       console.log(
-        `  ${sev}  ${pc.dim(`[${finding.tool}]`)} ${finding.message}` +
-          (loc ? `  ${pc.dim(loc)}` : ""),
+        `  ${sev}  ${toolLabel} ${finding.message}` + (loc ? `  ${pc.dim(loc)}` : ""),
       );
       if (finding.recommendation) {
         console.log(`         ${pc.dim("→")} ${pc.dim(finding.recommendation)}`);
@@ -214,22 +215,22 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   if (compareMode) {
     const previousReports = listScanReports(root);
     const previous = previousReports.find(
-      (r) => (r as Record<string, unknown>).id !== report.id,
+      (r) => r.id !== report.id,
     ) as ScanReport | undefined;
 
     if (previous) {
       const { newFindings, resolvedFindings } = compareScanReports(report, previous);
       console.log();
       if (newFindings.length > 0) {
-        p.log.warn(`${pc.bold(pc.red(`${newFindings.length} new`))} finding(s) since last scan:`);
+        const newLabel = pc.bold(pc.red(`${newFindings.length} new`));
+        p.log.warn(`${newLabel} finding(s) since last scan:`);
         for (const f of newFindings) {
           console.log(`  ${pc.red("+")} ${severityLabel(f.severity)}  ${f.message}`);
         }
       }
       if (resolvedFindings.length > 0) {
-        p.log.success(
-          `${pc.bold(pc.green(`${resolvedFindings.length} resolved`))} finding(s) since last scan:`,
-        );
+        const resolvedLabel = pc.bold(pc.green(`${resolvedFindings.length} resolved`));
+        p.log.success(`${resolvedLabel} finding(s) since last scan:`);
         for (const f of resolvedFindings) {
           console.log(`  ${pc.green("-")} ${severityLabel(f.severity)}  ${f.message}`);
         }
@@ -265,10 +266,10 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     const previousReports = listScanReports(root);
     const previousWithSbom = previousReports.find(
       (r) =>
-        (r as Record<string, unknown>).sbomHash && (r as Record<string, unknown>).id !== report.id,
+        r.sbomHash && r.id !== report.id,
     );
     if (previousWithSbom) {
-      const prevHash = (previousWithSbom as Record<string, unknown>).sbomHash as string;
+      const prevHash = previousWithSbom.sbomHash as string;
       if (prevHash !== currentHash) {
         p.log.warn(
           `SBOM changed since last scan (previous: ${pc.dim(prevHash.slice(0, 12))}, ` +

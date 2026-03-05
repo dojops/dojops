@@ -8,7 +8,7 @@ export class TokenTracker {
   private readonly budget: number;
 
   constructor(budget?: number) {
-    this.budget = budget ?? parseInt(process.env.DOJOPS_DAILY_TOKEN_BUDGET ?? "1000000", 10);
+    this.budget = budget ?? Number.parseInt(process.env.DOJOPS_DAILY_TOKEN_BUDGET ?? "1000000", 10);
     this.currentDate = this.today();
     this.totalTokens = 0;
   }

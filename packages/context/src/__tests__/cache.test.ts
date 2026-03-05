@@ -67,7 +67,7 @@ describe("TtlCache", () => {
   });
 
   it("overwrites existing values", () => {
-    cache.set("key", "old");
+    cache.set("key", "old"); // NOSONAR - intentional overwrite test
     cache.set("key", "new");
     expect(cache.get("key")).toBe("new");
   });

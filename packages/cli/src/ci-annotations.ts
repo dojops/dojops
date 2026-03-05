@@ -13,14 +13,13 @@ export function emitGitHubAnnotations(findings: ScanFinding[]): void {
     const level =
       finding.severity === "HIGH" || finding.severity === "CRITICAL" ? "error" : "warning";
 
-    const filePart = finding.file
-      ? `file=${finding.file}${finding.line ? `,line=${finding.line}` : ""}`
-      : "";
+    const linePart = finding.line ? `,line=${finding.line}` : "";
+    const filePart = finding.file ? `file=${finding.file}${linePart}` : "";
 
     const message = finding.message
-      .replace(/%/g, "%25")
-      .replace(/\r/g, "%0D")
-      .replace(/\n/g, "%0A");
+      .replaceAll("%", "%25")
+      .replaceAll("\r", "%0D")
+      .replaceAll("\n", "%0A");
 
     if (filePart) {
       console.log(`::${level} ${filePart}::${message}`);

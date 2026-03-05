@@ -91,8 +91,9 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
   p.log.success("Token saved successfully.");
 
   const isDefault = config.defaultProvider === provider;
+  const firstProviderSuffix = providerFlag ? "" : " (first configured provider)";
   const defaultNote = isDefault
-    ? `${pc.bold("Default:")}  ${pc.cyan("yes")}${!providerFlag ? " (first configured provider)" : ""}`
+    ? `${pc.bold("Default:")}  ${pc.cyan("yes")}${firstProviderSuffix}`
     : `${pc.bold("Default:")}  no (default is ${pc.bold(config.defaultProvider!)})`;
 
   const noteLines = [
@@ -103,9 +104,8 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
   p.note(noteLines.join("\n"), "Saved");
 
   if (!isDefault) {
-    p.log.info(
-      pc.dim(`Use ${pc.cyan(`dojops provider default ${provider}`)} to make it the default.`),
-    );
+    const makeDefaultCmd = pc.cyan(`dojops provider default ${provider}`);
+    p.log.info(pc.dim(`Use ${makeDefaultCmd} to make it the default.`));
   }
 
   p.log.warn(
@@ -262,9 +262,10 @@ async function authStatus(): Promise<void> {
 
   // UX #3: Show effective provider including env var
   const effectiveProvider = resolveProvider(undefined, config);
+  const envProviderLabel = pc.dim(`(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER})`);
   const providerDisplay =
     process.env.DOJOPS_PROVIDER && process.env.DOJOPS_PROVIDER !== config.defaultProvider
-      ? `${effectiveProvider} ${pc.dim(`(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER})`)}`
+      ? `${effectiveProvider} ${envProviderLabel}`
       : (config.defaultProvider ?? pc.dim("(not set)"));
   const lines = [
     `${pc.bold("Provider:")}  ${providerDisplay}`,

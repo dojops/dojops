@@ -775,8 +775,7 @@ export function deriveRelevantDomains(
   if (infra.tfProviders.length > 0) domains.push("cloud-architecture");
   if (infra.hasKustomize) domains.push("container-orchestration");
   if (infra.hasPulumi || infra.hasCloudFormation) {
-    domains.push("infrastructure");
-    domains.push("cloud-architecture");
+    domains.push("infrastructure", "cloud-architecture");
   }
   if (infra.hasPacker) domains.push("infrastructure");
   if (container.hasSwarm) domains.push("container-orchestration");
@@ -952,7 +951,7 @@ export function collectDevopsFiles(
     }
   }
 
-  return [...files].sort();
+  return [...files].sort((a, b) => a.localeCompare(b));
 }
 
 // ── Directory tree generator ─────────────────────────────────────────

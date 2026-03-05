@@ -1,13 +1,13 @@
 import { Router } from "express";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { runScan } from "@dojops/scanner";
 import type { ScanType } from "@dojops/scanner";
 import { HistoryStore } from "../store";
 import { ScanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
-const SCAN_TIMEOUT_MS = parseInt(process.env.DOJOPS_SCAN_TIMEOUT_MS ?? "120000", 10);
+const SCAN_TIMEOUT_MS = Number.parseInt(process.env.DOJOPS_SCAN_TIMEOUT_MS ?? "120000", 10);
 
 export function createScanRouter(store: HistoryStore, rootDir?: string): Router {
   const router = Router();

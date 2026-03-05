@@ -7,10 +7,10 @@ const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_DOCS_LENGTH = 4000;
 
 export class Context7DocAugmenter implements DocAugmenter {
-  private provider: DocProvider;
-  private libraryIdCache: TtlCache<string | null>;
-  private docsCache: TtlCache<string>;
-  private maxDocsLength: number;
+  private readonly provider: DocProvider;
+  private readonly libraryIdCache: TtlCache<string | null>;
+  private readonly docsCache: TtlCache<string>;
+  private readonly maxDocsLength: number;
 
   constructor(options?: DocAugmenterOptions) {
     this.provider = new Context7Client({

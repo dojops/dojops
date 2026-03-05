@@ -24,10 +24,10 @@ import {
   checkGitDirty,
   PlanState,
   getCurrentUser,
+  getDojopsVersion,
 } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
-import { getDojopsVersion } from "../state";
 import { getDriftWarnings } from "../drift-warning";
 import { validateReplayIntegrity, checkToolIntegrity } from "./replay-validator";
 import { readExistingToolFile } from "../tool-file-map";
@@ -48,7 +48,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const force = hasFlag(args, "--force");
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
   const timeoutArg = extractFlagValue(args, "--timeout");
-  const timeoutMs = timeoutArg ? parseInt(timeoutArg, 10) * 1000 : 60_000; // --timeout in seconds
+  const timeoutMs = timeoutArg ? Number.parseInt(timeoutArg, 10) * 1000 : 60_000; // --timeout in seconds
   if (timeoutArg && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
@@ -171,8 +171,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const toolsUsed = [...new Set(plan.tasks.map((t) => t.tool))];
   summaryLines.push(`${pc.bold("Tools:")}  ${toolsUsed.join(", ")}`);
 
-  summaryLines.push("");
-  summaryLines.push(pc.bold("Task breakdown:"));
+  summaryLines.push("", pc.bold("Task breakdown:"));
 
   for (const task of plan.tasks) {
     const isCompleted = completedTaskIds.has(task.id);
@@ -595,13 +594,14 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     const someCompleted = newResults.some(
       (r) => r.status === "completed" && (!r.executionStatus || r.executionStatus === "completed"),
     );
-    const status = allCompleted ? "SUCCESS" : someCompleted ? "PARTIAL" : "FAILURE";
+    const statusPartial = someCompleted ? "PARTIAL" : "FAILURE";
+    const status = allCompleted ? "SUCCESS" : statusPartial;
 
     // Save execution record
     saveExecution(root, {
       planId: plan.id,
       executedAt: new Date().toISOString(),
-      status: status as "SUCCESS" | "FAILURE" | "PARTIAL",
+      status: status,
       filesCreated: allFilesCreated,
       filesModified: allFilesModified,
       durationMs,

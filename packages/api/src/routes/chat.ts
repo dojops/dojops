@@ -136,7 +136,7 @@ export function createChatRouter(
 
     // FB8: Log warning when a specific sessionId was requested but not found
     if (sessionId) {
-      const sanitized = sessionId.replace(/[\r\n\t]/g, "").slice(0, 64);
+      const sanitized = sessionId.replace(/[\r\n\t]/g, "").slice(0, 64); // NOSONAR - character class
       console.warn(`[chat] Session "${sanitized}" not found, creating new session`);
     }
 
@@ -254,7 +254,7 @@ export function createChatRouter(
             const state = session.getState();
             const updatedAt = new Date(state.updatedAt).getTime();
             const ttl = process.env.DOJOPS_SESSION_TTL_MS
-              ? parseInt(process.env.DOJOPS_SESSION_TTL_MS, 10)
+              ? Number.parseInt(process.env.DOJOPS_SESSION_TTL_MS, 10)
               : 7 * 24 * 60 * 60 * 1000;
             if (Number.isFinite(updatedAt) && now - updatedAt > ttl) {
               sessions.delete(id);

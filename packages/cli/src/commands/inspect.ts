@@ -43,9 +43,10 @@ function inspectConfig(ctx: CLIContext): void {
 
   // UX #2: Show effective provider including env var
   const effectiveProvider = resolveProvider(undefined, config);
+  const envProviderLabel = pc.dim(`(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER})`);
   const providerDisplay =
     process.env.DOJOPS_PROVIDER && process.env.DOJOPS_PROVIDER !== config.defaultProvider
-      ? `${effectiveProvider} ${pc.dim(`(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER})`)}`
+      ? `${effectiveProvider} ${envProviderLabel}`
       : effectiveProvider;
   const lines = [
     `${pc.bold("Provider:")}  ${providerDisplay}`,

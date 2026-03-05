@@ -118,7 +118,10 @@ function matchesAnyKey(keys: string[], provided: string): boolean {
  * E-3: Supports single key (string) or multiple keys (string[]) for key rotation.
  */
 export function authMiddleware(apiKey?: string | string[]) {
-  const keys: string[] = apiKey ? (Array.isArray(apiKey) ? apiKey : [apiKey]) : [];
+  let keys: string[];
+  if (!apiKey) keys = [];
+  else if (Array.isArray(apiKey)) keys = apiKey;
+  else keys = [apiKey];
 
   return (req: Request, res: Response, next: NextFunction): void => {
     // Track authentication state on res.locals for downstream route handlers

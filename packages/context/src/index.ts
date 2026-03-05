@@ -18,12 +18,12 @@ export function createDocAugmenter(options?: DocAugmenterOptions): Context7DocAu
     cacheTtlMs:
       options?.cacheTtlMs ??
       (process.env.DOJOPS_CONTEXT_CACHE_TTL
-        ? parseInt(process.env.DOJOPS_CONTEXT_CACHE_TTL, 10)
+        ? Number.parseInt(process.env.DOJOPS_CONTEXT_CACHE_TTL, 10)
         : undefined),
     maxDocsLength:
       options?.maxDocsLength ??
       (process.env.DOJOPS_CONTEXT_MAX_LENGTH
-        ? parseInt(process.env.DOJOPS_CONTEXT_MAX_LENGTH, 10)
+        ? Number.parseInt(process.env.DOJOPS_CONTEXT_MAX_LENGTH, 10)
         : undefined),
     timeoutMs: options?.timeoutMs,
   });

@@ -83,14 +83,14 @@ function safeJsonParse<T>(text: string): T {
 export class MetricsAggregator {
   private readonly dojopsDir: string;
   // A32: Simple in-memory cache with 30s TTL (matches dashboard refresh interval)
-  private cache: {
+  private readonly cache: {
     overview?: { data: OverviewMetrics; ts: number };
     security?: { data: SecurityMetrics; ts: number };
     audit?: { data: AuditMetrics; ts: number };
   } = {};
   private readonly TTL = 30_000;
 
-  constructor(private rootDir: string) {
+  constructor(private readonly rootDir: string) {
     this.dojopsDir = path.join(rootDir, ".dojops");
   }
 
@@ -394,7 +394,7 @@ export class MetricsAggregator {
     const commandCounts = new Map<string, number>();
 
     for (const entry of entries) {
-      const status = entry.status as keyof typeof byStatus;
+      const status = entry.status;
       if (status in byStatus) byStatus[status]++;
 
       const cmd = entry.command || "unknown";

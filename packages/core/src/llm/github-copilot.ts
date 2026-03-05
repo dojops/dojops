@@ -25,7 +25,7 @@ const KNOWN_COPILOT_MODELS = [
 
 export class GitHubCopilotProvider implements LLMProvider {
   name = "github-copilot";
-  private model: string;
+  private readonly model: string;
 
   constructor(model = "gpt-4o") {
     this.model = model;
@@ -107,7 +107,7 @@ export class GitHubCopilotProvider implements LLMProvider {
       for await (const model of list) {
         models.push(model.id);
       }
-      return models.length > 0 ? models.sort() : KNOWN_COPILOT_MODELS;
+      return models.length > 0 ? models.sort((a, b) => a.localeCompare(b)) : KNOWN_COPILOT_MODELS;
     } catch {
       return KNOWN_COPILOT_MODELS;
     }
@@ -116,7 +116,7 @@ export class GitHubCopilotProvider implements LLMProvider {
 
 function extractApiError(err: unknown): string {
   if (err instanceof Error) {
-    const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+    const jsonMatch = /\{[\s\S]*\}/.exec(err.message);
     if (jsonMatch) {
       try {
         const body = JSON.parse(jsonMatch[0]);

@@ -105,10 +105,8 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       const deps = task.dependsOn.length ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
       return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
     });
-    p.note(
-      wrapForNote(taskLines.join("\n")),
-      `${graph.goal} ${pc.dim(`(${graph.tasks.length} tasks)`)}`,
-    );
+    const taskCountLabel = pc.dim(`(${graph.tasks.length} tasks)`);
+    p.note(wrapForNote(taskLines.join("\n")), `${graph.goal} ${taskCountLabel}`);
   }
 
   // Save plan to .dojops/plans/

@@ -5,9 +5,9 @@ import {
   writeFiles,
   matchesScopePattern,
 } from "../file-writer";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
 describe("serializeForFile", () => {
   it("serializes YAML with options", () => {

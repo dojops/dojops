@@ -6,8 +6,8 @@ import { augmentSystemPrompt } from "./schema-prompt";
 
 export class AnthropicProvider implements LLMProvider {
   name = "anthropic";
-  private client: Anthropic;
-  private model: string;
+  private readonly client: Anthropic;
+  private readonly model: string;
 
   constructor(apiKey: string, model = "claude-sonnet-4-5-20250929") {
     this.client = new Anthropic({ apiKey });
@@ -49,7 +49,7 @@ export class AnthropicProvider implements LLMProvider {
       if (usedPrefill && /\bprefill\b/i.test(errMsg)) {
         usedPrefill = false;
         const messagesWithoutPrefill = messages.filter(
-          (m) => !(m.role === "assistant" && m.content === "{"),
+          (m) => m.role !== "assistant" || m.content !== "{",
         );
         try {
           message = await this.client.messages.create({
@@ -98,7 +98,7 @@ export class AnthropicProvider implements LLMProvider {
     try {
       const page = await this.client.models.list({ limit: 100 });
       const models: string[] = page.data.filter((m) => m.id.startsWith("claude-")).map((m) => m.id);
-      return models.sort();
+      return models.sort((a, b) => a.localeCompare(b));
     } catch {
       return [];
     }
@@ -109,7 +109,7 @@ export class AnthropicProvider implements LLMProvider {
 function extractApiError(err: unknown): string {
   if (err instanceof Error) {
     // Anthropic SDK embeds JSON like: "400 {"type":"error","error":{"type":"...","message":"..."}}"
-    const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+    const jsonMatch = /\{[\s\S]*\}/.exec(err.message);
     if (jsonMatch) {
       try {
         const body = JSON.parse(jsonMatch[0]);

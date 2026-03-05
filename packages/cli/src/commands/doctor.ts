@@ -38,7 +38,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
 
   // Node.js version
   const nodeVersion = process.versions.node;
-  const major = parseInt(nodeVersion.split(".")[0], 10);
+  const major = Number.parseInt(nodeVersion.split(".")[0], 10);
   checks.push({
     name: "Node.js version",
     status: major >= 18 ? "pass" : "fail",
@@ -47,13 +47,11 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
 
   // Provider configured — UX #1: use resolveProvider() to include DOJOPS_PROVIDER env var
   const provider = resolveProvider(ctx.globalOpts.provider, ctx.config);
-  const providerSource = ctx.globalOpts.provider
-    ? "(CLI flag)"
-    : process.env.DOJOPS_PROVIDER
-      ? "(env: DOJOPS_PROVIDER)"
-      : ctx.config.defaultProvider
-        ? "(config)"
-        : "(default)";
+  let providerSource: string;
+  if (ctx.globalOpts.provider) providerSource = "(CLI flag)";
+  else if (process.env.DOJOPS_PROVIDER) providerSource = "(env: DOJOPS_PROVIDER)";
+  else if (ctx.config.defaultProvider) providerSource = "(config)";
+  else providerSource = "(default)";
   checks.push({
     name: "Provider configured",
     status: provider ? "pass" : "warn",
@@ -74,7 +72,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     checks.push({
       name: `API key (${provider})`,
       status: hasEnvKey || hasConfigKey ? "pass" : "fail",
-      detail: hasEnvKey ? `Set via $${envVar}` : hasConfigKey ? "Set in config" : "Not found",
+      detail: hasEnvKey ? `Set via $${envVar}` : (hasConfigKey ? "Set in config" : "Not found"),
     });
   }
 
@@ -177,7 +175,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
       if (!toolDomains.some((d) => domainSet.has(d))) continue;
     }
     const sandboxEntry = toolRegistry.tools.find((t) => t.name === tool.name);
-    const systemBinary = !sandboxEntry ? resolveBinary(tool.binaryName) : undefined;
+    const systemBinary = sandboxEntry ? undefined : resolveBinary(tool.binaryName);
     const supported = isToolSupportedOnCurrentPlatform(tool);
 
     let status: "pass" | "warn";
@@ -210,31 +208,33 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     const successRate =
       executions.length > 0 ? Math.round((successCount / executions.length) * 100) : 0;
 
-    checks.push({
-      name: "Plans",
-      status: "pass",
-      detail: `${plans.length} plan(s)`,
-    });
-    checks.push({
-      name: "Executions",
-      status: "pass",
-      detail:
-        executions.length > 0
-          ? `${executions.length} execution(s) (${successRate}% success)`
-          : "0 execution(s)",
-    });
-    checks.push({
-      name: "Security scans",
-      status: "pass",
-      detail: `${scanReports.length} scan(s)`,
-    });
-    checks.push({
-      name: "Audit chain",
-      status: auditResult.valid ? "pass" : "fail",
-      detail: auditResult.valid
-        ? `Valid (${auditResult.totalEntries} entries)`
-        : `Invalid — ${auditResult.errors.length} error(s) in ${auditResult.totalEntries} entries`,
-    });
+    checks.push(
+      {
+        name: "Plans",
+        status: "pass",
+        detail: `${plans.length} plan(s)`,
+      },
+      {
+        name: "Executions",
+        status: "pass",
+        detail:
+          executions.length > 0
+            ? `${executions.length} execution(s) (${successRate}% success)`
+            : "0 execution(s)",
+      },
+      {
+        name: "Security scans",
+        status: "pass",
+        detail: `${scanReports.length} scan(s)`,
+      },
+      {
+        name: "Audit chain",
+        status: auditResult.valid ? "pass" : "fail",
+        detail: auditResult.valid
+          ? `Valid (${auditResult.totalEntries} entries)`
+          : `Invalid — ${auditResult.errors.length} error(s) in ${auditResult.totalEntries} entries`,
+      },
+    );
   }
 
   // Output
@@ -249,8 +249,8 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
   const maxDetail = Math.max(20, cols - prefix - nameWidth - 6);
 
   const lines = checks.map((c) => {
-    const icon =
-      c.status === "pass" ? pc.green("✓") : c.status === "fail" ? pc.red("✗") : pc.yellow("!");
+    const iconFail = c.status === "fail" ? pc.red("✗") : pc.yellow("!");
+    const icon = c.status === "pass" ? pc.green("✓") : iconFail;
     const detail = c.detail.length > maxDetail ? c.detail.slice(0, maxDetail - 1) + "…" : c.detail;
     return `  ${icon} ${pc.bold(c.name.padEnd(nameWidth))} ${detail}`;
   });

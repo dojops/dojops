@@ -3,7 +3,7 @@
 const API = "/api";
 
 // Module-scoped state for pagination (C-9: no globalThis data storage)
-var _state = {
+let _state = {
   issuesData: [],
   issuesPage: 1,
   filteredIssues: [],
@@ -1081,7 +1081,7 @@ function renderSecurity(data) {
   html += "</div>";
 
   // Severity bar
-  var total = data.totalFindings || 1;
+  let total = data.totalFindings || 1;
   html += '<div class="metrics-section">';
   html += '<div class="metrics-section__title">Severity Distribution</div>';
   html += '<div class="severity-bar">';
@@ -1178,19 +1178,19 @@ function renderSecurity(data) {
   if (data.findingsTrend.length > 0) {
     html += '<div class="metrics-section glass-card">';
     html += '<div class="metrics-section__title">Findings Trend</div>';
-    var maxVal = Math.max(
+    let maxVal = Math.max(
       1,
       ...data.findingsTrend.map(function (d) {
         return d.critical + d.high + d.medium + d.low;
       }),
     );
     html += '<div class="trend-chart">';
-    for (var i = 0; i < data.findingsTrend.length; i++) {
-      var point = data.findingsTrend[i];
-      var cH = (point.critical / maxVal) * 100;
-      var hH = (point.high / maxVal) * 100;
-      var mH = (point.medium / maxVal) * 100;
-      var lH = (point.low / maxVal) * 100;
+    for (let i = 0; i < data.findingsTrend.length; i++) {
+      let point = data.findingsTrend[i];
+      let cH = (point.critical / maxVal) * 100;
+      let hH = (point.high / maxVal) * 100;
+      let mH = (point.medium / maxVal) * 100;
+      let lH = (point.low / maxVal) * 100;
       html += '<div class="trend-chart__bar-group">';
       if (point.low > 0)
         html +=
@@ -1217,14 +1217,14 @@ function renderSecurity(data) {
   // All issues table with pagination and filtering
   if (data.topIssues.length > 0) {
     // Extract unique severities and tools for filter dropdowns
-    var severities = [
+    let severities = [
       ...new Set(
         data.topIssues.map(function (i) {
           return i.severity;
         }),
       ),
     ].sort();
-    var tools = [
+    let tools = [
       ...new Set(
         data.topIssues.map(function (i) {
           return i.tool;
@@ -1241,7 +1241,7 @@ function renderSecurity(data) {
     html += '<label class="filter-label">Severity</label>';
     html += '<select id="issues-sev-filter" class="filter-select" data-action="filterIssues">';
     html += '<option value="">All</option>';
-    for (var si = 0; si < severities.length; si++) {
+    for (let si = 0; si < severities.length; si++) {
       html +=
         '<option value="' +
         escapeHtml(severities[si]) +
@@ -1254,7 +1254,7 @@ function renderSecurity(data) {
     html += '<label class="filter-label">Tool</label>';
     html += '<select id="issues-tool-filter" class="filter-select" data-action="filterIssues">';
     html += '<option value="">All</option>';
-    for (var ti = 0; ti < tools.length; ti++) {
+    for (let ti = 0; ti < tools.length; ti++) {
       html +=
         '<option value="' + escapeHtml(tools[ti]) + '">' + escapeHtml(tools[ti]) + "</option>";
     }
@@ -1274,7 +1274,7 @@ function renderSecurity(data) {
 
   // Scan history with pagination (sorted by time, newest first)
   if (data.scanHistory.length > 0) {
-    var sortedScans = data.scanHistory.slice().sort(function (a, b) {
+    let sortedScans = data.scanHistory.slice().sort(function (a, b) {
       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
     });
 
@@ -1324,9 +1324,9 @@ function renderAudit(data) {
   let html = "";
 
   // Chain integrity badge
-  var valid = data.chainIntegrity.valid;
-  var badgeClass = valid ? "integrity-badge--valid" : "integrity-badge--invalid";
-  var badgeIcon = valid
+  let valid = data.chainIntegrity.valid;
+  let badgeClass = valid ? "integrity-badge--valid" : "integrity-badge--invalid";
+  let badgeIcon = valid
     ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
     : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   html +=
@@ -1395,8 +1395,8 @@ function renderAudit(data) {
     html += '<div class="metrics-section__title">Command Distribution</div>';
     html +=
       '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
-    for (var i = 0; i < data.byCommand.length; i++) {
-      var item = data.byCommand[i];
+    for (let i = 0; i < data.byCommand.length; i++) {
+      let item = data.byCommand[i];
       html +=
         '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
         escapeHtml(item.command) +
@@ -1412,16 +1412,16 @@ function renderAudit(data) {
     html += '<div class="metrics-section">';
     html += '<div class="metrics-section__title">Recent Entries</div>';
     html += '<div class="audit-entries-grid">';
-    var max = Math.min(data.timeline.length, 20);
-    for (var j = 0; j < max; j++) {
-      var entry = data.timeline[j];
-      var statusChip =
+    let max = Math.min(data.timeline.length, 20);
+    for (let j = 0; j < max; j++) {
+      let entry = data.timeline[j];
+      let statusChip =
         entry.status === "success"
           ? '<span class="chip chip--success">ok</span>'
           : entry.status === "failure"
             ? '<span class="chip chip--error">fail</span>'
             : '<span class="chip chip--muted">' + escapeHtml(entry.status) + "</span>";
-      var hashDisplay = entry.hash
+      let hashDisplay = entry.hash
         ? '<span class="audit-entry-card__hash" title="' +
           escapeHtml(entry.hash) +
           '">' +
@@ -1453,15 +1453,15 @@ function renderAudit(data) {
 
 // ── Issues table filtering & pagination ───────────────
 
-var ISSUES_PER_PAGE = 10;
+let ISSUES_PER_PAGE = 10;
 
 function filterIssuesTable() {
-  var sevFilter = $("issues-sev-filter");
-  var toolFilter = $("issues-tool-filter");
-  var sev = sevFilter ? sevFilter.value : "";
-  var tool = toolFilter ? toolFilter.value : "";
+  let sevFilter = $("issues-sev-filter");
+  let toolFilter = $("issues-tool-filter");
+  let sev = sevFilter ? sevFilter.value : "";
+  let tool = toolFilter ? toolFilter.value : "";
 
-  var filtered = (_state.issuesData || []).filter(function (issue) {
+  let filtered = (_state.issuesData || []).filter(function (issue) {
     if (sev && issue.severity !== sev) return false;
     if (tool && issue.tool !== tool) return false;
     return true;
@@ -1473,26 +1473,26 @@ function filterIssuesTable() {
 }
 
 function renderIssuesPage() {
-  var items = _state.filteredIssues || [];
-  var page = _state.issuesPage || 1;
-  var totalPages = Math.max(1, Math.ceil(items.length / ISSUES_PER_PAGE));
+  let items = _state.filteredIssues || [];
+  let page = _state.issuesPage || 1;
+  let totalPages = Math.max(1, Math.ceil(items.length / ISSUES_PER_PAGE));
   if (page > totalPages) page = totalPages;
 
-  var start = (page - 1) * ISSUES_PER_PAGE;
-  var pageItems = items.slice(start, start + ISSUES_PER_PAGE);
+  let start = (page - 1) * ISSUES_PER_PAGE;
+  let pageItems = items.slice(start, start + ISSUES_PER_PAGE);
 
-  var wrap = $("issues-table-wrap");
+  let wrap = $("issues-table-wrap");
   if (!wrap) return;
 
-  var html =
+  let html =
     '<table class="metric-table"><thead><tr><th>Issue</th><th>Severity</th><th>Tool</th><th>Count</th></tr></thead><tbody>';
   if (pageItems.length === 0) {
     html +=
       '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px">No issues match the selected filters</td></tr>';
   }
-  for (var j = 0; j < pageItems.length; j++) {
-    var issue = pageItems[j];
-    var sevClass = "severity-" + issue.severity;
+  for (let j = 0; j < pageItems.length; j++) {
+    let issue = pageItems[j];
+    let sevClass = "severity-" + issue.severity;
     html +=
       "<tr>" +
       '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' +
@@ -1516,7 +1516,7 @@ function renderIssuesPage() {
   wrap.innerHTML = html;
 
   // Pagination controls
-  var pag = $("issues-pagination");
+  let pag = $("issues-pagination");
   if (pag) {
     pag.innerHTML = renderPagination(page, totalPages, items.length, "goIssuesPage");
   }
@@ -1529,24 +1529,24 @@ function goIssuesPage(p) {
 
 // ── Scan history pagination ───────────────────────────
 
-var SCANS_PER_PAGE = 10;
+let SCANS_PER_PAGE = 10;
 
 function renderScanHistoryPage() {
-  var items = _state.scanHistoryData || [];
-  var page = _state.scanHistoryPage || 1;
-  var totalPages = Math.max(1, Math.ceil(items.length / SCANS_PER_PAGE));
+  let items = _state.scanHistoryData || [];
+  let page = _state.scanHistoryPage || 1;
+  let totalPages = Math.max(1, Math.ceil(items.length / SCANS_PER_PAGE));
   if (page > totalPages) page = totalPages;
 
-  var start = (page - 1) * SCANS_PER_PAGE;
-  var pageItems = items.slice(start, start + SCANS_PER_PAGE);
+  let start = (page - 1) * SCANS_PER_PAGE;
+  let pageItems = items.slice(start, start + SCANS_PER_PAGE);
 
-  var wrap = $("scan-history-table-wrap");
+  let wrap = $("scan-history-table-wrap");
   if (!wrap) return;
 
-  var html =
+  let html =
     '<table class="metric-table"><thead><tr><th>ID</th><th>Time</th><th>Total</th><th>Critical</th><th>High</th><th>Duration</th></tr></thead><tbody>';
-  for (var k = 0; k < pageItems.length; k++) {
-    var scan = pageItems[k];
+  for (let k = 0; k < pageItems.length; k++) {
+    let scan = pageItems[k];
     html +=
       "<tr>" +
       '<td><code style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">' +
@@ -1571,7 +1571,7 @@ function renderScanHistoryPage() {
   html += "</tbody></table>";
   wrap.innerHTML = html;
 
-  var pag = $("scan-history-pagination");
+  let pag = $("scan-history-pagination");
   if (pag) {
     pag.innerHTML = renderPagination(page, totalPages, items.length, "goScanHistoryPage");
   }
@@ -1594,7 +1594,7 @@ function renderPagination(currentPage, totalPages, totalItems, goFnName) {
       "</span>"
     );
 
-  var html =
+  let html =
     '<span class="pagination__info">' +
     totalItems +
     " item" +
@@ -1622,11 +1622,11 @@ function renderPagination(currentPage, totalPages, totalItems, goFnName) {
     ">&lsaquo;</button>";
 
   // Show page numbers (max 5)
-  var startP = Math.max(1, currentPage - 2);
-  var endP = Math.min(totalPages, startP + 4);
+  let startP = Math.max(1, currentPage - 2);
+  let endP = Math.min(totalPages, startP + 4);
   if (endP - startP < 4) startP = Math.max(1, endP - 4);
 
-  for (var p = startP; p <= endP; p++) {
+  for (let p = startP; p <= endP; p++) {
     html +=
       '<button class="pagination__btn' +
       (p === currentPage ? " pagination__btn--active" : "") +
@@ -1693,10 +1693,10 @@ function setProviderStatus(text, online) {
 
 function showLoginOverlay() {
   // Remove existing overlay if present
-  var existing = $("auth-overlay");
+  let existing = $("auth-overlay");
   if (existing) existing.remove();
 
-  var overlay = document.createElement("div");
+  let overlay = document.createElement("div");
   overlay.id = "auth-overlay";
   overlay.className = "auth-overlay";
   overlay.innerHTML =
@@ -1711,7 +1711,7 @@ function showLoginOverlay() {
     "</div>";
   document.body.appendChild(overlay);
 
-  var input = $("auth-key-input");
+  let input = $("auth-key-input");
   if (input) {
     input.focus();
     input.addEventListener("keydown", function (e) {
@@ -1721,15 +1721,15 @@ function showLoginOverlay() {
 }
 
 function hideLoginOverlay() {
-  var overlay = $("auth-overlay");
+  let overlay = $("auth-overlay");
   if (overlay) overlay.remove();
 }
 
 async function attemptLogin() {
-  var input = $("auth-key-input");
-  var errorEl = $("auth-error");
+  let input = $("auth-key-input");
+  let errorEl = $("auth-error");
   if (!input) return;
-  var key = input.value.trim();
+  let key = input.value.trim();
   if (!key) {
     if (errorEl) {
       errorEl.textContent = "Please enter an API key";
@@ -1739,7 +1739,7 @@ async function attemptLogin() {
   }
   try {
     // Test key against agents endpoint
-    var res = await fetch(API + "/agents", {
+    let res = await fetch(API + "/agents", {
       headers: { "X-API-Key": key },
     });
     if (res.ok) {
@@ -1762,9 +1762,9 @@ async function attemptLogin() {
 }
 
 function showLogoutButton() {
-  var footer = document.querySelector(".sidebar__footer");
+  let footer = document.querySelector(".sidebar__footer");
   if (!footer || $("logout-btn")) return;
-  var btn = document.createElement("button");
+  let btn = document.createElement("button");
   btn.id = "logout-btn";
   btn.className = "btn btn--ghost logout-btn";
   btn.textContent = "Logout";
@@ -1773,7 +1773,7 @@ function showLogoutButton() {
 }
 
 function hideLogoutButton() {
-  var btn = $("logout-btn");
+  let btn = $("logout-btn");
   if (btn) btn.remove();
 }
 
@@ -1786,8 +1786,8 @@ function doLogout() {
 async function init() {
   // Check health (raw fetch, no auth needed for minimal payload)
   try {
-    var healthRes = await fetch(API + "/health");
-    var health = await healthRes.json();
+    let healthRes = await fetch(API + "/health");
+    let health = await healthRes.json();
 
     if (health.authRequired && !getStoredApiKey()) {
       showLoginOverlay();
@@ -1795,7 +1795,7 @@ async function init() {
     }
 
     // Full health check with auth
-    var fullHealth = await apiCall("/health");
+    let fullHealth = await apiCall("/health");
     setProviderStatus(fullHealth.provider, true);
     toast("success", "Connected", "Provider: " + fullHealth.provider);
 
@@ -1813,14 +1813,14 @@ async function init() {
   updateAutoRefresh("overview");
 
   // Agents search listener
-  var searchEl = $("agents-search");
+  let searchEl = $("agents-search");
   if (searchEl) {
     searchEl.addEventListener("input", renderAgentsFiltered);
   }
 }
 
 // ── Pagination function allowlist (C-9: no globalThis dispatch) ──────
-var PAGINATE_FUNCTIONS = {
+let PAGINATE_FUNCTIONS = {
   goIssuesPage: goIssuesPage,
   goScanHistoryPage: goScanHistoryPage,
 };
@@ -1828,9 +1828,9 @@ var PAGINATE_FUNCTIONS = {
 // ── CSP-safe event delegation ────────────────────────────
 // Replaces all inline onclick handlers with data-action attributes
 document.addEventListener("click", function (e) {
-  var target = e.target.closest("[data-action]");
+  let target = e.target.closest("[data-action]");
   if (!target) return;
-  var action = target.dataset.action;
+  let action = target.dataset.action;
   if (action === "copyCode") {
     copyCode(target.dataset.id);
   } else if (action === "toggleTaskOutput") {
@@ -1840,7 +1840,7 @@ document.addEventListener("click", function (e) {
   } else if (action === "navigateToTab") {
     navigateToTab(target.dataset.tab);
   } else if (action === "paginate") {
-    var paginateFn = PAGINATE_FUNCTIONS[target.dataset.fn];
+    let paginateFn = PAGINATE_FUNCTIONS[target.dataset.fn];
     if (typeof paginateFn === "function") paginateFn(parseInt(target.dataset.page, 10));
   } else if (action === "authSubmit") {
     attemptLogin();
@@ -1851,7 +1851,7 @@ document.addEventListener("click", function (e) {
 
 // CSP-safe change event delegation for data-action="filterIssues" selects
 document.addEventListener("change", function (e) {
-  var target = e.target.closest("[data-action]");
+  let target = e.target.closest("[data-action]");
   if (!target) return;
   if (target.dataset.action === "filterIssues") {
     filterIssuesTable();

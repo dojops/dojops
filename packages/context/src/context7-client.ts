@@ -18,9 +18,9 @@ interface SearchResult {
 }
 
 export class Context7Client implements DocProvider {
-  private baseUrl: string;
-  private apiKey?: string;
-  private timeoutMs: number;
+  private readonly baseUrl: string;
+  private readonly apiKey?: string;
+  private readonly timeoutMs: number;
 
   constructor(options?: Context7ClientOptions) {
     this.baseUrl = options?.baseUrl ?? DEFAULT_BASE_URL;

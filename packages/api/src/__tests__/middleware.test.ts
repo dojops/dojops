@@ -36,7 +36,7 @@ describe("errorHandler", () => {
   it("returns 400 for ZodError", () => {
     const schema = z.object({ x: z.string() });
     const result = schema.safeParse({ x: 123 });
-    const zodErr = !result.success ? result.error : new ZodError([]);
+    const zodErr = result.success ? new ZodError([]) : result.error;
 
     const { req, res, next } = mockReqRes({});
     errorHandler(zodErr, req, res, next);

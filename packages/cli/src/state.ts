@@ -516,7 +516,7 @@ const DEFAULT_AUDIT_MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
  */
 function rotateAuditIfNeeded(file: string): string | null {
   const maxSizeEnv = process.env.DOJOPS_AUDIT_MAX_SIZE_MB;
-  const maxBytes = maxSizeEnv ? parseFloat(maxSizeEnv) * 1024 * 1024 : DEFAULT_AUDIT_MAX_SIZE_BYTES;
+  const maxBytes = maxSizeEnv ? Number.parseFloat(maxSizeEnv) * 1024 * 1024 : DEFAULT_AUDIT_MAX_SIZE_BYTES;
 
   if (!Number.isFinite(maxBytes) || maxBytes <= 0) return null;
 
@@ -584,7 +584,7 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
   try {
     // If rotation just occurred, use the last hash from the rotated chain as genesis link
     let previousHash = rotatedLastHash ?? "genesis";
-    let seq = rotatedLastHash ? 1 : 1;
+    let seq = 1;
 
     if (fs.existsSync(file)) {
       const content = fs.readFileSync(file, "utf-8").trimEnd();

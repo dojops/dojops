@@ -54,8 +54,7 @@ function serializeHclEntries(obj: Record<string, unknown>, indent: number, lines
     if (typeof value === "object" && value !== null && !Array.isArray(value)) {
       lines.push(`${pad}${key} {`);
       serializeHclEntries(value as Record<string, unknown>, indent + 1, lines);
-      lines.push(`${pad}}`);
-      lines.push("");
+      lines.push(`${pad}}`, "");
     } else {
       lines.push(`${pad}${key} = ${hclSerializeValue(value)}`);
     }
@@ -80,5 +79,5 @@ function hclSerializeValue(v: unknown): string {
 }
 
 function escapeHclString(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+  return s.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", "\\n").replaceAll("\t", "\\t");
 }

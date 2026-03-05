@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 import { OllamaProvider } from "../../llm/ollama";
 import { CIDebugger, CIDiagnosisSchema } from "../../agents/ci-debugger";
 import { InfraDiffAnalyzer, InfraDiffAnalysisSchema } from "../../agents/infra-diff";
@@ -71,7 +71,7 @@ describe.skipIf(!HAS_SERVER)("OllamaProvider E2E — live server", () => {
       expect(Array.isArray(models)).toBe(true);
       expect(models.length).toBeGreaterThan(0);
       // Models should be sorted alphabetically
-      const sorted = [...models].sort();
+      const sorted = [...models].sort((a, b) => a.localeCompare(b));
       expect(models).toEqual(sorted);
     }, 15_000);
 

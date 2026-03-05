@@ -18,13 +18,13 @@ function extractUsage(data: Record<string, unknown>): LLMUsage | undefined {
 
 export class OllamaProvider implements LLMProvider {
   name = "ollama";
-  private model: string;
+  private readonly model: string;
 
   constructor(
-    private baseUrl = "http://localhost:11434",
+    private readonly baseUrl = "http://localhost:11434",
     model = "llama3",
-    private keepAlive: string = "5m",
-    private tlsRejectUnauthorized?: boolean,
+    private readonly keepAlive: string = "5m",
+    private readonly tlsRejectUnauthorized?: boolean,
   ) {
     this.model = model;
     // Validate URL and block SSRF targets
@@ -144,7 +144,7 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await axios.get(`${this.baseUrl}/api/tags`, this.getAxiosConfig());
       const models: string[] = (response.data.models ?? []).map((m: { name: string }) => m.name);
-      return models.sort();
+      return models.sort((a, b) => a.localeCompare(b));
     } catch {
       return [];
     }

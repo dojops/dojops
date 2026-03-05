@@ -79,7 +79,7 @@ export async function scanTrivyImage(imageName: string): Promise<ScannerResult> 
               severity: mapSeverity(vuln.Severity),
               category: "SECURITY",
               file: result.Target,
-              message: `${vuln.PkgName}@${vuln.InstalledVersion}: ${vuln.VulnerabilityID}${vuln.Title ? ` — ${vuln.Title}` : ""}`,
+              message: `${vuln.PkgName}@${vuln.InstalledVersion}: ${vuln.VulnerabilityID}${vuln.Title ? " \u2014 " + vuln.Title : ""}`,
               recommendation: vuln.FixedVersion
                 ? `Update to ${vuln.PkgName}@${vuln.FixedVersion}`
                 : "No fix version available",

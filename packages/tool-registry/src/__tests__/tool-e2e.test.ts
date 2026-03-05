@@ -17,9 +17,9 @@
  * rather than minimal test stubs.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import * as yaml from "js-yaml";
 import { LLMProvider, LLMResponse } from "@dojops/core";
 import { validateManifest } from "../manifest-schema";
@@ -279,7 +279,7 @@ describe("Tool E2E: Discovery & Registry", () => {
     expect(tools[0].source.location).toBe("project");
     expect(tools[0].source.toolHash).toMatch(/^[a-f0-9]{64}$/);
     expect(tools[0].inputSchemaRaw).toBeDefined();
-    expect((tools[0].inputSchemaRaw as Record<string, unknown>).type).toBe("object");
+    expect(tools[0].inputSchemaRaw.type).toBe("object");
   });
 
   it("discovers Envoy tool from global directory", () => {
@@ -302,7 +302,7 @@ describe("Tool E2E: Discovery & Registry", () => {
     const tools = discoverTools(projectDir);
     expect(tools).toHaveLength(2);
 
-    const names = tools.map((t) => t.manifest.name).sort();
+    const names = tools.map((t) => t.manifest.name).sort((a, b) => a.localeCompare(b));
     expect(names).toEqual(["caddy-config", "envoy-config"]);
   });
 

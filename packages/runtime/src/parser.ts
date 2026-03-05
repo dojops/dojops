@@ -1,4 +1,4 @@
-import * as fs from "fs";
+import * as fs from "node:fs";
 import * as yaml from "js-yaml";
 import {
   DopsFrontmatterSchema,
@@ -67,7 +67,7 @@ export function validateDopsModule(module: DopsModule): DopsValidationResult {
   }
 
   // Validate output schema has type
-  if (!module.frontmatter.output || !module.frontmatter.output.type) {
+  if (!module.frontmatter.output?.type) {
     errors.push("Output schema must have a 'type' field");
   }
 
@@ -165,7 +165,7 @@ function parseMarkdownSections(body: string): MarkdownSections {
   let currentContent: string[] = [];
 
   for (const line of lines) {
-    const headingMatch = line.match(/^##\s+(.+)$/);
+    const headingMatch = /^##\s+(.+)$/.exec(line);
     if (headingMatch) {
       // Save previous section
       if (currentSection) {

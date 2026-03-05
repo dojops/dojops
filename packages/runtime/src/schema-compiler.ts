@@ -87,7 +87,7 @@ function compileInputField(field: InputFieldDef): z.ZodType {
     }
 
     case "array": {
-      const itemDef = field.items as InputFieldDef | undefined;
+      const itemDef = field.items;
       const itemSchema = itemDef ? compileInputField(itemDef) : z.unknown();
       let arr = z.array(itemSchema);
       if (field.minItems !== undefined) arr = arr.min(field.minItems);
@@ -100,7 +100,7 @@ function compileInputField(field: InputFieldDef): z.ZodType {
       if (field.properties) {
         const shape: Record<string, z.ZodType> = {};
         for (const [key, propDef] of Object.entries(field.properties)) {
-          shape[key] = compileInputField(propDef as InputFieldDef);
+          shape[key] = compileInputField(propDef);
         }
         schema = z.object(shape);
       } else {

@@ -143,8 +143,7 @@ function serializeHclEntries(
       } else {
         lines.push(`${pad}${key} {`);
         serializeHclEntries(value as Record<string, unknown>, indent + 1, lines, mapAttrs);
-        lines.push(`${pad}}`);
-        lines.push("");
+        lines.push(`${pad}}`, "");
       }
     } else {
       lines.push(`${pad}${key} = ${hclValue(value, indent, mapAttrs)}`);
@@ -203,5 +202,5 @@ function hclMap(obj: Record<string, unknown>, indent: number, mapAttrs: Set<stri
 }
 
 function escapeHclString(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+  return s.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", "\\n").replaceAll("\t", "\\t");
 }

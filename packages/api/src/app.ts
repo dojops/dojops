@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import crypto from "node:crypto";
-import path from "path";
+import path from "node:path";
 import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
 import { HistoryStore } from "./store";
@@ -130,8 +130,8 @@ export function createApp(deps: AppDependencies): Express {
 
   // Rate limiting for API routes (A18: rate limiter before auth)
   const apiLimiter = rateLimit({
-    windowMs: parseInt(process.env.DOJOPS_RATE_LIMIT_WINDOW_MS ?? String(15 * 60 * 1000), 10),
-    limit: parseInt(process.env.DOJOPS_RATE_LIMIT ?? "100", 10),
+    windowMs: Number.parseInt(process.env.DOJOPS_RATE_LIMIT_WINDOW_MS ?? String(15 * 60 * 1000), 10),
+    limit: Number.parseInt(process.env.DOJOPS_RATE_LIMIT ?? "100", 10),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later" },
@@ -282,12 +282,8 @@ export function createApp(deps: AppDependencies): Express {
         tokenTracker.record(resp.totalTokens);
       } else if (typeof resp.usage === "object" && resp.usage !== null) {
         const usage = resp.usage as Record<string, unknown>;
-        const total =
-          typeof usage.totalTokens === "number"
-            ? usage.totalTokens
-            : typeof usage.total_tokens === "number"
-              ? usage.total_tokens
-              : 0;
+        const totalFallback = typeof usage.total_tokens === "number" ? usage.total_tokens : 0;
+        const total = typeof usage.totalTokens === "number" ? usage.totalTokens : totalFallback;
         if (total > 0) tokenTracker.record(total);
       }
     }

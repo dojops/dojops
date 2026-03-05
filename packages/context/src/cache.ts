@@ -4,10 +4,10 @@ interface CacheEntry<T> {
 }
 
 export class TtlCache<T> {
-  private store = new Map<string, CacheEntry<T>>();
+  private readonly store = new Map<string, CacheEntry<T>>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private ttlMs: number) {
+  constructor(private readonly ttlMs: number) {
     this.cleanupTimer = setInterval(() => this.evict(), ttlMs);
     if (this.cleanupTimer.unref) {
       this.cleanupTimer.unref();

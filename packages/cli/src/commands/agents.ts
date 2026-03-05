@@ -194,8 +194,7 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   }
 
   if (preflight && preflight.checks.length > 0) {
-    lines.push("");
-    lines.push(pc.bold("Tool Dependencies:"));
+    lines.push("", pc.bold("Tool Dependencies:"));
     for (const check of preflight.checks) {
       const icon = check.available ? pc.green("\u2713") : pc.yellow("!");
       const status = check.available

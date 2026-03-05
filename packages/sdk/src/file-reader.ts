@@ -1,6 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
-import * as crypto from "crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as crypto from "node:crypto";
 
 const MAX_CONTENT_SIZE = 50 * 1024; // 50 KB
 
@@ -109,8 +109,8 @@ export function listBackups(filePath: string): string[] {
       .readdirSync(dir)
       .filter((f) => f.startsWith(`${base}.bak.`) && /\.\d+$/.test(f))
       .sort((a, b) => {
-        const tsA = parseInt(a.match(/\.(\d+)$/)?.[1] ?? "0", 10);
-        const tsB = parseInt(b.match(/\.(\d+)$/)?.[1] ?? "0", 10);
+        const tsA = Number.parseInt(a.match(/\.(\d+)$/)?.[1] ?? "0", 10);
+        const tsB = Number.parseInt(b.match(/\.(\d+)$/)?.[1] ?? "0", 10);
         return tsB - tsA; // newest first
       })
       .map((f) => path.join(dir, f));
