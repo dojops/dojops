@@ -10,7 +10,9 @@ export function createHistoryRouter(store: HistoryStore): Router {
   router.get("/", (req, res) => {
     const rawType = req.query.type as string | undefined;
     const type = rawType && ALLOWED_TYPES.has(rawType) ? rawType : undefined;
-    const parsedLimit = req.query.limit ? Number.parseInt(req.query.limit as string, 10) : undefined;
+    const parsedLimit = req.query.limit
+      ? Number.parseInt(req.query.limit as string, 10)
+      : undefined;
     const limit =
       parsedLimit !== undefined && Number.isFinite(parsedLimit) && parsedLimit > 0
         ? Math.min(parsedLimit, MAX_LIMIT)

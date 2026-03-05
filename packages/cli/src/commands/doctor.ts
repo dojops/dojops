@@ -72,7 +72,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     checks.push({
       name: `API key (${provider})`,
       status: hasEnvKey || hasConfigKey ? "pass" : "fail",
-      detail: hasEnvKey ? `Set via $${envVar}` : (hasConfigKey ? "Set in config" : "Not found"),
+      detail: hasEnvKey ? `Set via $${envVar}` : hasConfigKey ? "Set in config" : "Not found",
     });
   }
 

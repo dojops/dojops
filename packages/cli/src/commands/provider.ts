@@ -48,7 +48,7 @@ async function providerList(args: string[], ctx: CLIContext): Promise<void> {
       name,
       configured: configured.has(name),
       default: config.defaultProvider === name,
-      token: name === "ollama" ? null : (config.tokens?.[name] ? "***" : null),
+      token: name === "ollama" ? null : config.tokens?.[name] ? "***" : null,
       model: config.defaultProvider === name && config.defaultModel ? config.defaultModel : null,
     }));
     console.log(JSON.stringify(data, null, 2));

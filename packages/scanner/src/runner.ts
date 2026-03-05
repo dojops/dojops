@@ -160,9 +160,7 @@ export async function runScan(
       const reason =
         outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
       const isTimeout = reason.startsWith("timeout after");
-      const skipReason = isTimeout
-        ? `Scanner timed out: ${reason}`
-        : `Scanner crashed: ${reason}`;
+      const skipReason = isTimeout ? `Scanner timed out: ${reason}` : `Scanner crashed: ${reason}`;
       errors.push(`${selected[i].name}: ${skipReason}`);
       results.push({
         tool: selected[i].name,

@@ -124,7 +124,9 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
           category: "DEPENDENCY",
           file: subProject
             ? `${subProject}/${hasRequirements ? "requirements.txt" : "pyproject.toml"}`
-            : (hasRequirements ? "requirements.txt" : "pyproject.toml"),
+            : hasRequirements
+              ? "requirements.txt"
+              : "pyproject.toml",
           message: `${prefix}${pkg.name}@${pkg.version}: ${vuln.id}${vuln.description ? " \u2014 " + vuln.description : ""}`,
           recommendation:
             vuln.fix_versions && vuln.fix_versions.length > 0

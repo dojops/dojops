@@ -87,9 +87,9 @@ export async function scanSemgrep(projectPath: string): Promise<ScannerResult> {
           message: `[${result.check_id}] ${result.extra.message}`,
           recommendation: result.extra.fix
             ? `Suggested fix available`
-            : (result.extra.metadata?.references?.[0]
+            : result.extra.metadata?.references?.[0]
               ? `See: ${result.extra.metadata.references[0]}`
-              : undefined),
+              : undefined,
           autoFixAvailable: !!result.extra.fix,
           cwe,
         });

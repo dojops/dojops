@@ -188,9 +188,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
       const fileLine = finding.line ? `:${finding.line}` : "";
       const loc = finding.file ? `${finding.file}${fileLine}` : "";
       const toolLabel = pc.dim(`[${finding.tool}]`);
-      console.log(
-        `  ${sev}  ${toolLabel} ${finding.message}` + (loc ? `  ${pc.dim(loc)}` : ""),
-      );
+      console.log(`  ${sev}  ${toolLabel} ${finding.message}` + (loc ? `  ${pc.dim(loc)}` : ""));
       if (finding.recommendation) {
         console.log(`         ${pc.dim("→")} ${pc.dim(finding.recommendation)}`);
       }
@@ -214,9 +212,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   // --compare: show delta against previous scan
   if (compareMode) {
     const previousReports = listScanReports(root);
-    const previous = previousReports.find(
-      (r) => r.id !== report.id,
-    ) as ScanReport | undefined;
+    const previous = previousReports.find((r) => r.id !== report.id) as ScanReport | undefined;
 
     if (previous) {
       const { newFindings, resolvedFindings } = compareScanReports(report, previous);
@@ -264,10 +260,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
 
     // Compare with previous scan's SBOM hash
     const previousReports = listScanReports(root);
-    const previousWithSbom = previousReports.find(
-      (r) =>
-        r.sbomHash && r.id !== report.id,
-    );
+    const previousWithSbom = previousReports.find((r) => r.sbomHash && r.id !== report.id);
     if (previousWithSbom) {
       const prevHash = previousWithSbom.sbomHash as string;
       if (prevHash !== currentHash) {

@@ -16,7 +16,8 @@ const MAX_REF_STRING_LENGTH = 50_000;
 
 /** Strip control characters and Unicode bidi/zero-width markers from strings */
 function sanitizeRefString(value: string): string {
-  const cleaned = value.replace( // NOSONAR - complex character class, cannot use replaceAll
+  const cleaned = value.replace(
+    // NOSONAR - complex character class, cannot use replaceAll
     // eslint-disable-next-line no-control-regex
     /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B-\u200D\uFEFF\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
     "",

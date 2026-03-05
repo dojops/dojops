@@ -516,7 +516,9 @@ const DEFAULT_AUDIT_MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
  */
 function rotateAuditIfNeeded(file: string): string | null {
   const maxSizeEnv = process.env.DOJOPS_AUDIT_MAX_SIZE_MB;
-  const maxBytes = maxSizeEnv ? Number.parseFloat(maxSizeEnv) * 1024 * 1024 : DEFAULT_AUDIT_MAX_SIZE_BYTES;
+  const maxBytes = maxSizeEnv
+    ? Number.parseFloat(maxSizeEnv) * 1024 * 1024
+    : DEFAULT_AUDIT_MAX_SIZE_BYTES;
 
   if (!Number.isFinite(maxBytes) || maxBytes <= 0) return null;
 

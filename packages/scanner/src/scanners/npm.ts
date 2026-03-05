@@ -237,9 +237,9 @@ function parseNpmAudit(
         file: subProject ? `${subProject}/${lockFile}` : lockFile,
         message: `${prefix}${name}: ${viaMessages || vuln.severity} vulnerability`,
         recommendation: vuln.fixAvailable
-          ? (typeof vuln.fixAvailable === "object"
+          ? typeof vuln.fixAvailable === "object"
             ? `Update to ${vuln.fixAvailable.name}@${vuln.fixAvailable.version}`
-            : "Run npm audit fix")
+            : "Run npm audit fix"
           : "No automatic fix available — review manually",
         autoFixAvailable: !!vuln.fixAvailable,
       });

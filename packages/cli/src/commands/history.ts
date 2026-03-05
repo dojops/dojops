@@ -220,7 +220,8 @@ function historyAudit(args: string[], ctx: CLIContext): void {
   }
 
   const lines = entries.map((entry: AuditEntry) => {
-    const statusColorFail = entry.status === "failure" ? pc.red(entry.status) : pc.yellow(entry.status);
+    const statusColorFail =
+      entry.status === "failure" ? pc.red(entry.status) : pc.yellow(entry.status);
     const statusColor = entry.status === "success" ? pc.green(entry.status) : statusColorFail;
     const seq =
       entry.seq != null ? pc.dim(`#${String(entry.seq).padStart(4, " ")}`) : pc.dim("#   ?");

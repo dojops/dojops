@@ -161,7 +161,8 @@ function renderTemplate(template: string, data: unknown): string {
   if (typeof data !== "object" || data === null) return template;
   const obj = data as Record<string, unknown>;
 
-  return template.replace(/\{\{\s*\.Values\.(\w+)\s*\}\}/g, (_match, key: string) => { // NOSONAR - capture group regex
+  return template.replace(/\{\{\s*\.Values\.(\w+)\s*\}\}/g, (_match, key: string) => {
+    // NOSONAR - capture group regex
     return obj[key] !== undefined ? String(obj[key]) : "";
   });
 }
@@ -240,7 +241,9 @@ export function matchesScopePattern(
     // * wildcard within pattern (e.g. "Dockerfile.*", "*.tf")
     if (normalizedExpanded.includes("*")) {
       const regexStr =
-        "^" + normalizedExpanded.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*") + "$"; // NOSONAR - escape-for-regex pattern
+        "^" +
+        normalizedExpanded.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*") +
+        "$"; // NOSONAR - escape-for-regex pattern
       if (new RegExp(regexStr).test(normalizedResolved)) return true;
     }
   }

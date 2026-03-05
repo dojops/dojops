@@ -130,7 +130,10 @@ export function createApp(deps: AppDependencies): Express {
 
   // Rate limiting for API routes (A18: rate limiter before auth)
   const apiLimiter = rateLimit({
-    windowMs: Number.parseInt(process.env.DOJOPS_RATE_LIMIT_WINDOW_MS ?? String(15 * 60 * 1000), 10),
+    windowMs: Number.parseInt(
+      process.env.DOJOPS_RATE_LIMIT_WINDOW_MS ?? String(15 * 60 * 1000),
+      10,
+    ),
     limit: Number.parseInt(process.env.DOJOPS_RATE_LIMIT ?? "100", 10),
     standardHeaders: true,
     legacyHeaders: false,
