@@ -83,7 +83,7 @@ const MAX_INPUT_VALUE_LENGTH = 10_000;
 function sanitizeInputValue(value: string): string {
   // Strip control chars except \n (0x0A), \t (0x09), \r (0x0D)
   // Also strip zero-width chars (U+200B-U+200D, U+FEFF) and bidi overrides
-  const cleaned = value.replace(
+  const cleaned = value.replaceAll(
     // eslint-disable-next-line no-control-regex
     /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B-\u200D\uFEFF\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
     "",
@@ -200,17 +200,17 @@ function substituteV2Variables(prompt: string, context: PromptContextV2): string
   result = result.replaceAll("{bestPractices}", bestPracticesList);
 
   // {context7Docs}
-  if (context.context7Docs !== undefined) {
-    result = result.replaceAll("{context7Docs}", context.context7Docs);
-  } else {
+  if (context.context7Docs === undefined) {
     result = result.replaceAll("{context7Docs}", "No additional documentation available.");
+  } else {
+    result = result.replaceAll("{context7Docs}", context.context7Docs);
   }
 
   // {projectContext}
-  if (context.projectContext !== undefined) {
-    result = result.replaceAll("{projectContext}", context.projectContext);
-  } else {
+  if (context.projectContext === undefined) {
     result = result.replaceAll("{projectContext}", "No project context available.");
+  } else {
+    result = result.replaceAll("{projectContext}", context.projectContext);
   }
 
   // {existingContent} — trusted (read from filesystem)

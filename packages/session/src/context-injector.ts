@@ -44,7 +44,7 @@ export function buildSessionContext(rootDir: string): string {
         const latest = JSON.parse(fs.readFileSync(path.join(scanDir, files[0]), "utf-8"));
         if (typeof latest.summary === "string" && latest.summary.length <= 4096) {
           // Sanitize: strip control chars and bidi markers to prevent prompt injection
-          const safeSummary = latest.summary.replace(
+          const safeSummary = latest.summary.replaceAll(
             // NOSONAR - complex character class
             // eslint-disable-next-line no-control-regex
             /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B-\u200D\uFEFF\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,

@@ -29,13 +29,13 @@ export function atomicWriteFileSync(filePath: string, content: string): void {
 export function restoreBackup(filePath: string, level?: number): boolean {
   let bakPath: string;
 
-  if (level !== undefined) {
+  if (level === undefined) {
+    bakPath = `${filePath}.bak`;
+  } else {
     // Restore from versioned backup chain
     const backups = listBackups(filePath);
     if (level >= backups.length) return false;
     bakPath = backups[level];
-  } else {
-    bakPath = `${filePath}.bak`;
   }
 
   if (!fs.existsSync(bakPath)) return false;

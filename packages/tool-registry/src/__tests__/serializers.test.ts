@@ -103,9 +103,9 @@ describe("serialize", () => {
   it("escapes special characters in HCL strings", () => {
     const result = serialize({ config: { path: 'C:\\dir\t"name"\n' } }, "hcl");
     expect(result).toContain("\\\\");
-    expect(result).toContain('\\"');
-    expect(result).toContain("\\n");
-    expect(result).toContain("\\t");
+    expect(result).toContain(String.raw`\"`);
+    expect(result).toContain(String.raw`\n`);
+    expect(result).toContain(String.raw`\t`);
   });
 
   it("throws for HCL with non-string non-object data", () => {

@@ -98,5 +98,5 @@ export function applyFixes(plan: RemediationPlan, projectPath: string): PatchRes
 }
 
 function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return str.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }

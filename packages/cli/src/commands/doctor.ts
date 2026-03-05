@@ -69,10 +69,18 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     const envVar = envVarMap[provider] ?? "OPENAI_API_KEY";
     const hasEnvKey = !!process.env[envVar];
     const hasConfigKey = !!ctx.config.tokens?.[provider];
+    let detail: string;
+    if (hasEnvKey) {
+      detail = `Set via $${envVar}`;
+    } else if (hasConfigKey) {
+      detail = "Set in config";
+    } else {
+      detail = "Not found";
+    }
     checks.push({
       name: `API key (${provider})`,
       status: hasEnvKey || hasConfigKey ? "pass" : "fail",
-      detail: hasEnvKey ? `Set via $${envVar}` : hasConfigKey ? "Set in config" : "Not found",
+      detail,
     });
   }
 
@@ -186,12 +194,12 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     } else if (systemBinary) {
       status = "pass";
       detail = `System (${systemBinary})`;
-    } else if (!supported) {
-      status = "warn";
-      detail = "Unsupported on this platform";
-    } else {
+    } else if (supported) {
       status = "warn";
       detail = `Not found — run: dojops toolchain install ${tool.name}`;
+    } else {
+      status = "warn";
+      detail = "Unsupported on this platform";
     }
 
     checks.push({ name: `System: ${tool.name}`, status, detail });

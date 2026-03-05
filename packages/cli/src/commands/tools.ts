@@ -155,102 +155,56 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
   p.note(lines.join("\n"), `Modules (${totalCount})`);
 };
 
-/**
- * `dojops tools validate <name-or-path>` — validates a tool manifest or .dops file.
- */
-export const toolsValidateCommand: CommandHandler = async (args) => {
-  const toolPath = args[0];
-  if (!toolPath) {
-    p.log.info(`  ${pc.dim("$")} dojops modules validate <name-or-path>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name or path required.");
+/** Returns the home directory for global .dojops lookups. */
+function getHomeDir(): string {
+  return process.env.HOME ?? process.env.USERPROFILE ?? "~";
+}
+
+/** Search standard locations for a .dops file by name. Returns its path if found. */
+function findDopsFileByName(toolPath: string): string | null {
+  const projectRoot = findProjectRoot();
+  const dopsLocations = [
+    projectRoot ? path.join(projectRoot, ".dojops", "modules", `${toolPath}.dops`) : null,
+    projectRoot ? path.join(projectRoot, ".dojops", "tools", `${toolPath}.dops`) : null,
+    path.join(getHomeDir(), ".dojops", "modules", `${toolPath}.dops`),
+    path.join(getHomeDir(), ".dojops", "tools", `${toolPath}.dops`),
+  ].filter(Boolean) as string[];
+
+  for (const loc of dopsLocations) {
+    if (fs.existsSync(loc)) return loc;
   }
+  return null;
+}
 
-  // Check if it's a .dops file (by extension or by discovering it)
-  const resolvedPath = path.resolve(toolPath);
-  if (toolPath.endsWith(".dops") && fs.existsSync(resolvedPath)) {
-    return validateDopsFile(resolvedPath);
-  }
+/** Check if a directory contains a tool.yaml or plugin.yaml. */
+function hasManifest(dir: string): boolean {
+  return fs.existsSync(path.join(dir, "tool.yaml")) || fs.existsSync(path.join(dir, "plugin.yaml"));
+}
 
-  // Check if plain name has a .dops file
-  if (!toolPath.includes("/") && !toolPath.includes("\\")) {
-    const projectRoot = findProjectRoot();
-    const dopsLocations = [
-      projectRoot ? path.join(projectRoot, ".dojops", "modules", `${toolPath}.dops`) : null,
-      projectRoot ? path.join(projectRoot, ".dojops", "tools", `${toolPath}.dops`) : null,
-      path.join(
-        process.env.HOME ?? process.env.USERPROFILE ?? "~",
-        ".dojops",
-        "modules",
-        `${toolPath}.dops`,
-      ),
-      path.join(
-        process.env.HOME ?? process.env.USERPROFILE ?? "~",
-        ".dojops",
-        "tools",
-        `${toolPath}.dops`,
-      ),
-    ].filter(Boolean) as string[];
+/** Resolve legacy tool directory by name from standard locations. */
+function resolveLegacyToolDir(toolPath: string): string {
+  const projectRoot = findProjectRoot();
+  const projectToolDir = projectRoot
+    ? path.join(projectRoot, ".dojops", "tools", toolPath)
+    : path.resolve(".dojops", "tools", toolPath);
+  const globalToolDir = path.join(getHomeDir(), ".dojops", "tools", toolPath);
 
-    for (const loc of dopsLocations) {
-      if (fs.existsSync(loc)) {
-        return validateDopsFile(loc);
-      }
-    }
-  }
+  if (hasManifest(projectToolDir)) return projectToolDir;
+  if (hasManifest(globalToolDir)) return globalToolDir;
 
-  // Fall back to legacy tool.yaml validation
-  let resolvedDir: string;
-  if (!toolPath.includes("/") && !toolPath.includes("\\") && !toolPath.includes(".")) {
-    const projectRoot = findProjectRoot();
-    const projectToolDir = projectRoot
-      ? path.join(projectRoot, ".dojops", "tools", toolPath)
-      : path.resolve(".dojops", "tools", toolPath);
-    const globalToolDir = path.join(
-      process.env.HOME ?? process.env.USERPROFILE ?? "~",
-      ".dojops",
-      "tools",
-      toolPath,
-    );
+  const projectPluginDir = projectRoot
+    ? path.join(projectRoot, ".dojops", "plugins", toolPath)
+    : path.resolve(".dojops", "plugins", toolPath);
+  const globalPluginDir = path.join(getHomeDir(), ".dojops", "plugins", toolPath);
 
-    if (
-      fs.existsSync(path.join(projectToolDir, "tool.yaml")) ||
-      fs.existsSync(path.join(projectToolDir, "plugin.yaml"))
-    ) {
-      resolvedDir = projectToolDir;
-    } else if (
-      fs.existsSync(path.join(globalToolDir, "tool.yaml")) ||
-      fs.existsSync(path.join(globalToolDir, "plugin.yaml"))
-    ) {
-      resolvedDir = globalToolDir;
-    } else {
-      const projectPluginDir = projectRoot
-        ? path.join(projectRoot, ".dojops", "plugins", toolPath)
-        : path.resolve(".dojops", "plugins", toolPath);
-      const globalPluginDir = path.join(
-        process.env.HOME ?? process.env.USERPROFILE ?? "~",
-        ".dojops",
-        "plugins",
-        toolPath,
-      );
+  if (hasManifest(projectPluginDir)) return projectPluginDir;
+  if (hasManifest(globalPluginDir)) return globalPluginDir;
 
-      if (
-        fs.existsSync(path.join(projectPluginDir, "plugin.yaml")) ||
-        fs.existsSync(path.join(projectPluginDir, "tool.yaml"))
-      ) {
-        resolvedDir = projectPluginDir;
-      } else if (
-        fs.existsSync(path.join(globalPluginDir, "plugin.yaml")) ||
-        fs.existsSync(path.join(globalPluginDir, "tool.yaml"))
-      ) {
-        resolvedDir = globalPluginDir;
-      } else {
-        resolvedDir = projectToolDir;
-      }
-    }
-  } else {
-    resolvedDir = path.resolve(toolPath);
-  }
+  return projectToolDir;
+}
 
+/** Validate a legacy tool.yaml manifest at the given directory. */
+function validateLegacyManifest(resolvedDir: string, toolPath: string): void {
   let manifestPath = path.join(resolvedDir, "tool.yaml");
   if (!fs.existsSync(manifestPath)) {
     manifestPath = path.join(resolvedDir, "plugin.yaml");
@@ -271,12 +225,11 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
       p.log.success(
         `Module manifest is valid: ${result.manifest!.name} v${result.manifest!.version}`,
       );
-
       const inputSchemaPath = path.join(resolvedDir, result.manifest!.inputSchema);
-      if (!fs.existsSync(inputSchemaPath)) {
-        p.log.warn(`Input schema file not found: ${inputSchemaPath}`);
-      } else {
+      if (fs.existsSync(inputSchemaPath)) {
         p.log.success("Input schema file exists.");
+      } else {
+        p.log.warn(`Input schema file not found: ${inputSchemaPath}`);
       }
     } else {
       throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid module manifest: ${result.error}`);
@@ -288,6 +241,36 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
       `Failed to parse module manifest: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+}
+
+/**
+ * `dojops tools validate <name-or-path>` — validates a tool manifest or .dops file.
+ */
+export const toolsValidateCommand: CommandHandler = async (args) => {
+  const toolPath = args[0];
+  if (!toolPath) {
+    p.log.info(`  ${pc.dim("$")} dojops modules validate <name-or-path>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name or path required.");
+  }
+
+  // Check if it's a .dops file (by extension)
+  const resolvedPath = path.resolve(toolPath);
+  if (toolPath.endsWith(".dops") && fs.existsSync(resolvedPath)) {
+    return validateDopsFile(resolvedPath);
+  }
+
+  // Check if plain name has a .dops file
+  if (!toolPath.includes("/") && !toolPath.includes("\\")) {
+    const found = findDopsFileByName(toolPath);
+    if (found) return validateDopsFile(found);
+  }
+
+  // Fall back to legacy tool.yaml validation
+  const isPlainName =
+    !toolPath.includes("/") && !toolPath.includes("\\") && !toolPath.includes(".");
+  const resolvedDir = isPlainName ? resolveLegacyToolDir(toolPath) : path.resolve(toolPath);
+
+  validateLegacyManifest(resolvedDir, toolPath);
 };
 
 function validateDopsFile(filePath: string): void {
@@ -678,7 +661,7 @@ ${keywords}
 }
 
 function escapeYaml(s: string): string {
-  return s.replaceAll('"', '\\"');
+  return s.replaceAll('"', String.raw`\"`);
 }
 
 function indent(text: string, spaces: number): string {
@@ -917,8 +900,6 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
     Buffer.from(
       `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
     ),
-  );
-  parts.push(
     fileBuffer,
     Buffer.from(
       `\r\n--${boundary}\r\nContent-Disposition: form-data; name="sha256"\r\n\r\n${hash}`,
@@ -1212,8 +1193,8 @@ export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
       const version = pkg.latestVersion?.semver
         ? pc.dim(`v${pkg.latestVersion.semver}`)
         : pc.dim("—");
-      const stars = pkg.starCount != null ? `${pc.yellow("★")} ${pkg.starCount}` : "";
-      const downloads = pkg.downloadCount != null ? `${pc.dim("↓")} ${pkg.downloadCount}` : "";
+      const stars = pkg.starCount == null ? "" : `${pc.yellow("★")} ${pkg.starCount}`;
+      const downloads = pkg.downloadCount == null ? "" : `${pc.dim("↓")} ${pkg.downloadCount}`;
       const desc = pkg.description ? pc.dim(pkg.description.slice(0, 60)) : "";
       lines.push(
         `  ${pc.cyan(pkg.name.padEnd(25))} ${version.padEnd(20)} ${stars.padEnd(12)} ${downloads.padEnd(12)} ${desc}`,

@@ -10,6 +10,61 @@ export interface ParsedCommandPath {
   positional: string[];
 }
 
+/** Try to consume a string-valued flag (--flag value or --flag=value). Returns new index if consumed, -1 otherwise. */
+function consumeStringFlag(
+  args: string[],
+  i: number,
+  flags: string | string[],
+): { value: string; nextIndex: number } | null {
+  const arg = args[i];
+  const flagList = Array.isArray(flags) ? flags : [flags];
+
+  for (const flag of flagList) {
+    if (arg === flag && i + 1 < args.length) {
+      return { value: args[i + 1], nextIndex: i + 1 };
+    }
+    if (arg.startsWith(`${flag}=`)) {
+      return { value: arg.slice(flag.length + 1), nextIndex: i };
+    }
+  }
+  return null;
+}
+
+/** Parse and validate a temperature value. */
+function parseTemperature(raw: string): number {
+  const t = Number(raw);
+  if (Number.isNaN(t)) throw new Error(`Invalid --temperature value: "${raw}"`);
+  if (t < 0 || t > 2) throw new Error(`--temperature must be between 0 and 2, got: ${t}`);
+  return t;
+}
+
+/** Parse and validate a timeout value. */
+function parseTimeout(raw: string): number {
+  const t = Number.parseInt(raw, 10);
+  if (isNaN(t) || t <= 0)
+    throw new Error(
+      `Invalid --timeout value: "${raw}". Must be a positive integer (milliseconds).`,
+    );
+  return t;
+}
+
+/** Parse and validate an output format value. */
+function parseOutputFormat(raw: string): OutputFormat {
+  if (!["table", "json", "yaml"].includes(raw))
+    throw new Error(`Invalid --output value: "${raw}". Valid: table, json, yaml`);
+  return raw as OutputFormat;
+}
+
+/** Boolean flags that set a property to true. */
+const BOOLEAN_FLAG_MAP: Record<string, keyof GlobalOptions> = {
+  "--verbose": "verbose",
+  "--debug": "debug",
+  "--quiet": "quiet",
+  "--no-color": "noColor",
+  "--raw": "raw",
+  "--non-interactive": "nonInteractive",
+};
+
 /**
  * Extracts global options from args, returning the options and remaining args.
  */
@@ -20,87 +75,78 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
 
-    if (arg === "--verbose") {
-      globalOpts.verbose = true;
-    } else if (arg === "--debug") {
-      globalOpts.debug = true;
-    } else if (arg === "--quiet") {
-      globalOpts.quiet = true;
-    } else if (arg === "--no-color") {
-      globalOpts.noColor = true;
-    } else if (arg === "--raw") {
-      globalOpts.raw = true;
-    } else if (arg === "--non-interactive") {
-      globalOpts.nonInteractive = true;
-    } else if (arg === "--") {
-      // Standard end-of-flags separator (commonly passed by pnpm/npm scripts) — skip it
+    // Boolean flags
+    const boolKey = BOOLEAN_FLAG_MAP[arg];
+    if (boolKey) {
+      (globalOpts as unknown as Record<string, unknown>)[boolKey] = true;
       continue;
-    } else if (arg === "--profile" && i + 1 < args.length) {
-      globalOpts.profile = args[++i];
-    } else if (arg.startsWith("--profile=")) {
-      globalOpts.profile = arg.slice("--profile=".length);
-    } else if (arg === "--provider" && i + 1 < args.length) {
-      globalOpts.provider = args[++i];
-    } else if (arg.startsWith("--provider=")) {
-      globalOpts.provider = arg.slice("--provider=".length);
-    } else if (arg === "--model" && i + 1 < args.length) {
-      globalOpts.model = args[++i];
-    } else if (arg.startsWith("--model=")) {
-      globalOpts.model = arg.slice("--model=".length);
-    } else if (arg === "--temperature" && i + 1 < args.length) {
-      const t = Number(args[++i]);
-      if (isNaN(t)) throw new Error(`Invalid --temperature value: "${args[i]}"`);
-      if (t < 0 || t > 2) throw new Error(`--temperature must be between 0 and 2, got: ${t}`);
-      globalOpts.temperature = t;
-    } else if (arg.startsWith("--temperature=")) {
-      const raw = arg.slice("--temperature=".length);
-      const t = Number(raw);
-      if (isNaN(t)) throw new Error(`Invalid --temperature value: "${raw}"`);
-      if (t < 0 || t > 2) throw new Error(`--temperature must be between 0 and 2, got: ${t}`);
-      globalOpts.temperature = t;
-    } else if (arg === "--fallback-provider" && i + 1 < args.length) {
-      globalOpts.fallbackProvider = args[++i];
-    } else if (arg.startsWith("--fallback-provider=")) {
-      globalOpts.fallbackProvider = arg.slice("--fallback-provider=".length);
-    } else if (arg === "--agent" && i + 1 < args.length) {
-      globalOpts.agent = args[++i];
-    } else if (arg.startsWith("--agent=")) {
-      globalOpts.agent = arg.slice("--agent=".length);
-    } else if ((arg === "--module" || arg === "--tool") && i + 1 < args.length) {
-      globalOpts.tool = args[++i];
-    } else if (arg.startsWith("--module=") || arg.startsWith("--tool=")) {
-      globalOpts.tool = arg.slice(arg.indexOf("=") + 1);
-    } else if (arg === "--timeout" && i + 1 < args.length) {
-      const t = Number.parseInt(args[++i], 10);
-      if (isNaN(t) || t <= 0)
-        throw new Error(
-          `Invalid --timeout value: "${args[i]}". Must be a positive integer (milliseconds).`,
-        );
-      globalOpts.timeout = t;
-    } else if (arg.startsWith("--timeout=")) {
-      const raw = arg.slice("--timeout=".length);
-      const t = Number.parseInt(raw, 10);
-      if (isNaN(t) || t <= 0)
-        throw new Error(
-          `Invalid --timeout value: "${raw}". Must be a positive integer (milliseconds).`,
-        );
-      globalOpts.timeout = t;
-    } else if (arg === "--output" && i + 1 < args.length) {
-      const fmt = args[++i];
-      if (!["table", "json", "yaml"].includes(fmt))
-        throw new Error(`Invalid --output value: "${fmt}". Valid: table, json, yaml`);
-      globalOpts.output = fmt as OutputFormat;
-    } else if (arg.startsWith("--output=")) {
-      const fmt = arg.slice("--output=".length);
-      if (!["table", "json", "yaml"].includes(fmt))
-        throw new Error(`Invalid --output value: "${fmt}". Valid: table, json, yaml`);
-      globalOpts.output = fmt as OutputFormat;
-    } else {
-      remaining.push(arg);
     }
+
+    // End-of-flags separator
+    if (arg === "--") continue;
+
+    // String-valued flags
+    const consumed = consumeSimpleStringFlag(args, i, globalOpts);
+    if (consumed >= 0) {
+      i = consumed;
+      continue;
+    }
+
+    // Validated flags (temperature, timeout, output)
+    const validated = consumeValidatedFlag(args, i, globalOpts);
+    if (validated >= 0) {
+      i = validated;
+      continue;
+    }
+
+    remaining.push(arg);
   }
 
   return { globalOpts, remaining };
+}
+
+/** Handle simple string flags (profile, provider, model, fallback-provider, agent, tool). Returns new index or -1. */
+function consumeSimpleStringFlag(args: string[], i: number, opts: GlobalOptions): number {
+  const simpleFlags: Array<{ flags: string | string[]; key: keyof GlobalOptions }> = [
+    { flags: "--profile", key: "profile" },
+    { flags: "--provider", key: "provider" },
+    { flags: "--model", key: "model" },
+    { flags: "--fallback-provider", key: "fallbackProvider" },
+    { flags: "--agent", key: "agent" },
+    { flags: ["--module", "--tool"], key: "tool" },
+  ];
+
+  for (const { flags, key } of simpleFlags) {
+    const result = consumeStringFlag(args, i, flags);
+    if (result) {
+      (opts as unknown as Record<string, unknown>)[key] = result.value;
+      return result.nextIndex;
+    }
+  }
+  return -1;
+}
+
+/** Handle validated flags (temperature, timeout, output). Returns new index or -1. */
+function consumeValidatedFlag(args: string[], i: number, opts: GlobalOptions): number {
+  const tempResult = consumeStringFlag(args, i, "--temperature");
+  if (tempResult) {
+    opts.temperature = parseTemperature(tempResult.value);
+    return tempResult.nextIndex;
+  }
+
+  const timeoutResult = consumeStringFlag(args, i, "--timeout");
+  if (timeoutResult) {
+    opts.timeout = parseTimeout(timeoutResult.value);
+    return timeoutResult.nextIndex;
+  }
+
+  const outputResult = consumeStringFlag(args, i, "--output");
+  if (outputResult) {
+    opts.output = parseOutputFormat(outputResult.value);
+    return outputResult.nextIndex;
+  }
+
+  return -1;
 }
 
 /**

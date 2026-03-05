@@ -6,7 +6,7 @@ export function sanitizeUserInput(input: string): string {
   // Remove Unicode direction overrides (U+202A-U+202E, U+2066-U+2069)
   // Remove bidi marks (U+200E, U+200F)
   // Remove zero-width characters (U+200B, U+200C, U+200D, U+FEFF)
-  return input.replace(/[\u202A-\u202E\u2066-\u2069\u200E\u200F\u200B-\u200D\uFEFF]/g, "");
+  return input.replaceAll(/[\u202A-\u202E\u2066-\u2069\u200E\u200F\u200B-\u200D\uFEFF]/g, "");
 }
 
 /**

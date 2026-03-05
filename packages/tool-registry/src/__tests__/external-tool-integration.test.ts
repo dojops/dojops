@@ -391,7 +391,7 @@ describe("External Tool Integration: Full Lifecycle", () => {
       expect(data.generated).toEqual(traefikConfig);
 
       // Verify LLM was called with correct prompts
-      const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const call = vi.mocked(provider.generate).mock.calls[0][0];
       expect(call.system).toContain("Traefik");
       expect(call.prompt).toContain("web-api");
       expect(call.prompt).toContain("3000");

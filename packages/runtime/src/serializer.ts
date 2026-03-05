@@ -204,7 +204,7 @@ function hclMap(obj: Record<string, unknown>, indent: number, mapAttrs: Set<stri
 function escapeHclString(s: string): string {
   return s
     .replaceAll("\\", "\\\\")
-    .replaceAll('"', '\\"')
-    .replaceAll("\n", "\\n")
-    .replaceAll("\t", "\\t");
+    .replaceAll('"', String.raw`\"`)
+    .replaceAll("\n", String.raw`\n`)
+    .replaceAll("\t", String.raw`\t`);
 }

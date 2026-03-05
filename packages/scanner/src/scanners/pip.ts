@@ -44,6 +44,17 @@ function mapPipSeverity(id: string, description?: string): "CRITICAL" | "HIGH" |
   return "HIGH";
 }
 
+function getPipFindingFile(
+  subProject: string | null | undefined,
+  hasRequirements: boolean,
+): string {
+  const filename = hasRequirements ? "requirements.txt" : "pyproject.toml";
+  if (subProject) {
+    return `${subProject}/${filename}`;
+  }
+  return filename;
+}
+
 export async function scanPip(projectPath: string): Promise<ScannerResult> {
   const projectDirs = discoverProjectDirs(projectPath, PIP_INDICATORS);
   if (projectDirs.length === 0) {
@@ -122,11 +133,7 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
           tool: "pip-audit",
           severity: mapPipSeverity(vuln.id, vuln.description),
           category: "DEPENDENCY",
-          file: subProject
-            ? `${subProject}/${hasRequirements ? "requirements.txt" : "pyproject.toml"}`
-            : hasRequirements
-              ? "requirements.txt"
-              : "pyproject.toml",
+          file: getPipFindingFile(subProject, hasRequirements),
           message: `${prefix}${pkg.name}@${pkg.version}: ${vuln.id}${vuln.description ? " \u2014 " + vuln.description : ""}`,
           recommendation:
             vuln.fix_versions && vuln.fix_versions.length > 0

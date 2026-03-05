@@ -58,10 +58,10 @@ function describeField(name: string, prop: JSONSchemaProperty, isRequired: boole
 
   if (hasDefault) {
     parts.push(`, optional, default: ${JSON.stringify(prop.default)}`);
-  } else if (!isRequired) {
-    parts.push(", optional");
-  } else {
+  } else if (isRequired) {
     parts.push(", required");
+  } else {
+    parts.push(", optional");
   }
 
   parts.push(")");

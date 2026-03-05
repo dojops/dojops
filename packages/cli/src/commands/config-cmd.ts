@@ -31,7 +31,7 @@ function showConfig(config: DojOpsConfig): void {
   const lines = [
     `${pc.bold("Provider:")}  ${providerDisplay}`,
     `${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`,
-    `${pc.bold("Temperature:")} ${config.defaultTemperature != null ? String(config.defaultTemperature) : pc.dim("(not set)")}`,
+    `${pc.bold("Temperature:")} ${config.defaultTemperature == null ? pc.dim("(not set)") : String(config.defaultTemperature)}`,
     `${pc.bold("Ollama host:")} ${config.ollamaHost ?? pc.dim("(default)")}`,
     `${pc.bold("Tokens:")}`,
     `  openai:          ${maskToken(config.tokens?.openai)}`,

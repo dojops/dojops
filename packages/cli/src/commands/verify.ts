@@ -249,7 +249,7 @@ async function verifyHelmContent(
       return {
         passed: false,
         tool: "helm lint",
-        issues: issues.length > 0 ? issues : [{ severity: "error", message: output }],
+        issues: issues.length > 0 ? issues : [{ severity: "error" as const, message: output }],
         rawOutput: output,
       };
     }

@@ -59,7 +59,7 @@ describe("errorHandler", () => {
     const { req, res, next } = mockReqRes({});
     errorHandler(new Error("secret detail"), req, res, next);
     expect(res.status).toHaveBeenCalledWith(500);
-    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const payload = vi.mocked(res.json).mock.calls[0][0];
     expect(payload.error).toBe("Internal server error");
     expect(payload.message).toBeUndefined();
     delete process.env.NODE_ENV;
@@ -178,7 +178,7 @@ describe("authMiddleware", () => {
     // unless X-API-Key is also provided
     expect(next).not.toHaveBeenCalled();
     // Either 401 (no provided key) or 403 (empty key doesn't match)
-    const statusCode = (res.status as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const statusCode = vi.mocked(res.status).mock.calls[0][0];
     expect([401, 403]).toContain(statusCode);
   });
 
@@ -190,7 +190,7 @@ describe("authMiddleware", () => {
     middleware(req, res, next);
     expect(next).not.toHaveBeenCalled();
     // Whitespace-only token should not authenticate successfully
-    const statusCode = (res.status as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const statusCode = vi.mocked(res.status).mock.calls[0][0];
     expect([401, 403]).toContain(statusCode);
   });
 });
@@ -236,8 +236,8 @@ describe("T-9: requestLogger CRLF injection prevention", () => {
     expect(loggedOutput).toContain("/api/health");
 
     logSpy.mockRestore();
-    if (origEnv !== undefined) process.env.NODE_ENV = origEnv;
-    else delete process.env.NODE_ENV;
+    if (origEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = origEnv;
   });
 
   it("escapes CRLF in production JSON format via JSON.stringify", () => {
@@ -302,8 +302,8 @@ describe("T-14: requestLogger secret leakage via query parameters", () => {
     expect(loggedOutput).toContain("/api/health");
 
     logSpy.mockRestore();
-    if (origEnv !== undefined) process.env.NODE_ENV = origEnv;
-    else delete process.env.NODE_ENV;
+    if (origEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = origEnv;
   });
 
   it("in production JSON mode, does not include query params when req.path is clean", () => {

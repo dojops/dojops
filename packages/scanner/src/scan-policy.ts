@@ -142,7 +142,7 @@ function parseScanPolicyYaml(content: string): ScanPolicy {
           id: stripped
             .slice(5)
             .trim()
-            .replace(/^["']|["']$/g, ""),
+            .replaceAll(/^["']|["']$/g, ""),
         };
         continue;
       }
@@ -150,7 +150,7 @@ function parseScanPolicyYaml(content: string): ScanPolicy {
         currentIgnoreEntry.reason = stripped
           .slice(7)
           .trim()
-          .replace(/^["']|["']$/g, "");
+          .replaceAll(/^["']|["']$/g, "");
         continue;
       }
     }

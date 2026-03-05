@@ -7,6 +7,11 @@ vi.mock("node:os");
 
 const mockHome = "/home/testuser";
 
+// We need dynamic import to get fresh module state with mocked os.homedir
+async function importAuth() {
+  return import("../../llm/copilot-auth");
+}
+
 describe("copilot-auth", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -21,11 +26,6 @@ describe("copilot-auth", () => {
   afterEach(() => {
     delete process.env.GITHUB_COPILOT_TOKEN;
   });
-
-  // We need dynamic import to get fresh module state with mocked os.homedir
-  async function importAuth() {
-    return import("../../llm/copilot-auth");
-  }
 
   describe("saveCopilotAuth", () => {
     it("creates directory and writes token file", async () => {

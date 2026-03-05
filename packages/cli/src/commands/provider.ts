@@ -44,13 +44,23 @@ async function providerList(args: string[], ctx: CLIContext): Promise<void> {
   const configured = new Set(getConfiguredProviders(config));
 
   if (ctx.globalOpts.output === "json") {
-    const data = VALID_PROVIDERS.map((name) => ({
-      name,
-      configured: configured.has(name),
-      default: config.defaultProvider === name,
-      token: name === "ollama" ? null : config.tokens?.[name] ? "***" : null,
-      model: config.defaultProvider === name && config.defaultModel ? config.defaultModel : null,
-    }));
+    const data = VALID_PROVIDERS.map((name) => {
+      let token: string | null;
+      if (name === "ollama") {
+        token = null;
+      } else if (config.tokens?.[name]) {
+        token = "***";
+      } else {
+        token = null;
+      }
+      return {
+        name,
+        configured: configured.has(name),
+        default: config.defaultProvider === name,
+        token,
+        model: config.defaultProvider === name && config.defaultModel ? config.defaultModel : null,
+      };
+    });
     console.log(JSON.stringify(data, null, 2));
     return;
   }
@@ -199,22 +209,24 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
       }
     }
 
-    if (!config.defaultProvider) {
+    if (config.defaultProvider) {
+      if (config.defaultProvider !== name) {
+        saveConfig(config);
+        p.log.success(`${pc.bold(name)} is available.`);
+        const switchCmd212 = pc.cyan(`dojops provider default ${name}`);
+        p.log.info(
+          pc.dim(
+            `Default provider remains ${pc.bold(config.defaultProvider)}. Use ${switchCmd212} to switch.`,
+          ),
+        );
+      } else {
+        saveConfig(config);
+        p.log.info(`${pc.bold(name)} is already the default provider.`);
+      }
+    } else {
       config.defaultProvider = name;
       saveConfig(config);
       p.log.success(`${pc.bold(name)} set as default provider.`);
-    } else if (config.defaultProvider !== name) {
-      saveConfig(config);
-      p.log.success(`${pc.bold(name)} is available.`);
-      const switchCmd212 = pc.cyan(`dojops provider default ${name}`);
-      p.log.info(
-        pc.dim(
-          `Default provider remains ${pc.bold(config.defaultProvider)}. Use ${switchCmd212} to switch.`,
-        ),
-      );
-    } else {
-      saveConfig(config);
-      p.log.info(`${pc.bold(name)} is already the default provider.`);
     }
     return;
   }
@@ -270,22 +282,24 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
     // Only ollama counts as "first" if no other provider has a token
     const hasOther = configured.some((p) => p !== "ollama");
 
-    if (!config.defaultProvider && !hasOther) {
+    if (config.defaultProvider || hasOther) {
+      if (config.defaultProvider !== name) {
+        saveConfig(config);
+        p.log.success(`${pc.bold(name)} is available.`);
+        const switchCmd282 = pc.cyan(`dojops provider default ${name}`);
+        p.log.info(
+          pc.dim(
+            `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd282} to switch.`,
+          ),
+        );
+      } else {
+        saveConfig(config);
+        p.log.info(`${pc.bold(name)} is already the default provider.`);
+      }
+    } else {
       config.defaultProvider = name;
       saveConfig(config);
       p.log.success(`${pc.bold(name)} set as default provider (first configured provider).`);
-    } else if (config.defaultProvider !== name) {
-      saveConfig(config);
-      p.log.success(`${pc.bold(name)} is available.`);
-      const switchCmd282 = pc.cyan(`dojops provider default ${name}`);
-      p.log.info(
-        pc.dim(
-          `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd282} to switch.`,
-        ),
-      );
-    } else {
-      saveConfig(config);
-      p.log.info(`${pc.bold(name)} is already the default provider.`);
     }
     return;
   }

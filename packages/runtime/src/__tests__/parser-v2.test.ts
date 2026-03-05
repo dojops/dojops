@@ -7,7 +7,7 @@ import {
 } from "../parser";
 import { isV2Module, DopsModuleV2, DopsModule } from "../spec";
 
-vi.mock("fs", () => ({
+vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
 }));
 
@@ -295,7 +295,7 @@ describe("parseDopsFileAny", () => {
   });
 
   it("reads and parses a v2 file from disk", async () => {
-    const fs = await import("fs");
+    const fs = await import("node:fs");
     (fs.readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(MINIMAL_V2_DOPS);
 
     const module = parseDopsFileAny("/path/to/tool.dops");
@@ -306,7 +306,7 @@ describe("parseDopsFileAny", () => {
   });
 
   it("reads and parses a v1 file from disk", async () => {
-    const fs = await import("fs");
+    const fs = await import("node:fs");
     (fs.readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(MINIMAL_V1_DOPS);
 
     const module = parseDopsFileAny("/path/to/v1-tool.dops");

@@ -50,7 +50,7 @@ export const DEVOPS_WRITE_ALLOWLIST: string[] = [
  */
 export function matchesAllowlistPattern(filePath: string, pattern: string): boolean {
   // Normalize to forward slashes for matching
-  const normalized = filePath.replace(/\\/g, "/");
+  const normalized = filePath.replaceAll("\\", "/");
 
   // Handle ** (recursive directory match)
   if (pattern.endsWith("/**")) {
@@ -84,7 +84,7 @@ export function matchesAllowlistPattern(filePath: string, pattern: string): bool
  */
 export function isDevOpsFile(filePath: string): boolean {
   // Extract a relative path: strip leading ./ and any absolute prefix
-  let relative = filePath.replace(/\\/g, "/");
+  let relative = filePath.replaceAll("\\", "/");
   if (path.isAbsolute(relative)) {
     // For absolute paths, resolve and check if under cwd (H-20)
     const resolved = path.resolve(filePath);

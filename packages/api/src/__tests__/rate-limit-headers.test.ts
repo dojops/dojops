@@ -285,39 +285,39 @@ describe("createRateLimiter RFC headers (H-4)", () => {
     });
   });
 
+  function createMockProvider(): LLMProvider {
+    return {
+      name: "mock",
+      generate: vi.fn().mockResolvedValue({
+        content: "Mock response",
+        usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      } satisfies LLMResponse),
+    };
+  }
+
+  function createMockTool(): DevOpsTool {
+    return {
+      name: "mock-tool",
+      description: "A mock tool",
+      inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
+      validate: () => ({ valid: true }),
+      generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
+    };
+  }
+
+  function createTestDeps(): AppDependencies {
+    const provider = createMockProvider();
+    return {
+      provider,
+      tools: [createMockTool()],
+      router: new AgentRouter(provider),
+      debugger: new CIDebugger(provider),
+      diffAnalyzer: new InfraDiffAnalyzer(provider),
+      store: new HistoryStore(),
+    };
+  }
+
   describe("integration: per-route limits (E-6)", () => {
-    function createMockProvider(): LLMProvider {
-      return {
-        name: "mock",
-        generate: vi.fn().mockResolvedValue({
-          content: "Mock response",
-          usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-        } satisfies LLMResponse),
-      };
-    }
-
-    function createMockTool(): DevOpsTool {
-      return {
-        name: "mock-tool",
-        description: "A mock tool",
-        inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
-        validate: () => ({ valid: true }),
-        generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
-      };
-    }
-
-    function createTestDeps(): AppDependencies {
-      const provider = createMockProvider();
-      return {
-        provider,
-        tools: [createMockTool()],
-        router: new AgentRouter(provider),
-        debugger: new CIDebugger(provider),
-        diffAnalyzer: new InfraDiffAnalyzer(provider),
-        store: new HistoryStore(),
-      };
-    }
-
     it("POST /api/generate has RateLimit headers", async () => {
       const deps = createTestDeps();
       const app = createApp(deps);

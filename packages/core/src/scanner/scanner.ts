@@ -90,28 +90,37 @@ const LANGUAGE_INDICATORS: Array<{
  * Detect languages at root and in immediate child directories.
  * Returns one entry per (language, indicator path) pair.
  */
+/** Check a single directory for language indicators and append results. */
+function detectLanguagesInDir(
+  dir: string,
+  root: string,
+  seen: Set<string>,
+  results: LanguageDetection[],
+): void {
+  const absDir = dir ? path.join(root, dir) : root;
+  for (const lang of LANGUAGE_INDICATORS) {
+    const key = `${lang.name}:${dir}`;
+    if (seen.has(key)) continue;
+    for (const file of lang.files) {
+      const matched = matchFileIndicator(absDir, file);
+      if (matched) {
+        const indicator = dir ? `${dir}/${matched}` : matched;
+        const confidence = dir ? lang.confidence * 0.9 : lang.confidence;
+        results.push({ name: lang.name, confidence, indicator });
+        seen.add(key);
+        break;
+      }
+    }
+  }
+}
+
 export function detectLanguages(root: string): LanguageDetection[] {
   const results: LanguageDetection[] = [];
-  const seen = new Set<string>(); // track "lang:dir" to avoid duplicates
+  const seen = new Set<string>();
 
   const searchDirs = ["", ...listChildDirs(root)];
   for (const dir of searchDirs) {
-    const absDir = dir ? path.join(root, dir) : root;
-    for (const lang of LANGUAGE_INDICATORS) {
-      const key = `${lang.name}:${dir}`;
-      if (seen.has(key)) continue;
-      for (const file of lang.files) {
-        const matched = matchFileIndicator(absDir, file);
-        if (matched) {
-          const indicator = dir ? `${dir}/${matched}` : matched;
-          // Subdirectory detections get slightly lower confidence
-          const confidence = dir ? lang.confidence * 0.9 : lang.confidence;
-          results.push({ name: lang.name, confidence, indicator });
-          seen.add(key);
-          break;
-        }
-      }
-    }
+    detectLanguagesInDir(dir, root, seen, results);
   }
   return results;
 }
@@ -157,130 +166,103 @@ export function detectPackageManager(root: string): PackageManager | null {
 
 // ── CI detection ─────────────────────────────────────────────────────
 
-export function detectCI(root: string): CIDetection[] {
-  const results: CIDetection[] = [];
-
-  // GitHub Actions
+/** Detect GitHub Actions workflows and reusable workflows. */
+function detectGitHubActions(root: string, results: CIDetection[]): void {
   const workflowsDir = path.join(root, ".github", "workflows");
-  if (fs.existsSync(workflowsDir)) {
-    try {
-      const files = fs
-        .readdirSync(workflowsDir)
-        .filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
-      for (const file of files) {
-        results.push({
-          platform: "github-actions",
-          configPath: `.github/workflows/${file}`,
-        });
-        // Reusable workflows — check for workflow_call trigger
-        try {
-          const content = fs.readFileSync(path.join(workflowsDir, file), "utf-8");
-          if (/workflow_call/.test(content)) {
-            results.push({
-              platform: "github-reusable-workflow",
-              configPath: `.github/workflows/${file}`,
-            });
-          }
-        } catch {
-          /* unreadable */
+  if (!fs.existsSync(workflowsDir)) return;
+  try {
+    const files = fs
+      .readdirSync(workflowsDir)
+      .filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
+    for (const file of files) {
+      results.push({ platform: "github-actions", configPath: `.github/workflows/${file}` });
+      try {
+        const content = fs.readFileSync(path.join(workflowsDir, file), "utf-8");
+        if (/workflow_call/.test(content)) {
+          results.push({
+            platform: "github-reusable-workflow",
+            configPath: `.github/workflows/${file}`,
+          });
         }
+      } catch {
+        /* unreadable */
       }
-    } catch {
-      // Permission denied or other read error
     }
+  } catch {
+    // Permission denied or other read error
   }
+}
 
-  // GitHub Composite Actions
+/** Detect GitHub Composite Actions. */
+function detectGitHubCompositeActions(root: string, results: CIDetection[]): void {
   const actionsDir = path.join(root, ".github", "actions");
-  if (fs.existsSync(actionsDir)) {
-    try {
-      const dirs = fs
-        .readdirSync(actionsDir, { withFileTypes: true })
-        .filter((d) => d.isDirectory());
-      for (const dir of dirs) {
-        for (const f of ["action.yml", "action.yaml"]) {
-          if (fs.existsSync(path.join(actionsDir, dir.name, f))) {
-            results.push({
-              platform: "github-composite-action",
-              configPath: `.github/actions/${dir.name}/${f}`,
-            });
-            break;
-          }
+  if (!fs.existsSync(actionsDir)) return;
+  try {
+    const dirs = fs.readdirSync(actionsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+    for (const dir of dirs) {
+      for (const f of ["action.yml", "action.yaml"]) {
+        if (fs.existsSync(path.join(actionsDir, dir.name, f))) {
+          results.push({
+            platform: "github-composite-action",
+            configPath: `.github/actions/${dir.name}/${f}`,
+          });
+          break;
         }
       }
-    } catch {
-      // Permission denied or other read error
+    }
+  } catch {
+    // Permission denied or other read error
+  }
+}
+
+/** Detect simple file-based CI platforms. */
+function detectSimpleCIPlatforms(root: string, results: CIDetection[]): void {
+  const simpleChecks: Array<{ platform: string; file: string; isDir?: boolean }> = [
+    { platform: "gitlab-ci", file: ".gitlab-ci.yml" },
+    { platform: "jenkins", file: "Jenkinsfile" },
+    { platform: "bitbucket-pipelines", file: "bitbucket-pipelines.yml" },
+    { platform: "drone", file: ".drone.yml" },
+    { platform: "travis-ci", file: ".travis.yml" },
+    { platform: "tekton", file: ".tekton", isDir: true },
+    { platform: "concourse", file: ".concourse", isDir: true },
+    { platform: "teamcity", file: ".teamcity", isDir: true },
+  ];
+  for (const { platform, file, isDir } of simpleChecks) {
+    if (fs.existsSync(path.join(root, file))) {
+      results.push({ platform, configPath: isDir ? `${file}/` : file });
     }
   }
 
-  // GitLab CI
-  if (fs.existsSync(path.join(root, ".gitlab-ci.yml"))) {
-    results.push({ platform: "gitlab-ci", configPath: ".gitlab-ci.yml" });
-  }
-
-  // Jenkins
-  if (fs.existsSync(path.join(root, "Jenkinsfile"))) {
-    results.push({ platform: "jenkins", configPath: "Jenkinsfile" });
-  }
-
-  // CircleCI
   if (fs.existsSync(path.join(root, ".circleci", "config.yml"))) {
     results.push({ platform: "circleci", configPath: ".circleci/config.yml" });
   }
 
-  // Azure Pipelines
-  for (const f of ["azure-pipelines.yml", "azure-pipelines.yaml"]) {
-    if (fs.existsSync(path.join(root, f))) {
-      results.push({ platform: "azure-pipelines", configPath: f });
-      break;
+  const multiFileChecks: Array<{ platform: string; files: string[] }> = [
+    { platform: "azure-pipelines", files: ["azure-pipelines.yml", "azure-pipelines.yaml"] },
+    { platform: "aws-codebuild", files: ["buildspec.yml", "buildspec.yaml"] },
+  ];
+  for (const { platform, files } of multiFileChecks) {
+    for (const f of files) {
+      if (fs.existsSync(path.join(root, f))) {
+        results.push({ platform, configPath: f });
+        break;
+      }
     }
   }
 
-  // AWS CodeBuild
-  for (const f of ["buildspec.yml", "buildspec.yaml"]) {
-    if (fs.existsSync(path.join(root, f))) {
-      results.push({ platform: "aws-codebuild", configPath: f });
-      break;
-    }
-  }
-
-  // Bitbucket Pipelines
-  if (fs.existsSync(path.join(root, "bitbucket-pipelines.yml"))) {
-    results.push({ platform: "bitbucket-pipelines", configPath: "bitbucket-pipelines.yml" });
-  }
-
-  // Drone CI
-  if (fs.existsSync(path.join(root, ".drone.yml"))) {
-    results.push({ platform: "drone", configPath: ".drone.yml" });
-  }
-
-  // Travis CI
-  if (fs.existsSync(path.join(root, ".travis.yml"))) {
-    results.push({ platform: "travis-ci", configPath: ".travis.yml" });
-  }
-
-  // Tekton
-  if (fs.existsSync(path.join(root, ".tekton"))) {
-    results.push({ platform: "tekton", configPath: ".tekton/" });
-  }
-
-  // Woodpecker CI
+  // Woodpecker CI (file or directory)
   if (fs.existsSync(path.join(root, ".woodpecker.yml"))) {
     results.push({ platform: "woodpecker", configPath: ".woodpecker.yml" });
   } else if (fs.existsSync(path.join(root, ".woodpecker"))) {
     results.push({ platform: "woodpecker", configPath: ".woodpecker/" });
   }
+}
 
-  // Concourse CI
-  if (fs.existsSync(path.join(root, ".concourse"))) {
-    results.push({ platform: "concourse", configPath: ".concourse/" });
-  }
-
-  // TeamCity
-  if (fs.existsSync(path.join(root, ".teamcity"))) {
-    results.push({ platform: "teamcity", configPath: ".teamcity/" });
-  }
-
+export function detectCI(root: string): CIDetection[] {
+  const results: CIDetection[] = [];
+  detectGitHubActions(root, results);
+  detectGitHubCompositeActions(root, results);
+  detectSimpleCIPlatforms(root, results);
   return results;
 }
 
@@ -414,32 +396,80 @@ function scanTfDir(dir: string, tfProviders: string[]): boolean {
   }
 }
 
-export function detectInfra(root: string): InfraDetection {
-  // Terraform
-  let hasState = false;
-  const tfProviders: string[] = [];
+/** Check root and child dirs for a file, return true if found in any. */
+function existsInRootOrChild(root: string, filenames: string[]): boolean {
+  if (filenames.some((f) => fs.existsSync(path.join(root, f)))) return true;
+  return listChildDirs(root).some((d) =>
+    filenames.some((f) => fs.existsSync(path.join(root, d, f))),
+  );
+}
 
+function detectTerraform(root: string): {
+  hasTerraform: boolean;
+  tfProviders: string[];
+  hasState: boolean;
+} {
+  const tfProviders: string[] = [];
   let hasTerraform = scanTfDir(root, tfProviders);
+  let hasState = false;
 
   try {
     const entries = fs.readdirSync(root);
     hasState = entries.some((f) => f === "terraform.tfstate" || f === ".terraform");
   } catch {
-    // Root unreadable
+    /* root unreadable */
   }
 
-  // Fallback: scan common subdirectories for .tf files
   if (!hasTerraform) {
     for (const child of listChildDirs(root)) {
-      const childPath = path.join(root, child);
-      if (scanTfDir(childPath, tfProviders)) {
+      if (scanTfDir(path.join(root, child), tfProviders)) {
         hasTerraform = true;
         break;
       }
     }
   }
 
-  // Kubernetes — strong dirs always count, weak dirs need content verification
+  return { hasTerraform, tfProviders, hasState };
+}
+
+function detectCloudFormation(root: string): boolean {
+  if (fs.existsSync(path.join(root, "cloudformation"))) return true;
+  try {
+    const entries = fs.readdirSync(root);
+    if (entries.some((f) => f.endsWith(".cfn.yml") || f.endsWith(".cfn.yaml"))) return true;
+  } catch {
+    /* root unreadable */
+  }
+  if (fs.existsSync(path.join(root, "template.yaml"))) {
+    try {
+      const content = fs.readFileSync(path.join(root, "template.yaml"), "utf-8");
+      if (/AWSTemplateFormatVersion/.test(content)) return true;
+    } catch {
+      /* unreadable */
+    }
+  }
+  return false;
+}
+
+function detectPacker(root: string): boolean {
+  const hasPkrFiles = (dir: string): boolean => {
+    try {
+      const entries = fs.readdirSync(dir);
+      return (
+        entries.some((f) => f.endsWith(".pkr.hcl") || f.endsWith(".pkr.json")) ||
+        entries.includes("packer.json")
+      );
+    } catch {
+      return false;
+    }
+  };
+  if (hasPkrFiles(root)) return true;
+  return listChildDirs(root).some((d) => hasPkrFiles(path.join(root, d)));
+}
+
+export function detectInfra(root: string): InfraDetection {
+  const { hasTerraform, tfProviders, hasState } = detectTerraform(root);
+
   let hasKubernetes = K8S_STRONG_DIRS.some((d) => fs.existsSync(path.join(root, d)));
   if (!hasKubernetes) {
     hasKubernetes = K8S_WEAK_DIRS.some((d) => {
@@ -448,136 +478,28 @@ export function detectInfra(root: string): InfraDetection {
     });
   }
 
-  // Helm — check root, then subdirectories
-  let hasHelm =
-    fs.existsSync(path.join(root, "Chart.yaml")) || fs.existsSync(path.join(root, "charts"));
-  if (!hasHelm) {
-    hasHelm = listChildDirs(root).some(
-      (d) =>
-        fs.existsSync(path.join(root, d, "Chart.yaml")) ||
-        fs.existsSync(path.join(root, d, "charts")),
-    );
-  }
-
-  // Ansible — check root, then subdirectories
-  let hasAnsible = ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, f)));
-  if (!hasAnsible) {
-    hasAnsible = listChildDirs(root).some((d) =>
-      ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, d, f))),
-    );
-  }
-
-  // Kustomize — check root, then subdirectories
-  let hasKustomize =
-    fs.existsSync(path.join(root, "kustomization.yaml")) ||
-    fs.existsSync(path.join(root, "kustomization.yml"));
-  if (!hasKustomize) {
-    hasKustomize = listChildDirs(root).some(
-      (d) =>
-        fs.existsSync(path.join(root, d, "kustomization.yaml")) ||
-        fs.existsSync(path.join(root, d, "kustomization.yml")),
-    );
-  }
-
-  // Vagrant
-  const hasVagrant = fs.existsSync(path.join(root, "Vagrantfile"));
-
-  // Pulumi
-  const hasPulumi =
-    fs.existsSync(path.join(root, "Pulumi.yaml")) || fs.existsSync(path.join(root, "Pulumi.yml"));
-
-  // CloudFormation
-  let hasCloudFormation = fs.existsSync(path.join(root, "cloudformation"));
-  if (!hasCloudFormation) {
-    try {
-      const entries = fs.readdirSync(root);
-      hasCloudFormation = entries.some((f) => f.endsWith(".cfn.yml") || f.endsWith(".cfn.yaml"));
-    } catch {
-      // Root unreadable
-    }
-  }
-  if (!hasCloudFormation && fs.existsSync(path.join(root, "template.yaml"))) {
-    try {
-      const content = fs.readFileSync(path.join(root, "template.yaml"), "utf-8");
-      hasCloudFormation = /AWSTemplateFormatVersion/.test(content);
-    } catch {
-      // Unreadable
-    }
-  }
-
-  // Packer — check root, then subdirectories
-  let hasPacker = false;
-  try {
-    const entries = fs.readdirSync(root);
-    hasPacker =
-      entries.some((f) => f.endsWith(".pkr.hcl") || f.endsWith(".pkr.json")) ||
-      entries.includes("packer.json");
-  } catch {
-    /* unreadable */
-  }
-  if (!hasPacker) {
-    hasPacker = listChildDirs(root).some((d) => {
-      try {
-        const entries = fs.readdirSync(path.join(root, d));
-        return (
-          entries.some((f) => f.endsWith(".pkr.hcl") || f.endsWith(".pkr.json")) ||
-          entries.includes("packer.json")
-        );
-      } catch {
-        return false;
-      }
-    });
-  }
-
-  // CDK — check root, then subdirectories
-  let hasCdk = fs.existsSync(path.join(root, "cdk.json"));
-  if (!hasCdk) {
-    hasCdk = listChildDirs(root).some((d) => fs.existsSync(path.join(root, d, "cdk.json")));
-  }
-
-  // Skaffold — check root, then subdirectories
-  let hasSkaffold = fs.existsSync(path.join(root, "skaffold.yaml"));
-  if (!hasSkaffold) {
-    hasSkaffold = listChildDirs(root).some((d) =>
-      fs.existsSync(path.join(root, d, "skaffold.yaml")),
-    );
-  }
-
-  // ArgoCD — check .argocd/ directory
-  const hasArgoCD = fs.existsSync(path.join(root, ".argocd"));
-
-  // Tiltfile — check root
-  const hasTiltfile = fs.existsSync(path.join(root, "Tiltfile"));
-
-  // Helmfile — check root, then subdirectories
-  let hasHelmfile =
-    fs.existsSync(path.join(root, "helmfile.yaml")) ||
-    fs.existsSync(path.join(root, "helmfile.yml"));
-  if (!hasHelmfile) {
-    hasHelmfile = listChildDirs(root).some(
-      (d) =>
-        fs.existsSync(path.join(root, d, "helmfile.yaml")) ||
-        fs.existsSync(path.join(root, d, "helmfile.yml")),
-    );
-  }
-
   return {
     hasTerraform,
     tfProviders,
     hasState,
     hasKubernetes,
-    hasHelm,
-    hasAnsible,
-    hasKustomize,
-    hasVagrant,
-    hasPulumi,
-    hasCloudFormation,
-    hasPacker,
-    hasCdk,
-    hasSkaffold,
-    hasArgoCD,
-    hasTiltfile,
-    hasHelmfile,
+    hasHelm: existsInRootOrChild(root, ["Chart.yaml", "charts"]),
+    hasAnsible:
+      ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, f))) ||
+      listChildDirs(root).some((d) =>
+        ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, d, f))),
+      ),
+    hasKustomize: existsInRootOrChild(root, ["kustomization.yaml", "kustomization.yml"]),
+    hasVagrant: fs.existsSync(path.join(root, "Vagrantfile")),
+    hasPulumi:
+      fs.existsSync(path.join(root, "Pulumi.yaml")) || fs.existsSync(path.join(root, "Pulumi.yml")),
+    hasCloudFormation: detectCloudFormation(root),
+    hasPacker: detectPacker(root),
+    hasCdk: existsInRootOrChild(root, ["cdk.json"]),
+    hasSkaffold: existsInRootOrChild(root, ["skaffold.yaml"]),
+    hasArgoCD: fs.existsSync(path.join(root, ".argocd")),
+    hasTiltfile: fs.existsSync(path.join(root, "Tiltfile")),
+    hasHelmfile: existsInRootOrChild(root, ["helmfile.yaml", "helmfile.yml"]),
   };
 }
 

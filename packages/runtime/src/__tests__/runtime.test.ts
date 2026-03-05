@@ -345,7 +345,7 @@ test
 
     await runtime.generate({ existingContent: "old stuff" });
 
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
     expect(call.system).toContain("Update existing: old stuff");
     expect(call.system).not.toContain("Generate new config.");
   });

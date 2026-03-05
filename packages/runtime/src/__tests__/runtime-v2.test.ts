@@ -191,7 +191,7 @@ describe("DopsRuntimeV2.generate", () => {
     expect(result.usage).toEqual({ promptTokens: 10, completionTokens: 20, totalTokens: 30 });
 
     // Verify LLM was called WITHOUT schema
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
     expect(call.schema).toBeUndefined();
     expect(call.system).toBeDefined();
     expect(call.prompt).toContain("Generate Terraform configuration");
@@ -299,7 +299,7 @@ describe("DopsRuntimeV2.generate", () => {
     expect(data.isUpdate).toBe(true);
 
     // Verify LLM was told it's an update
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
     expect(call.prompt).toContain("Update");
   });
 });
@@ -307,11 +307,11 @@ describe("DopsRuntimeV2.generate", () => {
 describe("DopsRuntimeV2.execute", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (fs.existsSync as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    vi.mocked(fs.existsSync).mockReturnValue(false);
   });
 
   it("writes raw content to files", async () => {
-    (fs.existsSync as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    vi.mocked(fs.existsSync).mockReturnValue(true);
 
     const rawContent = 'resource "aws_s3_bucket" "main" {}';
     const module = createV2Module();

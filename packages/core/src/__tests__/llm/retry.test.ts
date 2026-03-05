@@ -34,6 +34,11 @@ function scriptedGenerate(
   };
 }
 
+// Helper: flush all pending timers and microtasks
+async function flush(): Promise<void> {
+  await vi.runAllTimersAsync();
+}
+
 describe("withRetry()", () => {
   // Suppress PromiseRejectionHandledWarning that occurs when fake timers
   // resolve sleep() and the next generate() throws before the retry loop's
@@ -57,11 +62,6 @@ describe("withRetry()", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
-
-  // Helper: flush all pending timers and microtasks
-  async function flush(): Promise<void> {
-    await vi.runAllTimersAsync();
-  }
 
   // ---------------------------------------------------------------
   // 1. Succeeds on first try (no retry needed)

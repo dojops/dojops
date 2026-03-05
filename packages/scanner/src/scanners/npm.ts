@@ -18,6 +18,16 @@ interface NpmAuditOutput {
 
 type PackageManager = "npm" | "yarn" | "pnpm";
 
+function getNpmFixRecommendation(vuln: NpmVulnerability): string {
+  if (!vuln.fixAvailable) {
+    return "No automatic fix available — review manually";
+  }
+  if (typeof vuln.fixAvailable === "object") {
+    return `Update to ${vuln.fixAvailable.name}@${vuln.fixAvailable.version}`;
+  }
+  return "Run npm audit fix";
+}
+
 /**
  * Detect which package manager is used in a directory.
  * Priority: pnpm-lock.yaml > yarn.lock > package-lock.json
@@ -236,11 +246,7 @@ function parseNpmAudit(
         category: "DEPENDENCY",
         file: subProject ? `${subProject}/${lockFile}` : lockFile,
         message: `${prefix}${name}: ${viaMessages || vuln.severity} vulnerability`,
-        recommendation: vuln.fixAvailable
-          ? typeof vuln.fixAvailable === "object"
-            ? `Update to ${vuln.fixAvailable.name}@${vuln.fixAvailable.version}`
-            : "Run npm audit fix"
-          : "No automatic fix available — review manually",
+        recommendation: getNpmFixRecommendation(vuln),
         autoFixAvailable: !!vuln.fixAvailable,
       });
     }

@@ -334,9 +334,9 @@ describe("API integration", () => {
     });
 
     it("returns 200 for GET /api/metrics with valid API key and rootDir", async () => {
-      const fs = await import("fs");
-      const path = await import("path");
-      const os = await import("os");
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const os = await import("node:os");
 
       // Create a temporary rootDir with .dojops directory for MetricsAggregator
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
@@ -360,9 +360,9 @@ describe("API integration", () => {
     });
 
     it("returns 200 for GET /api/metrics/overview with valid API key and rootDir", async () => {
-      const fs = await import("fs");
-      const path = await import("path");
-      const os = await import("os");
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const os = await import("node:os");
 
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
       fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
@@ -385,9 +385,9 @@ describe("API integration", () => {
     });
 
     it("returns 200 for GET /api/metrics/security with valid API key and rootDir", async () => {
-      const fs = await import("fs");
-      const path = await import("path");
-      const os = await import("os");
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const os = await import("node:os");
 
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
       fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
@@ -410,9 +410,9 @@ describe("API integration", () => {
     });
 
     it("returns 200 for GET /api/metrics/audit with valid API key and rootDir", async () => {
-      const fs = await import("fs");
-      const path = await import("path");
-      const os = await import("os");
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const os = await import("node:os");
 
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
       fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });

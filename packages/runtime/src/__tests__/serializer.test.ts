@@ -88,7 +88,7 @@ describe("serialize", () => {
 
     it("escapes strings", () => {
       const result = serialize({ msg: 'hello "world"\nnewline' }, "hcl");
-      expect(result).toContain('msg = "hello \\"world\\"\\nnewline"');
+      expect(result).toContain(String.raw`msg = "hello \"world\"\nnewline"`);
     });
   });
 

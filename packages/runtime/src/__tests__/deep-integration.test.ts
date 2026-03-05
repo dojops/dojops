@@ -635,7 +635,7 @@ describe("Full Lifecycle: Custom Redis Tool", () => {
         outputPath: tmpDir,
       });
 
-      const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const call = vi.mocked(provider.generate).mock.calls[0][0];
       expect(call.system).toContain("Redis configuration expert");
       expect(call.system).toContain("my-cache"); // variable substitution
       expect(call.system).toContain("CONSTRAINTS:"); // constraints compiled
@@ -981,7 +981,7 @@ test
     });
 
     it("rejects Windows-style path traversal", () => {
-      const module = parseDopsString(`---
+      const module = parseDopsString(String.raw`---
 dops: v1
 meta:
   name: win-traversal
@@ -992,7 +992,7 @@ output:
 files:
   - path: "out.yaml"
 scope:
-  write: ["..\\\\..\\\\etc\\\\redis.conf"]
+  write: ["..\\..\\etc\\redis.conf"]
 ---
 ## Prompt
 
@@ -1413,7 +1413,7 @@ describe("Update Lifecycle", () => {
         existingContent: "# old redis.conf\nbind 0.0.0.0\nport 6379",
       });
 
-      const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const call = vi.mocked(provider.generate).mock.calls[0][0];
       // Should use update prompt
       expect(call.system).toContain("updating an existing Redis configuration");
       // Should contain existing content via injectAs substitution

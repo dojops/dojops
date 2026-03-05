@@ -39,7 +39,9 @@ export class AgentRouter {
     }
     // Single-word: use word boundary matching
     // \b handles punctuation, hyphens, and whitespace boundaries
-    return new RegExp(String.raw`\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\b`).test(lower);
+    return new RegExp(
+      String.raw`\b${kw.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}\b`,
+    ).test(lower);
   }
 
   route(prompt: string, options?: RouteOptions): RouteResult {

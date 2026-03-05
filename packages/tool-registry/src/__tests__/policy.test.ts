@@ -198,7 +198,7 @@ describe("isToolAllowed", () => {
 
     it("tool name with backslash traversal is treated as a different name", () => {
       const policy: ToolPolicy = { allowedTools: ["tool-a"] };
-      expect(isToolAllowed("..\\tool-a", policy)).toBe(false);
+      expect(isToolAllowed(String.raw`..\tool-a`, policy)).toBe(false);
     });
   });
 });

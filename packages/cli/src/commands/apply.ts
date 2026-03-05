@@ -169,9 +169,11 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
 
   // Collect unique tools used
   const toolsUsed = [...new Set(plan.tasks.map((t) => t.tool))];
-  summaryLines.push(`${pc.bold("Tools:")}  ${toolsUsed.join(", ")}`);
-
-  summaryLines.push("", pc.bold("Task breakdown:"));
+  summaryLines.push(
+    `${pc.bold("Tools:")}  ${toolsUsed.join(", ")}`,
+    "",
+    pc.bold("Task breakdown:"),
+  );
 
   for (const task of plan.tasks) {
     const isCompleted = completedTaskIds.has(task.id);
@@ -371,7 +373,9 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     // requires an exact environment match to produce meaningful results.
     if (replay) {
       const result = validateReplayIntegrity(plan, provider.name, ctx.globalOpts.model, registry);
-      if (!result.valid) {
+      if (result.valid) {
+        p.log.success("Replay validation passed.");
+      } else {
         p.log.warn(pc.bold("Replay integrity check failed:"));
         for (const m of result.mismatches) {
           const taskLabel = m.taskId ? ` [task ${m.taskId}]` : "";
@@ -387,8 +391,6 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
           );
         }
         p.log.warn("Continuing despite replay mismatches (--force).");
-      } else {
-        p.log.success("Replay validation passed.");
       }
     }
 

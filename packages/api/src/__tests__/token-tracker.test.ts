@@ -5,10 +5,10 @@ describe("TokenTracker (E-7)", () => {
   const originalEnv = process.env.DOJOPS_DAILY_TOKEN_BUDGET;
 
   afterEach(() => {
-    if (originalEnv !== undefined) {
-      process.env.DOJOPS_DAILY_TOKEN_BUDGET = originalEnv;
-    } else {
+    if (originalEnv === undefined) {
       delete process.env.DOJOPS_DAILY_TOKEN_BUDGET;
+    } else {
+      process.env.DOJOPS_DAILY_TOKEN_BUDGET = originalEnv;
     }
     vi.restoreAllMocks();
   });

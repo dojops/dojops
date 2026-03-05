@@ -28,6 +28,16 @@ interface SemgrepOutput {
   errors: Array<{ message: string }>;
 }
 
+function getRecommendation(result: SemgrepResult): string | undefined {
+  if (result.extra.fix) {
+    return "Suggested fix available";
+  }
+  if (result.extra.metadata?.references?.[0]) {
+    return `See: ${result.extra.metadata.references[0]}`;
+  }
+  return undefined;
+}
+
 /**
  * Run Semgrep SAST scanner for code-level security analysis.
  * Uses the "auto" config which detects the project languages and applies relevant rules.
@@ -85,11 +95,7 @@ export async function scanSemgrep(projectPath: string): Promise<ScannerResult> {
           file: result.path,
           line: result.start.line,
           message: `[${result.check_id}] ${result.extra.message}`,
-          recommendation: result.extra.fix
-            ? `Suggested fix available`
-            : result.extra.metadata?.references?.[0]
-              ? `See: ${result.extra.metadata.references[0]}`
-              : undefined,
+          recommendation: getRecommendation(result),
           autoFixAvailable: !!result.extra.fix,
           cwe,
         });

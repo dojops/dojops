@@ -26,10 +26,10 @@ export const toolchainListCommand: CommandHandler = async (_args, ctx) => {
         status = "installed";
       } else if (systemBinary) {
         status = "system";
-      } else if (!supported) {
-        status = "unsupported";
-      } else {
+      } else if (supported) {
         status = "available";
+      } else {
+        status = "unsupported";
       }
 
       return {
@@ -55,10 +55,10 @@ export const toolchainListCommand: CommandHandler = async (_args, ctx) => {
       statusLabel = pc.green("installed") + pc.dim(` (v${installed.version})`);
     } else if (systemBinary) {
       statusLabel = pc.blue("system") + pc.dim(` (${systemBinary})`);
-    } else if (!supported) {
-      statusLabel = pc.dim("unsupported");
-    } else {
+    } else if (supported) {
       statusLabel = pc.yellow("available");
+    } else {
+      statusLabel = pc.dim("unsupported");
     }
 
     const cols = Math.min(process.stdout.columns || 80, 100);

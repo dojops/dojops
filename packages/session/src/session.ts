@@ -89,7 +89,7 @@ export class ChatSession {
       this.memoryManager.needsSummarization(this.state.messages.length)
     ) {
       try {
-        const keepCount = this.memoryManager["maxMessages"] as number;
+        const keepCount = this.memoryManager["maxMessages"];
         const oldMessages = this.state.messages.slice(0, this.state.messages.length - keepCount);
         this.state.summary = await this.summarizer.summarize(oldMessages);
         // Trim old messages after successful summarization to prevent memory leak

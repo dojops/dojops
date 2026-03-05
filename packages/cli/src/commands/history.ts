@@ -62,7 +62,7 @@ function historyList(args: string[], ctx: CLIContext): void {
   // Apply --since filter (ISO date string)
   if (sinceFilter) {
     const sinceDate = new Date(sinceFilter);
-    if (!isNaN(sinceDate.getTime())) {
+    if (!Number.isNaN(sinceDate.getTime())) {
       plans = plans.filter((plan) => new Date(plan.createdAt).getTime() >= sinceDate.getTime());
     }
   }
@@ -70,7 +70,7 @@ function historyList(args: string[], ctx: CLIContext): void {
   // Apply --limit filter (after other filters)
   if (limitFilter) {
     const limit = Number.parseInt(limitFilter, 10);
-    if (!isNaN(limit) && limit > 0) {
+    if (!Number.isNaN(limit) && limit > 0) {
       plans = plans.slice(0, limit);
     }
   }
@@ -101,7 +101,7 @@ function historyList(args: string[], ctx: CLIContext): void {
     console.log("---");
     for (const plan of plans) {
       console.log(`- id: ${plan.id}`);
-      console.log(`  goal: "${plan.goal.replaceAll('"', '\\"')}"`);
+      console.log(`  goal: "${plan.goal.replaceAll('"', String.raw`\"`)}"`);
       console.log(`  status: ${plan.approvalStatus}`);
       console.log(`  createdAt: ${plan.createdAt}`);
       console.log(`  tasks: ${plan.tasks.length}`);
@@ -224,7 +224,7 @@ function historyAudit(args: string[], ctx: CLIContext): void {
       entry.status === "failure" ? pc.red(entry.status) : pc.yellow(entry.status);
     const statusColor = entry.status === "success" ? pc.green(entry.status) : statusColorFail;
     const seq =
-      entry.seq != null ? pc.dim(`#${String(entry.seq).padStart(4, " ")}`) : pc.dim("#   ?");
+      entry.seq == null ? pc.dim("#   ?") : pc.dim(`#${String(entry.seq).padStart(4, " ")}`);
     const ts = new Date(entry.timestamp).toLocaleString();
     const planInfo = entry.planId ? ` ${pc.cyan(entry.planId)}` : "";
     const duration = pc.dim(`(${entry.durationMs}ms)`);
