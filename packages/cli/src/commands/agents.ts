@@ -88,17 +88,11 @@ function agentList(ctx: CLIContext): void {
   p.note(lines.join("\n"), `Specialist Agents (${agents.length})`);
 }
 
-function agentInfo(args: string[], ctx: CLIContext): void {
-  const name = args[0];
-  if (!name) {
-    p.log.info(`  ${pc.dim("$")} dojops agents info <name>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Agent name required.");
-  }
-
-  const projectRoot = findProjectRoot() ?? undefined;
-  const customAgents = discoverCustomAgents(projectRoot);
-
-  // Merge built-in + custom configs (same pattern as agentList, no LLM needed)
+/** Build a merged map of built-in + custom agent configs. */
+function buildAgentConfigMap(customAgents: ReturnType<typeof discoverCustomAgents>): {
+  configMap: Map<string, SpecialistConfig>;
+  customAgentNames: Set<string>;
+} {
   const configMap = new Map<string, SpecialistConfig>();
   for (const c of ALL_SPECIALIST_CONFIGS) configMap.set(c.name, c);
   const customAgentNames = new Set<string>();
@@ -106,79 +100,97 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     configMap.set(entry.config.name, entry.config);
     customAgentNames.add(entry.config.name);
   }
+  return { configMap, customAgentNames };
+}
 
-  const allConfigs = [...configMap.values()];
+/**
+ * Find a matching agent config using 3-tier matching:
+ * 1. Exact match (case-insensitive)
+ * 2. Prefix match (e.g., "terraform" matches "terraform-specialist")
+ * 3. Segment match (e.g., "docker" matches "docker-specialist")
+ *
+ * Returns the matched config, or undefined if no unique match is found.
+ */
+function findMatchingAgent(
+  allConfigs: SpecialistConfig[],
+  name: string,
+): SpecialistConfig | undefined {
   const lower = name.toLowerCase();
 
   // 1. Exact match (case-insensitive)
-  let config = allConfigs.find((c) => c.name.toLowerCase() === lower);
+  const exact = allConfigs.find((c) => c.name.toLowerCase() === lower);
+  if (exact) return exact;
 
   // 2. Prefix match (e.g., "terraform" matches "terraform-specialist")
-  if (!config) {
-    const prefixMatches = allConfigs.filter((c) => c.name.toLowerCase().startsWith(lower));
-    if (prefixMatches.length === 1) config = prefixMatches[0];
-  }
+  const prefixMatches = allConfigs.filter((c) => c.name.toLowerCase().startsWith(lower));
+  if (prefixMatches.length === 1) return prefixMatches[0];
 
   // 3. Substring match on name segments (e.g., "docker" matches "docker-specialist")
-  if (!config) {
-    const segmentMatches = allConfigs.filter((c) =>
-      c.name.toLowerCase().split("-").includes(lower),
-    );
-    if (segmentMatches.length === 1) config = segmentMatches[0];
+  const segmentMatches = allConfigs.filter((c) => c.name.toLowerCase().split("-").includes(lower));
+  if (segmentMatches.length === 1) return segmentMatches[0];
+
+  return undefined;
+}
+
+/** Show suggestions when an agent is not found, then throw. */
+function throwAgentNotFound(
+  name: string,
+  allConfigs: SpecialistConfig[],
+  configMap: Map<string, SpecialistConfig>,
+): never {
+  const lower = name.toLowerCase();
+  const candidates = allConfigs
+    .filter((c) => c.name.toLowerCase().includes(lower) || c.domain.toLowerCase().includes(lower))
+    .map((c) => c.name);
+  if (candidates.length > 0) {
+    p.log.info(`Did you mean: ${candidates.join(", ")}?`);
+  } else {
+    const names = [...configMap.keys()].join(", ");
+    p.log.info(`Available agents: ${names}`);
   }
+  throw new CLIError(ExitCode.VALIDATION_ERROR, `Agent "${name}" not found.`);
+}
 
-  if (!config) {
-    // Show suggestions for close matches
-    const candidates = allConfigs
-      .filter((c) => c.name.toLowerCase().includes(lower) || c.domain.toLowerCase().includes(lower))
-      .map((c) => c.name);
-    if (candidates.length > 0) {
-      p.log.info(`Did you mean: ${candidates.join(", ")}?`);
-    } else {
-      const names = [...configMap.keys()].join(", ");
-      p.log.info(`Available agents: ${names}`);
-    }
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Agent "${name}" not found.`);
-  }
+/** Format agent info as JSON and write to stdout. */
+function formatAgentInfoJson(
+  config: SpecialistConfig,
+  isCustom: boolean,
+  sourcePath: string | undefined,
+  preflight: ReturnType<typeof runPreflight> | null,
+  deps: NonNullable<SpecialistConfig["toolDependencies"]>,
+): void {
+  console.log(
+    JSON.stringify(
+      {
+        name: config.name,
+        domain: config.domain,
+        description: config.description ?? null,
+        type: isCustom ? "custom" : "built-in",
+        source: sourcePath ?? null,
+        toolDependencies:
+          deps.length > 0
+            ? preflight!.checks.map((c) => ({
+                name: c.dependency.name,
+                npmPackage: c.dependency.npmPackage,
+                binary: c.dependency.binary ?? null,
+                available: c.available,
+                resolvedPath: c.resolvedPath ?? null,
+              }))
+            : [],
+      },
+      null,
+      2,
+    ),
+  );
+}
 
-  const isCustom = customAgentNames.has(config.name);
-  const deps = config.toolDependencies ?? [];
-  const preflight = deps.length > 0 ? runPreflight(config.name, deps) : null;
-
-  // Find source path for custom agents
-  let sourcePath: string | undefined;
-  if (isCustom) {
-    const entry = customAgents.find((a) => a.config.name === config.name);
-    if (entry) sourcePath = entry.agentDir;
-  }
-
-  if (ctx.globalOpts.output === "json") {
-    console.log(
-      JSON.stringify(
-        {
-          name: config.name,
-          domain: config.domain,
-          description: config.description ?? null,
-          type: isCustom ? "custom" : "built-in",
-          source: sourcePath ?? null,
-          toolDependencies:
-            deps.length > 0
-              ? preflight!.checks.map((c) => ({
-                  name: c.dependency.name,
-                  npmPackage: c.dependency.npmPackage,
-                  binary: c.dependency.binary ?? null,
-                  available: c.available,
-                  resolvedPath: c.resolvedPath ?? null,
-                }))
-              : [],
-        },
-        null,
-        2,
-      ),
-    );
-    return;
-  }
-
+/** Format agent info as text and display via p.note(). */
+function formatAgentInfoText(
+  config: SpecialistConfig,
+  isCustom: boolean,
+  sourcePath: string | undefined,
+  preflight: ReturnType<typeof runPreflight> | null,
+): void {
   const lines = [
     `${pc.bold("Name:")}        ${config.name}`,
     `${pc.bold("Domain:")}      ${config.domain}`,
@@ -202,6 +214,40 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   }
 
   p.note(lines.join("\n"), `Agent: ${config.name}`);
+}
+
+function agentInfo(args: string[], ctx: CLIContext): void {
+  const name = args[0];
+  if (!name) {
+    p.log.info(`  ${pc.dim("$")} dojops agents info <name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Agent name required.");
+  }
+
+  const projectRoot = findProjectRoot() ?? undefined;
+  const customAgents = discoverCustomAgents(projectRoot);
+  const { configMap, customAgentNames } = buildAgentConfigMap(customAgents);
+  const allConfigs = [...configMap.values()];
+
+  const config = findMatchingAgent(allConfigs, name);
+  if (!config) {
+    throwAgentNotFound(name, allConfigs, configMap);
+  }
+
+  const isCustom = customAgentNames.has(config.name);
+  const deps = config.toolDependencies ?? [];
+  const preflight = deps.length > 0 ? runPreflight(config.name, deps) : null;
+
+  // Find source path for custom agents
+  const sourcePath = isCustom
+    ? customAgents.find((a) => a.config.name === config.name)?.agentDir
+    : undefined;
+
+  if (ctx.globalOpts.output === "json") {
+    formatAgentInfoJson(config, isCustom, sourcePath, preflight, deps);
+    return;
+  }
+
+  formatAgentInfoText(config, isCustom, sourcePath, preflight);
 }
 
 async function agentCreate(args: string[], ctx: CLIContext): Promise<void> {

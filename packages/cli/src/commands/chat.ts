@@ -100,7 +100,8 @@ async function sendSingleMessage(
   try {
     const result = await session.send(messageFlag);
     if (!isStructuredOutput) {
-      s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
+      const agentLabel = `${pc.green("Agent")} ${pc.dim("(" + result.agent + ")")}`;
+      s.stop(agentLabel);
     }
     displaySingleResult(result, isStructuredOutput);
   } catch (err) {
@@ -251,7 +252,8 @@ async function handleSendMessage(session: ChatSession, trimmed: string): Promise
   s.start("Thinking...");
   try {
     const result = await session.send(trimmed);
-    s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
+    const agentLabel = `${pc.green("Agent")} ${pc.dim("(" + result.agent + ")")}`;
+    s.stop(agentLabel);
     p.log.message(result.content);
     showContextWarning(session);
   } catch (err) {

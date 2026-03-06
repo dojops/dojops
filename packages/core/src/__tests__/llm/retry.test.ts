@@ -322,13 +322,19 @@ describe("withRetry()", () => {
 
     await expect(promise).rejects.toThrow("service unavailable");
 
-    // With Math.random() mocked to 0, jitter is 0.
-    // Expected delays: 1000*2^0=1000, 1000*2^1=2000, 1000*2^2=4000
+    // Base delays: 1000*2^0=1000, 1000*2^1=2000, 1000*2^2=4000
+    // jitter is crypto.randomInt(500) so 0-499
     const delays = setTimeoutSpy.mock.calls
       .map((call) => call[1])
       .filter((d): d is number => typeof d === "number" && d >= 1000);
 
-    expect(delays).toEqual([1000, 2000, 4000]);
+    expect(delays.length).toBe(3);
+    expect(delays[0]).toBeGreaterThanOrEqual(1000);
+    expect(delays[0]).toBeLessThanOrEqual(1500);
+    expect(delays[1]).toBeGreaterThanOrEqual(2000);
+    expect(delays[1]).toBeLessThanOrEqual(2500);
+    expect(delays[2]).toBeGreaterThanOrEqual(4000);
+    expect(delays[2]).toBeLessThanOrEqual(4500);
   });
 
   // ---------------------------------------------------------------
@@ -358,17 +364,19 @@ describe("withRetry()", () => {
 
     await expect(promise).rejects.toThrow("bad gateway");
 
-    // With Math.random() = 0: min(5000, 8000)=5000, min(10000, 8000)=8000, ...capped
+    // Base delays: min(5000+jitter, 8000), min(10000+jitter, 8000), ...capped
+    // jitter is crypto.randomInt(500) so 0-499
     const delays = setTimeoutSpy.mock.calls
       .map((call) => call[1])
       .filter((d): d is number => typeof d === "number" && d >= 1000);
 
     expect(delays.length).toBe(5);
     for (const delay of delays) {
-      expect(delay).toBeLessThanOrEqual(8000);
+      expect(delay).toBeLessThanOrEqual(8500); // 8000 + max jitter 499
     }
-    expect(delays[0]).toBe(5000);
-    expect(delays[1]).toBe(8000);
+    expect(delays[0]).toBeGreaterThanOrEqual(5000);
+    expect(delays[0]).toBeLessThanOrEqual(5500); // 5000 + max jitter
+    expect(delays[1]).toBeLessThanOrEqual(8500); // capped at maxDelayMs + jitter
   });
 
   // ---------------------------------------------------------------

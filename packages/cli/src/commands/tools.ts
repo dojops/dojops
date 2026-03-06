@@ -815,6 +815,35 @@ export const toolsLoadCommand: CommandHandler = async (args) => {
   );
 };
 
+function resolveDopsPath(target: string): string {
+  const resolved = path.resolve(target);
+  if (target.endsWith(".dops") && fs.existsSync(resolved)) {
+    return resolved;
+  }
+  if (target.includes("/") || target.includes("\\")) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `File not found: ${resolved}`);
+  }
+  const projectRoot = findProjectRoot();
+  const candidates = [
+    projectRoot ? path.join(projectRoot, ".dojops", "tools", `${target}.dops`) : null,
+    path.join(
+      process.env.HOME ?? process.env.USERPROFILE ?? "~",
+      ".dojops",
+      "tools",
+      `${target}.dops`,
+    ),
+  ].filter(Boolean) as string[];
+
+  const found = candidates.find((c) => fs.existsSync(c));
+  if (!found) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `No .dops file found for "${target}". Looked in:\n  ${candidates.join("\n  ")}`,
+    );
+  }
+  return found;
+}
+
 /**
  * `dojops tools publish [path]` — publishes a .dops file to the DojOps Hub.
  *
@@ -840,36 +869,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
     changelog = args[changelogIdx + 1];
   }
 
-  // Resolve the .dops file path
-  let dopsPath: string;
-  const resolved = path.resolve(target);
-
-  if (target.endsWith(".dops") && fs.existsSync(resolved)) {
-    dopsPath = resolved;
-  } else if (!target.includes("/") && !target.includes("\\")) {
-    // Look up by name in standard locations
-    const projectRoot = findProjectRoot();
-    const candidates = [
-      projectRoot ? path.join(projectRoot, ".dojops", "tools", `${target}.dops`) : null,
-      path.join(
-        process.env.HOME ?? process.env.USERPROFILE ?? "~",
-        ".dojops",
-        "tools",
-        `${target}.dops`,
-      ),
-    ].filter(Boolean) as string[];
-
-    const found = candidates.find((c) => fs.existsSync(c));
-    if (!found) {
-      throw new CLIError(
-        ExitCode.VALIDATION_ERROR,
-        `No .dops file found for "${target}". Looked in:\n  ${candidates.join("\n  ")}`,
-      );
-    }
-    dopsPath = found;
-  } else {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `File not found: ${resolved}`);
-  }
+  const dopsPath = resolveDopsPath(target);
 
   // Validate locally before publishing
   const spinner = p.spinner();
@@ -1140,6 +1140,46 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
   }
 };
 
+interface SearchPackage {
+  name: string;
+  slug: string;
+  description: string;
+  author?: string;
+  starCount?: number;
+  downloadCount?: number;
+  latestVersion?: { semver: string };
+  tags?: string[];
+}
+
+function displaySearchResults(packages: SearchPackage[], query: string, isJson: boolean): void {
+  if (packages.length === 0) {
+    if (isJson) {
+      console.log(JSON.stringify([]));
+    } else {
+      p.log.info(`No modules found for "${query}".`);
+    }
+    return;
+  }
+
+  if (isJson) {
+    console.log(JSON.stringify(packages, null, 2));
+    return;
+  }
+
+  const lines = packages.map((pkg) => {
+    const version = pkg.latestVersion?.semver
+      ? pc.dim(`v${pkg.latestVersion.semver}`)
+      : pc.dim("—");
+    const stars = pkg.starCount == null ? "" : `${pc.yellow("★")} ${pkg.starCount}`;
+    const downloads = pkg.downloadCount == null ? "" : `${pc.dim("↓")} ${pkg.downloadCount}`;
+    const desc = pkg.description ? pc.dim(pkg.description.slice(0, 60)) : "";
+    return `  ${pc.cyan(pkg.name.padEnd(25))} ${version.padEnd(20)} ${stars.padEnd(12)} ${downloads.padEnd(12)} ${desc}`;
+  });
+
+  p.note(lines.join("\n"), `Search results for "${query}" (${packages.length})`);
+  p.log.info(pc.dim(`Install with: dojops modules install <name>`));
+}
+
 /**
  * `dojops tools search <query>` — searches the DojOps Hub for tools.
  *
@@ -1181,48 +1221,12 @@ export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
     }
 
     const data = await res.json();
-    const packages: Array<{
-      name: string;
-      slug: string;
-      description: string;
-      author?: string;
-      starCount?: number;
-      downloadCount?: number;
-      latestVersion?: { semver: string };
-      tags?: string[];
-    }> = data.packages ?? data.results ?? (Array.isArray(data) ? data : []);
+    const packages: SearchPackage[] =
+      data.packages ?? data.results ?? (Array.isArray(data) ? data : []);
 
     if (!isJson) spinner.stop(`Found ${packages.length} result(s)`);
 
-    if (packages.length === 0) {
-      if (isJson) {
-        console.log(JSON.stringify([]));
-      } else {
-        p.log.info(`No modules found for "${query}".`);
-      }
-      return;
-    }
-
-    if (isJson) {
-      console.log(JSON.stringify(packages, null, 2));
-      return;
-    }
-
-    const lines: string[] = [];
-    for (const pkg of packages) {
-      const version = pkg.latestVersion?.semver
-        ? pc.dim(`v${pkg.latestVersion.semver}`)
-        : pc.dim("—");
-      const stars = pkg.starCount == null ? "" : `${pc.yellow("★")} ${pkg.starCount}`;
-      const downloads = pkg.downloadCount == null ? "" : `${pc.dim("↓")} ${pkg.downloadCount}`;
-      const desc = pkg.description ? pc.dim(pkg.description.slice(0, 60)) : "";
-      lines.push(
-        `  ${pc.cyan(pkg.name.padEnd(25))} ${version.padEnd(20)} ${stars.padEnd(12)} ${downloads.padEnd(12)} ${desc}`,
-      );
-    }
-
-    p.note(lines.join("\n"), `Search results for "${query}" (${packages.length})`);
-    p.log.info(pc.dim(`Install with: dojops modules install <name>`));
+    displaySearchResults(packages, query, isJson);
   } catch (err) {
     if (err instanceof CLIError) throw err;
     if (!isJson) spinner.stop("Search failed");

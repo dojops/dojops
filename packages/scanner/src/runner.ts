@@ -105,6 +105,28 @@ const SCANNERS: ScannerEntry[] = [
   },
 ];
 
+function collectResults(
+  settled: PromiseSettledResult<ScannerResult>[],
+  selected: typeof SCANNERS,
+): { results: ScannerResult[]; errors: string[] } {
+  const results: ScannerResult[] = [];
+  const errors: string[] = [];
+  for (let i = 0; i < settled.length; i++) {
+    const outcome = settled[i];
+    if (outcome.status === "fulfilled") {
+      results.push(outcome.value);
+      continue;
+    }
+    const reason =
+      outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+    const isTimeout = reason.startsWith("timeout after");
+    const skipReason = isTimeout ? `Scanner timed out: ${reason}` : `Scanner crashed: ${reason}`;
+    errors.push(`${selected[i].name}: ${skipReason}`);
+    results.push({ tool: selected[i].name, findings: [], skipped: true, skipReason });
+  }
+  return { results, errors };
+}
+
 export async function runScan(
   projectPath: string,
   scanType: ScanType,
@@ -147,26 +169,7 @@ export async function runScan(
   const settled = await Promise.allSettled(
     selected.map((s) => withTimeout(s.fn(projectPath), scannerTimeoutMs)),
   );
-  const errors: string[] = [];
-  const results: ScannerResult[] = [];
-  for (let i = 0; i < settled.length; i++) {
-    const outcome = settled[i];
-    if (outcome.status === "fulfilled") {
-      results.push(outcome.value);
-    } else {
-      const reason =
-        outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-      const isTimeout = reason.startsWith("timeout after");
-      const skipReason = isTimeout ? `Scanner timed out: ${reason}` : `Scanner crashed: ${reason}`;
-      errors.push(`${selected[i].name}: ${skipReason}`);
-      results.push({
-        tool: selected[i].name,
-        findings: [],
-        skipped: true,
-        skipReason,
-      });
-    }
-  }
+  const { results, errors } = collectResults(settled, selected);
 
   // Collect findings and track scanner status
   const allFindings: ScanFinding[] = [];

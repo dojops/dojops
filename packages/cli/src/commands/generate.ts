@@ -106,22 +106,26 @@ function outputFormatted(
   }
 }
 
+interface ToolDirectContext {
+  provider: ReturnType<CLIContext["getProvider"]>;
+  projectRoot: string | undefined;
+  docAugmenter?: DocAugmenter;
+  context7Provider?: Context7Provider;
+  projectContextStr?: string;
+}
+
 async function handleToolDirect(
   ctx: CLIContext,
   prompt: string,
   writePath: string | undefined,
   allowAllPaths: boolean,
   toolName: string,
-  provider: ReturnType<CLIContext["getProvider"]>,
-  projectRoot: string | undefined,
-  docAugmenter: DocAugmenter | undefined,
-  context7Provider: Context7Provider | undefined,
-  projectContextStr: string | undefined,
+  toolCtx: ToolDirectContext,
 ): Promise<void> {
-  const registry = createToolRegistry(provider, projectRoot, {
-    docAugmenter,
-    context7Provider,
-    projectContext: projectContextStr,
+  const registry = createToolRegistry(toolCtx.provider, toolCtx.projectRoot, {
+    docAugmenter: toolCtx.docAugmenter,
+    context7Provider: toolCtx.context7Provider,
+    projectContext: toolCtx.projectContextStr,
   });
   const tool = registry.get(toolName);
   if (!tool) {
@@ -339,18 +343,13 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   const toolName = ctx.globalOpts.tool;
   if (toolName) {
-    await handleToolDirect(
-      ctx,
-      prompt,
-      writePath,
-      allowAllPaths,
-      toolName,
+    await handleToolDirect(ctx, prompt, writePath, allowAllPaths, toolName, {
       provider,
       projectRoot,
       docAugmenter,
       context7Provider,
       projectContextStr,
-    );
+    });
     return;
   }
 

@@ -634,22 +634,26 @@ function processNonExecutableTask(taskResult: {
   };
 }
 
+interface ApplyContext {
+  plan: PlanState;
+  safeExecutor: SafeExecutor;
+  allFilesCreated: string[];
+  allFilesModified: string[];
+  jsonOutput: boolean;
+  verbose: boolean;
+}
+
 async function processExecutableTask(
   taskResult: { taskId: string; status: string; output?: unknown; error?: string },
-  plan: PlanState,
   taskNode: { input: Record<string, unknown> },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tool: any,
-  safeExecutor: SafeExecutor,
-  allFilesCreated: string[],
-  allFilesModified: string[],
-  jsonOutput: boolean,
-  verbose: boolean,
+  ctx: ApplyContext,
 ): Promise<TaskResultEntry> {
-  const taskDef = plan.tasks.find((t) => t.id === taskResult.taskId);
+  const taskDef = ctx.plan.tasks.find((t) => t.id === taskResult.taskId);
   const metadata = buildToolMetadata(taskDef);
 
-  const execResult = await safeExecutor.executeTask(
+  const execResult = await ctx.safeExecutor.executeTask(
     taskResult.taskId,
     tool,
     taskNode.input,
@@ -657,11 +661,11 @@ async function processExecutableTask(
   );
   const taskFiles = execResult.auditLog?.filesWritten ?? [];
   const taskModified = execResult.auditLog?.filesModified ?? [];
-  allFilesCreated.push(...taskFiles);
-  allFilesModified.push(...taskModified);
+  ctx.allFilesCreated.push(...taskFiles);
+  ctx.allFilesModified.push(...taskModified);
 
-  if (!jsonOutput) {
-    renderExecutionResult(execResult, verbose);
+  if (!ctx.jsonOutput) {
+    renderExecutionResult(execResult, ctx.verbose);
   }
 
   return {
@@ -679,14 +683,11 @@ async function processTaskResults(
   planResult: {
     results: Array<{ taskId: string; status: string; output?: unknown; error?: string }>;
   },
-  plan: PlanState,
   graph: ReturnType<typeof buildTaskGraph>,
   toolMap: Map<string, ToolEntry>,
-  safeExecutor: SafeExecutor,
   completedTaskIds: Set<string>,
   interrupted: { value: boolean },
-  jsonOutput: boolean,
-  verbose: boolean,
+  ctx: ApplyContext,
 ): Promise<{
   newResults: TaskResultEntry[];
   allFilesCreated: string[];
@@ -703,7 +704,7 @@ async function processTaskResults(
     }
 
     if (completedTaskIds.has(taskResult.taskId)) {
-      const prev = processCompletedTask(taskResult, plan);
+      const prev = processCompletedTask(taskResult, ctx.plan);
       if (prev) newResults.push(prev);
       continue;
     }
@@ -721,17 +722,11 @@ async function processTaskResults(
       continue;
     }
 
-    const result = await processExecutableTask(
-      taskResult,
-      plan,
-      taskNode,
-      tool,
-      safeExecutor,
+    const result = await processExecutableTask(taskResult, taskNode, tool, {
+      ...ctx,
       allFilesCreated,
       allFilesModified,
-      jsonOutput,
-      verbose,
-    );
+    });
     newResults.push(result);
   }
 
@@ -750,42 +745,48 @@ function computeExecutionStatus(newResults: TaskResultEntry[]): string {
   return "FAILURE";
 }
 
+interface SaveApplyContext {
+  root: string;
+  plan: PlanState;
+  durationMs: number;
+  replay: boolean;
+  planSuccess: boolean;
+}
+
 function saveApplyResults(
-  root: string,
-  plan: PlanState,
-  newResults: TaskResultEntry[],
-  allFilesCreated: string[],
-  allFilesModified: string[],
-  durationMs: number,
-  status: string,
-  replay: boolean,
-  planSuccess: boolean,
+  results: {
+    newResults: TaskResultEntry[];
+    allFilesCreated: string[];
+    allFilesModified: string[];
+    status: string;
+  },
+  ctx: SaveApplyContext,
 ): void {
-  saveExecution(root, {
-    planId: plan.id,
+  saveExecution(ctx.root, {
+    planId: ctx.plan.id,
     executedAt: new Date().toISOString(),
-    status: status as "SUCCESS" | "FAILURE" | "PARTIAL",
-    filesCreated: allFilesCreated,
-    filesModified: allFilesModified,
-    durationMs,
+    status: results.status as "SUCCESS" | "FAILURE" | "PARTIAL",
+    filesCreated: results.allFilesCreated,
+    filesModified: results.allFilesModified,
+    durationMs: ctx.durationMs,
   });
 
-  plan.results = newResults;
-  plan.approvalStatus = status === "SUCCESS" ? "APPLIED" : "PARTIAL";
-  savePlan(root, plan);
+  ctx.plan.results = results.newResults;
+  ctx.plan.approvalStatus = results.status === "SUCCESS" ? "APPLIED" : "PARTIAL";
+  savePlan(ctx.root, ctx.plan);
 
-  const session = loadSession(root);
+  const session = loadSession(ctx.root);
   session.mode = "IDLE";
-  saveSession(root, session);
+  saveSession(ctx.root, session);
 
-  appendAudit(root, {
+  appendAudit(ctx.root, {
     timestamp: new Date().toISOString(),
     user: getCurrentUser(),
-    command: `apply${replay ? " --replay" : ""} ${plan.id}`,
+    command: `apply${ctx.replay ? " --replay" : ""} ${ctx.plan.id}`,
     action: "apply",
-    planId: plan.id,
-    status: planSuccess ? "success" : "failure",
-    durationMs,
+    planId: ctx.plan.id,
+    status: ctx.planSuccess ? "success" : "failure",
+    durationMs: ctx.durationMs,
   });
 }
 
@@ -906,31 +907,30 @@ async function executeApplyPlan(
   const executor = createExecutorWithCallbacks(tools, graph, ctx);
   const planResult = await executor.execute(graph, { completedTaskIds });
 
+  const applyCtx: ApplyContext = {
+    plan,
+    safeExecutor,
+    allFilesCreated: [],
+    allFilesModified: [],
+    jsonOutput: flags.jsonOutput,
+    verbose: ctx.globalOpts.verbose,
+  };
+
   const { newResults, allFilesCreated, allFilesModified } = await processTaskResults(
     planResult,
-    plan,
     graph,
     toolMap,
-    safeExecutor,
     completedTaskIds,
     interrupted,
-    flags.jsonOutput,
-    ctx.globalOpts.verbose,
+    applyCtx,
   );
 
   const durationMs = Date.now() - startTime;
   const status = computeExecutionStatus(newResults);
 
   saveApplyResults(
-    root,
-    plan,
-    newResults,
-    allFilesCreated,
-    allFilesModified,
-    durationMs,
-    status,
-    flags.replay,
-    planResult.success,
+    { newResults, allFilesCreated, allFilesModified, status },
+    { root, plan, durationMs, replay: flags.replay, planSuccess: planResult.success },
   );
 
   if (flags.jsonOutput) {

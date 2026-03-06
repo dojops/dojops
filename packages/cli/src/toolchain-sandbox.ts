@@ -171,7 +171,7 @@ export function downloadToTemp(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const tmpFile = path.join(
       os.tmpdir(),
-      `dojops-download-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `dojops-download-${Date.now()}-${crypto.randomInt(2 ** 48).toString(36)}`,
     );
 
     followRedirects(url, 0, tmpFile, resolve, reject);

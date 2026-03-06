@@ -109,30 +109,32 @@ export class OllamaProvider implements LLMProvider {
         usage = extractUsage(response.data);
       }
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        if (err.response?.status === 404) {
-          throw new Error(
-            `Model "${this.model}" not found on Ollama. Run: ollama pull ${this.model}`,
-            { cause: err },
-          );
-        }
-        if (err.code === "ECONNREFUSED") {
-          throw new Error(
-            `Cannot connect to Ollama at ${this.baseUrl}. Is the Ollama server running?`,
-            { cause: err },
-          );
-        }
-        if (err.code === "ECONNABORTED") {
-          throw new Error(`Ollama request timed out after ${OLLAMA_TIMEOUT_MS / 1000}s`, {
-            cause: err,
-          });
-        }
-        throw new Error(`Ollama request failed: ${err.message}`, { cause: err });
-      }
-      throw err;
+      throw this.wrapError(err);
     }
 
     return buildLLMResponse(content, usage, req);
+  }
+
+  private wrapError(err: unknown): Error {
+    if (!axios.isAxiosError(err)) throw err;
+    if (err.response?.status === 404) {
+      return new Error(
+        `Model "${this.model}" not found on Ollama. Run: ollama pull ${this.model}`,
+        { cause: err },
+      );
+    }
+    if (err.code === "ECONNREFUSED") {
+      return new Error(
+        `Cannot connect to Ollama at ${this.baseUrl}. Is the Ollama server running?`,
+        { cause: err },
+      );
+    }
+    if (err.code === "ECONNABORTED") {
+      return new Error(`Ollama request timed out after ${OLLAMA_TIMEOUT_MS / 1000}s`, {
+        cause: err,
+      });
+    }
+    return new Error(`Ollama request failed: ${err.message}`, { cause: err });
   }
 
   async listModels(): Promise<string[]> {

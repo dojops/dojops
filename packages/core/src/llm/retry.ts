@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
 import { JsonValidationError } from "./json-validator";
 import { redactSecrets } from "./redact";
@@ -74,7 +75,7 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
           }
 
           if (attempt < maxRetries && isRetryableError(err)) {
-            const jitter = Math.random() * 500;
+            const jitter = crypto.randomInt(500);
             const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + jitter, maxDelayMs);
             await sleep(delay);
             continue;

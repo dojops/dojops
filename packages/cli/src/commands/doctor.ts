@@ -33,130 +33,127 @@ interface Check {
   detail: string;
 }
 
-export async function statusCommand(_args: string[], ctx: CLIContext): Promise<void> {
-  const checks: Check[] = [];
-
-  // Node.js version
+function checkNodeVersion(): Check {
   const nodeVersion = process.versions.node;
   const major = Number.parseInt(nodeVersion.split(".")[0], 10);
-  checks.push({
+  return {
     name: "Node.js version",
     status: major >= 18 ? "pass" : "fail",
     detail: `v${nodeVersion}${major < 18 ? " (requires >= 18)" : ""}`,
-  });
+  };
+}
 
-  // Provider configured — UX #1: use resolveProvider() to include DOJOPS_PROVIDER env var
+function checkProvider(ctx: CLIContext): { check: Check; provider: string | undefined } {
   const provider = resolveProvider(ctx.globalOpts.provider, ctx.config);
   let providerSource: string;
   if (ctx.globalOpts.provider) providerSource = "(CLI flag)";
   else if (process.env.DOJOPS_PROVIDER) providerSource = "(env: DOJOPS_PROVIDER)";
   else if (ctx.config.defaultProvider) providerSource = "(config)";
   else providerSource = "(default)";
-  checks.push({
-    name: "Provider configured",
-    status: provider ? "pass" : "warn",
-    detail: `${provider} ${providerSource}`,
-  });
+  return {
+    check: {
+      name: "Provider configured",
+      status: provider ? "pass" : "warn",
+      detail: `${provider} ${providerSource}`,
+    },
+    provider,
+  };
+}
 
-  // API key present
-  if (provider && provider !== "ollama" && provider !== "github-copilot") {
-    const envVarMap: Record<string, string> = {
-      openai: "OPENAI_API_KEY",
-      anthropic: "ANTHROPIC_API_KEY",
-      deepseek: "DEEPSEEK_API_KEY",
-      gemini: "GEMINI_API_KEY",
-    };
-    const envVar = envVarMap[provider] ?? "OPENAI_API_KEY";
-    const hasEnvKey = !!process.env[envVar];
-    const hasConfigKey = !!ctx.config.tokens?.[provider];
-    let detail: string;
-    if (hasEnvKey) {
-      detail = `Set via $${envVar}`;
-    } else if (hasConfigKey) {
-      detail = "Set in config";
-    } else {
-      detail = "Not found";
-    }
-    checks.push({
-      name: `API key (${provider})`,
-      status: hasEnvKey || hasConfigKey ? "pass" : "fail",
-      detail,
-    });
+function checkApiKey(provider: string, ctx: CLIContext): Check | undefined {
+  if (!provider || provider === "ollama" || provider === "github-copilot") return undefined;
+
+  const envVarMap: Record<string, string> = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    deepseek: "DEEPSEEK_API_KEY",
+    gemini: "GEMINI_API_KEY",
+  };
+  const envVar = envVarMap[provider] ?? "OPENAI_API_KEY";
+  const hasEnvKey = !!process.env[envVar];
+  const hasConfigKey = !!ctx.config.tokens?.[provider];
+  let detail: string;
+  if (hasEnvKey) {
+    detail = `Set via $${envVar}`;
+  } else if (hasConfigKey) {
+    detail = "Set in config";
+  } else {
+    detail = "Not found";
   }
+  return {
+    name: `API key (${provider})`,
+    status: hasEnvKey || hasConfigKey ? "pass" : "fail",
+    detail,
+  };
+}
 
-  // GitHub Copilot auth check
-  if (provider === "github-copilot") {
-    try {
-      const { getValidCopilotToken } = await import("@dojops/core");
-      const { apiBaseUrl } = await getValidCopilotToken();
-      checks.push({
-        name: "Copilot API",
-        status: "pass",
-        detail: `Connected to ${apiBaseUrl}`,
-      });
-    } catch (err) {
-      checks.push({
-        name: "Copilot API",
-        status: "fail",
-        detail: (err as Error).message,
-      });
-    }
+async function checkCopilotAuth(provider: string | undefined): Promise<Check | undefined> {
+  if (provider !== "github-copilot") return undefined;
+
+  try {
+    const { getValidCopilotToken } = await import("@dojops/core");
+    const { apiBaseUrl } = await getValidCopilotToken();
+    return { name: "Copilot API", status: "pass", detail: `Connected to ${apiBaseUrl}` };
+  } catch (err) {
+    return { name: "Copilot API", status: "fail", detail: (err as Error).message };
   }
+}
 
-  // .dojops/ initialized
+function checkInitialization(): { check: Check; root: string | null } {
   const root = findProjectRoot();
-  checks.push({
-    name: "Project initialized (.dojops/)",
-    status: root && fs.existsSync(`${root}/.dojops`) ? "pass" : "warn",
-    detail: root ? `${root}/.dojops/` : "Not initialized (run: dojops init)",
-  });
+  return {
+    check: {
+      name: "Project initialized (.dojops/)",
+      status: root && fs.existsSync(`${root}/.dojops`) ? "pass" : "warn",
+      detail: root ? `${root}/.dojops/` : "Not initialized (run: dojops init)",
+    },
+    root,
+  };
+}
 
-  // Load project domains for filtering tool suggestions
-  const projectDomains: string[] = root ? (loadContext(root)?.relevantDomains ?? []) : [];
+async function checkOllama(
+  provider: string | undefined,
+  ctx: CLIContext,
+): Promise<Check | undefined> {
+  if (provider !== "ollama" && process.env.DOJOPS_PROVIDER !== "ollama") return undefined;
 
-  // Ollama reachability
-  if (provider === "ollama" || process.env.DOJOPS_PROVIDER === "ollama") {
-    const ollamaHost = resolveOllamaHost(undefined, ctx.config);
-    let ollamaOk = false;
-    try {
-      const resp = await fetch(`${ollamaHost}/api/tags`);
-      ollamaOk = resp.ok;
-    } catch {
-      // not reachable
-    }
-    checks.push({
-      name: "Ollama server",
-      status: ollamaOk ? "pass" : "fail",
-      detail: ollamaOk ? `Running at ${ollamaHost}` : `Not reachable at ${ollamaHost}`,
-    });
+  const ollamaHost = resolveOllamaHost(undefined, ctx.config);
+  let ollamaOk = false;
+  try {
+    const resp = await fetch(`${ollamaHost}/api/tags`);
+    ollamaOk = resp.ok;
+  } catch {
+    // not reachable
   }
+  return {
+    name: "Ollama server",
+    status: ollamaOk ? "pass" : "fail",
+    detail: ollamaOk ? `Running at ${ollamaHost}` : `Not reachable at ${ollamaHost}`,
+  };
+}
 
-  // Config file permissions
+function checkConfigPermissions(): Check | undefined {
   const configPath = getConfigPath();
-  if (fs.existsSync(configPath)) {
-    try {
-      const stat = fs.statSync(configPath);
-      const mode = (stat.mode & 0o777).toString(8);
-      checks.push({
-        name: "Config file permissions",
-        status: mode === "600" ? "pass" : "warn",
-        detail: `${configPath} (${mode})`,
-      });
-    } catch {
-      checks.push({
-        name: "Config file permissions",
-        status: "warn",
-        detail: "Could not check",
-      });
-    }
-  }
+  if (!fs.existsSync(configPath)) return undefined;
 
-  // Agent tool dependencies (deduplicated by npmPackage, filtered by project domains)
+  try {
+    const stat = fs.statSync(configPath);
+    const mode = (stat.mode & 0o777).toString(8);
+    return {
+      name: "Config file permissions",
+      status: mode === "600" ? "pass" : "warn",
+      detail: `${configPath} (${mode})`,
+    };
+  } catch {
+    return { name: "Config file permissions", status: "warn", detail: "Could not check" };
+  }
+}
+
+function checkBuiltInTools(projectDomains: string[]): Check[] {
   const domainSet = new Set(projectDomains);
   const seen = new Set<string>();
   const uniqueDeps: ToolDependency[] = [];
   for (const config of ALL_SPECIALIST_CONFIGS) {
-    // Skip specialists whose domain doesn't match the project (if domains are known)
     if (projectDomains.length > 0 && !domainSet.has(config.domain)) continue;
     for (const dep of config.toolDependencies ?? []) {
       if (!seen.has(dep.npmPackage)) {
@@ -165,85 +162,138 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
       }
     }
   }
-  for (const dep of uniqueDeps) {
+
+  return uniqueDeps.map((dep) => {
     const found = dep.binary ? resolveBinary(dep.binary) : resolveModule(dep.npmPackage);
-    checks.push({
+    return {
       name: `Tool: ${dep.name}`,
-      status: found ? "pass" : "warn",
+      status: found ? ("pass" as const) : ("warn" as const),
       detail: found ?? "Not found (optional)",
-    });
+    };
+  });
+}
+
+function resolveSystemToolStatus(
+  tool: (typeof SYSTEM_TOOLS)[number],
+  toolRegistry: ReturnType<typeof loadToolchainRegistry>,
+): { status: "pass" | "warn"; detail: string } {
+  const sandboxEntry = toolRegistry.tools.find((t) => t.name === tool.name);
+  if (sandboxEntry) {
+    return {
+      status: "pass",
+      detail: `Sandbox v${sandboxEntry.version} (${sandboxEntry.binaryPath})`,
+    };
   }
 
-  // System tool checks (filtered by project domains)
+  const systemBinary = resolveBinary(tool.binaryName);
+  if (systemBinary) {
+    return { status: "pass", detail: `System (${systemBinary})` };
+  }
+
+  if (isToolSupportedOnCurrentPlatform(tool)) {
+    return { status: "warn", detail: `Not found — run: dojops toolchain install ${tool.name}` };
+  }
+
+  return { status: "warn", detail: "Unsupported on this platform" };
+}
+
+function checkSystemTools(projectDomains: string[]): Check[] {
+  const domainSet = new Set(projectDomains);
   const toolRegistry = loadToolchainRegistry();
+  const results: Check[] = [];
+
   for (const tool of SYSTEM_TOOLS) {
-    // Skip system tools whose domains don't match the project (if domains are known)
     if (projectDomains.length > 0) {
       const toolDomains = SYSTEM_TOOL_DOMAINS[tool.name] ?? [];
       if (!toolDomains.some((d) => domainSet.has(d))) continue;
     }
-    const sandboxEntry = toolRegistry.tools.find((t) => t.name === tool.name);
-    const systemBinary = sandboxEntry ? undefined : resolveBinary(tool.binaryName);
-    const supported = isToolSupportedOnCurrentPlatform(tool);
-
-    let status: "pass" | "warn";
-    let detail: string;
-    if (sandboxEntry) {
-      status = "pass";
-      detail = `Sandbox v${sandboxEntry.version} (${sandboxEntry.binaryPath})`;
-    } else if (systemBinary) {
-      status = "pass";
-      detail = `System (${systemBinary})`;
-    } else if (supported) {
-      status = "warn";
-      detail = `Not found — run: dojops toolchain install ${tool.name}`;
-    } else {
-      status = "warn";
-      detail = "Unsupported on this platform";
-    }
-
-    checks.push({ name: `System: ${tool.name}`, status, detail });
+    const { status, detail } = resolveSystemToolStatus(tool, toolRegistry);
+    results.push({ name: `System: ${tool.name}`, status, detail });
   }
 
-  // Project metrics summary
-  if (root && fs.existsSync(`${root}/.dojops`)) {
-    const plans = listPlans(root);
-    const executions = listExecutions(root);
-    const scanReports = listScanReports(root);
-    const auditResult = verifyAuditIntegrity(root);
+  return results;
+}
 
-    const successCount = executions.filter((e) => e.status === "SUCCESS").length;
-    const successRate =
-      executions.length > 0 ? Math.round((successCount / executions.length) * 100) : 0;
+function checkProjectMetrics(root: string | null): Check[] {
+  if (!root || !fs.existsSync(`${root}/.dojops`)) return [];
 
-    checks.push(
-      {
-        name: "Plans",
-        status: "pass",
-        detail: `${plans.length} plan(s)`,
-      },
-      {
-        name: "Executions",
-        status: "pass",
-        detail:
-          executions.length > 0
-            ? `${executions.length} execution(s) (${successRate}% success)`
-            : "0 execution(s)",
-      },
-      {
-        name: "Security scans",
-        status: "pass",
-        detail: `${scanReports.length} scan(s)`,
-      },
-      {
-        name: "Audit chain",
-        status: auditResult.valid ? "pass" : "fail",
-        detail: auditResult.valid
-          ? `Valid (${auditResult.totalEntries} entries)`
-          : `Invalid — ${auditResult.errors.length} error(s) in ${auditResult.totalEntries} entries`,
-      },
-    );
-  }
+  const plans = listPlans(root);
+  const executions = listExecutions(root);
+  const scanReports = listScanReports(root);
+  const auditResult = verifyAuditIntegrity(root);
+
+  const successCount = executions.filter((e) => e.status === "SUCCESS").length;
+  const successRate =
+    executions.length > 0 ? Math.round((successCount / executions.length) * 100) : 0;
+
+  return [
+    {
+      name: "Plans",
+      status: "pass",
+      detail: `${plans.length} plan(s)`,
+    },
+    {
+      name: "Executions",
+      status: "pass",
+      detail:
+        executions.length > 0
+          ? `${executions.length} execution(s) (${successRate}% success)`
+          : "0 execution(s)",
+    },
+    {
+      name: "Security scans",
+      status: "pass",
+      detail: `${scanReports.length} scan(s)`,
+    },
+    {
+      name: "Audit chain",
+      status: auditResult.valid ? "pass" : "fail",
+      detail: auditResult.valid
+        ? `Valid (${auditResult.totalEntries} entries)`
+        : `Invalid — ${auditResult.errors.length} error(s) in ${auditResult.totalEntries} entries`,
+    },
+  ];
+}
+
+function formatChecks(checks: Check[]): string[] {
+  const cols = Math.min(process.stdout.columns || 80, 100);
+  const nameWidth = 26;
+  const prefix = 4; // "  ✓ "
+  const maxDetail = Math.max(20, cols - prefix - nameWidth - 6);
+
+  return checks.map((c) => {
+    const iconFail = c.status === "fail" ? pc.red("✗") : pc.yellow("!");
+    const icon = c.status === "pass" ? pc.green("✓") : iconFail;
+    const detail = c.detail.length > maxDetail ? c.detail.slice(0, maxDetail - 1) + "…" : c.detail;
+    return `  ${icon} ${pc.bold(c.name.padEnd(nameWidth))} ${detail}`;
+  });
+}
+
+export async function statusCommand(_args: string[], ctx: CLIContext): Promise<void> {
+  // Run all checks
+  const { check: providerCheck, provider } = checkProvider(ctx);
+  const { check: initCheck, root } = checkInitialization();
+  const projectDomains: string[] = root ? (loadContext(root)?.relevantDomains ?? []) : [];
+
+  const checks: Check[] = [checkNodeVersion(), providerCheck];
+
+  const apiKeyCheck = checkApiKey(provider!, ctx);
+  if (apiKeyCheck) checks.push(apiKeyCheck);
+
+  const copilotCheck = await checkCopilotAuth(provider);
+  if (copilotCheck) checks.push(copilotCheck);
+
+  checks.push(initCheck);
+
+  const ollamaCheck = await checkOllama(provider, ctx);
+  if (ollamaCheck) checks.push(ollamaCheck);
+
+  const configCheck = checkConfigPermissions();
+  if (configCheck) checks.push(configCheck);
+
+  checks.push(...checkBuiltInTools(projectDomains));
+  checks.push(...checkSystemTools(projectDomains));
+  checks.push(...checkProjectMetrics(root));
 
   // Output
   if (ctx.globalOpts.output === "json") {
@@ -251,19 +301,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     return;
   }
 
-  const cols = Math.min(process.stdout.columns || 80, 100);
-  const nameWidth = 26;
-  const prefix = 4; // "  ✓ "
-  const maxDetail = Math.max(20, cols - prefix - nameWidth - 6);
-
-  const lines = checks.map((c) => {
-    const iconFail = c.status === "fail" ? pc.red("✗") : pc.yellow("!");
-    const icon = c.status === "pass" ? pc.green("✓") : iconFail;
-    const detail = c.detail.length > maxDetail ? c.detail.slice(0, maxDetail - 1) + "…" : c.detail;
-    return `  ${icon} ${pc.bold(c.name.padEnd(nameWidth))} ${detail}`;
-  });
-
-  p.note(lines.join("\n"), "System Diagnostics");
+  p.note(formatChecks(checks).join("\n"), "System Diagnostics");
 
   const failCount = checks.filter((c) => c.status === "fail").length;
   if (failCount > 0) {

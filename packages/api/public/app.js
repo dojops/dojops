@@ -106,7 +106,7 @@ function copyCode(id) {
       // Fallback for older browsers
       raw.style.display = "block";
       raw.select();
-      document.execCommand("copy");
+      document.execCommand("copy"); // NOSONAR — intentional fallback for older browsers
       raw.style.display = "none";
       btn.innerHTML = `${checkIcon}<span>Copied!</span>`;
       btn.classList.add("copied");
@@ -116,6 +116,26 @@ function copyCode(id) {
       }, 2000);
     },
   );
+}
+
+// ── Shared UI Helpers ────────────────────────────────────
+
+function rateToSeverity(rate) {
+  if (rate >= 80) return "success";
+  if (rate >= 50) return "warning";
+  return "error";
+}
+
+function findingSeverity(critical, total) {
+  if (critical > 0) return "error";
+  if (total > 0) return "warning";
+  return "success";
+}
+
+function statusToChip(status) {
+  if (status === "success") return '<span class="chip chip--success">ok</span>';
+  if (status === "failure") return '<span class="chip chip--error">fail</span>';
+  return '<span class="chip chip--muted">' + escapeHtml(status) + "</span>";
 }
 
 // ── Toast Notification System ────────────────────────────
@@ -227,18 +247,14 @@ function renderTaskGraph(graph, planResult) {
 
     let statusChip = "";
     if (resultInfo) {
-      const chipClass =
-        resultInfo.status === "completed"
-          ? "chip--success"
-          : resultInfo.status === "failed"
-            ? "chip--error"
-            : "chip--muted";
+      const chipMap = { completed: "chip--success", failed: "chip--error" };
+      const chipClass = chipMap[resultInfo.status] || "chip--muted";
       statusChip = `<span class="chip ${chipClass}">${escapeHtml(resultInfo.status)}</span>`;
     }
 
     // Determine if there's output to show
-    const hasOutput = resultInfo && resultInfo.output;
-    const hasError = resultInfo && resultInfo.error;
+    const hasOutput = resultInfo?.output;
+    const hasError = resultInfo?.error;
     const outputId = `task-output-${i}`;
     const toggleId = `task-toggle-${i}`;
 
@@ -252,7 +268,7 @@ function renderTaskGraph(graph, planResult) {
           </div>
         </div>
         <div class="task-node__desc">${escapeHtml(task.description)}</div>
-        ${task.dependsOn.length ? `<div class="task-node__deps">depends on: ${task.dependsOn.map(escapeHtml).join(", ")}</div>` : ""}`;
+        ${task.dependsOn.length ? '<div class="task-node__deps">depends on: ' + task.dependsOn.map(escapeHtml).join(", ") + "</div>" : ""}`;
 
     // Show expand button for task output
     if (hasOutput) {
@@ -329,7 +345,10 @@ function renderDiagnosis(d) {
     `Confidence: ${(d.confidence * 100).toFixed(0)}%`,
     d.affectedFiles?.length ? `Affected Files: ${d.affectedFiles.join(", ")}` : "",
     d.suggestedFixes?.length
-      ? `Suggested Fixes:\n${d.suggestedFixes.map((f) => `  - ${f.description}${f.command ? ` (${f.command})` : ""}`).join("\n")}`
+      ? "Suggested Fixes:\n" +
+        d.suggestedFixes
+          .map((f) => "  - " + f.description + (f.command ? " (" + f.command + ")" : ""))
+          .join("\n")
       : "",
   ]
     .filter(Boolean)
@@ -388,6 +407,21 @@ function renderDiagnosis(d) {
   return html;
 }
 
+function renderListSection(label, items) {
+  if (!items || items.length === 0) return "";
+  const lis = items.map((s) => `<li style="margin-bottom:4px">${escapeHtml(s)}</li>`).join("");
+  return `
+    <div class="field-group">
+      <div class="field-label">${escapeHtml(label)}</div>
+      <ul style="margin-left:16px;color:var(--text-secondary)">${lis}</ul>
+    </div>`;
+}
+
+function formatListForCopy(label, items) {
+  if (!items || items.length === 0) return "";
+  return `${label}:\n${items.map((s) => "  - " + s).join("\n")}`;
+}
+
 function renderAnalysis(a) {
   const riskClass =
     { low: "risk--low", medium: "risk--medium", high: "risk--high", critical: "risk--critical" }[
@@ -401,15 +435,9 @@ function renderAnalysis(a) {
     `Cost Impact: ${a.costImpact.direction} — ${a.costImpact.details}`,
     `Rollback Complexity: ${a.rollbackComplexity}`,
     `Confidence: ${(a.confidence * 100).toFixed(0)}%`,
-    a.riskFactors?.length
-      ? `Risk Factors:\n${a.riskFactors.map((r) => `  - ${r}`).join("\n")}`
-      : "",
-    a.securityImpact?.length
-      ? `Security Impact:\n${a.securityImpact.map((s) => `  - ${s}`).join("\n")}`
-      : "",
-    a.recommendations?.length
-      ? `Recommendations:\n${a.recommendations.map((r) => `  - ${r}`).join("\n")}`
-      : "",
+    formatListForCopy("Risk Factors", a.riskFactors),
+    formatListForCopy("Security Impact", a.securityImpact),
+    formatListForCopy("Recommendations", a.recommendations),
   ]
     .filter(Boolean)
     .join("\n");
@@ -454,29 +482,9 @@ function renderAnalysis(a) {
     html += "</div>";
   }
 
-  if (a.riskFactors && a.riskFactors.length > 0) {
-    html += `
-      <div class="field-group">
-        <div class="field-label">Risk Factors</div>
-        <ul style="margin-left:16px;color:var(--text-secondary)">${a.riskFactors.map((r) => `<li style="margin-bottom:4px">${escapeHtml(r)}</li>`).join("")}</ul>
-      </div>`;
-  }
-
-  if (a.securityImpact && a.securityImpact.length > 0) {
-    html += `
-      <div class="field-group">
-        <div class="field-label">Security Impact</div>
-        <ul style="margin-left:16px;color:var(--text-secondary)">${a.securityImpact.map((s) => `<li style="margin-bottom:4px">${escapeHtml(s)}</li>`).join("")}</ul>
-      </div>`;
-  }
-
-  if (a.recommendations && a.recommendations.length > 0) {
-    html += `
-      <div class="field-group">
-        <div class="field-label">Recommendations</div>
-        <ul style="margin-left:16px;color:var(--text-secondary)">${a.recommendations.map((r) => `<li style="margin-bottom:4px">${escapeHtml(r)}</li>`).join("")}</ul>
-      </div>`;
-  }
+  html += renderListSection("Risk Factors", a.riskFactors);
+  html += renderListSection("Security Impact", a.securityImpact);
+  html += renderListSection("Recommendations", a.recommendations);
 
   html += "</div>";
   return html;
@@ -585,7 +593,7 @@ function renderDomainFilters(agents) {
   const container = $("agents-domain-filters");
   if (!container) return;
 
-  const domains = [...new Set(agents.map((a) => a.domain))].sort();
+  const domains = [...new Set(agents.map((a) => a.domain))].sort((a, b) => a.localeCompare(b));
 
   let html = `<button class="domain-filter${activeFilter === null ? " active" : ""}" data-domain="">All</button>`;
   for (const d of domains) {
@@ -793,9 +801,9 @@ $("history-clear").addEventListener("click", async () => {
 let autoRefreshTimer = null;
 const REFRESH_INTERVAL = 30000;
 const metricsTabLoaders = {
-  overview: () => loadOverview(true),
-  security: () => loadSecurity(true),
-  audit: () => loadAudit(true),
+  overview: () => loadOverview(),
+  security: () => loadSecurity(),
+  audit: () => loadAudit(),
 };
 
 function updateAutoRefresh(tab) {
@@ -893,11 +901,7 @@ function renderOverview(data) {
     "Executions",
     "",
   );
-  html += renderStatCard(
-    data.successRate + "%",
-    "Success Rate",
-    data.successRate >= 80 ? "success" : data.successRate >= 50 ? "warning" : "error",
-  );
+  html += renderStatCard(data.successRate + "%", "Success Rate", rateToSeverity(data.successRate));
   html += renderStatCard(
     data.avgExecutionTimeMs > 0 ? formatDuration(data.avgExecutionTimeMs) : "N/A",
     "Avg Exec Time",
@@ -907,7 +911,7 @@ function renderOverview(data) {
   html += renderStatCard(
     data.totalFindings,
     "Total Findings",
-    data.criticalFindings > 0 ? "error" : data.totalFindings > 0 ? "warning" : "success",
+    findingSeverity(data.criticalFindings, data.totalFindings),
   );
   html += "</div>";
 
@@ -939,18 +943,12 @@ function renderOverview(data) {
     html += '<div class="metrics-section__title">Recent Activity</div>';
     html += '<div class="timeline-list">';
     for (const item of data.recentActivity.slice(0, 10)) {
-      const dotClass =
-        item.status === "success"
-          ? "timeline-entry__dot--success"
-          : item.status === "failure"
-            ? "timeline-entry__dot--failure"
-            : "timeline-entry__dot--unknown";
-      const statusChip =
-        item.status === "success"
-          ? '<span class="chip chip--success">ok</span>'
-          : item.status === "failure"
-            ? '<span class="chip chip--error">fail</span>'
-            : '<span class="chip chip--muted">' + escapeHtml(item.status) + "</span>";
+      const dotMap = {
+        success: "timeline-entry__dot--success",
+        failure: "timeline-entry__dot--failure",
+      };
+      const dotClass = dotMap[item.status] || "timeline-entry__dot--unknown";
+      const statusChip = statusToChip(item.status);
       html +=
         '<div class="timeline-entry">' +
         '<span class="timeline-entry__dot ' +
@@ -1185,8 +1183,7 @@ function renderSecurity(data) {
       }),
     );
     html += '<div class="trend-chart">';
-    for (let i = 0; i < data.findingsTrend.length; i++) {
-      let point = data.findingsTrend[i];
+    for (const point of data.findingsTrend) {
       let cH = (point.critical / maxVal) * 100;
       let hH = (point.high / maxVal) * 100;
       let mH = (point.medium / maxVal) * 100;
@@ -1223,14 +1220,14 @@ function renderSecurity(data) {
           return i.severity;
         }),
       ),
-    ].sort();
+    ].sort((a, b) => a.localeCompare(b));
     let tools = [
       ...new Set(
         data.topIssues.map(function (i) {
           return i.tool;
         }),
       ),
-    ].sort();
+    ].sort((a, b) => a.localeCompare(b));
 
     html += '<div class="metrics-section glass-card">';
     html += '<div class="metrics-section__title">All Issues (' + data.topIssues.length + ")</div>";
@@ -1395,8 +1392,7 @@ function renderAudit(data) {
     html += '<div class="metrics-section__title">Command Distribution</div>';
     html +=
       '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
-    for (let i = 0; i < data.byCommand.length; i++) {
-      let item = data.byCommand[i];
+    for (const item of data.byCommand) {
       html +=
         '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
         escapeHtml(item.command) +
@@ -1415,12 +1411,7 @@ function renderAudit(data) {
     let max = Math.min(data.timeline.length, 20);
     for (let j = 0; j < max; j++) {
       let entry = data.timeline[j];
-      let statusChip =
-        entry.status === "success"
-          ? '<span class="chip chip--success">ok</span>'
-          : entry.status === "failure"
-            ? '<span class="chip chip--error">fail</span>'
-            : '<span class="chip chip--muted">' + escapeHtml(entry.status) + "</span>";
+      let statusChip = statusToChip(entry.status);
       let hashDisplay = entry.hash
         ? '<span class="audit-entry-card__hash" title="' +
           escapeHtml(entry.hash) +

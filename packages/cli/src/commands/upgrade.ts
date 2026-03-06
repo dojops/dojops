@@ -36,6 +36,14 @@ async function fetchLatestVersion(): Promise<string> {
   return data.version;
 }
 
+function jsonOrThrow(isJson: boolean, data: object, message: string): never | void {
+  if (isJson) {
+    console.log(JSON.stringify(data));
+    return;
+  }
+  throw new CLIError(ExitCode.GENERAL_ERROR, message);
+}
+
 export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<void> {
   const checkOnly = hasFlag(args, "--check");
   const autoYes = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
@@ -43,102 +51,37 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
 
   const currentVersion = getDojopsVersion();
   if (currentVersion === "unknown") {
-    if (isJson) {
-      console.log(JSON.stringify({ error: "Could not determine current version" }));
-      return;
-    }
-    throw new CLIError(ExitCode.GENERAL_ERROR, "Could not determine current version.");
-  }
-
-  // Fetch latest from npm
-  let latestVersion: string;
-  try {
-    const s = p.spinner();
-    if (!isJson) s.start("Checking npm registry…");
-    latestVersion = await fetchLatestVersion();
-    if (!isJson) s.stop("Registry checked.");
-  } catch (err) {
-    if (isJson) {
-      console.log(
-        JSON.stringify({
-          error: `Failed to check for updates: ${(err as Error).message}`,
-        }),
-      );
-      return;
-    }
-    throw new CLIError(
-      ExitCode.GENERAL_ERROR,
-      `Failed to check for updates: ${(err as Error).message}`,
+    return jsonOrThrow(
+      isJson,
+      { error: "Could not determine current version" },
+      "Could not determine current version.",
     );
   }
 
+  const latestVersion = await fetchWithSpinner(isJson);
+  if (!latestVersion) return;
+
   const cmp = compareSemver(currentVersion, latestVersion);
-
-  // Already up to date
   if (cmp >= 0) {
-    if (isJson) {
-      console.log(
-        JSON.stringify({
-          current: currentVersion,
-          latest: latestVersion,
-          upToDate: true,
-        }),
-      );
-      return;
-    }
-    const currentVersionLabel = pc.cyan(`v${currentVersion}`);
-    p.log.success(`Already up to date — ${currentVersionLabel}`);
-    return;
+    return handleUpToDate(isJson, currentVersion, latestVersion);
   }
 
-  // Update available
   if (checkOnly) {
-    if (isJson) {
-      console.log(
-        JSON.stringify({
-          current: currentVersion,
-          latest: latestVersion,
-          upToDate: false,
-        }),
-      );
-      return;
-    }
-    const currentDim = pc.dim(`v${currentVersion}`);
-    const latestCyan = pc.cyan(`v${latestVersion}`);
-    p.log.info(`Update available: ${currentDim} → ${latestCyan}`);
-    p.log.info(`Run ${pc.cyan("dojops upgrade")} to install.`);
-    throw new CLIError(ExitCode.GENERAL_ERROR);
+    return handleCheckOnly(isJson, currentVersion, latestVersion);
   }
 
-  // Interactive confirmation
-  if (!autoYes) {
-    const currentDim = pc.dim(`v${currentVersion}`);
-    const latestCyan = pc.cyan(`v${latestVersion}`);
-    p.log.info(`Update available: ${currentDim} → ${latestCyan}`);
-    const shouldProceed = await p.confirm({ message: "Install update?" });
-    if (p.isCancel(shouldProceed) || !shouldProceed) {
-      p.log.info("Upgrade cancelled.");
-      return;
-    }
-  } else if (!isJson) {
-    const currentDim = pc.dim(`v${currentVersion}`);
-    const latestCyan = pc.cyan(`v${latestVersion}`);
-    p.log.info(`Upgrading: ${currentDim} → ${latestCyan}`);
-  }
+  const confirmed = await confirmUpgrade(isJson, autoYes, currentVersion, latestVersion);
+  if (!confirmed) return;
 
-  // Run npm install
   try {
     execSync(`npm install -g @dojops/cli@${latestVersion}`, {
       stdio: "inherit",
       timeout: 120_000,
     });
   } catch {
-    if (isJson) {
-      console.log(JSON.stringify({ error: "npm install failed" }));
-      return;
-    }
-    throw new CLIError(
-      ExitCode.GENERAL_ERROR,
+    return jsonOrThrow(
+      isJson,
+      { error: "npm install failed" },
       "npm install failed. Try running manually:\n  npm install -g @dojops/cli",
     );
   }
@@ -154,7 +97,59 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
     );
     return;
   }
+  p.log.success(`Upgraded to ${pc.cyan(`v${latestVersion}`)}`);
+}
 
-  const upgradedVersion = pc.cyan(`v${latestVersion}`);
-  p.log.success(`Upgraded to ${upgradedVersion}`);
+async function fetchWithSpinner(isJson: boolean): Promise<string | null> {
+  try {
+    const s = p.spinner();
+    if (!isJson) s.start("Checking npm registry…");
+    const version = await fetchLatestVersion();
+    if (!isJson) s.stop("Registry checked.");
+    return version;
+  } catch (err) {
+    const msg = `Failed to check for updates: ${(err as Error).message}`;
+    if (isJson) {
+      console.log(JSON.stringify({ error: msg }));
+      return null;
+    }
+    throw new CLIError(ExitCode.GENERAL_ERROR, msg);
+  }
+}
+
+function handleUpToDate(isJson: boolean, current: string, latest: string): void {
+  if (isJson) {
+    console.log(JSON.stringify({ current, latest, upToDate: true }));
+    return;
+  }
+  p.log.success(`Already up to date — ${pc.cyan(`v${current}`)}`);
+}
+
+function handleCheckOnly(isJson: boolean, current: string, latest: string): void {
+  if (isJson) {
+    console.log(JSON.stringify({ current, latest, upToDate: false }));
+    return;
+  }
+  p.log.info(`Update available: ${pc.dim(`v${current}`)} → ${pc.cyan(`v${latest}`)}`);
+  p.log.info(`Run ${pc.cyan("dojops upgrade")} to install.`);
+  throw new CLIError(ExitCode.GENERAL_ERROR);
+}
+
+async function confirmUpgrade(
+  isJson: boolean,
+  autoYes: boolean,
+  current: string,
+  latest: string,
+): Promise<boolean> {
+  if (!autoYes) {
+    p.log.info(`Update available: ${pc.dim(`v${current}`)} → ${pc.cyan(`v${latest}`)}`);
+    const shouldProceed = await p.confirm({ message: "Install update?" });
+    if (p.isCancel(shouldProceed) || !shouldProceed) {
+      p.log.info("Upgrade cancelled.");
+      return false;
+    }
+  } else if (!isJson) {
+    p.log.info(`Upgrading: ${pc.dim(`v${current}`)} → ${pc.cyan(`v${latest}`)}`);
+  }
+  return true;
 }

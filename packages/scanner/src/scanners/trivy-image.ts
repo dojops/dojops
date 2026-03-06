@@ -58,27 +58,9 @@ export async function scanTrivyImage(imageName: string): Promise<ScannerResult> 
 
   try {
     const output: TrivyImageOutput = JSON.parse(rawOutput);
-    if (output.Results) {
-      for (const result of output.Results) {
-        if (result.Vulnerabilities) {
-          for (const vuln of result.Vulnerabilities) {
-            findings.push({
-              id: deterministicFindingId("trivy-img", vuln.VulnerabilityID, vuln.PkgName),
-              tool: "trivy-image",
-              severity: mapTrivySeverity(vuln.Severity),
-              category: "SECURITY",
-              file: result.Target,
-              message: `${vuln.PkgName}@${vuln.InstalledVersion}: ${vuln.VulnerabilityID}${vuln.Title ? " \u2014 " + vuln.Title : ""}`,
-              recommendation: vuln.FixedVersion
-                ? `Update to ${vuln.PkgName}@${vuln.FixedVersion}`
-                : "No fix version available",
-              autoFixAvailable: !!vuln.FixedVersion,
-              cve: vuln.VulnerabilityID.startsWith("CVE-") ? vuln.VulnerabilityID : undefined,
-              cvss: extractCvssScore(vuln.CVSS),
-              fixVersion: vuln.FixedVersion || undefined,
-            });
-          }
-        }
+    for (const result of output.Results ?? []) {
+      for (const vuln of result.Vulnerabilities ?? []) {
+        findings.push(mapVulnToFinding(vuln, result.Target));
       }
     }
   } catch {
@@ -86,6 +68,25 @@ export async function scanTrivyImage(imageName: string): Promise<ScannerResult> 
   }
 
   return { tool: "trivy-image", findings, rawOutput };
+}
+
+function mapVulnToFinding(vuln: TrivyImageVulnerability, target: string): ScanFinding {
+  const titleSuffix = vuln.Title ? " \u2014 " + vuln.Title : "";
+  return {
+    id: deterministicFindingId("trivy-img", vuln.VulnerabilityID, vuln.PkgName),
+    tool: "trivy-image",
+    severity: mapTrivySeverity(vuln.Severity),
+    category: "SECURITY",
+    file: target,
+    message: `${vuln.PkgName}@${vuln.InstalledVersion}: ${vuln.VulnerabilityID}${titleSuffix}`,
+    recommendation: vuln.FixedVersion
+      ? `Update to ${vuln.PkgName}@${vuln.FixedVersion}`
+      : "No fix version available",
+    autoFixAvailable: !!vuln.FixedVersion,
+    cve: vuln.VulnerabilityID.startsWith("CVE-") ? vuln.VulnerabilityID : undefined,
+    cvss: extractCvssScore(vuln.CVSS),
+    fixVersion: vuln.FixedVersion || undefined,
+  };
 }
 
 function extractCvssScore(

@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { decompose } from "@dojops/planner";
-import { createToolRegistry } from "@dojops/tool-registry";
+import { decompose, TaskGraph } from "@dojops/planner";
+import { createToolRegistry, ToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
@@ -22,6 +22,96 @@ import {
   PlanState,
   getCurrentUser,
 } from "../state";
+
+/** Enrich each task with tool metadata from the registry. */
+function enrichTasksWithMetadata(graph: TaskGraph, registry: ToolRegistry): void {
+  for (const task of graph.tasks) {
+    const meta = registry.getToolMetadata(task.tool);
+    if (!meta) continue;
+    task.toolType = meta.toolType;
+    if (meta.toolType === "custom") {
+      task.toolVersion = meta.toolVersion;
+      task.toolHash = meta.toolHash;
+      task.toolSource = meta.toolSource as "global" | "project" | undefined;
+      task.systemPromptHash = meta.systemPromptHash;
+    }
+  }
+}
+
+/** Format and display the task graph via p.note(). */
+function displayTaskGraph(graph: TaskGraph): void {
+  const taskLines = graph.tasks.map((task) => {
+    const deps = task.dependsOn.length ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
+    return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
+  });
+  const taskCountLabel = pc.dim(`(${graph.tasks.length} tasks)`);
+  p.note(wrapForNote(taskLines.join("\n")), `${graph.goal} ${taskCountLabel}`);
+}
+
+/** Build the PlanState object for persistence. */
+function buildPlanState(
+  planId: string,
+  graph: TaskGraph,
+  registry: ToolRegistry,
+  ctx: CLIContext,
+  providerName: string,
+  skipVerify: boolean,
+): PlanState {
+  return {
+    id: planId,
+    goal: graph.goal,
+    createdAt: new Date().toISOString(),
+    risk: classifyPlanRisk(graph.tasks),
+    tasks: graph.tasks.map((t) => ({
+      id: t.id,
+      tool: t.tool,
+      description: t.description,
+      dependsOn: t.dependsOn,
+      input: t.input as Record<string, unknown> | undefined,
+      toolType: t.toolType,
+      toolVersion: t.toolVersion,
+      toolHash: t.toolHash,
+      toolSource: t.toolSource,
+      systemPromptHash: t.systemPromptHash,
+    })),
+    files: [],
+    approvalStatus: "PENDING",
+    executionContext: {
+      provider: providerName,
+      model: ctx.globalOpts.model,
+      temperature: ctx.resolvedTemperature,
+      dojopsVersion: getDojopsVersion(),
+      policySnapshot: crypto
+        .createHash("sha256")
+        .update(JSON.stringify({ skipVerification: skipVerify }))
+        .digest("hex")
+        .slice(0, 16),
+      toolVersions: Object.fromEntries(
+        graph.tasks.map((t) => {
+          const meta = registry.getToolMetadata(t.tool);
+          return [t.tool, meta?.toolVersion ?? "built-in"];
+        }),
+      ),
+    },
+  };
+}
+
+/** Output the plan result in the requested format (JSON, YAML, or text). */
+function outputPlanResult(
+  planId: string,
+  graph: TaskGraph,
+  outputFormat: string | undefined,
+): void {
+  if (outputFormat === "json") {
+    console.log(JSON.stringify({ planId, graph }, null, 2));
+    return;
+  }
+  if (outputFormat === "yaml") {
+    console.log(yaml.dump({ planId, graph }, { lineWidth: 120, noRefs: true }));
+    return;
+  }
+  p.log.info(pc.dim("To execute this plan, run: dojops apply " + planId));
+}
 
 export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
   const executeMode = hasFlag(args, "--execute");
@@ -85,28 +175,10 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     }
   }
 
-  // Enrich tasks with tool metadata
-  for (const task of graph.tasks) {
-    const meta = registry.getToolMetadata(task.tool);
-    if (meta) {
-      task.toolType = meta.toolType;
-      if (meta.toolType === "custom") {
-        task.toolVersion = meta.toolVersion;
-        task.toolHash = meta.toolHash;
-        task.toolSource = meta.toolSource as "global" | "project" | undefined;
-        task.systemPromptHash = meta.systemPromptHash;
-      }
-    }
-  }
+  enrichTasksWithMetadata(graph, registry);
 
-  // Display task graph
   if (!isJson) {
-    const taskLines = graph.tasks.map((task) => {
-      const deps = task.dependsOn.length ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
-      return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
-    });
-    const taskCountLabel = pc.dim(`(${graph.tasks.length} tasks)`);
-    p.note(wrapForNote(taskLines.join("\n")), `${graph.goal} ${taskCountLabel}`);
+    displayTaskGraph(graph);
   }
 
   // Save plan to .dojops/plans/
@@ -117,43 +189,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   const planId = generatePlanId();
-  const savedPlan: PlanState = {
-    id: planId,
-    goal: graph.goal,
-    createdAt: new Date().toISOString(),
-    risk: classifyPlanRisk(graph.tasks),
-    tasks: graph.tasks.map((t) => ({
-      id: t.id,
-      tool: t.tool,
-      description: t.description,
-      dependsOn: t.dependsOn,
-      input: t.input as Record<string, unknown> | undefined,
-      toolType: t.toolType,
-      toolVersion: t.toolVersion,
-      toolHash: t.toolHash,
-      toolSource: t.toolSource,
-      systemPromptHash: t.systemPromptHash,
-    })),
-    files: [],
-    approvalStatus: "PENDING",
-    executionContext: {
-      provider: provider.name,
-      model: ctx.globalOpts.model,
-      temperature: ctx.resolvedTemperature,
-      dojopsVersion: getDojopsVersion(),
-      policySnapshot: crypto
-        .createHash("sha256")
-        .update(JSON.stringify({ skipVerification: skipVerify }))
-        .digest("hex")
-        .slice(0, 16),
-      toolVersions: Object.fromEntries(
-        graph.tasks.map((t) => {
-          const meta = registry.getToolMetadata(t.tool);
-          return [t.tool, meta?.toolVersion ?? "built-in"];
-        }),
-      ),
-    },
-  };
+  const savedPlan = buildPlanState(planId, graph, registry, ctx, provider.name, skipVerify);
   savePlan(root, savedPlan);
 
   // Update session
@@ -178,26 +214,19 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     if (hasFlag(args, "--force")) applyArgs.push("--force");
     if (hasFlag(args, "--allow-all-paths")) applyArgs.push("--allow-all-paths");
     return applyCommand(applyArgs, ctx);
-  } else {
-    // Plan-only mode: show decomposed tasks without executing
-    // Task graph is already displayed above via p.note()
-
-    appendAudit(root, {
-      timestamp: new Date().toISOString(),
-      user: getCurrentUser(),
-      command: `plan "${prompt}"`,
-      action: "plan",
-      planId,
-      status: "success",
-      durationMs: Date.now() - startTime,
-    });
-
-    if (isJson) {
-      console.log(JSON.stringify({ planId, graph }, null, 2));
-    } else if (ctx.globalOpts.output === "yaml") {
-      console.log(yaml.dump({ planId, graph }, { lineWidth: 120, noRefs: true }));
-    } else {
-      p.log.info(pc.dim("To execute this plan, run: dojops apply " + planId));
-    }
   }
+
+  // Plan-only mode: show decomposed tasks without executing
+  // Task graph is already displayed above via p.note()
+  appendAudit(root, {
+    timestamp: new Date().toISOString(),
+    user: getCurrentUser(),
+    command: `plan "${prompt}"`,
+    action: "plan",
+    planId,
+    status: "success",
+    durationMs: Date.now() - startTime,
+  });
+
+  outputPlanResult(planId, graph, ctx.globalOpts.output);
 }

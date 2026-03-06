@@ -123,6 +123,24 @@ function historyList(args: string[], ctx: CLIContext): void {
   p.note(lines.join("\n"), `Plans (${plans.length})`);
 }
 
+function formatResultStatus(status: string): string {
+  if (status === "completed") return pc.green(status);
+  if (status === "failed") return pc.red(status);
+  return pc.yellow(status);
+}
+
+function formatResultLine(r: {
+  taskId: string;
+  status: string;
+  executionStatus?: string;
+  error?: string;
+}): string {
+  let line = `  ${pc.blue(r.taskId)} ${formatResultStatus(r.status)}`;
+  if (r.executionStatus) line += ` exec:${r.executionStatus}`;
+  if (r.error) line += ` ${pc.red(r.error)}`;
+  return line;
+}
+
 function historyShow(args: string[], ctx: CLIContext): void {
   const root = findProjectRoot();
   if (!root) {
@@ -173,12 +191,7 @@ function historyShow(args: string[], ctx: CLIContext): void {
   if (plan.results && plan.results.length > 0) {
     infoLines.push("", pc.bold("Results:"));
     for (const r of plan.results) {
-      const stFailed = r.status === "failed" ? pc.red(r.status) : pc.yellow(r.status);
-      const st = r.status === "completed" ? pc.green(r.status) : stFailed;
-      let line = `  ${pc.blue(r.taskId)} ${st}`;
-      if (r.executionStatus) line += ` exec:${r.executionStatus}`;
-      if (r.error) line += ` ${pc.red(r.error)}`;
-      infoLines.push(line);
+      infoLines.push(formatResultLine(r));
     }
   }
 

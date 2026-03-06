@@ -79,7 +79,7 @@ export async function openaiCompatGenerate(
 /** Extract a readable error message from an LLM provider SDK error. */
 export function extractApiError(err: unknown): string {
   if (err instanceof Error) {
-    const jsonMatch = /\{[\s\S]*\}/.exec(err.message);
+    const jsonMatch = /\{[\s\S]*?\}/.exec(err.message);
     if (jsonMatch) {
       try {
         const body = JSON.parse(jsonMatch[0]);

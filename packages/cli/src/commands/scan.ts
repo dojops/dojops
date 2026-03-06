@@ -362,8 +362,7 @@ async function handleFixMode(
     return null;
   }
 
-  return generateAndApplyFixes(
-    criticalFindings,
+  return generateAndApplyFixes(criticalFindings, {
     report,
     scanRoot,
     scanType,
@@ -371,24 +370,28 @@ async function handleFixMode(
     root,
     ctx,
     autoApprove,
-  );
+  });
+}
+
+interface FixContext {
+  report: ScanReport;
+  scanRoot: string;
+  scanType: ScanType;
+  context: RepoContext | undefined;
+  root: string;
+  ctx: CLIContext;
+  autoApprove: boolean;
 }
 
 async function generateAndApplyFixes(
   criticalFindings: ScanFinding[],
-  report: ScanReport,
-  scanRoot: string,
-  scanType: ScanType,
-  context: RepoContext | undefined,
-  root: string,
-  ctx: CLIContext,
-  autoApprove: boolean,
+  fixCtx: FixContext,
 ): Promise<ScanReport | null> {
   const remSpinner = p.spinner();
   remSpinner.start("Generating remediation plan...");
 
   try {
-    const provider = ctx.getProvider();
+    const provider = fixCtx.ctx.getProvider();
     const plan = await planRemediation(criticalFindings, provider);
     remSpinner.stop("Remediation plan ready");
 
@@ -397,7 +400,15 @@ async function generateAndApplyFixes(
       return null;
     }
 
-    return promptAndApplyFixes(plan, report, scanRoot, scanType, context, root, autoApprove);
+    return promptAndApplyFixes(
+      plan,
+      fixCtx.report,
+      fixCtx.scanRoot,
+      fixCtx.scanType,
+      fixCtx.context,
+      fixCtx.root,
+      fixCtx.autoApprove,
+    );
   } catch (err) {
     remSpinner.stop("Remediation failed");
     p.log.error(toErrorMessage(err));
