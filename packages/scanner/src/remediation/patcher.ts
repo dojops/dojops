@@ -3,91 +3,120 @@ import * as path from "node:path";
 import { atomicWriteFileSync, backupFile } from "@dojops/sdk";
 import { RemediationPlan, PatchResult } from "../types";
 
+interface FixContext {
+  filePath: string;
+  content: string;
+  file: string;
+  findingId: string;
+  patch: string;
+}
+
+function applyReplace(ctx: FixContext, filesModified: string[], errors: string[]): void {
+  const parts = ctx.patch.split(">>>");
+  if (parts.length !== 2) {
+    errors.push(`${ctx.findingId}: Invalid replace patch format`);
+    return;
+  }
+  const [oldStr, newStr] = parts;
+  if (!ctx.content.includes(oldStr)) {
+    errors.push(`${ctx.findingId}: Pattern not found in ${ctx.file}`);
+    return;
+  }
+  atomicWriteFileSync(ctx.filePath, ctx.content.replaceAll(oldStr, newStr));
+  filesModified.push(ctx.file);
+}
+
+function applyUpdateVersionPackageJson(
+  ctx: FixContext,
+  filesModified: string[],
+  errors: string[],
+): void {
+  try {
+    const pkg = JSON.parse(ctx.content);
+    const [depName, newVersion] = ctx.patch.split("@");
+    if (!depName || !newVersion) return;
+    for (const section of ["dependencies", "devDependencies"]) {
+      if (pkg[section]?.[depName]) {
+        pkg[section][depName] = newVersion;
+      }
+    }
+    atomicWriteFileSync(ctx.filePath, JSON.stringify(pkg, null, 2) + "\n");
+    filesModified.push(ctx.file);
+  } catch {
+    errors.push(`${ctx.findingId}: Failed to parse ${ctx.file}`);
+  }
+}
+
+function applyUpdateVersionRequirements(ctx: FixContext, filesModified: string[]): void {
+  const [pkgName, newVersion] = ctx.patch.split(">=");
+  if (!pkgName || !newVersion) return;
+  const updated = ctx.content.replace(
+    new RegExp(`^${escapeRegex(pkgName.trim())}[><=!~].+$`, "m"),
+    `${pkgName.trim()}>=${newVersion}`,
+  );
+  atomicWriteFileSync(ctx.filePath, updated);
+  filesModified.push(ctx.file);
+}
+
+function applyUpdateVersion(ctx: FixContext, filesModified: string[], errors: string[]): void {
+  if (ctx.file === "package.json") {
+    applyUpdateVersionPackageJson(ctx, filesModified, errors);
+  } else if (ctx.file === "requirements.txt") {
+    applyUpdateVersionRequirements(ctx, filesModified);
+  }
+}
+
+function applySingleFix(
+  fix: RemediationPlan["fixes"][number],
+  projectPath: string,
+  filesModified: string[],
+  errors: string[],
+): void {
+  const filePath = path.resolve(projectPath, fix.file);
+
+  if (!filePath.startsWith(path.resolve(projectPath) + path.sep)) {
+    errors.push(`${fix.findingId}: Path traversal blocked — ${fix.file}`);
+    return;
+  }
+
+  if (!fs.existsSync(filePath)) {
+    errors.push(`${fix.findingId}: File not found — ${fix.file}`);
+    return;
+  }
+
+  backupFile(filePath);
+  const content = fs.readFileSync(filePath, "utf-8");
+  const ctx: FixContext = {
+    filePath,
+    content,
+    file: fix.file,
+    findingId: fix.findingId,
+    patch: fix.patch,
+  };
+
+  switch (fix.action) {
+    case "replace":
+      applyReplace(ctx, filesModified, errors);
+      break;
+    case "update-version":
+      applyUpdateVersion(ctx, filesModified, errors);
+      break;
+    case "write":
+      atomicWriteFileSync(filePath, fix.patch);
+      filesModified.push(fix.file);
+      break;
+    default:
+      errors.push(`${fix.findingId}: Unknown action — ${fix.action}`);
+  }
+}
+
 export function applyFixes(plan: RemediationPlan, projectPath: string): PatchResult {
   const filesModified: string[] = [];
   const errors: string[] = [];
 
   for (const fix of plan.fixes) {
-    const filePath = path.resolve(projectPath, fix.file);
-
     try {
-      // Safety: only modify files within the project directory
-      if (!filePath.startsWith(path.resolve(projectPath) + path.sep)) {
-        errors.push(`${fix.findingId}: Path traversal blocked — ${fix.file}`);
-        continue;
-      }
-
-      if (!fs.existsSync(filePath)) {
-        errors.push(`${fix.findingId}: File not found — ${fix.file}`);
-        continue;
-      }
-
-      // Create backup before any modification
-      backupFile(filePath);
-
-      const content = fs.readFileSync(filePath, "utf-8");
-
-      switch (fix.action) {
-        case "replace": {
-          // Patch contains "old>>>new" format
-          const parts = fix.patch.split(">>>");
-          if (parts.length === 2) {
-            const [oldStr, newStr] = parts;
-            if (content.includes(oldStr)) {
-              atomicWriteFileSync(filePath, content.replaceAll(oldStr, newStr));
-              filesModified.push(fix.file);
-            } else {
-              errors.push(`${fix.findingId}: Pattern not found in ${fix.file}`);
-            }
-          } else {
-            errors.push(`${fix.findingId}: Invalid replace patch format`);
-          }
-          break;
-        }
-
-        case "update-version": {
-          // For package.json dependency version bumps
-          if (fix.file === "package.json") {
-            try {
-              const pkg = JSON.parse(content);
-              const [depName, newVersion] = fix.patch.split("@");
-              if (depName && newVersion) {
-                for (const section of ["dependencies", "devDependencies"]) {
-                  if (pkg[section]?.[depName]) {
-                    pkg[section][depName] = newVersion;
-                  }
-                }
-                atomicWriteFileSync(filePath, JSON.stringify(pkg, null, 2) + "\n");
-                filesModified.push(fix.file);
-              }
-            } catch {
-              errors.push(`${fix.findingId}: Failed to parse ${fix.file}`);
-            }
-          } else if (fix.file === "requirements.txt") {
-            // For requirements.txt: replace version pin
-            const [pkgName, newVersion] = fix.patch.split(">=");
-            if (pkgName && newVersion) {
-              const updated = content.replace(
-                new RegExp(`^${escapeRegex(pkgName.trim())}[><=!~].+$`, "m"),
-                `${pkgName.trim()}>=${newVersion}`,
-              );
-              atomicWriteFileSync(filePath, updated);
-              filesModified.push(fix.file);
-            }
-          }
-          break;
-        }
-
-        case "write": {
-          // Overwrite file with patch content
-          atomicWriteFileSync(filePath, fix.patch);
-          filesModified.push(fix.file);
-          break;
-        }
-
-        default:
-          errors.push(`${fix.findingId}: Unknown action — ${fix.action}`);
-      }
+      applySingleFix(fix, projectPath, filesModified, errors);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${fix.findingId}: ${msg}`);

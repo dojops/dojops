@@ -16,52 +16,65 @@ export function validateStructure(data: unknown, rules: StructuralRule[]): Verif
   return issues;
 }
 
-function evaluateRule(data: unknown, rule: StructuralRule): VerificationIssue[] {
-  const issues: VerificationIssue[] = [];
-  const segments = rule.path.split(".");
+function checkRequired(
+  values: ResolvedValue[],
+  message: string,
+  issues: VerificationIssue[],
+): void {
+  if (values.length === 0) {
+    issues.push({ severity: "error", message });
+    return;
+  }
+  for (const v of values) {
+    if (v.value === undefined || v.value === null) {
+      issues.push({ severity: "error", message });
+    }
+  }
+}
 
-  // Resolve all values at the given path
-  const values = resolvePath(data, segments);
+function checkType(
+  values: ResolvedValue[],
+  expectedType: string,
+  message: string,
+  issues: VerificationIssue[],
+): void {
+  for (const v of values) {
+    if (v.value === undefined || v.value === null) continue;
+    if (!matchesType(v.value, expectedType)) {
+      issues.push({ severity: "error", message });
+    }
+  }
+}
+
+function checkMinItems(
+  values: ResolvedValue[],
+  minItems: number,
+  message: string,
+  issues: VerificationIssue[],
+): void {
+  for (const v of values) {
+    if (v.value === undefined || v.value === null) continue;
+    if (Array.isArray(v.value) && v.value.length < minItems) {
+      issues.push({ severity: "error", message });
+    }
+  }
+}
+
+function evaluateRule(data: unknown, rule: StructuralRule): VerificationIssue[] {
+  const values = resolvePath(data, rule.path.split("."));
 
   // Check requiredUnless: if the "unless" path has a value, skip this rule
   if (rule.requiredUnless) {
-    const unlessSegments = rule.requiredUnless.split(".");
-    const unlessValues = resolvePath(data, unlessSegments);
+    const unlessValues = resolvePath(data, rule.requiredUnless.split("."));
     if (unlessValues.some((v) => v.value !== undefined && v.value !== null)) {
       return [];
     }
   }
 
-  if (rule.required) {
-    if (values.length === 0) {
-      issues.push({ severity: "error", message: rule.message });
-    } else {
-      for (const v of values) {
-        if (v.value === undefined || v.value === null) {
-          issues.push({ severity: "error", message: rule.message });
-        }
-      }
-    }
-  }
-
-  if (rule.type) {
-    for (const v of values) {
-      if (v.value === undefined || v.value === null) continue;
-      if (!matchesType(v.value, rule.type)) {
-        issues.push({ severity: "error", message: rule.message });
-      }
-    }
-  }
-
-  if (rule.minItems !== undefined) {
-    for (const v of values) {
-      if (v.value === undefined || v.value === null) continue;
-      if (Array.isArray(v.value) && v.value.length < rule.minItems) {
-        issues.push({ severity: "error", message: rule.message });
-      }
-    }
-  }
-
+  const issues: VerificationIssue[] = [];
+  if (rule.required) checkRequired(values, rule.message, issues);
+  if (rule.type) checkType(values, rule.type, rule.message, issues);
+  if (rule.minItems !== undefined) checkMinItems(values, rule.minItems, rule.message, issues);
   return issues;
 }
 
@@ -73,6 +86,26 @@ interface ResolvedValue {
 /**
  * Resolve a dot-notation path (with `*` wildcard for arrays) to all matching values.
  */
+function resolveWildcard(data: unknown, rest: string[]): ResolvedValue[] {
+  if (Array.isArray(data)) {
+    const results: ResolvedValue[] = [];
+    for (let i = 0; i < data.length; i++) {
+      const sub = resolvePath(data[i], rest);
+      results.push(...sub.map((s) => ({ ...s, path: `[${i}]${s.path ? "." + s.path : ""}` })));
+    }
+    return results;
+  }
+  if (typeof data === "object" && data !== null) {
+    const results: ResolvedValue[] = [];
+    for (const [key, val] of Object.entries(data)) {
+      const sub = resolvePath(val, rest);
+      results.push(...sub.map((s) => ({ ...s, path: `${key}${s.path ? "." + s.path : ""}` })));
+    }
+    return results;
+  }
+  return [];
+}
+
 function resolvePath(data: unknown, segments: string[]): ResolvedValue[] {
   if (segments.length === 0) {
     return [{ value: data, path: "" }];
@@ -80,37 +113,14 @@ function resolvePath(data: unknown, segments: string[]): ResolvedValue[] {
 
   const [first, ...rest] = segments;
 
-  if (first === "*") {
-    // Wildcard: iterate over array items or object values
-    if (Array.isArray(data)) {
-      const results: ResolvedValue[] = [];
-      for (let i = 0; i < data.length; i++) {
-        const sub = resolvePath(data[i], rest);
-        results.push(...sub.map((s) => ({ ...s, path: `[${i}]${s.path ? "." + s.path : ""}` })));
-      }
-      return results;
-    }
-    if (typeof data === "object" && data !== null) {
-      const results: ResolvedValue[] = [];
-      for (const [key, val] of Object.entries(data)) {
-        const sub = resolvePath(val, rest);
-        results.push(...sub.map((s) => ({ ...s, path: `${key}${s.path ? "." + s.path : ""}` })));
-      }
-      return results;
-    }
-    return [];
-  }
+  if (first === "*") return resolveWildcard(data, rest);
 
   // Named segment
   if (typeof data !== "object" || data === null) return [];
 
   const obj = data as Record<string, unknown>;
   if (!(first in obj)) {
-    // Path doesn't exist — return empty (the value is undefined at this path)
-    if (rest.length === 0) {
-      return [{ value: undefined, path: first }];
-    }
-    return [];
+    return rest.length === 0 ? [{ value: undefined, path: first }] : [];
   }
 
   return resolvePath(obj[first], rest);

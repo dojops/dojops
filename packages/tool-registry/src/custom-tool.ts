@@ -65,6 +65,34 @@ export function isVerificationCommandAllowed(command: string): boolean {
   );
 }
 
+const DANGEROUS_ARG_PATTERNS = [
+  /--backend-config/,
+  /--plugin-dir/,
+  /-chdir/,
+  /--config/,
+  /--kubeconfig/,
+  /--credentials/,
+  /--token/,
+  /--cert/,
+  /--key/,
+  /--output/,
+  /--exec/,
+];
+
+/** Return the first dangerous argument found, or null if all are safe. */
+function findDangerousArg(args: string[]): string | null {
+  for (const arg of args) {
+    if (
+      DANGEROUS_ARG_PATTERNS.some((p) => p.test(arg)) ||
+      arg.includes("/") ||
+      arg.includes("\\")
+    ) {
+      return arg;
+    }
+  }
+  return null;
+}
+
 /**
  * Adapts a declarative ToolManifest into a DevOpsTool-compatible object.
  * This is the core bridge that makes custom tools behave identically to built-in tools.
@@ -120,59 +148,49 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
     return { valid: false, error: result.error.message };
   }
 
+  /** Detect existing config content from detector paths or input. */
+  private detectExisting(input: Record<string, unknown>): string | undefined {
+    if (this.manifest.generator.updateMode && this.manifest.detector?.path) {
+      const rawPath = this.manifest.detector.path;
+      const paths = Array.isArray(rawPath) ? rawPath : [rawPath];
+      for (const p of paths) {
+        const content = readExistingConfig(this.resolveDetectorPath(p, input));
+        if (content) return content;
+      }
+    }
+    if (typeof input.existingContent === "string") return input.existingContent;
+    return undefined;
+  }
+
+  /** Parse LLM response data, preferring structured output. */
+  private static parseResponseData(response: { parsed?: unknown; content: string }): unknown {
+    if (response.parsed) return response.parsed;
+    try {
+      return JSON.parse(response.content);
+    } catch {
+      return response.content;
+    }
+  }
+
   async generate(input: Record<string, unknown>): Promise<ToolOutput> {
     try {
-      let existingContent: string | undefined;
-
-      // If updateMode is enabled and detector path exists, read existing content
-      if (this.manifest.generator.updateMode && this.manifest.detector?.path) {
-        const rawPath = this.manifest.detector.path;
-        const paths = Array.isArray(rawPath) ? rawPath : [rawPath];
-        for (const p of paths) {
-          const detectorPath = this.resolveDetectorPath(p, input);
-          const content = readExistingConfig(detectorPath);
-          if (content) {
-            existingContent = content;
-            break;
-          }
-        }
-      }
-
-      // Also check if existingContent was provided in input
-      if (input.existingContent && typeof input.existingContent === "string") {
-        existingContent = input.existingContent;
-      }
-
+      const existingContent = this.detectExisting(input);
       const isUpdate = !!existingContent;
 
-      // Build the LLM prompt
       let systemPrompt = this.manifest.generator.systemPrompt;
       if (isUpdate && existingContent) {
         systemPrompt = sanitizeSystemPrompt(systemPrompt, existingContent);
       }
 
-      const userPrompt = this.buildUserPrompt(input);
-
       const response = await this.provider.generate({
         system: systemPrompt,
-        prompt: userPrompt,
+        prompt: this.buildUserPrompt(input),
         schema: this.outputZodSchema,
       });
 
-      let data: unknown;
-      if (response.parsed) {
-        data = response.parsed;
-      } else {
-        try {
-          data = JSON.parse(response.content);
-        } catch {
-          data = response.content;
-        }
-      }
-
       return {
         success: true,
-        data: { generated: data, isUpdate },
+        data: { generated: CustomTool.parseResponseData(response), isUpdate },
       };
     } catch (err) {
       return failedOutput(err);
@@ -214,60 +232,38 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
     return crypto.createHash("sha256").update(this.manifest.generator.systemPrompt).digest("hex");
   }
 
+  private makeResult(
+    passed: boolean,
+    issues: VerificationIssue[],
+    rawOutput?: string,
+  ): VerificationResult {
+    return { passed, tool: this.name, issues, ...(rawOutput ? { rawOutput } : {}) };
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async verify(data: unknown): Promise<VerificationResult> {
     const command = this.manifest.verification?.command;
 
-    // No command → pass (no-op)
-    if (!command) {
-      return { passed: true, tool: this.name, issues: [] };
-    }
+    if (!command) return this.makeResult(true, []);
+    if (this.manifest.permissions?.child_process !== "required") return this.makeResult(true, []);
 
-    // child_process permission not "required" → pass, never execute
-    if (this.manifest.permissions?.child_process !== "required") {
-      return { passed: true, tool: this.name, issues: [] };
-    }
-
-    // Command not in whitelist → fail
     if (!isVerificationCommandAllowed(command)) {
-      const issues: VerificationIssue[] = [
+      return this.makeResult(false, [
         {
           severity: "error",
           message: `Verification command "${command}" is not in the allowed binaries whitelist. Allowed: ${ALLOWED_VERIFICATION_BINARIES.join(", ")}`,
         },
-      ];
-      return { passed: false, tool: this.name, issues };
+      ]);
     }
 
-    // Reject dangerous arguments (A8) — expanded blocklist for all whitelisted binaries
     const parts = command.split(/\s+/);
-    const DANGEROUS_ARG_PATTERNS = [
-      /--backend-config/,
-      /--plugin-dir/,
-      /-chdir/,
-      /--config/,
-      /--kubeconfig/,
-      /--credentials/,
-      /--token/,
-      /--cert/,
-      /--key/,
-      /--output/,
-      /--exec/,
-    ];
-    for (const arg of parts.slice(1)) {
-      if (
-        DANGEROUS_ARG_PATTERNS.some((p) => p.test(arg)) ||
-        arg.includes("/") ||
-        arg.includes("\\")
-      ) {
-        const issues: VerificationIssue[] = [
-          { severity: "error", message: `Dangerous argument rejected: ${arg}` },
-        ];
-        return { passed: false, tool: this.name, issues };
-      }
+    const dangerousArg = findDangerousArg(parts.slice(1));
+    if (dangerousArg) {
+      return this.makeResult(false, [
+        { severity: "error", message: `Dangerous argument rejected: ${dangerousArg}` },
+      ]);
     }
 
-    // Whitelisted + permission required → execute
     try {
       execFileSync(parts[0], parts.slice(1), {
         cwd: this.toolDir,
@@ -275,27 +271,22 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
         timeout: 10_000,
         stdio: "pipe",
       });
-
-      return { passed: true, tool: this.name, issues: [] };
+      return this.makeResult(true, []);
     } catch (err) {
       const output =
         err && typeof err === "object" && "stderr" in err
           ? String((err as { stderr: unknown }).stderr)
           : String(err);
-
-      const issues: VerificationIssue[] = [
-        {
-          severity: "error",
-          message: `Verification command failed: ${output.slice(0, 500)}`,
-        },
-      ];
-
-      return {
-        passed: false,
-        tool: this.name,
-        issues,
-        rawOutput: output,
-      };
+      return this.makeResult(
+        false,
+        [
+          {
+            severity: "error",
+            message: `Verification command failed: ${output.slice(0, 500)}`,
+          },
+        ],
+        output,
+      );
     }
   }
 

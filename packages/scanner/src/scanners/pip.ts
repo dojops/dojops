@@ -80,6 +80,38 @@ export async function scanPip(projectPath: string): Promise<ScannerResult> {
   return { tool: "pip-audit", findings: allFindings, rawOutput: combinedRawOutput || undefined };
 }
 
+function parsePipAuditOutput(
+  rawOutput: string,
+  subProject: string | undefined,
+  hasRequirements: boolean,
+): ScanFinding[] {
+  const findings: ScanFinding[] = [];
+  try {
+    const packages: PipAuditPackage[] = JSON.parse(rawOutput);
+    for (const pkg of packages) {
+      for (const vuln of pkg.vulns) {
+        const prefix = subProject ? `${subProject}: ` : "";
+        findings.push({
+          id: deterministicFindingId("pip", pkg.name, vuln.id),
+          tool: "pip-audit",
+          severity: mapPipSeverity(vuln.id, vuln.description),
+          category: "DEPENDENCY",
+          file: getPipFindingFile(subProject, hasRequirements),
+          message: `${prefix}${pkg.name}@${pkg.version}: ${vuln.id}${vuln.description ? " \u2014 " + vuln.description : ""}`,
+          recommendation:
+            vuln.fix_versions && vuln.fix_versions.length > 0
+              ? `Update to ${pkg.name}>=${vuln.fix_versions.at(-1)}`
+              : "No fix version available — review manually",
+          autoFixAvailable: !!(vuln.fix_versions && vuln.fix_versions.length > 0),
+        });
+      }
+    }
+  } catch {
+    findings.push(parseErrorFinding("pip-audit", "SECURITY"));
+  }
+  return findings;
+}
+
 async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
   const subProject = dir === rootPath ? undefined : path.relative(rootPath, dir);
   const hasRequirements = fs.existsSync(path.join(dir, "requirements.txt"));
@@ -110,31 +142,6 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
     }
   }
 
-  const findings: ScanFinding[] = [];
-
-  try {
-    const packages: PipAuditPackage[] = JSON.parse(rawOutput);
-    for (const pkg of packages) {
-      for (const vuln of pkg.vulns) {
-        const prefix = subProject ? `${subProject}: ` : "";
-        findings.push({
-          id: deterministicFindingId("pip", pkg.name, vuln.id),
-          tool: "pip-audit",
-          severity: mapPipSeverity(vuln.id, vuln.description),
-          category: "DEPENDENCY",
-          file: getPipFindingFile(subProject, hasRequirements),
-          message: `${prefix}${pkg.name}@${pkg.version}: ${vuln.id}${vuln.description ? " \u2014 " + vuln.description : ""}`,
-          recommendation:
-            vuln.fix_versions && vuln.fix_versions.length > 0
-              ? `Update to ${pkg.name}>=${vuln.fix_versions.at(-1)}`
-              : "No fix version available — review manually",
-          autoFixAvailable: !!(vuln.fix_versions && vuln.fix_versions.length > 0),
-        });
-      }
-    }
-  } catch {
-    findings.push(parseErrorFinding("pip-audit", "SECURITY"));
-  }
-
+  const findings = parsePipAuditOutput(rawOutput, subProject, hasRequirements);
   return { tool: "pip-audit", findings, rawOutput };
 }

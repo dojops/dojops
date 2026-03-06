@@ -9,6 +9,18 @@ export interface SafeExecutorOptions {
   approvalHandler?: ApprovalHandler;
 }
 
+/** Options for the internal runExecution method. */
+interface RunExecutionContext {
+  taskId: string;
+  tool: DevOpsTool;
+  input: unknown;
+  generateOutput: ToolOutput;
+  approval: ApprovalDecision;
+  verification: VerificationResult | undefined;
+  startTime: number;
+  meta?: Record<string, unknown>;
+}
+
 export class SafeExecutor {
   private readonly policy: ExecutionPolicy;
   private readonly approvalHandler: ApprovalHandler;
@@ -126,16 +138,8 @@ export class SafeExecutor {
   }
 
   /** Run tool.execute and check file path policies. */
-  private async runExecution(
-    taskId: string,
-    tool: DevOpsTool,
-    input: unknown,
-    generateOutput: ToolOutput,
-    approval: ApprovalDecision,
-    verification: VerificationResult | undefined,
-    startTime: number,
-    meta?: Record<string, unknown>,
-  ): Promise<ExecutionResult> {
+  private async runExecution(ctx: RunExecutionContext): Promise<ExecutionResult> {
+    const { taskId, tool, input, generateOutput, approval, verification, startTime, meta } = ctx;
     const filesWritten: string[] = [];
     const filesModified: string[] = [];
     try {
@@ -297,7 +301,7 @@ export class SafeExecutor {
       }
     }
 
-    return this.runExecution(
+    return this.runExecution({
       taskId,
       tool,
       input,
@@ -306,7 +310,7 @@ export class SafeExecutor {
       verification,
       startTime,
       meta,
-    );
+    });
   }
 
   getAuditLog(): ExecutionAuditEntry[] {

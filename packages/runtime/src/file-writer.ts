@@ -15,6 +15,18 @@ export interface WriteResult {
  * When `scope` is provided, enforces write boundary — only files matching
  * a declared scope.write pattern (after variable expansion) are allowed.
  */
+/** Resolve the content string for a single file spec. */
+function resolveFileContent(fileSpec: FileSpec, data: unknown, fileData: unknown): string {
+  if (fileSpec.source === "template" && fileSpec.content) {
+    return renderTemplate(fileSpec.content, data);
+  }
+  const options: SerializerOptions = {
+    ...fileSpec.options,
+    multiDocument: fileSpec.multiDocument,
+  };
+  return serialize(fileData, fileSpec.format, options);
+}
+
 export function writeFiles(
   data: unknown,
   fileSpecs: FileSpec[],
@@ -26,38 +38,18 @@ export function writeFiles(
   const filesModified: string[] = [];
 
   for (const fileSpec of fileSpecs) {
-    // Resolve dataPath: select sub-field of data if specified
     const fileData = resolveDataPath(data, fileSpec.dataPath);
-
-    // Skip conditional files when data is empty/missing
-    if (fileSpec.conditional && isEmptyData(fileData)) {
-      continue;
-    }
+    if (fileSpec.conditional && isEmptyData(fileData)) continue;
 
     const resolvedPath = resolveFilePath(fileSpec.path, input);
 
-    // Enforce scope write boundary
-    if (scope) {
-      if (!matchesScopePattern(resolvedPath, scope.write, input)) {
-        throw new Error(`File path '${resolvedPath}' not in declared write scope`);
-      }
+    if (scope && !matchesScopePattern(resolvedPath, scope.write, input)) {
+      throw new Error(`File path '${resolvedPath}' not in declared write scope`);
     }
 
-    // Determine content
-    let content: string;
-    if (fileSpec.source === "template" && fileSpec.content) {
-      content = renderTemplate(fileSpec.content, data);
-    } else {
-      // LLM source: serialize data with format + options
-      const options: SerializerOptions = {
-        ...fileSpec.options,
-        multiDocument: fileSpec.multiDocument,
-      };
-      content = serialize(fileData, fileSpec.format, options);
-    }
-
-    // Backup existing file if updating
+    const content = resolveFileContent(fileSpec, data, fileData);
     const exists = fs.existsSync(resolvedPath);
+
     if (exists && isUpdate) {
       backupFile(resolvedPath);
       filesModified.push(resolvedPath);
@@ -65,7 +57,6 @@ export function writeFiles(
       filesWritten.push(resolvedPath);
     }
 
-    // Atomic write
     atomicWriteFileSync(resolvedPath, content);
   }
 
@@ -93,28 +84,31 @@ export function serializeForFile(data: unknown, fileSpec: FileSpec): string {
 /**
  * Detect existing content from detection paths.
  */
+/** Try to find existing content via a glob pattern in a directory. */
+function detectGlobContent(dir: string, globPattern: string): string | null {
+  try {
+    if (!fs.existsSync(dir)) return null;
+    for (const file of fs.readdirSync(dir)) {
+      if (!matchGlob(file, globPattern)) continue;
+      const content = readExistingConfig(path.join(dir, file));
+      if (content) return content;
+    }
+  } catch {
+    // Unreadable directory
+  }
+  return null;
+}
+
 export function detectExistingContent(detectionPaths: string[], basePath: string): string | null {
   for (const pattern of detectionPaths) {
-    // Simple glob: check exact path or basic * matching
     if (pattern.includes("*")) {
-      // Check directory for matching files
-      const dir = path.dirname(path.join(basePath, pattern));
-      const globPattern = path.basename(pattern);
-      try {
-        if (!fs.existsSync(dir)) continue;
-        const files = fs.readdirSync(dir);
-        for (const file of files) {
-          if (matchGlob(file, globPattern)) {
-            const content = readExistingConfig(path.join(dir, file));
-            if (content) return content;
-          }
-        }
-      } catch {
-        continue;
-      }
+      const result = detectGlobContent(
+        path.dirname(path.join(basePath, pattern)),
+        path.basename(pattern),
+      );
+      if (result) return result;
     } else {
-      const fullPath = path.join(basePath, pattern);
-      const content = readExistingConfig(fullPath);
+      const content = readExistingConfig(path.join(basePath, pattern));
       if (content) return content;
     }
   }
@@ -164,7 +158,7 @@ function renderTemplate(template: string, data: unknown): string {
   return template.replaceAll(/\{\{\s*\.Values\.(\w+)\s*\}\}/g, (_match, key: string) => {
     // NOSONAR - capture group regex
     const val = obj[key];
-    return val === undefined ? "" : String(val);
+    return val == null ? "" : String(val);
   });
 }
 

@@ -23,59 +23,41 @@ export interface ReplayValidationResult {
  * 3. model matches (if plan stored one)
  * 4. systemPromptHash matches for custom tool tasks
  */
-export function validateReplayIntegrity(
-  plan: PlanState,
+/** Check execution context fields for mismatches. */
+function checkContextMismatches(
+  ctx: NonNullable<PlanState["executionContext"]>,
   currentProvider: string,
   currentModel: string | undefined,
-  registry: ToolRegistry,
-): ReplayValidationResult {
-  const mismatches: ReplayMismatch[] = [];
-
-  if (!plan.executionContext) {
-    mismatches.push({
-      field: "executionContext",
-      expected: "(present)",
-      actual: "(missing)",
-    });
-    return { mismatches, valid: false };
+  mismatches: ReplayMismatch[],
+): void {
+  if (ctx.provider !== currentProvider) {
+    mismatches.push({ field: "provider", expected: ctx.provider, actual: currentProvider });
   }
-
-  if (plan.executionContext.provider !== currentProvider) {
-    mismatches.push({
-      field: "provider",
-      expected: plan.executionContext.provider,
-      actual: currentProvider,
-    });
+  if (ctx.model && currentModel && ctx.model !== currentModel) {
+    mismatches.push({ field: "model", expected: ctx.model, actual: currentModel });
   }
-
-  if (plan.executionContext.model && currentModel && plan.executionContext.model !== currentModel) {
-    mismatches.push({
-      field: "model",
-      expected: plan.executionContext.model,
-      actual: currentModel,
-    });
-  }
-
-  // Check dojopsVersion in replay mode
-  if (plan.executionContext.dojopsVersion) {
+  if (ctx.dojopsVersion) {
     const currentVersion = getDojopsVersion();
-    if (plan.executionContext.dojopsVersion !== currentVersion) {
+    if (ctx.dojopsVersion !== currentVersion) {
       mismatches.push({
         field: "dojopsVersion",
-        expected: plan.executionContext.dojopsVersion,
+        expected: ctx.dojopsVersion,
         actual: currentVersion,
       });
     }
   }
+}
 
-  for (const task of plan.tasks) {
-    if (task.toolType !== "custom") continue;
-    if (!task.systemPromptHash) continue;
-
+/** Check custom tool system prompt hashes for mismatches. */
+function checkToolPromptHashes(
+  tasks: PlanState["tasks"],
+  registry: ToolRegistry,
+  mismatches: ReplayMismatch[],
+): void {
+  for (const task of tasks) {
+    if (task.toolType !== "custom" || !task.systemPromptHash) continue;
     const metadata = registry.getToolMetadata(task.tool);
-    if (metadata?.toolType !== "custom") continue;
-    if (!metadata.systemPromptHash) continue;
-
+    if (metadata?.toolType !== "custom" || !metadata.systemPromptHash) continue;
     if (task.systemPromptHash !== metadata.systemPromptHash) {
       mismatches.push({
         field: "systemPromptHash",
@@ -85,6 +67,23 @@ export function validateReplayIntegrity(
       });
     }
   }
+}
+
+export function validateReplayIntegrity(
+  plan: PlanState,
+  currentProvider: string,
+  currentModel: string | undefined,
+  registry: ToolRegistry,
+): ReplayValidationResult {
+  const mismatches: ReplayMismatch[] = [];
+
+  if (!plan.executionContext) {
+    mismatches.push({ field: "executionContext", expected: "(present)", actual: "(missing)" });
+    return { mismatches, valid: false };
+  }
+
+  checkContextMismatches(plan.executionContext, currentProvider, currentModel, mismatches);
+  checkToolPromptHashes(plan.tasks, registry, mismatches);
 
   return { mismatches, valid: mismatches.length === 0 };
 }

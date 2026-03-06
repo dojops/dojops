@@ -5,7 +5,16 @@ import * as os from "node:os";
 import * as yaml from "js-yaml";
 import { discoverTools } from "../tool-loader";
 
-function createTestTool(dir: string, name: string, overrides?: Record<string, unknown>) {
+/** Write a tool manifest + input schema to disk. */
+function writeToolFiles(
+  dir: string,
+  name: string,
+  opts?: {
+    manifestFilename?: string;
+    descriptionSuffix?: string;
+    overrides?: Record<string, unknown>;
+  },
+) {
   const toolDir = path.join(dir, name);
   fs.mkdirSync(toolDir, { recursive: true });
 
@@ -14,17 +23,18 @@ function createTestTool(dir: string, name: string, overrides?: Record<string, un
     name,
     version: "1.0.0",
     type: "tool",
-    description: `Test ${name} tool`,
+    description: `Test ${name} ${opts?.descriptionSuffix ?? "tool"}`,
     inputSchema: "input.schema.json",
     generator: {
       strategy: "llm",
       systemPrompt: "Generate config.",
     },
     files: [{ path: "output.yaml", serializer: "yaml" }],
-    ...overrides,
+    ...opts?.overrides,
   };
 
-  fs.writeFileSync(path.join(toolDir, "tool.yaml"), yaml.dump(manifest), "utf-8");
+  const filename = opts?.manifestFilename ?? "tool.yaml";
+  fs.writeFileSync(path.join(toolDir, filename), yaml.dump(manifest), "utf-8");
 
   const inputSchema = {
     type: "object",
@@ -43,43 +53,16 @@ function createTestTool(dir: string, name: string, overrides?: Record<string, un
   return toolDir;
 }
 
+function createTestTool(dir: string, name: string, overrides?: Record<string, unknown>) {
+  return writeToolFiles(dir, name, { overrides });
+}
+
 function createLegacyPlugin(dir: string, name: string, overrides?: Record<string, unknown>) {
-  const toolDir = path.join(dir, name);
-  fs.mkdirSync(toolDir, { recursive: true });
-
-  const manifest = {
-    spec: 1,
-    name,
-    version: "1.0.0",
-    type: "tool",
-    description: `Test ${name} legacy plugin`,
-    inputSchema: "input.schema.json",
-    generator: {
-      strategy: "llm",
-      systemPrompt: "Generate config.",
-    },
-    files: [{ path: "output.yaml", serializer: "yaml" }],
-    ...overrides,
-  };
-
-  // Write as plugin.yaml (legacy)
-  fs.writeFileSync(path.join(toolDir, "plugin.yaml"), yaml.dump(manifest), "utf-8");
-
-  const inputSchema = {
-    type: "object",
-    properties: {
-      name: { type: "string" },
-    },
-    required: ["name"],
-  };
-
-  fs.writeFileSync(
-    path.join(toolDir, "input.schema.json"),
-    JSON.stringify(inputSchema, null, 2),
-    "utf-8",
-  );
-
-  return toolDir;
+  return writeToolFiles(dir, name, {
+    manifestFilename: "plugin.yaml",
+    descriptionSuffix: "legacy plugin",
+    overrides,
+  });
 }
 
 describe("discoverTools", () => {

@@ -14,12 +14,9 @@ const REQUIRED_SECTIONS = ["Domain", "Description", "System Prompt", "Keywords"]
  * Parses a structured README.md into a CustomAgentConfig.
  * Returns null if the content is empty or missing required sections.
  */
-export function parseAgentReadme(content: string, dirName: string): CustomAgentConfig | null {
-  if (!content?.trim()) return null;
-
+/** Parse markdown content into a map of ## heading -> body text. */
+function parseMarkdownSections(content: string): Map<string, string> {
   const sections = new Map<string, string>();
-
-  // Split by ## headings and extract content under each
   const lines = content.split("\n");
   let currentSection: string | null = null;
   let currentContent: string[] = [];
@@ -27,40 +24,37 @@ export function parseAgentReadme(content: string, dirName: string): CustomAgentC
   for (const line of lines) {
     const headingMatch = /^##\s+(.+)$/.exec(line); // NOSONAR - safe: anchored pattern on single line
     if (headingMatch) {
-      // Save previous section
-      if (currentSection) {
-        sections.set(currentSection, currentContent.join("\n").trim());
-      }
+      if (currentSection) sections.set(currentSection, currentContent.join("\n").trim());
       currentSection = headingMatch[1].trim();
       currentContent = [];
     } else if (currentSection) {
       currentContent.push(line);
     }
   }
-  // Save last section
-  if (currentSection) {
-    sections.set(currentSection, currentContent.join("\n").trim());
-  }
+  if (currentSection) sections.set(currentSection, currentContent.join("\n").trim());
+  return sections;
+}
+
+export function parseAgentReadme(content: string, dirName: string): CustomAgentConfig | null {
+  if (!content?.trim()) return null;
+
+  const sections = parseMarkdownSections(content);
 
   // Check all required sections exist and are non-empty
   for (const section of REQUIRED_SECTIONS) {
-    const value = sections.get(section);
-    if (!value?.trim()) return null;
+    if (!sections.get(section)?.trim()) return null;
   }
 
-  const domain = sections.get("Domain")!.trim();
-  const description = sections.get("Description")!.trim();
   const systemPrompt = sections.get("System Prompt")!.trim();
-  const keywordsRaw = sections.get("Keywords")!.trim();
-
-  const keywords = keywordsRaw
+  const keywords = sections
+    .get("Keywords")!
+    .trim()
     .split(",")
     .map((k) => k.trim())
     .filter((k) => k.length > 0);
 
   if (keywords.length === 0) return null;
 
-  // Validate system prompt for injection patterns (A4) — reject unsafe prompts (H-19)
   const promptValidation = validateSystemPrompt(systemPrompt);
   if (!promptValidation.safe) {
     for (const warning of promptValidation.warnings) {
@@ -71,8 +65,8 @@ export function parseAgentReadme(content: string, dirName: string): CustomAgentC
 
   return {
     name: dirName,
-    domain,
-    description,
+    domain: sections.get("Domain")!.trim(),
+    description: sections.get("Description")!.trim(),
     systemPrompt,
     keywords,
   };

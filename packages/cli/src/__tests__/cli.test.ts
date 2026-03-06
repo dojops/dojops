@@ -97,15 +97,39 @@ describe("CLI", () => {
   });
 
   describe("per-command help", () => {
-    it("shows plan-specific help with dojops plan --help", () => {
-      const output = run("plan", "--help");
-      expect(output).toContain("dojops plan");
-      expect(output).toContain("--execute");
-      expect(output).toContain("--yes");
-      expect(output).toContain("EXAMPLES");
-      // Should NOT contain the global commands list
-      expect(output).not.toContain("COMMANDS");
-    });
+    /** Data-driven: [command, expectedStrings, notExpectedStrings?] */
+    const helpCases: Array<[string, string[], string[]?]> = [
+      ["plan", ["dojops plan", "--execute", "--yes", "EXAMPLES"], ["COMMANDS"]],
+      ["apply", ["dojops apply", "--dry-run", "--resume", "--yes"]],
+      ["serve", ["dojops serve", "--port=N", "ENDPOINTS"]],
+      ["debug", ["dojops debug ci", "log"]],
+      ["agents", ["dojops agents", "list", "info"]],
+      ["config", ["dojops config", "profile", "--token=KEY"]],
+      ["history", ["dojops history", "verify", "show"]],
+      ["inspect", ["dojops inspect", "config", "session"]],
+      ["init", ["dojops init", ".dojops/"]],
+      ["status", ["dojops status", "diagnostics"]],
+      ["clean", ["dojops clean", "--dry-run"]],
+      ["rollback", ["dojops rollback", "--dry-run"]],
+      ["generate", ["dojops generate", "default command"]],
+      ["explain", ["dojops explain", "plan-id"]],
+      ["validate", ["dojops validate", "plan-id"]],
+      ["auth", ["dojops auth", "login", "status"]],
+      ["analyze", ["dojops analyze diff", "risk"]],
+      ["modules", ["dojops modules", "list", "init", "validate", "load"]],
+    ];
+
+    function expectHelpContains(command: string, expected: string[], notExpected: string[] = []) {
+      const output = run(command, "--help");
+      for (const s of expected) expect(output).toContain(s);
+      for (const s of notExpected) expect(output).not.toContain(s);
+    }
+
+    for (const [cmd, expected, notExpected] of helpCases) {
+      it(`shows ${cmd}-specific help with dojops ${cmd} --help`, () => {
+        expectHelpContains(cmd, expected, notExpected);
+      });
+    }
 
     it("shows plan-specific help with dojops plan -h", () => {
       const output = run("plan", "-h");
@@ -113,149 +137,31 @@ describe("CLI", () => {
       expect(output).toContain("--execute");
     });
 
-    it("shows apply-specific help with dojops apply --help", () => {
-      const output = run("apply", "--help");
-      expect(output).toContain("dojops apply");
-      expect(output).toContain("--dry-run");
-      expect(output).toContain("--resume");
-      expect(output).toContain("--yes");
-    });
-
-    it("shows serve-specific help with dojops serve --help", () => {
-      const output = run("serve", "--help");
-      expect(output).toContain("dojops serve");
-      expect(output).toContain("--port=N");
-      expect(output).toContain("ENDPOINTS");
-    });
-
-    it("shows debug-specific help with dojops debug --help", () => {
-      const output = run("debug", "--help");
-      expect(output).toContain("dojops debug ci");
-      expect(output).toContain("log");
-    });
-
-    it("shows agents-specific help with dojops agents --help", () => {
-      const output = run("agents", "--help");
-      expect(output).toContain("dojops agents");
-      expect(output).toContain("list");
-      expect(output).toContain("info");
-    });
-
-    it("shows config-specific help with dojops config --help", () => {
-      const output = run("config", "--help");
-      expect(output).toContain("dojops config");
-      expect(output).toContain("profile");
-      expect(output).toContain("--token=KEY");
-    });
-
-    it("shows history-specific help with dojops history --help", () => {
-      const output = run("history", "--help");
-      expect(output).toContain("dojops history");
-      expect(output).toContain("verify");
-      expect(output).toContain("show");
-    });
-
-    it("shows inspect-specific help with dojops inspect --help", () => {
-      const output = run("inspect", "--help");
-      expect(output).toContain("dojops inspect");
-      expect(output).toContain("config");
-      expect(output).toContain("session");
-    });
-
-    it("shows init-specific help with dojops init --help", () => {
-      const output = run("init", "--help");
-      expect(output).toContain("dojops init");
-      expect(output).toContain(".dojops/");
-    });
-
-    it("shows status-specific help with dojops status --help", () => {
-      const output = run("status", "--help");
-      expect(output).toContain("dojops status");
-      expect(output).toContain("diagnostics");
-    });
-
     it("shows status help via doctor alias with dojops doctor --help", () => {
-      const output = run("doctor", "--help");
-      expect(output).toContain("dojops status");
-      expect(output).toContain("diagnostics");
-    });
-
-    it("shows clean-specific help with dojops clean --help", () => {
-      const output = run("clean", "--help");
-      expect(output).toContain("dojops clean");
-      expect(output).toContain("--dry-run");
+      expectHelpContains("doctor", ["dojops status", "diagnostics"]);
     });
 
     it("shows destroy as deprecated alias for clean", () => {
-      const output = run("destroy", "--help");
-      expect(output).toContain("clean");
-      expect(output).toContain("--dry-run");
-    });
-
-    it("shows rollback-specific help with dojops rollback --help", () => {
-      const output = run("rollback", "--help");
-      expect(output).toContain("dojops rollback");
-      expect(output).toContain("--dry-run");
-    });
-
-    it("shows generate-specific help with dojops generate --help", () => {
-      const output = run("generate", "--help");
-      expect(output).toContain("dojops generate");
-      expect(output).toContain("default command");
-    });
-
-    it("shows explain-specific help with dojops explain --help", () => {
-      const output = run("explain", "--help");
-      expect(output).toContain("dojops explain");
-      expect(output).toContain("plan-id");
-    });
-
-    it("shows validate-specific help with dojops validate --help", () => {
-      const output = run("validate", "--help");
-      expect(output).toContain("dojops validate");
-      expect(output).toContain("plan-id");
-    });
-
-    it("shows auth-specific help with dojops auth --help", () => {
-      const output = run("auth", "--help");
-      expect(output).toContain("dojops auth");
-      expect(output).toContain("login");
-      expect(output).toContain("status");
-    });
-
-    it("shows analyze-specific help with dojops analyze --help", () => {
-      const output = run("analyze", "--help");
-      expect(output).toContain("dojops analyze diff");
-      expect(output).toContain("risk");
-    });
-
-    it("shows modules-specific help with dojops modules --help", () => {
-      const output = run("modules", "--help");
-      expect(output).toContain("dojops modules");
-      expect(output).toContain("list");
-      expect(output).toContain("init");
-      expect(output).toContain("validate");
-      expect(output).toContain("load");
+      expectHelpContains("destroy", ["clean", "--dry-run"]);
     });
 
     it("shows modules help via tools alias with dojops tools --help", () => {
-      const output = run("tools", "--help");
-      expect(output).toContain("dojops modules");
-      expect(output).toContain("list");
+      expectHelpContains("tools", ["dojops modules", "list"]);
     });
   });
 
   describe("subcommand routing", () => {
+    function expectRunContains(args: string[], expected: string[]) {
+      const output = run(...args);
+      for (const s of expected) expect(output).toContain(s);
+    }
+
     it("status runs without LLM provider", () => {
-      const output = run("status");
-      expect(output).toContain("Node.js version");
-      expect(output).toContain("System Diagnostics");
+      expectRunContains(["status"], ["Node.js version", "System Diagnostics"]);
     });
 
     it("doctor alias still works", () => {
-      const output = run("doctor");
-      expect(output).toContain("Node.js version");
-      expect(output).toContain("System Diagnostics");
+      expectRunContains(["doctor"], ["Node.js version", "System Diagnostics"]);
     });
 
     it("init creates .dojops directory or reports already initialized", () => {
@@ -264,15 +170,11 @@ describe("CLI", () => {
     });
 
     it("modules list runs without error", () => {
-      const output = run("modules", "list");
-      // modules list shows custom manifest-based modules (not system binaries)
-      // In a test environment with no custom modules, it reports none found
-      expect(output).toContain("No custom modules discovered");
+      expectRunContains(["modules", "list"], ["No custom modules discovered"]);
     });
 
     it("tools list alias still works", () => {
-      const output = run("tools", "list");
-      expect(output).toContain("No custom modules discovered");
+      expectRunContains(["tools", "list"], ["No custom modules discovered"]);
     });
   });
 });

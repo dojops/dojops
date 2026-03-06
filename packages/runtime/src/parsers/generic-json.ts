@@ -4,6 +4,22 @@ import type { VerificationIssue } from "@dojops/sdk";
  * Parse generic JSON output into VerificationIssues.
  * Expects JSON with a top-level array or an object with a list field.
  */
+function parseObjectIssues(obj: Record<string, unknown>): VerificationIssue[] {
+  const issues: VerificationIssue[] = [];
+  const listFields = ["errors", "warnings", "issues", "diagnostics", "results"];
+  for (const field of listFields) {
+    if (Array.isArray(obj[field])) {
+      for (const item of obj[field] as unknown[]) {
+        issues.push(extractIssue(item));
+      }
+    }
+  }
+  if (issues.length === 0 && (obj.error || obj.message)) {
+    issues.push(extractIssue(obj));
+  }
+  return issues;
+}
+
 export function parseGenericJson(output: string): VerificationIssue[] {
   let parsed: unknown;
   try {
@@ -12,30 +28,15 @@ export function parseGenericJson(output: string): VerificationIssue[] {
     return [{ severity: "error", message: "Failed to parse JSON verification output" }];
   }
 
-  const issues: VerificationIssue[] = [];
-
   if (Array.isArray(parsed)) {
-    for (const item of parsed) {
-      issues.push(extractIssue(item));
-    }
-  } else if (typeof parsed === "object" && parsed !== null) {
-    const obj = parsed as Record<string, unknown>;
-    // Look for common list fields
-    const listFields = ["errors", "warnings", "issues", "diagnostics", "results"];
-    for (const field of listFields) {
-      if (Array.isArray(obj[field])) {
-        for (const item of obj[field] as unknown[]) {
-          issues.push(extractIssue(item));
-        }
-      }
-    }
-    // If no list fields found, check for error/message at top level
-    if (issues.length === 0 && (obj.error || obj.message)) {
-      issues.push(extractIssue(obj));
-    }
+    return parsed.map(extractIssue);
   }
 
-  return issues;
+  if (typeof parsed === "object" && parsed !== null) {
+    return parseObjectIssues(parsed as Record<string, unknown>);
+  }
+
+  return [];
 }
 
 function extractMessage(obj: Record<string, unknown>, item: unknown): string {

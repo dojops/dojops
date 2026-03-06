@@ -304,17 +304,12 @@ export async function offerToolInstall(options?: {
     const s = p.spinner();
     s.start(`Installing ${dep.name} (${prefix}npm install -g ${pkg})...`);
     try {
-      if (useSudo) {
-        npmInstallGlobalSudo(pkg);
-      } else {
-        npmInstallGlobal(pkg);
-      }
+      (useSudo ? npmInstallGlobalSudo : npmInstallGlobal)(pkg);
       s.stop(`${pc.green("\u2713")} ${dep.name} installed.`);
       installed.push(pkg);
     } catch (err) {
       s.stop(`${pc.red("\u2717")} ${dep.name} failed.`);
-      const msg = toErrorMessage(err);
-      p.log.warn(`Failed to install ${dep.name}: ${msg}`);
+      p.log.warn(`Failed to install ${dep.name}: ${toErrorMessage(err)}`);
     }
   }
 

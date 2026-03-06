@@ -135,6 +135,53 @@ function makeCtx(overrides?: Partial<CLIContext["globalOpts"]>): CLIContext {
   };
 }
 
+/** Set up the common mock chain for publish tests: existsSync + parse + validate + readFileSync */
+function setupPublishMocks() {
+  vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
+  vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
+  vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
+  vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
+}
+
+/** Create an ArrayBuffer slice from SAMPLE_BUFFER (for download mock responses). */
+function sampleArrayBuffer(): ArrayBuffer {
+  return SAMPLE_BUFFER.buffer.slice(
+    SAMPLE_BUFFER.byteOffset,
+    SAMPLE_BUFFER.byteOffset + SAMPLE_BUFFER.byteLength,
+  );
+}
+
+/** Mock a successful package info fetch response. */
+function mockPackageInfoResponse(slug: string, version: string) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      name: slug,
+      slug,
+      latestVersion: { semver: version },
+    }),
+  });
+}
+
+/** Mock a successful download fetch response (with optional hash header). */
+function mockDownloadResponse(arrayBuffer: ArrayBuffer, sha256?: string) {
+  const headers = sha256
+    ? (new Map([["x-checksum-sha256", sha256]]) as unknown as Headers)
+    : (new Map() as unknown as Headers);
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    arrayBuffer: async () => arrayBuffer,
+    headers,
+  });
+}
+
+/** Set up filesystem mocks for install tests. */
+function setupInstallFsMocks() {
+  vi.mocked(fs.existsSync).mockReturnValue(false);
+  vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+  vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
+}
+
 // ── Tests: toolsPublishCommand ─────────────────────────────────────
 
 describe("toolsPublishCommand", () => {
@@ -170,10 +217,7 @@ describe("toolsPublishCommand", () => {
   });
 
   it("rejects if no DOJOPS_HUB_TOKEN is set", async () => {
-    vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
-    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
-    vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
+    setupPublishMocks();
 
     await expect(toolsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow(
       "No hub auth token",
@@ -182,11 +226,7 @@ describe("toolsPublishCommand", () => {
 
   it("computes SHA-256 and includes it in the upload", async () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
-
-    vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
-    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
-    vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
+    setupPublishMocks();
 
     mockFetch.mockResolvedValue({
       ok: true,
@@ -212,11 +252,7 @@ describe("toolsPublishCommand", () => {
 
   it("sends the auth token as a Bearer header", async () => {
     process.env.DOJOPS_HUB_TOKEN = "dojops_abc123def456";
-
-    vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
-    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
-    vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
+    setupPublishMocks();
 
     mockFetch.mockResolvedValue({
       ok: true,
@@ -232,11 +268,7 @@ describe("toolsPublishCommand", () => {
 
   it("throws CLIError on hub error response", async () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
-
-    vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
-    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
-    vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
+    setupPublishMocks();
 
     mockFetch.mockResolvedValue({
       ok: false,
@@ -251,11 +283,7 @@ describe("toolsPublishCommand", () => {
 
   it("extracts --changelog flag", async () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
-
-    vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
-    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
-    vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
+    setupPublishMocks();
 
     mockFetch.mockResolvedValue({
       ok: true,
@@ -291,11 +319,7 @@ describe("toolsPublishCommand", () => {
 
   it("throws on network failure", async () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
-
-    vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
-    vi.mocked(parseDopsFileAny).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFileAny>);
-    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
-    vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
+    setupPublishMocks();
 
     mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
 
@@ -319,31 +343,9 @@ describe("toolsInstallCommand", () => {
   });
 
   it("fetches package info and downloads latest version", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-
-    // Mock package info response
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        name: "test-tool",
-        slug: "test-tool",
-        latestVersion: { semver: "1.0.0" },
-      }),
-    });
-
-    // Mock download response
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () =>
-        SAMPLE_BUFFER.buffer.slice(
-          SAMPLE_BUFFER.byteOffset,
-          SAMPLE_BUFFER.byteOffset + SAMPLE_BUFFER.byteLength,
-        ),
-      headers: new Map([["x-checksum-sha256", SAMPLE_SHA256]]) as unknown as Headers,
-    });
-
+    setupInstallFsMocks();
+    mockPackageInfoResponse("test-tool", "1.0.0");
+    mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
     await toolsInstallCommand(["test-tool"], makeCtx());
@@ -389,24 +391,14 @@ describe("toolsInstallCommand", () => {
   it("fails integrity check when hash mismatches", async () => {
     const tamperedBuffer = Buffer.from("tampered content", "utf-8");
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        name: "test-tool",
-        slug: "test-tool",
-        latestVersion: { semver: "1.0.0" },
-      }),
-    });
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () =>
-        tamperedBuffer.buffer.slice(
-          tamperedBuffer.byteOffset,
-          tamperedBuffer.byteOffset + tamperedBuffer.byteLength,
-        ),
-      headers: new Map([["x-checksum-sha256", SAMPLE_SHA256]]) as unknown as Headers,
-    });
+    mockPackageInfoResponse("test-tool", "1.0.0");
+    mockDownloadResponse(
+      tamperedBuffer.buffer.slice(
+        tamperedBuffer.byteOffset,
+        tamperedBuffer.byteOffset + tamperedBuffer.byteLength,
+      ),
+      SAMPLE_SHA256,
+    );
 
     await expect(toolsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
       "integrity check failed",
@@ -414,29 +406,9 @@ describe("toolsInstallCommand", () => {
   });
 
   it("passes integrity check when hash matches", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        name: "test-tool",
-        slug: "test-tool",
-        latestVersion: { semver: "1.0.0" },
-      }),
-    });
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () =>
-        SAMPLE_BUFFER.buffer.slice(
-          SAMPLE_BUFFER.byteOffset,
-          SAMPLE_BUFFER.byteOffset + SAMPLE_BUFFER.byteLength,
-        ),
-      headers: new Map([["x-checksum-sha256", SAMPLE_SHA256]]) as unknown as Headers,
-    });
-
+    setupInstallFsMocks();
+    mockPackageInfoResponse("test-tool", "1.0.0");
+    mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
     await toolsInstallCommand(["test-tool"], makeCtx());
@@ -446,30 +418,10 @@ describe("toolsInstallCommand", () => {
   });
 
   it("warns when no publisher hash is available", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        name: "test-tool",
-        slug: "test-tool",
-        latestVersion: { semver: "1.0.0" },
-      }),
-    });
-
+    setupInstallFsMocks();
+    mockPackageInfoResponse("test-tool", "1.0.0");
     // No x-checksum-sha256 header
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () =>
-        SAMPLE_BUFFER.buffer.slice(
-          SAMPLE_BUFFER.byteOffset,
-          SAMPLE_BUFFER.byteOffset + SAMPLE_BUFFER.byteLength,
-        ),
-      headers: new Map() as unknown as Headers,
-    });
-
+    mockDownloadResponse(sampleArrayBuffer());
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
     await toolsInstallCommand(["test-tool"], makeCtx());
@@ -480,21 +432,9 @@ describe("toolsInstallCommand", () => {
   });
 
   it("uses --version flag to install specific version", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-
+    setupInstallFsMocks();
     // When --version is provided, it should skip the info fetch and go directly to download
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () =>
-        SAMPLE_BUFFER.buffer.slice(
-          SAMPLE_BUFFER.byteOffset,
-          SAMPLE_BUFFER.byteOffset + SAMPLE_BUFFER.byteLength,
-        ),
-      headers: new Map([["x-checksum-sha256", SAMPLE_SHA256]]) as unknown as Headers,
-    });
-
+    mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
     await toolsInstallCommand(["test-tool", "--version", "2.0.0"], makeCtx());
@@ -505,29 +445,9 @@ describe("toolsInstallCommand", () => {
   });
 
   it("installs to global dir with --global flag", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        name: "test-tool",
-        slug: "test-tool",
-        latestVersion: { semver: "1.0.0" },
-      }),
-    });
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () =>
-        SAMPLE_BUFFER.buffer.slice(
-          SAMPLE_BUFFER.byteOffset,
-          SAMPLE_BUFFER.byteOffset + SAMPLE_BUFFER.byteLength,
-        ),
-      headers: new Map([["x-checksum-sha256", SAMPLE_SHA256]]) as unknown as Headers,
-    });
-
+    setupInstallFsMocks();
+    mockPackageInfoResponse("test-tool", "1.0.0");
+    mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
     await toolsInstallCommand(["test-tool", "--global"], makeCtx());
@@ -539,14 +459,7 @@ describe("toolsInstallCommand", () => {
   });
 
   it("rejects when download fails (404 version)", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        name: "test-tool",
-        slug: "test-tool",
-        latestVersion: { semver: "1.0.0" },
-      }),
-    });
+    mockPackageInfoResponse("test-tool", "1.0.0");
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -559,27 +472,15 @@ describe("toolsInstallCommand", () => {
   });
 
   it("rejects when downloaded file is invalid .dops", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        name: "test-tool",
-        slug: "test-tool",
-        latestVersion: { semver: "1.0.0" },
-      }),
-    });
+    setupInstallFsMocks();
+    mockPackageInfoResponse("test-tool", "1.0.0");
 
     const badBuffer = Buffer.from("not a valid dops file", "utf-8");
     const badHash = crypto.createHash("sha256").update(badBuffer).digest("hex");
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () =>
-        badBuffer.buffer.slice(badBuffer.byteOffset, badBuffer.byteOffset + badBuffer.byteLength),
-      headers: new Map([["x-checksum-sha256", badHash]]) as unknown as Headers,
-    });
+    mockDownloadResponse(
+      badBuffer.buffer.slice(badBuffer.byteOffset, badBuffer.byteOffset + badBuffer.byteLength),
+      badHash,
+    );
 
     vi.mocked(parseDopsString).mockImplementation(() => {
       throw new Error("Invalid frontmatter");

@@ -136,6 +136,83 @@ export class PlannerExecutor {
     this.toolMap = new Map(tools.map((t) => [t.name, t]));
   }
 
+  private recordResult(
+    task: TaskNode,
+    status: TaskStatus,
+    results: Map<string, TaskResult>,
+    failed: Set<string>,
+    error?: string,
+    output?: unknown,
+  ): void {
+    if (status === "failed" || status === "skipped") failed.add(task.id);
+    const result: TaskResult = { taskId: task.id, status, error, output };
+    results.set(task.id, result);
+    if (error) {
+      this.logger.taskEnd(task.id, status, error);
+    } else {
+      this.logger.taskEnd(task.id, status);
+    }
+  }
+
+  private async executeTask(
+    task: TaskNode,
+    completedTaskIds: Set<string>,
+    failed: Set<string>,
+    results: Map<string, TaskResult>,
+  ): Promise<void> {
+    if (completedTaskIds.has(task.id)) {
+      this.recordResult(task, "completed", results, failed);
+      return;
+    }
+
+    if (task.dependsOn.some((dep) => failed.has(dep))) {
+      this.recordResult(task, "skipped", results, failed, "Skipped due to failed dependency");
+      return;
+    }
+
+    const tool = this.toolMap.get(task.tool);
+    if (!tool) {
+      this.recordResult(task, "failed", results, failed, `Unknown tool: ${task.tool}`);
+      return;
+    }
+
+    this.logger.taskStart(task.id, task.description);
+    await this.runToolForTask(task, tool, results, failed);
+  }
+
+  private async runToolForTask(
+    task: TaskNode,
+    tool: DevOpsTool,
+    results: Map<string, TaskResult>,
+    failed: Set<string>,
+  ): Promise<void> {
+    try {
+      const resolvedInput = resolveInputRefs(task.input, results);
+      const validation = tool.validate(resolvedInput);
+
+      if (!validation.valid) {
+        this.recordResult(
+          task,
+          "failed",
+          results,
+          failed,
+          `Validation failed: ${validation.error}`,
+        );
+        return;
+      }
+
+      const output = await tool.generate(resolvedInput);
+      if (output.success) {
+        this.recordResult(task, "completed", results, failed, undefined, output.data);
+      } else {
+        this.recordResult(task, "failed", results, failed, output.error);
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      this.recordResult(task, "failed", results, failed, error);
+    }
+  }
+
   async execute(graph: TaskGraph, options?: PlannerExecuteOptions): Promise<PlannerResult> {
     // Validate graph first (topologicalSort checks for cycles/bad refs)
     topologicalSort(graph.tasks);
@@ -175,90 +252,7 @@ export class PlannerExecutor {
       await executeInChunks(wave, maxConcurrency, async (taskId) => {
         const task = taskMap.get(taskId)!;
         processed.add(taskId);
-
-        // Already completed (resume)
-        if (completedTaskIds.has(task.id)) {
-          const result: TaskResult = { taskId: task.id, status: "completed" };
-          results.set(task.id, result);
-          this.logger.taskEnd(task.id, "completed");
-          return;
-        }
-
-        // Check if any dependency failed
-        const shouldSkip = task.dependsOn.some((dep) => failed.has(dep));
-        if (shouldSkip) {
-          failed.add(task.id);
-          const result: TaskResult = {
-            taskId: task.id,
-            status: "skipped",
-            error: "Skipped due to failed dependency",
-          };
-          results.set(task.id, result);
-          this.logger.taskEnd(task.id, "skipped");
-          return;
-        }
-
-        const tool = this.toolMap.get(task.tool);
-        if (!tool) {
-          failed.add(task.id);
-          const result: TaskResult = {
-            taskId: task.id,
-            status: "failed",
-            error: `Unknown tool: ${task.tool}`,
-          };
-          results.set(task.id, result);
-          this.logger.taskEnd(task.id, "failed", result.error);
-          return;
-        }
-
-        this.logger.taskStart(task.id, task.description);
-
-        try {
-          const resolvedInput = resolveInputRefs(task.input, results);
-          const validation = tool.validate(resolvedInput);
-
-          if (!validation.valid) {
-            failed.add(task.id);
-            const result: TaskResult = {
-              taskId: task.id,
-              status: "failed",
-              error: `Validation failed: ${validation.error}`,
-            };
-            results.set(task.id, result);
-            this.logger.taskEnd(task.id, "failed", result.error);
-            return;
-          }
-
-          const output = await tool.generate(resolvedInput);
-          if (output.success) {
-            const result: TaskResult = {
-              taskId: task.id,
-              status: "completed",
-              output: output.data,
-            };
-            results.set(task.id, result);
-            this.logger.taskEnd(task.id, "completed");
-          } else {
-            failed.add(task.id);
-            const result: TaskResult = {
-              taskId: task.id,
-              status: "failed",
-              error: output.error,
-            };
-            results.set(task.id, result);
-            this.logger.taskEnd(task.id, "failed", output.error);
-          }
-        } catch (err) {
-          failed.add(task.id);
-          const error = err instanceof Error ? err.message : String(err);
-          const result: TaskResult = {
-            taskId: task.id,
-            status: "failed",
-            error,
-          };
-          results.set(task.id, result);
-          this.logger.taskEnd(task.id, "failed", error);
-        }
+        await this.executeTask(task, completedTaskIds, failed, results);
       });
 
       // Warn when a wave has mixed success/failure (A10/A30)

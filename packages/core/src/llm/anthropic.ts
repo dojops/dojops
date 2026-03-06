@@ -13,19 +13,41 @@ export class AnthropicProvider implements LLMProvider {
     this.model = model;
   }
 
+  private buildMessages(req: LLMRequest): Anthropic.MessageParam[] {
+    const messages: Anthropic.MessageParam[] = req.messages?.length
+      ? req.messages
+          .filter((m) => m.role !== "system")
+          .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
+      : [{ role: "user" as const, content: req.prompt }];
+    return messages;
+  }
+
+  private buildCreateParams(
+    system: string | undefined,
+    messages: Anthropic.MessageParam[],
+    req: LLMRequest,
+  ) {
+    return {
+      model: this.model,
+      max_tokens: req.maxTokens ?? 8192,
+      system,
+      messages,
+      ...(req.temperature === undefined ? {} : { temperature: req.temperature }),
+    };
+  }
+
+  private extractUsage(message: Anthropic.Message): LLMUsage | undefined {
+    if (!message.usage) return undefined;
+    return {
+      promptTokens: message.usage.input_tokens,
+      completionTokens: message.usage.output_tokens,
+      totalTokens: message.usage.input_tokens + message.usage.output_tokens,
+    };
+  }
+
   async generate(req: LLMRequest): Promise<LLMResponse> {
     const system = augmentSystemPrompt(req.system, req.schema) || undefined;
-
-    const messages: Anthropic.MessageParam[] = req.messages?.length
-      ? [
-          ...req.messages
-            .filter((m) => m.role !== "system")
-            .map((m) => ({
-              role: m.role as "user" | "assistant",
-              content: m.content,
-            })),
-        ]
-      : [{ role: "user" as const, content: req.prompt }];
+    const messages = this.buildMessages(req);
 
     let usedPrefill = false;
     if (req.schema) {
@@ -35,29 +57,18 @@ export class AnthropicProvider implements LLMProvider {
 
     let message: Anthropic.Message;
     try {
-      message = await this.client.messages.create({
-        model: this.model,
-        max_tokens: req.maxTokens ?? 8192,
-        system,
-        messages,
-        ...(req.temperature === undefined ? {} : { temperature: req.temperature }),
-      });
+      message = await this.client.messages.create(this.buildCreateParams(system, messages, req));
     } catch (err: unknown) {
       const errMsg = extractApiError(err);
-      // Some models don't support assistant prefill — retry without it
       if (usedPrefill && /\bprefill\b/i.test(errMsg)) {
         usedPrefill = false;
         const messagesWithoutPrefill = messages.filter(
           (m) => m.role !== "assistant" || m.content !== "{",
         );
         try {
-          message = await this.client.messages.create({
-            model: this.model,
-            max_tokens: req.maxTokens ?? 8192,
-            system,
-            messages: messagesWithoutPrefill,
-            ...(req.temperature === undefined ? {} : { temperature: req.temperature }),
-          });
+          message = await this.client.messages.create(
+            this.buildCreateParams(system, messagesWithoutPrefill, req),
+          );
         } catch (retryErr: unknown) {
           throw new Error(extractApiError(retryErr), { cause: retryErr });
         }
@@ -69,26 +80,16 @@ export class AnthropicProvider implements LLMProvider {
     const firstBlock = message.content[0];
     let content = firstBlock?.type === "text" ? firstBlock.text : "";
 
-    const usage: LLMUsage | undefined = message.usage
-      ? {
-          promptTokens: message.usage.input_tokens,
-          completionTokens: message.usage.output_tokens,
-          totalTokens: message.usage.input_tokens + message.usage.output_tokens,
-        }
-      : undefined;
-
     if (req.schema) {
       if (message.stop_reason === "max_tokens") {
         throw new Error(
           "LLM response was truncated (hit max_tokens limit). The generated JSON is incomplete.",
         );
       }
-      if (usedPrefill) {
-        content = "{" + content;
-      }
+      if (usedPrefill) content = "{" + content;
     }
 
-    return buildLLMResponse(content, usage, req);
+    return buildLLMResponse(content, this.extractUsage(message), req);
   }
 
   async listModels(): Promise<string[]> {

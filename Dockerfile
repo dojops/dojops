@@ -46,11 +46,9 @@ COPY --from=builder /app/package.json .
 COPY --from=builder /app/pnpm-workspace.yaml .
 COPY --from=builder /app/pnpm-lock.yaml .
 
-# Link CLI globally (requires root for global link)
-RUN pnpm --filter @dojops/cli link --global 2>/dev/null || true
-
-# Create non-root user for runtime
-RUN groupadd --gid 1001 dojops && useradd --uid 1001 --gid dojops --shell /bin/sh --create-home dojops \
+# Link CLI globally and create non-root user for runtime (requires root)
+RUN pnpm --filter @dojops/cli link --global 2>/dev/null || true \
+    && groupadd --gid 1001 dojops && useradd --uid 1001 --gid dojops --shell /bin/sh --create-home dojops \
     && chown -R dojops:dojops /app
 
 ENV NODE_ENV=production

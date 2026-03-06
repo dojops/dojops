@@ -98,15 +98,42 @@ function makeCtxWithProvider(
   };
 }
 
+function resetFsMocks() {
+  vi.clearAllMocks();
+  vi.mocked(fs.existsSync).mockReturnValue(false);
+  vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+  vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
+}
+
+/** Run toolsInitCommand in non-interactive mode and return the written file content. */
+async function initAndGetContent(name: string, ctx?: CLIContext): Promise<string> {
+  await toolsInitCommand([name, "--non-interactive"], ctx ?? makeCtx());
+  return String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+}
+
+/** Set up interactive wizard responses for the LLM generation flow. */
+function setupWizardResponses(opts: {
+  name: string;
+  description: string;
+  technology: string;
+  fileFormat: string;
+  outputPath: string;
+  useLLM: boolean;
+}) {
+  mockText.mockResolvedValueOnce(opts.name);
+  mockText.mockResolvedValueOnce(opts.description);
+  mockText.mockResolvedValueOnce(opts.technology);
+  mockSelect.mockResolvedValueOnce(opts.fileFormat);
+  mockText.mockResolvedValueOnce(opts.outputPath);
+  if (opts.useLLM !== undefined) {
+    mockConfirm.mockResolvedValueOnce(opts.useLLM);
+  }
+}
+
 // ── Tests: toolsInitCommand — v2 scaffold (no LLM) ───────────────
 
 describe("toolsInitCommand — v2 scaffold", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-  });
+  beforeEach(resetFsMocks);
 
   it("rejects with no name in non-interactive mode", async () => {
     await expect(toolsInitCommand(["--non-interactive"], makeCtx())).rejects.toThrow(CLIError);
@@ -130,70 +157,46 @@ describe("toolsInitCommand — v2 scaffold", () => {
   });
 
   it("generates v2 .dops file with dops: v2 header", async () => {
-    await toolsInitCommand(["my-tool", "--non-interactive"], makeCtx());
-
+    const content = await initAndGetContent("my-tool");
     expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
     expect(content).toContain("dops: v2");
     expect(content).not.toContain("dops: v1");
   });
 
   it("generates v2 file with context block instead of input/output", async () => {
-    await toolsInitCommand(["my-tool", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
-    expect(content).toContain("context:");
-    expect(content).toContain("technology:");
-    expect(content).toContain("fileFormat:");
-    expect(content).toContain("outputGuidance:");
-    expect(content).toContain("bestPractices:");
-    expect(content).not.toContain("input:");
-    expect(content).not.toContain("output:");
-    expect(content).not.toContain("source: llm");
+    const content = await initAndGetContent("my-tool");
+    for (const s of ["context:", "technology:", "fileFormat:", "outputGuidance:", "bestPractices:"])
+      expect(content).toContain(s);
+    for (const s of ["input:", "output:", "source: llm"]) expect(content).not.toContain(s);
   });
 
   it("includes all required v2 sections: Prompt and Keywords", async () => {
-    await toolsInitCommand(["redis", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("redis");
     expect(content).toContain("## Prompt");
     expect(content).toContain("## Keywords");
   });
 
   it("includes v2 prompt variables in the prompt section", async () => {
-    await toolsInitCommand(["redis", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
-    expect(content).toContain("{outputGuidance}");
-    expect(content).toContain("{bestPractices}");
-    expect(content).toContain("{context7Docs}");
-    expect(content).toContain("{projectContext}");
+    const content = await initAndGetContent("redis");
+    for (const v of ["{outputGuidance}", "{bestPractices}", "{context7Docs}", "{projectContext}"])
+      expect(content).toContain(v);
   });
 
   it("includes scope, risk, detection, execution, and update blocks", async () => {
-    await toolsInitCommand(["caddy", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
-    expect(content).toContain("scope:");
-    expect(content).toContain("risk:");
-    expect(content).toContain("detection:");
-    expect(content).toContain("execution:");
-    expect(content).toContain("update:");
-    expect(content).toContain("updateMode: true");
+    const content = await initAndGetContent("caddy");
+    for (const s of ["scope:", "risk:", "detection:", "execution:", "update:", "updateMode: true"])
+      expect(content).toContain(s);
   });
 
   it("uses tool name to derive technology and file path", async () => {
-    await toolsInitCommand(["redis", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("redis");
     expect(content).toContain('technology: "Redis"');
     expect(content).toContain('path: "redis.yaml"');
     expect(content).toContain("redis, redis");
   });
 
   it("writes to .dojops/modules/<name>.dops", async () => {
-    await toolsInitCommand(["my-tool", "--non-interactive"], makeCtx());
-
+    await initAndGetContent("my-tool");
     expect(fs.mkdirSync).toHaveBeenCalledWith(
       expect.stringContaining(path.join(".dojops", "modules")),
       { recursive: true },
@@ -203,15 +206,12 @@ describe("toolsInitCommand — v2 scaffold", () => {
   });
 
   it("includes context7Libraries block", async () => {
-    await toolsInitCommand(["postgres", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("postgres");
     expect(content).toContain("context7Libraries:");
   });
 
   it("logs success message", async () => {
-    await toolsInitCommand(["my-tool", "--non-interactive"], makeCtx());
-
+    await initAndGetContent("my-tool");
     expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining("my-tool.dops"));
   });
 });
@@ -219,12 +219,7 @@ describe("toolsInitCommand — v2 scaffold", () => {
 // ── Tests: toolsInitCommand — --legacy flag ───────────────────────
 
 describe("toolsInitCommand — --legacy flag", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-  });
+  beforeEach(resetFsMocks);
 
   it("generates v1 format with --legacy flag", async () => {
     await toolsInitCommand(["old-tool", "--legacy", "--non-interactive"], makeCtx());
@@ -249,12 +244,7 @@ describe("toolsInitCommand — --legacy flag", () => {
 // ── Tests: toolsInitCommand — LLM-powered generation ──────────────
 
 describe("toolsInitCommand — LLM-powered generation", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-  });
+  beforeEach(resetFsMocks);
 
   it("uses LLM-generated content when provider responds successfully", async () => {
     const mockLLMResponse = {
@@ -282,13 +272,14 @@ describe("toolsInitCommand — LLM-powered generation", () => {
       parsed: mockLLMResponse,
     });
 
-    // Set up interactive wizard responses
-    mockText.mockResolvedValueOnce("redis"); // name
-    mockText.mockResolvedValueOnce("Redis configuration generator"); // description
-    mockText.mockResolvedValueOnce("Redis"); // technology
-    mockSelect.mockResolvedValueOnce("raw"); // fileFormat
-    mockText.mockResolvedValueOnce("redis.conf"); // outputFilePath
-    mockConfirm.mockResolvedValueOnce(true); // useLLM
+    setupWizardResponses({
+      name: "redis",
+      description: "Redis configuration generator",
+      technology: "Redis",
+      fileFormat: "raw",
+      outputPath: "redis.conf",
+      useLLM: true,
+    });
 
     const ctx = makeCtxWithProvider(mockGenerate);
     await toolsInitCommand([], ctx);
@@ -302,22 +293,21 @@ describe("toolsInitCommand — LLM-powered generation", () => {
     expect(content).toContain("Set maxmemory to prevent OOM");
     expect(content).toContain("MEDIUM");
     expect(content).toContain("redis, cache, in-memory");
-    expect(content).toContain("{outputGuidance}");
-    expect(content).toContain("{bestPractices}");
-    expect(content).toContain("{context7Docs}");
-    expect(content).toContain("{projectContext}");
+    for (const v of ["{outputGuidance}", "{bestPractices}", "{context7Docs}", "{projectContext}"])
+      expect(content).toContain(v);
   });
 
   it("falls back to defaults when LLM generation fails", async () => {
     const mockGenerate = vi.fn().mockRejectedValue(new Error("API error"));
 
-    // Set up interactive wizard responses
-    mockText.mockResolvedValueOnce("caddy"); // name
-    mockText.mockResolvedValueOnce("Caddy web server config"); // description
-    mockText.mockResolvedValueOnce("Caddy"); // technology
-    mockSelect.mockResolvedValueOnce("raw"); // fileFormat
-    mockText.mockResolvedValueOnce("Caddyfile"); // outputFilePath
-    mockConfirm.mockResolvedValueOnce(true); // useLLM
+    setupWizardResponses({
+      name: "caddy",
+      description: "Caddy web server config",
+      technology: "Caddy",
+      fileFormat: "raw",
+      outputPath: "Caddyfile",
+      useLLM: true,
+    });
 
     const ctx = makeCtxWithProvider(mockGenerate);
     await toolsInitCommand([], ctx);
@@ -335,13 +325,14 @@ describe("toolsInitCommand — LLM-powered generation", () => {
   it("does not call LLM when user declines AI generation", async () => {
     const mockGenerate = vi.fn();
 
-    // Set up interactive wizard responses
-    mockText.mockResolvedValueOnce("my-tool"); // name
-    mockText.mockResolvedValueOnce("My tool description"); // description
-    mockText.mockResolvedValueOnce("MyTool"); // technology
-    mockSelect.mockResolvedValueOnce("yaml"); // fileFormat
-    mockText.mockResolvedValueOnce("my-tool.yaml"); // outputFilePath
-    mockConfirm.mockResolvedValueOnce(false); // useLLM = no
+    setupWizardResponses({
+      name: "my-tool",
+      description: "My tool description",
+      technology: "MyTool",
+      fileFormat: "yaml",
+      outputPath: "my-tool.yaml",
+      useLLM: false,
+    });
 
     const ctx = makeCtxWithProvider(mockGenerate);
     await toolsInitCommand([], ctx);
@@ -354,13 +345,12 @@ describe("toolsInitCommand — LLM-powered generation", () => {
   });
 
   it("does not offer LLM when no provider is available", async () => {
-    // Set up interactive wizard responses
-    mockText.mockResolvedValueOnce("my-tool"); // name
-    mockText.mockResolvedValueOnce("desc"); // description
-    mockText.mockResolvedValueOnce("MyTool"); // technology
-    mockSelect.mockResolvedValueOnce("yaml"); // fileFormat
-    mockText.mockResolvedValueOnce("my-tool.yaml"); // outputFilePath
-    // confirm should NOT be called — no provider
+    // Set up wizard responses without useLLM (confirm should NOT be called — no provider)
+    mockText.mockResolvedValueOnce("my-tool");
+    mockText.mockResolvedValueOnce("desc");
+    mockText.mockResolvedValueOnce("MyTool");
+    mockSelect.mockResolvedValueOnce("yaml");
+    mockText.mockResolvedValueOnce("my-tool.yaml");
 
     const ctx = makeCtx(); // no provider
     await toolsInitCommand([], ctx);
@@ -392,13 +382,14 @@ describe("toolsInitCommand — LLM-powered generation", () => {
       parsed: mockLLMResponse,
     });
 
-    // Set up interactive wizard responses
-    mockText.mockResolvedValueOnce("test-tool");
-    mockText.mockResolvedValueOnce("Test tool");
-    mockText.mockResolvedValueOnce("TestTool");
-    mockSelect.mockResolvedValueOnce("yaml");
-    mockText.mockResolvedValueOnce("test.yaml");
-    mockConfirm.mockResolvedValueOnce(true);
+    setupWizardResponses({
+      name: "test-tool",
+      description: "Test tool",
+      technology: "TestTool",
+      fileFormat: "yaml",
+      outputPath: "test.yaml",
+      useLLM: true,
+    });
 
     const ctx = makeCtxWithProvider(mockGenerate);
     await toolsInitCommand([], ctx);
@@ -427,12 +418,14 @@ describe("toolsInitCommand — LLM-powered generation", () => {
       parsed: mockLLMResponse,
     });
 
-    mockText.mockResolvedValueOnce("yaml-tool");
-    mockText.mockResolvedValueOnce("YAML config");
-    mockText.mockResolvedValueOnce("YAML");
-    mockSelect.mockResolvedValueOnce("yaml");
-    mockText.mockResolvedValueOnce("config.yaml");
-    mockConfirm.mockResolvedValueOnce(true);
+    setupWizardResponses({
+      name: "yaml-tool",
+      description: "YAML config",
+      technology: "YAML",
+      fileFormat: "yaml",
+      outputPath: "config.yaml",
+      useLLM: true,
+    });
 
     const ctx = makeCtxWithProvider(mockGenerate);
     await toolsInitCommand([], ctx);
@@ -447,89 +440,65 @@ describe("toolsInitCommand — LLM-powered generation", () => {
 // ── Tests: toolsInitCommand — non-interactive v2 defaults ─────────
 
 describe("toolsInitCommand — non-interactive defaults", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
-  });
+  beforeEach(resetFsMocks);
 
   it("produces valid v2 structure with just a name", async () => {
-    await toolsInitCommand(["nginx-custom", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("nginx-custom");
 
     // Must have frontmatter delimiters
     const parts = content.split("---");
     expect(parts.length).toBeGreaterThanOrEqual(3);
 
-    // Must have v2 marker
-    expect(content).toContain("dops: v2");
-    expect(content).toContain("kind: tool");
-
-    // Must have meta
-    expect(content).toContain("name: nginx-custom");
-    expect(content).toContain("version: 0.1.0");
-
-    // Must have context block
-    expect(content).toContain("context:");
-    expect(content).toContain("technology:");
-    expect(content).toContain("fileFormat: yaml");
-
-    // Must have files, detection, permissions, scope, risk, execution, update
-    expect(content).toContain("files:");
-    expect(content).toContain("detection:");
-    expect(content).toContain("permissions:");
-    expect(content).toContain("scope:");
-    expect(content).toContain("risk:");
-    expect(content).toContain("execution:");
-    expect(content).toContain("update:");
-
-    // Must have markdown sections
-    expect(content).toContain("## Prompt");
-    expect(content).toContain("## Keywords");
-
-    // Must have v2 template variables
-    expect(content).toContain("{outputGuidance}");
-    expect(content).toContain("{bestPractices}");
-    expect(content).toContain("{context7Docs}");
-    expect(content).toContain("{projectContext}");
+    // Must have all v2 structural elements
+    const requiredStrings = [
+      "dops: v2",
+      "kind: tool",
+      "name: nginx-custom",
+      "version: 0.1.0",
+      "context:",
+      "technology:",
+      "fileFormat: yaml",
+      "files:",
+      "detection:",
+      "permissions:",
+      "scope:",
+      "risk:",
+      "execution:",
+      "update:",
+      "## Prompt",
+      "## Keywords",
+      "{outputGuidance}",
+      "{bestPractices}",
+      "{context7Docs}",
+      "{projectContext}",
+    ];
+    for (const s of requiredStrings) expect(content).toContain(s);
   });
 
   it("auto-capitalizes technology from tool name", async () => {
-    await toolsInitCommand(["redis", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("redis");
     expect(content).toContain('technology: "Redis"');
   });
 
   it("title-cases hyphenated tool names for technology", async () => {
-    await toolsInitCommand(["redis-config", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("redis-config");
     expect(content).toContain('technology: "Redis Config"');
     expect(content).not.toContain("Redis-config");
   });
 
   it("title-cases multi-segment hyphenated names", async () => {
-    await toolsInitCommand(["my-custom-tool", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("my-custom-tool");
     expect(content).toContain('technology: "My Custom Tool"');
   });
 
   it("defaults file format to yaml", async () => {
-    await toolsInitCommand(["my-tool", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("my-tool");
     expect(content).toContain("fileFormat: yaml");
     expect(content).toContain('path: "my-tool.yaml"');
   });
 
   it("defaults risk level to LOW", async () => {
-    await toolsInitCommand(["my-tool", "--non-interactive"], makeCtx());
-
-    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    const content = await initAndGetContent("my-tool");
     expect(content).toContain("level: LOW");
   });
 });

@@ -725,6 +725,138 @@ export function deriveRelevantDomains(
 
 // ── Collect DevOps files ─────────────────────────────────────────────
 
+/** Add files if they exist at root. */
+function addExistingFiles(files: Set<string>, root: string, filenames: string[]): void {
+  for (const f of filenames) {
+    if (fs.existsSync(path.join(root, f))) files.add(f);
+  }
+}
+
+/** Collect container-related files (Dockerfiles + compose). */
+function collectContainerFiles(
+  files: Set<string>,
+  container: ContainerDetection,
+  root: string,
+): void {
+  if (container.hasDockerfile) {
+    if (fs.existsSync(path.join(root, "Dockerfile"))) files.add("Dockerfile");
+    for (const d of listChildDirs(root)) {
+      if (fs.existsSync(path.join(root, d, "Dockerfile"))) files.add(`${d}/Dockerfile`);
+    }
+  }
+  if (container.composePath) files.add(container.composePath);
+  if (container.hasSwarm) {
+    addExistingFiles(files, root, ["docker-stack.yml", "docker-stack.yaml"]);
+  }
+}
+
+/** Collect Terraform .tf and .tfvars files from known directories. */
+function collectTerraformFiles(files: Set<string>, root: string): void {
+  const tfDirs = ["", "terraform", "infra", "infrastructure", "tf", "iac", "terraform-iac"];
+  for (const dir of tfDirs) {
+    const dirPath = dir ? path.join(root, dir) : root;
+    try {
+      if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) continue;
+      const entries = fs.readdirSync(dirPath);
+      for (const f of entries) {
+        if (f.endsWith(".tf") || f === "terraform.tfvars" || f === "terraform.tfvars.json") {
+          files.add(dir ? `${dir}/${f}` : f);
+        }
+      }
+    } catch {
+      // Unreadable
+    }
+  }
+}
+
+/** Collect monitoring config files. */
+function collectMonitoringFiles(
+  files: Set<string>,
+  monitoring: MonitoringDetection,
+  root: string,
+): void {
+  if (monitoring.hasPrometheus)
+    addExistingFiles(files, root, ["prometheus.yml", "prometheus.yaml"]);
+  if (monitoring.hasNginx) files.add("nginx.conf");
+  if (monitoring.hasHaproxy) files.add("haproxy.cfg");
+  if (monitoring.hasTomcat) files.add("server.xml");
+  if (monitoring.hasApache)
+    addExistingFiles(files, root, ["httpd.conf", "apache2.conf", ".htaccess"]);
+  if (monitoring.hasCaddy) files.add("Caddyfile");
+  if (monitoring.hasEnvoy) addExistingFiles(files, root, ["envoy.yaml", "envoy.yml"]);
+
+  // Systemd services
+  try {
+    for (const f of fs.readdirSync(root)) {
+      if (f.endsWith(".service")) files.add(f);
+    }
+  } catch {
+    // Unreadable
+  }
+}
+
+/** Collect script files. */
+function collectScriptFiles(files: Set<string>, scripts: ScriptsDetection): void {
+  for (const s of scripts.shellScripts) files.add(s);
+  for (const s of scripts.pythonScripts) files.add(s);
+  if (scripts.hasJustfile) files.add("Justfile");
+}
+
+/** Collect security-related files. */
+function collectSecurityFiles(files: Set<string>, security: SecurityDetection, root: string): void {
+  if (security.hasEnvExample) files.add(".env.example");
+  if (security.hasGitignore) files.add(".gitignore");
+  if (security.hasCodeowners) {
+    addExistingFiles(files, root, ["CODEOWNERS"]);
+    if (fs.existsSync(path.join(root, ".github", "CODEOWNERS"))) files.add(".github/CODEOWNERS");
+  }
+  if (security.hasSecurityPolicy) {
+    addExistingFiles(files, root, ["SECURITY.md"]);
+    if (fs.existsSync(path.join(root, ".github", "SECURITY.md"))) files.add(".github/SECURITY.md");
+  }
+  if (security.hasDependabot) files.add(".github/dependabot.yml");
+  if (security.hasRenovate) files.add("renovate.json");
+  if (security.hasSecretScanning) files.add(".github/secret_scanning.yml");
+  if (security.hasEditorConfig) files.add(".editorconfig");
+}
+
+/** Collect Kubernetes YAML manifests from well-known directories. */
+function collectK8sFiles(files: Set<string>, root: string): void {
+  const k8sDirs = ["k8s", "kubernetes", "manifests", "deploy"];
+  for (const d of k8sDirs) {
+    const dirPath = path.join(root, d);
+    try {
+      if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) continue;
+      for (const f of fs.readdirSync(dirPath)) {
+        if (f.endsWith(".yaml") || f.endsWith(".yml")) files.add(`${d}/${f}`);
+      }
+    } catch {
+      // Unreadable
+    }
+  }
+}
+
+/** Collect miscellaneous infra files (Kustomize, Vagrant, Pulumi, Helm, Ansible, Packer). */
+function collectInfraExtraFiles(files: Set<string>, infra: InfraDetection, root: string): void {
+  if (infra.hasKustomize)
+    addExistingFiles(files, root, ["kustomization.yaml", "kustomization.yml"]);
+  if (infra.hasVagrant) files.add("Vagrantfile");
+  if (infra.hasPulumi) addExistingFiles(files, root, ["Pulumi.yaml", "Pulumi.yml"]);
+  if (infra.hasHelm && fs.existsSync(path.join(root, "Chart.yaml"))) files.add("Chart.yaml");
+  if (infra.hasAnsible) addExistingFiles(files, root, ANSIBLE_INDICATORS);
+  if (infra.hasPacker) {
+    try {
+      for (const f of fs.readdirSync(root)) {
+        if (f.endsWith(".pkr.hcl") || f.endsWith(".pkr.json") || f === "packer.json") {
+          files.add(f);
+        }
+      }
+    } catch {
+      // Unreadable
+    }
+  }
+}
+
 export function collectDevopsFiles(
   ci: CIDetection[],
   container: ContainerDetection,
@@ -736,142 +868,14 @@ export function collectDevopsFiles(
 ): string[] {
   const files = new Set<string>();
 
-  // CI config paths
   for (const c of ci) files.add(c.configPath);
-
-  // Container
-  if (container.hasDockerfile) {
-    if (fs.existsSync(path.join(root, "Dockerfile"))) files.add("Dockerfile");
-    for (const d of listChildDirs(root)) {
-      if (fs.existsSync(path.join(root, d, "Dockerfile"))) files.add(`${d}/Dockerfile`);
-    }
-  }
-  if (container.composePath) files.add(container.composePath);
-
-  // Terraform (root + common subdirectories)
-  if (infra.hasTerraform) {
-    const tfDirs = ["", "terraform", "infra", "infrastructure", "tf", "iac", "terraform-iac"];
-    for (const dir of tfDirs) {
-      const dirPath = dir ? path.join(root, dir) : root;
-      try {
-        if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) continue;
-        const entries = fs.readdirSync(dirPath);
-        for (const f of entries) {
-          if (f.endsWith(".tf") || f === "terraform.tfvars" || f === "terraform.tfvars.json") {
-            files.add(dir ? `${dir}/${f}` : f);
-          }
-        }
-      } catch {
-        // Unreadable
-      }
-    }
-  }
-
-  // Monitoring configs
-  if (monitoring.hasPrometheus) {
-    if (fs.existsSync(path.join(root, "prometheus.yml"))) files.add("prometheus.yml");
-    if (fs.existsSync(path.join(root, "prometheus.yaml"))) files.add("prometheus.yaml");
-  }
-  if (monitoring.hasNginx) files.add("nginx.conf");
-  if (monitoring.hasHaproxy) files.add("haproxy.cfg");
-  if (monitoring.hasTomcat) files.add("server.xml");
-  if (monitoring.hasApache) {
-    if (fs.existsSync(path.join(root, "httpd.conf"))) files.add("httpd.conf");
-    if (fs.existsSync(path.join(root, "apache2.conf"))) files.add("apache2.conf");
-    if (fs.existsSync(path.join(root, ".htaccess"))) files.add(".htaccess");
-  }
-  if (monitoring.hasCaddy) files.add("Caddyfile");
-  if (monitoring.hasEnvoy) {
-    if (fs.existsSync(path.join(root, "envoy.yaml"))) files.add("envoy.yaml");
-    if (fs.existsSync(path.join(root, "envoy.yml"))) files.add("envoy.yml");
-  }
-
-  // Systemd services
-  try {
-    const entries = fs.readdirSync(root);
-    for (const f of entries) {
-      if (f.endsWith(".service")) files.add(f);
-    }
-  } catch {
-    // Unreadable
-  }
-
-  // Scripts
-  for (const s of scripts.shellScripts) files.add(s);
-  for (const s of scripts.pythonScripts) files.add(s);
-  if (scripts.hasJustfile) files.add("Justfile");
-
-  // Security files
-  if (security.hasEnvExample) files.add(".env.example");
-  if (security.hasGitignore) files.add(".gitignore");
-  if (security.hasCodeowners) {
-    if (fs.existsSync(path.join(root, "CODEOWNERS"))) files.add("CODEOWNERS");
-    if (fs.existsSync(path.join(root, ".github", "CODEOWNERS"))) files.add(".github/CODEOWNERS");
-  }
-  if (security.hasSecurityPolicy) {
-    if (fs.existsSync(path.join(root, "SECURITY.md"))) files.add("SECURITY.md");
-    if (fs.existsSync(path.join(root, ".github", "SECURITY.md"))) files.add(".github/SECURITY.md");
-  }
-  if (security.hasDependabot) files.add(".github/dependabot.yml");
-  if (security.hasRenovate) files.add("renovate.json");
-  if (security.hasSecretScanning) files.add(".github/secret_scanning.yml");
-  if (security.hasEditorConfig) files.add(".editorconfig");
-
-  // Kubernetes manifests
-  if (infra.hasKubernetes) {
-    const k8sDirs = ["k8s", "kubernetes", "manifests", "deploy"];
-    for (const d of k8sDirs) {
-      const dirPath = path.join(root, d);
-      try {
-        if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-          const entries = fs.readdirSync(dirPath);
-          for (const f of entries) {
-            if (f.endsWith(".yaml") || f.endsWith(".yml")) {
-              files.add(`${d}/${f}`);
-            }
-          }
-        }
-      } catch {
-        // Unreadable
-      }
-    }
-  }
-
-  // Infra extras
-  if (infra.hasKustomize) {
-    if (fs.existsSync(path.join(root, "kustomization.yaml"))) files.add("kustomization.yaml");
-    if (fs.existsSync(path.join(root, "kustomization.yml"))) files.add("kustomization.yml");
-  }
-  if (infra.hasVagrant) files.add("Vagrantfile");
-  if (infra.hasPulumi) {
-    if (fs.existsSync(path.join(root, "Pulumi.yaml"))) files.add("Pulumi.yaml");
-    if (fs.existsSync(path.join(root, "Pulumi.yml"))) files.add("Pulumi.yml");
-  }
-  if (infra.hasHelm && fs.existsSync(path.join(root, "Chart.yaml"))) files.add("Chart.yaml");
-  if (infra.hasAnsible) {
-    for (const f of ANSIBLE_INDICATORS) {
-      if (fs.existsSync(path.join(root, f))) files.add(f);
-    }
-  }
-  if (infra.hasPacker) {
-    try {
-      const entries = fs.readdirSync(root);
-      for (const f of entries) {
-        if (f.endsWith(".pkr.hcl") || f.endsWith(".pkr.json") || f === "packer.json") {
-          files.add(f);
-        }
-      }
-    } catch {
-      // Unreadable
-    }
-  }
-
-  // Docker Swarm
-  if (container.hasSwarm) {
-    for (const f of ["docker-stack.yml", "docker-stack.yaml"]) {
-      if (fs.existsSync(path.join(root, f))) files.add(f);
-    }
-  }
+  collectContainerFiles(files, container, root);
+  if (infra.hasTerraform) collectTerraformFiles(files, root);
+  collectMonitoringFiles(files, monitoring, root);
+  collectScriptFiles(files, scripts);
+  collectSecurityFiles(files, security, root);
+  if (infra.hasKubernetes) collectK8sFiles(files, root);
+  collectInfraExtraFiles(files, infra, root);
 
   return [...files].sort((a, b) => a.localeCompare(b));
 }

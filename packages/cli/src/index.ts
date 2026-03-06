@@ -334,20 +334,12 @@ async function main() {
   if (showBanner) p.outro("Done.");
 }
 
-// Top-level async IIFE — CJS module, top-level await not supported
-(async () => {
-  // NOSONAR
-  try {
-    await main();
-  } catch (err) {
-    if (err instanceof CLIError) {
-      if (err.message) {
-        console.error(err.message);
-      }
-      process.exit(err.exitCode);
-    }
-    const msg = toErrorMessage(err);
-    console.error(msg);
-    process.exit(ExitCode.GENERAL_ERROR);
+// Top-level async entry — CJS module, top-level await not supported
+main().catch((err) => {
+  if (err instanceof CLIError) {
+    if (err.message) console.error(err.message);
+    process.exit(err.exitCode);
   }
-})();
+  console.error(toErrorMessage(err));
+  process.exit(ExitCode.GENERAL_ERROR);
+});

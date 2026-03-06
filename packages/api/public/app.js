@@ -40,7 +40,7 @@ function clearStoredApiKey() {
 // ── Helpers ──────────────────────────────────────────────
 
 async function apiCall(path, opts = {}) {
-  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  const headers = { "Content-Type": "application/json", ...opts.headers };
   const apiKey = getStoredApiKey();
   if (apiKey) {
     headers["X-API-Key"] = apiKey;
@@ -845,13 +845,10 @@ async function loadOverview() {
   }
 }
 
-function renderOverview(data) {
-  let html = "";
-
-  // Health banner
-  const healthLevel =
+function renderHealthBanner(data) {
+  var healthLevel =
     data.criticalFindings > 0 ? "critical" : data.successRate < 50 ? "warning" : "healthy";
-  const healthIcons = {
+  var healthIcons = {
     healthy:
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
     warning:
@@ -859,21 +856,27 @@ function renderOverview(data) {
     critical:
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
   };
-  const healthLabels = {
+  var healthLabels = {
     healthy: "System Healthy",
     warning: "Needs Attention",
     critical: "Critical Issues Detected",
   };
-  const critDesc = [];
+  var critDesc = [];
   if (data.criticalFindings > 0) critDesc.push(data.criticalFindings + " critical");
   if (data.highFindings > 0) critDesc.push(data.highFindings + " high");
-  const critSummary = critDesc.length ? critDesc.join(" and ") + " severity" : "";
-  const healthDetails = {
-    healthy: `${data.successRate}% success rate across ${data.totalPlans} plans`,
-    warning: `Success rate at ${data.successRate}% — review recent failures`,
-    critical: `${data.totalFindings} security finding${data.totalFindings !== 1 ? "s" : ""} detected (${critSummary}) — includes vulnerabilities and dependency issues`,
+  var critSummary = critDesc.length ? critDesc.join(" and ") + " severity" : "";
+  var healthDetails = {
+    healthy: data.successRate + "% success rate across " + data.totalPlans + " plans",
+    warning: "Success rate at " + data.successRate + "% — review recent failures",
+    critical:
+      data.totalFindings +
+      " security finding" +
+      (data.totalFindings !== 1 ? "s" : "") +
+      " detected (" +
+      critSummary +
+      ") — includes vulnerabilities and dependency issues",
   };
-  html +=
+  return (
     '<div class="health-banner health-banner--' +
     healthLevel +
     '">' +
@@ -891,10 +894,12 @@ function renderOverview(data) {
     (healthLevel === "critical"
       ? '<a class="health-banner__link" data-action="navigateToTab" data-tab="security" style="margin-left:auto;cursor:pointer;color:var(--error);font-size:12px;font-weight:600;text-decoration:underline;white-space:nowrap">View Security &rarr;</a>'
       : "") +
-    "</div>";
+    "</div>"
+  );
+}
 
-  // 6 stat cards
-  html += '<div class="stat-grid--6">';
+function renderOverviewStatCards(data) {
+  var html = '<div class="stat-grid--6">';
   html += renderStatCard(data.totalPlans, "Total Plans", "");
   html += renderStatCard(
     data.totalExecutions !== undefined ? data.totalExecutions : "—",
@@ -914,101 +919,109 @@ function renderOverview(data) {
     findingSeverity(data.criticalFindings, data.totalFindings),
   );
   html += "</div>";
+  return html;
+}
 
-  // Findings summary (if findings > 0)
-  if (data.criticalFindings > 0 || (data.highFindings && data.highFindings > 0)) {
-    html += '<div class="findings-summary">';
-    if (data.criticalFindings > 0) {
-      html +=
-        '<div class="findings-summary__item">' +
-        '<span class="findings-summary__count findings-summary__count--critical">' +
-        data.criticalFindings +
-        "</span>" +
-        '<span style="color:var(--text-secondary);font-size:12px">Critical</span></div>';
-    }
-    if (data.highFindings && data.highFindings > 0) {
-      html +=
-        '<div class="findings-summary__item">' +
-        '<span class="findings-summary__count findings-summary__count--high">' +
-        data.highFindings +
-        "</span>" +
-        '<span style="color:var(--text-secondary);font-size:12px">High</span></div>';
-    }
-    html += "</div>";
+function renderFindingsSummary(data) {
+  if (data.criticalFindings <= 0 && !(data.highFindings && data.highFindings > 0)) return "";
+  var html = '<div class="findings-summary">';
+  if (data.criticalFindings > 0) {
+    html +=
+      '<div class="findings-summary__item">' +
+      '<span class="findings-summary__count findings-summary__count--critical">' +
+      data.criticalFindings +
+      "</span>" +
+      '<span style="color:var(--text-secondary);font-size:12px">Critical</span></div>';
   }
-
-  // Recent activity with colored dots
-  if (data.recentActivity.length > 0) {
-    html += '<div class="metrics-section">';
-    html += '<div class="metrics-section__title">Recent Activity</div>';
-    html += '<div class="timeline-list">';
-    for (const item of data.recentActivity.slice(0, 10)) {
-      const dotMap = {
-        success: "timeline-entry__dot--success",
-        failure: "timeline-entry__dot--failure",
-      };
-      const dotClass = dotMap[item.status] || "timeline-entry__dot--unknown";
-      const statusChip = statusToChip(item.status);
-      html +=
-        '<div class="timeline-entry">' +
-        '<span class="timeline-entry__dot ' +
-        dotClass +
-        '"></span>' +
-        '<span class="timeline-entry__time">' +
-        escapeHtml(new Date(item.timestamp).toLocaleString()) +
-        "</span>" +
-        '<span class="timeline-entry__action">' +
-        escapeHtml(item.action) +
-        "</span>" +
-        statusChip +
-        (item.planId
-          ? '<span class="chip chip--muted">' + escapeHtml(item.planId) + "</span>"
-          : "") +
-        "</div>";
-    }
-    html += "</div></div>";
+  if (data.highFindings && data.highFindings > 0) {
+    html +=
+      '<div class="findings-summary__item">' +
+      '<span class="findings-summary__count findings-summary__count--high">' +
+      data.highFindings +
+      "</span>" +
+      '<span style="color:var(--text-secondary);font-size:12px">High</span></div>';
   }
+  html += "</div>";
+  return html;
+}
 
-  // Two-column layout for agent usage and failure reasons
+function renderRecentActivity(data) {
+  if (data.recentActivity.length === 0) return "";
+  var html = '<div class="metrics-section">';
+  html += '<div class="metrics-section__title">Recent Activity</div>';
+  html += '<div class="timeline-list">';
+  var dotMap = {
+    success: "timeline-entry__dot--success",
+    failure: "timeline-entry__dot--failure",
+  };
+  for (const item of data.recentActivity.slice(0, 10)) {
+    var dotClass = dotMap[item.status] || "timeline-entry__dot--unknown";
+    var statusChip = statusToChip(item.status);
+    html +=
+      '<div class="timeline-entry">' +
+      '<span class="timeline-entry__dot ' +
+      dotClass +
+      '"></span>' +
+      '<span class="timeline-entry__time">' +
+      escapeHtml(new Date(item.timestamp).toLocaleString()) +
+      "</span>" +
+      '<span class="timeline-entry__action">' +
+      escapeHtml(item.action) +
+      "</span>" +
+      statusChip +
+      (item.planId ? '<span class="chip chip--muted">' + escapeHtml(item.planId) + "</span>" : "") +
+      "</div>";
+  }
+  html += "</div></div>";
+  return html;
+}
+
+function renderAgentUsageTable(data) {
+  if (data.mostUsedAgents.length === 0) return "";
+  var html = '<div class="metrics-section glass-card">';
+  html += '<div class="metrics-section__title">Most Used Commands</div>';
+  html +=
+    '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
+  for (const item of data.mostUsedAgents.slice(0, 8)) {
+    html +=
+      '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
+      escapeHtml(item.agent) +
+      '</code></td><td style="font-family:var(--font-mono)">' +
+      item.count +
+      "</td></tr>";
+  }
+  html += "</tbody></table></div>";
+  return html;
+}
+
+function renderFailureReasonsTable(data) {
+  if (data.failureReasons.length === 0) {
+    return '<div class="metrics-section glass-card"><div class="metrics-section__title">Failure Reasons</div><div style="color:var(--text-muted);font-size:13px;padding:8px 0">No failures recorded</div></div>';
+  }
+  var html = '<div class="metrics-section glass-card">';
+  html += '<div class="metrics-section__title">Failure Reasons</div>';
+  html +=
+    '<table class="metric-table"><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody>';
+  for (const item of data.failureReasons.slice(0, 8)) {
+    html +=
+      '<tr><td style="color:var(--error)">' +
+      escapeHtml(item.reason) +
+      '</td><td style="font-family:var(--font-mono)">' +
+      item.count +
+      "</td></tr>";
+  }
+  html += "</tbody></table></div>";
+  return html;
+}
+
+function renderOverview(data) {
+  var html = renderHealthBanner(data);
+  html += renderOverviewStatCards(data);
+  html += renderFindingsSummary(data);
+  html += renderRecentActivity(data);
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">';
-
-  // Most used agents
-  if (data.mostUsedAgents.length > 0) {
-    html += '<div class="metrics-section glass-card">';
-    html += '<div class="metrics-section__title">Most Used Commands</div>';
-    html +=
-      '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
-    for (const item of data.mostUsedAgents.slice(0, 8)) {
-      html +=
-        '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
-        escapeHtml(item.agent) +
-        '</code></td><td style="font-family:var(--font-mono)">' +
-        item.count +
-        "</td></tr>";
-    }
-    html += "</tbody></table></div>";
-  }
-
-  // Failure reasons
-  if (data.failureReasons.length > 0) {
-    html += '<div class="metrics-section glass-card">';
-    html += '<div class="metrics-section__title">Failure Reasons</div>';
-    html +=
-      '<table class="metric-table"><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody>';
-    for (const item of data.failureReasons.slice(0, 8)) {
-      html +=
-        '<tr><td style="color:var(--error)">' +
-        escapeHtml(item.reason) +
-        '</td><td style="font-family:var(--font-mono)">' +
-        item.count +
-        "</td></tr>";
-    }
-    html += "</tbody></table></div>";
-  } else {
-    html +=
-      '<div class="metrics-section glass-card"><div class="metrics-section__title">Failure Reasons</div><div style="color:var(--text-muted);font-size:13px;padding:8px 0">No failures recorded</div></div>';
-  }
-
+  html += renderAgentUsageTable(data);
+  html += renderFailureReasonsTable(data);
   html += "</div>";
   return html;
 }
@@ -1738,11 +1751,9 @@ async function attemptLogin() {
       hideLoginOverlay();
       showLogoutButton();
       init();
-    } else {
-      if (errorEl) {
-        errorEl.textContent = "Invalid API key. Please try again.";
-        errorEl.style.display = "block";
-      }
+    } else if (errorEl) {
+      errorEl.textContent = "Invalid API key. Please try again.";
+      errorEl.style.display = "block";
     }
   } catch {
     if (errorEl) {
@@ -1794,7 +1805,7 @@ async function init() {
       showLogoutButton();
     }
   } catch (err) {
-    if (err && err.message === "Authentication required") return;
+    if (err?.message === "Authentication required") return;
     setProviderStatus("offline", false);
     toast("error", "Connection failed", "Could not reach API. Is the server running?");
   }
@@ -1832,7 +1843,7 @@ document.addEventListener("click", function (e) {
     navigateToTab(target.dataset.tab);
   } else if (action === "paginate") {
     let paginateFn = PAGINATE_FUNCTIONS[target.dataset.fn];
-    if (typeof paginateFn === "function") paginateFn(parseInt(target.dataset.page, 10));
+    if (typeof paginateFn === "function") paginateFn(Number.parseInt(target.dataset.page, 10));
   } else if (action === "authSubmit") {
     attemptLogin();
   } else if (action === "authLogout") {

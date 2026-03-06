@@ -36,6 +36,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function throwRedactedError(err: unknown): never {
+  if (err instanceof Error) {
+    const redacted = redactSecrets(err.message);
+    if (redacted !== err.message) throw new Error(redacted, { cause: err });
+  }
+  throw err;
+}
+
 /**
  * Wraps an LLMProvider with automatic retry + exponential backoff.
  * Retries on 429/5xx/transient network errors.
@@ -92,14 +100,6 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
         const stricterSystem =
           `${req.system ?? ""}\n\nIMPORTANT: Your previous response failed JSON schema validation: ${validationErr.message}. You MUST respond with valid JSON that matches the required schema exactly. No markdown fences, no extra text outside JSON.`.trim();
         return { ...req, system: stricterSystem };
-      }
-
-      function throwRedactedError(err: unknown): never {
-        if (err instanceof Error) {
-          const redacted = redactSecrets(err.message);
-          if (redacted !== err.message) throw new Error(redacted, { cause: err });
-        }
-        throw err;
       }
     },
 

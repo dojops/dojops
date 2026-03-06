@@ -107,11 +107,34 @@ export function createChatRouter(
     loadAllSessionsFromDisk(rootDir, provider, agentRouter, sessions, MAX_SESSIONS);
   }
 
+  /** Restore a session from disk into the in-memory cache. */
+  function restoreFromDisk(sessionId: string): ChatSession | null {
+    if (!rootDir) return null;
+    const diskState = loadSessionFromDisk(rootDir, sessionId);
+    if (!diskState) return null;
+    const session = new ChatSession({
+      provider,
+      router: agentRouter,
+      state: diskState,
+      mode: diskState.mode ?? "INTERACTIVE",
+    });
+    sessions.set(session.id, session);
+    return session;
+  }
+
+  /** Evict oldest session if at capacity. */
+  function evictIfFull(): void {
+    if (sessions.size < MAX_SESSIONS) return;
+    const oldestKey = sessions.keys().next().value;
+    if (oldestKey) sessions.delete(oldestKey);
+  }
+
   function getOrCreateSession(
     sessionId?: string,
     agent?: string,
     mode?: "INTERACTIVE" | "DETERMINISTIC",
   ): ChatSession {
+    // Try in-memory cache first
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
       if (agent) session.pinAgent(agent);
@@ -119,33 +142,17 @@ export function createChatRouter(
     }
 
     // Cache miss — try loading from disk
-    if (sessionId && rootDir) {
-      const diskState = loadSessionFromDisk(rootDir, sessionId);
-      if (diskState) {
-        const session = new ChatSession({
-          provider,
-          router: agentRouter,
-          state: diskState,
-          mode: diskState.mode ?? "INTERACTIVE",
-        });
-        if (agent) session.pinAgent(agent);
-        sessions.set(session.id, session);
-        return session;
-      }
-    }
-
-    // FB8: Log warning when a specific sessionId was requested but not found
     if (sessionId) {
+      const restored = restoreFromDisk(sessionId);
+      if (restored) {
+        if (agent) restored.pinAgent(agent);
+        return restored;
+      }
       const sanitized = sessionId.replace(/[\r\n\t]/g, "").slice(0, 64); // NOSONAR - character class
       console.warn(`[chat] Session "${sanitized}" not found, creating new session`);
     }
 
-    // Evict oldest session if at capacity
-    if (sessions.size >= MAX_SESSIONS) {
-      const oldestKey = sessions.keys().next().value;
-      if (oldestKey) sessions.delete(oldestKey);
-    }
-
+    evictIfFull();
     const session = new ChatSession({
       provider,
       router: agentRouter,

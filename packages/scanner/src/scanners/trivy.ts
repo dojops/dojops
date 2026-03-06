@@ -48,6 +48,76 @@ interface TrivyOutput {
   Results?: TrivyResult[];
 }
 
+function parseVulnerabilities(result: TrivyResult, findings: ScanFinding[]): void {
+  if (!result.Vulnerabilities) return;
+  for (const vuln of result.Vulnerabilities) {
+    findings.push({
+      id: deterministicFindingId("trivy", vuln.VulnerabilityID, vuln.PkgName),
+      tool: "trivy",
+      severity: mapTrivySeverity(vuln.Severity),
+      category: "SECURITY",
+      file: result.Target,
+      message: `${vuln.PkgName}@${vuln.InstalledVersion}: ${vuln.VulnerabilityID}${vuln.Title ? " — " + vuln.Title : ""}`,
+      recommendation: vuln.FixedVersion
+        ? `Update to ${vuln.PkgName}@${vuln.FixedVersion}`
+        : "No fix version available",
+      autoFixAvailable: !!vuln.FixedVersion,
+      cve: vuln.VulnerabilityID.startsWith("CVE-") ? vuln.VulnerabilityID : undefined,
+      cvss: extractCvssScore(vuln.CVSS),
+      fixVersion: vuln.FixedVersion || undefined,
+    });
+  }
+}
+
+function parseMisconfigurations(result: TrivyResult, findings: ScanFinding[]): void {
+  if (!result.Misconfigurations) return;
+  for (const misconfig of result.Misconfigurations) {
+    findings.push({
+      id: deterministicFindingId("trivy", misconfig.ID, result.Target),
+      tool: "trivy",
+      severity: mapTrivySeverity(misconfig.Severity),
+      category: "IAC",
+      file: result.Target,
+      message: `${misconfig.ID}: ${misconfig.Title}`,
+      recommendation: misconfig.Resolution ?? misconfig.Description,
+      autoFixAvailable: false,
+    });
+  }
+}
+
+function parseSecrets(result: TrivyResult, findings: ScanFinding[]): void {
+  if (!result.Secrets) return;
+  for (const secret of result.Secrets) {
+    findings.push({
+      id: deterministicFindingId("trivy", secret.RuleID, String(secret.StartLine)),
+      tool: "trivy",
+      severity: "CRITICAL",
+      category: "SECRETS",
+      file: result.Target,
+      line: secret.StartLine,
+      message: `${secret.RuleID}: ${secret.Title}`,
+      recommendation: "Remove secret from source code and rotate credentials",
+      autoFixAvailable: false,
+    });
+  }
+}
+
+function parseTrivyResults(rawOutput: string): ScanFinding[] {
+  const findings: ScanFinding[] = [];
+  try {
+    const output: TrivyOutput = JSON.parse(rawOutput);
+    if (!output.Results) return findings;
+    for (const result of output.Results) {
+      parseVulnerabilities(result, findings);
+      parseMisconfigurations(result, findings);
+      parseSecrets(result, findings);
+    }
+  } catch {
+    findings.push(parseErrorFinding("trivy", "SECURITY"));
+  }
+  return findings;
+}
+
 export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
   let rawOutput: string;
   try {
@@ -71,71 +141,7 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
     }
   }
 
-  const findings: ScanFinding[] = [];
-
-  try {
-    const output: TrivyOutput = JSON.parse(rawOutput);
-    if (output.Results) {
-      for (const result of output.Results) {
-        // Vulnerabilities
-        if (result.Vulnerabilities) {
-          for (const vuln of result.Vulnerabilities) {
-            findings.push({
-              id: deterministicFindingId("trivy", vuln.VulnerabilityID, vuln.PkgName),
-              tool: "trivy",
-              severity: mapTrivySeverity(vuln.Severity),
-              category: "SECURITY",
-              file: result.Target,
-              message: `${vuln.PkgName}@${vuln.InstalledVersion}: ${vuln.VulnerabilityID}${vuln.Title ? " — " + vuln.Title : ""}`,
-              recommendation: vuln.FixedVersion
-                ? `Update to ${vuln.PkgName}@${vuln.FixedVersion}`
-                : "No fix version available",
-              autoFixAvailable: !!vuln.FixedVersion,
-              cve: vuln.VulnerabilityID.startsWith("CVE-") ? vuln.VulnerabilityID : undefined,
-              cvss: extractCvssScore(vuln.CVSS),
-              fixVersion: vuln.FixedVersion || undefined,
-            });
-          }
-        }
-
-        // Misconfigurations
-        if (result.Misconfigurations) {
-          for (const misconfig of result.Misconfigurations) {
-            findings.push({
-              id: deterministicFindingId("trivy", misconfig.ID, result.Target),
-              tool: "trivy",
-              severity: mapTrivySeverity(misconfig.Severity),
-              category: "IAC",
-              file: result.Target,
-              message: `${misconfig.ID}: ${misconfig.Title}`,
-              recommendation: misconfig.Resolution ?? misconfig.Description,
-              autoFixAvailable: false,
-            });
-          }
-        }
-
-        // Secrets
-        if (result.Secrets) {
-          for (const secret of result.Secrets) {
-            findings.push({
-              id: deterministicFindingId("trivy", secret.RuleID, String(secret.StartLine)),
-              tool: "trivy",
-              severity: "CRITICAL",
-              category: "SECRETS",
-              file: result.Target,
-              line: secret.StartLine,
-              message: `${secret.RuleID}: ${secret.Title}`,
-              recommendation: "Remove secret from source code and rotate credentials",
-              autoFixAvailable: false,
-            });
-          }
-        }
-      }
-    }
-  } catch {
-    findings.push(parseErrorFinding("trivy", "SECURITY"));
-  }
-
+  const findings = parseTrivyResults(rawOutput);
   return { tool: "trivy", findings, rawOutput };
 }
 

@@ -26,98 +26,90 @@ export function parseDopsFile(filePath: string): DopsModule {
  */
 export function parseDopsString(content: string): DopsModule {
   const { frontmatterRaw, body } = splitFrontmatter(content);
-
-  // Parse YAML frontmatter
-  let frontmatterData: unknown;
-  try {
-    frontmatterData = yaml.load(frontmatterRaw);
-  } catch (err) {
-    throw new Error(`Invalid YAML in frontmatter: ${(err as Error).message}`, { cause: err });
-  }
-
-  // Validate frontmatter against schema
-  const parseResult = DopsFrontmatterSchema.safeParse(frontmatterData);
-  if (!parseResult.success) {
-    const errors = parseResult.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
-    throw new Error(`Invalid DOPS frontmatter:\n  ${errors.join("\n  ")}`);
-  }
-
-  // Parse markdown sections
+  const frontmatterData = parseFrontmatterYaml(frontmatterRaw);
+  const frontmatter = validateFrontmatter(
+    DopsFrontmatterSchema,
+    frontmatterData,
+    "DOPS frontmatter",
+  );
   const sections = parseMarkdownSections(body);
-
-  return {
-    frontmatter: parseResult.data,
-    sections,
-    raw: content,
-  };
+  return { frontmatter, sections, raw: content };
 }
 
 /**
  * Validate a parsed DOPS module for completeness.
  */
+const KNOWN_VERIFICATION_PARSERS = new Set([
+  "terraform-json",
+  "hadolint-json",
+  "kubectl-stderr",
+  "helm-lint",
+  "nginx-stderr",
+  "promtool",
+  "systemd-analyze",
+  "make-dryrun",
+  "ansible-syntax",
+  "docker-compose-config",
+  "actionlint",
+  "github-actions",
+  "gitlab-ci",
+  "generic-stderr",
+  "generic-json",
+]);
+
+/** Validate required sections exist. */
+function validateRequiredSections(sections: MarkdownSections, errors: string[]): void {
+  if (!sections.prompt || sections.prompt.trim().length === 0) {
+    errors.push("Missing required ## Prompt section");
+  }
+  if (!sections.keywords || sections.keywords.trim().length === 0) {
+    errors.push("Missing required ## Keywords section");
+  }
+}
+
+/** Validate scope write paths for path traversal. */
+function validateScopeWritePaths(scope: { write: string[] } | undefined, errors: string[]): void {
+  if (!scope) return;
+  for (const writePath of scope.write) {
+    if (writePath.split(/[/\\]/).includes("..")) {
+      errors.push(`Scope write path contains path traversal: '${writePath}'`);
+    }
+  }
+}
+
+/** Validate verification binary parser is known. */
+function validateVerificationParser(
+  verification: { binary?: { parser: string } } | undefined,
+  errors: string[],
+): void {
+  if (!verification?.binary) return;
+  if (!KNOWN_VERIFICATION_PARSERS.has(verification.binary.parser)) {
+    errors.push(`Unknown verification parser: '${verification.binary.parser}'`);
+  }
+}
+
 export function validateDopsModule(module: DopsModule): DopsValidationResult {
   const errors: string[] = [];
 
-  // Required sections
-  if (!module.sections.prompt || module.sections.prompt.trim().length === 0) {
-    errors.push("Missing required ## Prompt section");
-  }
-  if (!module.sections.keywords || module.sections.keywords.trim().length === 0) {
-    errors.push("Missing required ## Keywords section");
-  }
+  validateRequiredSections(module.sections, errors);
 
-  // Validate output schema has type
   if (!module.frontmatter.output?.type) {
     errors.push("Output schema must have a 'type' field");
   }
 
-  // Validate files have valid paths
   for (const file of module.frontmatter.files) {
     if (file.source === "template" && !file.content && file.format !== "raw") {
       errors.push(`File '${file.path}': template source requires 'content' field`);
     }
   }
 
-  // Validate scope.write paths do not contain path traversal
-  if (module.frontmatter.scope) {
-    for (const writePath of module.frontmatter.scope.write) {
-      const segments = writePath.split(/[/\\]/);
-      if (segments.includes("..")) {
-        errors.push(`Scope write path contains path traversal: '${writePath}'`);
-      }
-    }
-  }
+  validateScopeWritePaths(module.frontmatter.scope, errors);
 
-  // Validate network must be "none" when risk is declared (v1 constraint)
   if (module.frontmatter.risk && module.frontmatter.permissions?.network === "required") {
     errors.push("network permission must be 'none' for v1 tools");
   }
 
-  // Validate verification binary references a known parser
-  if (module.frontmatter.verification?.binary) {
-    const knownParsers = [
-      "terraform-json",
-      "hadolint-json",
-      "kubectl-stderr",
-      "helm-lint",
-      "nginx-stderr",
-      "promtool",
-      "systemd-analyze",
-      "make-dryrun",
-      "ansible-syntax",
-      "docker-compose-config",
-      "actionlint",
-      "github-actions",
-      "gitlab-ci",
-      "generic-stderr",
-      "generic-json",
-    ];
-    if (!knownParsers.includes(module.frontmatter.verification.binary.parser)) {
-      errors.push(
-        `Unknown verification parser: '${module.frontmatter.verification.binary.parser}'`,
-      );
-    }
-  }
+  validateVerificationParser(module.frontmatter.verification, errors);
 
   return {
     valid: errors.length === 0,
@@ -204,40 +196,57 @@ export function parseDopsFileAny(filePath: string): DopsModuleAny {
   return parseDopsStringAny(content);
 }
 
-/**
- * Parse a .dops file from a string, auto-detecting v1 or v2 format.
- */
-export function parseDopsStringAny(content: string): DopsModuleAny {
-  const { frontmatterRaw, body } = splitFrontmatter(content);
-
-  let frontmatterData: unknown;
+/** Parse frontmatter YAML and throw on invalid YAML. */
+function parseFrontmatterYaml(raw: string): unknown {
   try {
-    frontmatterData = yaml.load(frontmatterRaw);
+    return yaml.load(raw);
   } catch (err) {
     throw new Error(`Invalid YAML in frontmatter: ${(err as Error).message}`, { cause: err });
   }
+}
 
-  // Detect version from the `dops` field
+/** Validate frontmatter data against a Zod schema, throwing with formatted errors. */
+function validateFrontmatter<T>(
+  schema: {
+    safeParse: (data: unknown) => {
+      success: boolean;
+      data?: T;
+      error?: { issues: Array<{ path: PropertyKey[]; message: string }> };
+    };
+  },
+  data: unknown,
+  label: string,
+): T {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    const errors = result.error!.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
+    throw new Error(`Invalid ${label}:\n  ${errors.join("\n  ")}`);
+  }
+  return result.data!;
+}
+
+export function parseDopsStringAny(content: string): DopsModuleAny {
+  const { frontmatterRaw, body } = splitFrontmatter(content);
+  const frontmatterData = parseFrontmatterYaml(frontmatterRaw);
+  const sections = parseMarkdownSections(body);
+
   const version = (frontmatterData as Record<string, unknown>)?.dops;
 
   if (version === "v2") {
-    const parseResult = DopsFrontmatterV2Schema.safeParse(frontmatterData);
-    if (!parseResult.success) {
-      const errors = parseResult.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
-      throw new Error(`Invalid DOPS v2 frontmatter:\n  ${errors.join("\n  ")}`);
-    }
-    const sections = parseMarkdownSections(body);
-    return { frontmatter: parseResult.data, sections, raw: content } as DopsModuleV2;
+    const frontmatter = validateFrontmatter(
+      DopsFrontmatterV2Schema,
+      frontmatterData,
+      "DOPS v2 frontmatter",
+    );
+    return { frontmatter, sections, raw: content } as DopsModuleV2;
   }
 
-  // Default: v1
-  const parseResult = DopsFrontmatterSchema.safeParse(frontmatterData);
-  if (!parseResult.success) {
-    const errors = parseResult.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
-    throw new Error(`Invalid DOPS frontmatter:\n  ${errors.join("\n  ")}`);
-  }
-  const sections = parseMarkdownSections(body);
-  return { frontmatter: parseResult.data, sections, raw: content } as DopsModule;
+  const frontmatter = validateFrontmatter(
+    DopsFrontmatterSchema,
+    frontmatterData,
+    "DOPS frontmatter",
+  );
+  return { frontmatter, sections, raw: content } as DopsModule;
 }
 
 /**
@@ -246,56 +255,16 @@ export function parseDopsStringAny(content: string): DopsModuleAny {
 export function validateDopsModuleV2(module: DopsModuleV2): DopsValidationResult {
   const errors: string[] = [];
 
-  // Required sections
-  if (!module.sections.prompt || module.sections.prompt.trim().length === 0) {
-    errors.push("Missing required ## Prompt section");
-  }
-  if (!module.sections.keywords || module.sections.keywords.trim().length === 0) {
-    errors.push("Missing required ## Keywords section");
-  }
+  validateRequiredSections(module.sections, errors);
 
-  // Validate files have valid paths
   for (const file of module.frontmatter.files) {
     if (!file.path || file.path.trim().length === 0) {
       errors.push("File spec has empty path");
     }
   }
 
-  // Validate scope.write paths do not contain path traversal
-  if (module.frontmatter.scope) {
-    for (const writePath of module.frontmatter.scope.write) {
-      const segments = writePath.split(/[/\\]/);
-      if (segments.includes("..")) {
-        errors.push(`Scope write path contains path traversal: '${writePath}'`);
-      }
-    }
-  }
-
-  // Validate verification binary references a known parser
-  if (module.frontmatter.verification?.binary) {
-    const knownParsers = [
-      "terraform-json",
-      "hadolint-json",
-      "kubectl-stderr",
-      "helm-lint",
-      "nginx-stderr",
-      "promtool",
-      "systemd-analyze",
-      "make-dryrun",
-      "ansible-syntax",
-      "docker-compose-config",
-      "actionlint",
-      "github-actions",
-      "gitlab-ci",
-      "generic-stderr",
-      "generic-json",
-    ];
-    if (!knownParsers.includes(module.frontmatter.verification.binary.parser)) {
-      errors.push(
-        `Unknown verification parser: '${module.frontmatter.verification.binary.parser}'`,
-      );
-    }
-  }
+  validateScopeWritePaths(module.frontmatter.scope, errors);
+  validateVerificationParser(module.frontmatter.verification, errors);
 
   return {
     valid: errors.length === 0,

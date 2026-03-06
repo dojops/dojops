@@ -45,46 +45,46 @@ export function loadScanPolicy(projectPath: string): ScanPolicy | undefined {
  * Returns pass/fail status with violation details.
  * Also filters out ignored findings from the report (side-effect on report.findings).
  */
-export function evaluatePolicy(report: ScanReport, policy: ScanPolicy): PolicyResult {
+/** Apply ignore list to a report, filtering out suppressed findings. Returns count of suppressed. */
+function applyIgnoreList(report: ScanReport, ignoreEntries: ScanPolicyIgnoreEntry[]): number {
+  if (ignoreEntries.length === 0) return 0;
+  const ignoreIds = new Set(ignoreEntries.map((e) => e.id));
+  const originalCount = report.findings.length;
+  report.findings = report.findings.filter(
+    (f) => !ignoreIds.has(f.id) && !ignoreIds.has(f.cve ?? ""),
+  );
+  const suppressedCount = originalCount - report.findings.length;
+  if (suppressedCount > 0) {
+    report.summary = {
+      total: report.findings.length,
+      critical: report.findings.filter((f) => f.severity === "CRITICAL").length,
+      high: report.findings.filter((f) => f.severity === "HIGH").length,
+      medium: report.findings.filter((f) => f.severity === "MEDIUM").length,
+      low: report.findings.filter((f) => f.severity === "LOW").length,
+    };
+  }
+  return suppressedCount;
+}
+
+/** Check severity thresholds and collect violation messages. */
+function checkThresholds(report: ScanReport, thresholds: ScanPolicyThresholds): string[] {
   const violations: string[] = [];
-  let suppressedCount = 0;
-
-  // Apply ignore list — filter suppressed findings and recompute summary
-  if (policy.ignore && policy.ignore.length > 0) {
-    const ignoreIds = new Set(policy.ignore.map((e) => e.id));
-    const originalFindings = [...report.findings];
-    report.findings = originalFindings.filter(
-      (f) => !ignoreIds.has(f.id) && !ignoreIds.has(f.cve ?? ""),
+  const criticalCount = report.findings.filter((f) => f.severity === "CRITICAL").length;
+  const highCount = report.findings.filter((f) => f.severity === "HIGH").length;
+  if (thresholds.critical !== undefined && criticalCount > thresholds.critical) {
+    violations.push(
+      `CRITICAL findings (${criticalCount}) exceed threshold (${thresholds.critical})`,
     );
-    suppressedCount = originalFindings.length - report.findings.length;
-
-    // Recompute summary to match filtered findings
-    if (suppressedCount > 0) {
-      report.summary = {
-        total: report.findings.length,
-        critical: report.findings.filter((f) => f.severity === "CRITICAL").length,
-        high: report.findings.filter((f) => f.severity === "HIGH").length,
-        medium: report.findings.filter((f) => f.severity === "MEDIUM").length,
-        low: report.findings.filter((f) => f.severity === "LOW").length,
-      };
-    }
   }
-
-  // Check severity count thresholds
-  if (policy.thresholds) {
-    const criticalCount = report.findings.filter((f) => f.severity === "CRITICAL").length;
-    const highCount = report.findings.filter((f) => f.severity === "HIGH").length;
-
-    if (policy.thresholds.critical !== undefined && criticalCount > policy.thresholds.critical) {
-      violations.push(
-        `CRITICAL findings (${criticalCount}) exceed threshold (${policy.thresholds.critical})`,
-      );
-    }
-    if (policy.thresholds.high !== undefined && highCount > policy.thresholds.high) {
-      violations.push(`HIGH findings (${highCount}) exceed threshold (${policy.thresholds.high})`);
-    }
+  if (thresholds.high !== undefined && highCount > thresholds.high) {
+    violations.push(`HIGH findings (${highCount}) exceed threshold (${thresholds.high})`);
   }
+  return violations;
+}
 
+export function evaluatePolicy(report: ScanReport, policy: ScanPolicy): PolicyResult {
+  const suppressedCount = policy.ignore ? applyIgnoreList(report, policy.ignore) : 0;
+  const violations = policy.thresholds ? checkThresholds(report, policy.thresholds) : [];
   return { passed: violations.length === 0, violations, suppressedCount };
 }
 
@@ -92,6 +92,17 @@ export function evaluatePolicy(report: ScanReport, policy: ScanPolicy): PolicyRe
  * Minimal YAML parser for scan-policy.yaml.
  * Supports the specific schema: thresholds.critical, thresholds.high, ignore[].id, ignore[].reason
  */
+/** Strip surrounding quotes from a YAML value string. */
+function stripQuotes(value: string): string {
+  return value.trim().replaceAll(/^["']|["']$/g, "");
+}
+
+/** Parse an integer from a "key: value" YAML line. Returns undefined on failure. */
+function parseThresholdValue(stripped: string): number | undefined {
+  const val = Number.parseInt(stripped.split(":")[1].trim(), 10);
+  return Number.isNaN(val) ? undefined : val;
+}
+
 function parseScanPolicyYaml(content: string): ScanPolicy {
   const policy: ScanPolicy = {};
   const lines = content.split("\n");
@@ -100,19 +111,17 @@ function parseScanPolicyYaml(content: string): ScanPolicy {
   let currentIgnoreEntry: Partial<ScanPolicyIgnoreEntry> | null = null;
 
   for (const raw of lines) {
-    const line = raw.trimEnd();
-    const stripped = line.trim();
+    const stripped = raw.trimEnd().trim();
 
-    // Skip comments and empty lines
     if (!stripped || stripped.startsWith("#")) continue;
 
+    // Detect top-level section switches
     if (stripped === "thresholds:") {
       inThresholds = true;
       inIgnore = false;
       policy.thresholds = {};
       continue;
     }
-
     if (stripped === "ignore:") {
       inIgnore = true;
       inThresholds = false;
@@ -120,45 +129,34 @@ function parseScanPolicyYaml(content: string): ScanPolicy {
       continue;
     }
 
-    if (inThresholds && stripped.startsWith("critical:")) {
-      const val = Number.parseInt(stripped.split(":")[1].trim(), 10);
-      if (!Number.isNaN(val)) policy.thresholds!.critical = val;
+    // Unknown top-level key resets context (must be checked before section parsing)
+    if (!stripped.startsWith(" ") && !stripped.startsWith("-") && stripped.endsWith(":")) {
+      inThresholds = false;
+      inIgnore = false;
       continue;
     }
 
-    if (inThresholds && stripped.startsWith("high:")) {
-      const val = Number.parseInt(stripped.split(":")[1].trim(), 10);
-      if (!Number.isNaN(val)) policy.thresholds!.high = val;
+    if (inThresholds) {
+      if (stripped.startsWith("critical:")) {
+        const val = parseThresholdValue(stripped);
+        if (val !== undefined) policy.thresholds!.critical = val;
+      } else if (stripped.startsWith("high:")) {
+        const val = parseThresholdValue(stripped);
+        if (val !== undefined) policy.thresholds!.high = val;
+      }
       continue;
     }
 
     if (inIgnore) {
       if (stripped.startsWith("- id:")) {
-        // Push previous entry if any
         if (currentIgnoreEntry?.id) {
           policy.ignore!.push(currentIgnoreEntry as ScanPolicyIgnoreEntry);
         }
-        currentIgnoreEntry = {
-          id: stripped
-            .slice(5)
-            .trim()
-            .replaceAll(/^["']|["']$/g, ""),
-        };
-        continue;
+        currentIgnoreEntry = { id: stripQuotes(stripped.slice(5)) };
+      } else if (stripped.startsWith("reason:") && currentIgnoreEntry) {
+        currentIgnoreEntry.reason = stripQuotes(stripped.slice(7));
       }
-      if (stripped.startsWith("reason:") && currentIgnoreEntry) {
-        currentIgnoreEntry.reason = stripped
-          .slice(7)
-          .trim()
-          .replaceAll(/^["']|["']$/g, "");
-        continue;
-      }
-    }
-
-    // If we hit a top-level key, reset context
-    if (!stripped.startsWith(" ") && !stripped.startsWith("-") && stripped.endsWith(":")) {
-      inThresholds = false;
-      inIgnore = false;
+      continue;
     }
   }
 

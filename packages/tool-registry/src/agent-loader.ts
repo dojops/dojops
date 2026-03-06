@@ -49,45 +49,34 @@ function loadAgentFromDir(
  * Discovers custom agents from global (~/.dojops/agents/) and project (.dojops/agents/) directories.
  * Project agents override global agents by directory name.
  */
+/** Scan a directory for agent subdirectories and load them into the map. */
+function loadAgentsFromDirectory(
+  baseDir: string,
+  location: "global" | "project",
+  agents: Map<string, CustomAgentEntry>,
+): void {
+  if (!fs.existsSync(baseDir)) return;
+  try {
+    const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const agentDir = path.join(baseDir, entry.name);
+      const agent = loadAgentFromDir(agentDir, location);
+      if (agent) agents.set(entry.name, agent);
+    }
+  } catch {
+    // Silently skip unreadable directory
+  }
+}
+
 export function discoverCustomAgents(projectPath?: string): CustomAgentEntry[] {
   const agents = new Map<string, CustomAgentEntry>();
 
-  // 1. Global agents
   const globalDir = getGlobalAgentsDir();
-  if (globalDir && fs.existsSync(globalDir)) {
-    try {
-      const entries = fs.readdirSync(globalDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const agentDir = path.join(globalDir, entry.name);
-        const agent = loadAgentFromDir(agentDir, "global");
-        if (agent) {
-          agents.set(entry.name, agent);
-        }
-      }
-    } catch {
-      // Silently skip unreadable global dir
-    }
-  }
+  if (globalDir) loadAgentsFromDirectory(globalDir, "global", agents);
 
-  // 2. Project agents (override global)
   if (projectPath) {
-    const projectDir = getProjectAgentsDir(projectPath);
-    if (fs.existsSync(projectDir)) {
-      try {
-        const entries = fs.readdirSync(projectDir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (!entry.isDirectory()) continue;
-          const agentDir = path.join(projectDir, entry.name);
-          const agent = loadAgentFromDir(agentDir, "project");
-          if (agent) {
-            agents.set(entry.name, agent);
-          }
-        }
-      } catch {
-        // Silently skip unreadable project dir
-      }
-    }
+    loadAgentsFromDirectory(getProjectAgentsDir(projectPath), "project", agents);
   }
 
   return Array.from(agents.values());

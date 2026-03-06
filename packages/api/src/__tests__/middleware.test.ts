@@ -77,6 +77,30 @@ function mockAuthReqRes(path: string, headers: Record<string, string> = {}) {
   return { req, res, next };
 }
 
+/**
+ * Run an auth middleware and assert the expected outcome:
+ * - "pass": next was called, status was NOT called
+ * - number: status was called with that code, next was NOT called
+ */
+function runAuthMiddleware(
+  apiKey: string | undefined,
+  reqPath: string,
+  headers: Record<string, string>,
+  expected: "pass" | number,
+) {
+  const middleware = authMiddleware(apiKey);
+  const { req, res, next } = mockAuthReqRes(reqPath, headers);
+  middleware(req, res, next);
+  if (expected === "pass") {
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  } else {
+    expect(res.status).toHaveBeenCalledWith(expected);
+    expect(next).not.toHaveBeenCalled();
+  }
+  return { res };
+}
+
 describe("authMiddleware", () => {
   it("passes through when no apiKey configured", () => {
     const middleware = authMiddleware();
@@ -89,83 +113,76 @@ describe("authMiddleware", () => {
   });
 
   it("allows /health without auth even when apiKey is set", () => {
-    const middleware = authMiddleware("secret-key-123");
-    const { req, res, next } = mockAuthReqRes("/health");
-    middleware(req, res, next);
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
+    runAuthMiddleware("secret-key-123", "/health", {}, "pass");
   });
 
   it("allows /api/health without auth even when apiKey is set", () => {
-    const middleware = authMiddleware("secret-key-123");
-    const { req, res, next } = mockAuthReqRes("/api/health");
-    middleware(req, res, next);
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
+    runAuthMiddleware("secret-key-123", "/api/health", {}, "pass");
   });
 
   it("returns 401 when no auth header provided", () => {
-    const middleware = authMiddleware("secret-key-123");
-    const { req, res, next } = mockAuthReqRes("/api/generate");
-    middleware(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
+    const { res } = runAuthMiddleware("secret-key-123", "/api/generate", {}, 401);
     expect(res.json).toHaveBeenCalledWith({ error: "Authentication required" });
-    expect(next).not.toHaveBeenCalled();
   });
 
   it("returns 403 for wrong Bearer token", () => {
-    const middleware = authMiddleware("correct-key");
-    const { req, res, next } = mockAuthReqRes("/api/generate", {
-      authorization: "Bearer wrong-key-xx",
-    });
-    middleware(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    const { res } = runAuthMiddleware(
+      "correct-key",
+      "/api/generate",
+      {
+        authorization: "Bearer wrong-key-xx",
+      },
+      403,
+    );
     expect(res.json).toHaveBeenCalledWith({ error: "Invalid API key" });
-    expect(next).not.toHaveBeenCalled();
   });
 
   it("passes with correct Bearer token and sets authenticated", () => {
-    const middleware = authMiddleware("my-secret-key");
-    const { req, res, next } = mockAuthReqRes("/api/generate", {
-      authorization: "Bearer my-secret-key",
-    });
-    middleware(req, res, next);
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
+    const { res } = runAuthMiddleware(
+      "my-secret-key",
+      "/api/generate",
+      {
+        authorization: "Bearer my-secret-key",
+      },
+      "pass",
+    );
     expect(res.locals.authenticated).toBe(true);
   });
 
   it("passes with correct X-API-Key header", () => {
-    const middleware = authMiddleware("my-secret-key");
-    const { req, res, next } = mockAuthReqRes("/api/generate", {
-      "x-api-key": "my-secret-key",
-    });
-    middleware(req, res, next);
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
+    runAuthMiddleware(
+      "my-secret-key",
+      "/api/generate",
+      {
+        "x-api-key": "my-secret-key",
+      },
+      "pass",
+    );
   });
 
   it("prefers Bearer over X-API-Key when both present", () => {
-    const middleware = authMiddleware("correct-key-value");
-    const { req, res, next } = mockAuthReqRes("/api/generate", {
-      authorization: "Bearer correct-key-value",
-      "x-api-key": "wrong-key-value---",
-    });
-    middleware(req, res, next);
     // Bearer is correct so it should pass, even though X-API-Key is wrong
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
+    runAuthMiddleware(
+      "correct-key-value",
+      "/api/generate",
+      {
+        authorization: "Bearer correct-key-value",
+        "x-api-key": "wrong-key-value---",
+      },
+      "pass",
+    );
   });
 
   it("returns 403 for key with different length", () => {
-    const middleware = authMiddleware("short");
-    const { req, res, next } = mockAuthReqRes("/api/generate", {
-      authorization: "Bearer much-longer-key-that-differs-in-length",
-    });
-    middleware(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    const { res } = runAuthMiddleware(
+      "short",
+      "/api/generate",
+      {
+        authorization: "Bearer much-longer-key-that-differs-in-length",
+      },
+      403,
+    );
     expect(res.json).toHaveBeenCalledWith({ error: "Invalid API key" });
-    expect(next).not.toHaveBeenCalled();
   });
 
   it("returns 401 for empty Bearer token ('Bearer ' with no key)", () => {

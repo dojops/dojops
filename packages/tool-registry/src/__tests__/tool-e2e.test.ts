@@ -43,6 +43,64 @@ function createMockProvider(response?: Partial<LLMResponse>): LLMProvider {
   };
 }
 
+/** Shared temp dir setup/teardown for E2E tests that need filesystem isolation. */
+function useTempDir() {
+  let tmpDir: string;
+  let projectDir: string;
+  let origHome: string | undefined;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-"));
+    projectDir = path.join(tmpDir, "project");
+    fs.mkdirSync(projectDir, { recursive: true });
+    origHome = process.env.HOME;
+    process.env.HOME = tmpDir;
+  });
+
+  afterEach(() => {
+    process.env.HOME = origHome;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  return {
+    get tmpDir() {
+      return tmpDir;
+    },
+    get projectDir() {
+      return projectDir;
+    },
+  };
+}
+
+/**
+ * Write a Caddy tool into projectDir's .dojops/tools, discover it,
+ * and return the first discovered entry.
+ */
+function setupCaddyTool(projectDir: string) {
+  const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+  writeCaddyTool(projectToolsDir);
+  return discoverTools(projectDir)[0];
+}
+
+/**
+ * Create a CustomTool from a discovered tool entry with the given provider.
+ */
+function createCustomToolFromEntry(
+  entry: ReturnType<typeof discoverTools>[0],
+  provider: LLMProvider,
+  anchorDir?: string,
+) {
+  return new CustomTool(
+    entry.manifest,
+    provider,
+    entry.toolDir,
+    entry.source,
+    entry.inputSchemaRaw,
+    undefined,
+    anchorDir,
+  );
+}
+
 /** Write a realistic Caddy tool to disk */
 function writeCaddyTool(toolsDir: string): string {
   const dir = path.join(toolsDir, "caddy-config");
@@ -251,28 +309,13 @@ describe("Tool E2E: Manifest Validation", () => {
 });
 
 describe("Tool E2E: Discovery & Registry", () => {
-  let tmpDir: string;
-  let projectDir: string;
-  let origHome: string | undefined;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-"));
-    projectDir = path.join(tmpDir, "project");
-    fs.mkdirSync(projectDir, { recursive: true });
-    origHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-  });
-
-  afterEach(() => {
-    process.env.HOME = origHome;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  const ctx = useTempDir();
 
   it("discovers Caddy tool from project directory", () => {
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+    const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
     writeCaddyTool(projectToolsDir);
 
-    const tools = discoverTools(projectDir);
+    const tools = discoverTools(ctx.projectDir);
     expect(tools).toHaveLength(1);
     expect(tools[0].manifest.name).toBe("caddy-config");
     expect(tools[0].manifest.version).toBe("1.0.0");
@@ -283,23 +326,23 @@ describe("Tool E2E: Discovery & Registry", () => {
   });
 
   it("discovers Envoy tool from global directory", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    const globalToolsDir = path.join(ctx.tmpDir, ".dojops", "tools");
     writeEnvoyTool(globalToolsDir);
 
-    const tools = discoverTools(projectDir);
+    const tools = discoverTools(ctx.projectDir);
     expect(tools).toHaveLength(1);
     expect(tools[0].manifest.name).toBe("envoy-config");
     expect(tools[0].source.location).toBe("global");
   });
 
   it("discovers both Caddy (project) and Envoy (global) tools", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+    const globalToolsDir = path.join(ctx.tmpDir, ".dojops", "tools");
     writeEnvoyTool(globalToolsDir);
 
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+    const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
     writeCaddyTool(projectToolsDir);
 
-    const tools = discoverTools(projectDir);
+    const tools = discoverTools(ctx.projectDir);
     expect(tools).toHaveLength(2);
 
     const names = tools.map((t) => t.manifest.name).sort((a, b) => a.localeCompare(b));
@@ -307,7 +350,7 @@ describe("Tool E2E: Discovery & Registry", () => {
   });
 
   it("provides warnings for invalid tools", () => {
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+    const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
     fs.mkdirSync(path.join(projectToolsDir, "broken-tool"), { recursive: true });
     fs.writeFileSync(
       path.join(projectToolsDir, "broken-tool", "tool.yaml"),
@@ -315,18 +358,18 @@ describe("Tool E2E: Discovery & Registry", () => {
       "utf-8",
     );
 
-    const { tools, warnings } = discoverToolsWithWarnings(projectDir);
+    const { tools, warnings } = discoverToolsWithWarnings(ctx.projectDir);
     expect(tools).toHaveLength(0);
     expect(warnings.length).toBeGreaterThan(0);
     expect(warnings[0]).toContain("Failed to load");
   });
 
   it("ToolRegistry integrates custom tools alongside built-in tools", () => {
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+    const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
     writeCaddyTool(projectToolsDir);
     writeEnvoyTool(projectToolsDir);
 
-    const entries = discoverTools(projectDir);
+    const entries = discoverTools(ctx.projectDir);
     const provider = createMockProvider();
 
     const customTools = entries.map(
@@ -372,7 +415,7 @@ describe("Tool E2E: Discovery & Registry", () => {
 
   it("custom tools can override built-in tools by name", () => {
     // Create a tool named "nginx" which is also a built-in
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+    const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
     const dir = path.join(projectToolsDir, "nginx");
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
@@ -399,7 +442,7 @@ describe("Tool E2E: Discovery & Registry", () => {
       "utf-8",
     );
 
-    const entries = discoverTools(projectDir);
+    const entries = discoverTools(ctx.projectDir);
     const provider = createMockProvider();
     const customTools = entries.map(
       (entry) =>
@@ -519,19 +562,7 @@ describe("Tool E2E: JSON Schema to Zod Conversion", () => {
 });
 
 describe("Tool E2E: CustomTool Generate & Execute", () => {
-  let tmpDir: string;
-  let origHome: string | undefined;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-exec-"));
-    origHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-  });
-
-  afterEach(() => {
-    process.env.HOME = origHome;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  const ctx = useTempDir();
 
   it("Caddy tool: generates Caddyfile via LLM", async () => {
     const caddyfileContent = "example.com {\n  reverse_proxy localhost:3000\n  tls internal\n}\n";
@@ -540,24 +571,14 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       parsed: { caddyfile: caddyfileContent },
     });
 
-    const projectToolsDir = path.join(tmpDir, "project", ".dojops", "tools");
-    writeCaddyTool(projectToolsDir);
-    const projectDir = path.join(tmpDir, "project");
-    const entry = discoverTools(projectDir)[0];
-
-    const tool = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-    );
+    const entry = setupCaddyTool(ctx.projectDir);
+    const tool = createCustomToolFromEntry(entry, provider);
 
     // Validate input
     const validation = tool.validate({
       domain: "example.com",
       description: "Reverse proxy to Node app",
-      outputPath: path.join(tmpDir, "output"),
+      outputPath: path.join(ctx.tmpDir, "output"),
     });
     expect(validation.valid).toBe(true);
 
@@ -565,7 +586,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     const result = await tool.generate({
       domain: "example.com",
       description: "Reverse proxy to Node app",
-      outputPath: path.join(tmpDir, "output"),
+      outputPath: path.join(ctx.tmpDir, "output"),
     });
 
     expect(result.success).toBe(true);
@@ -588,22 +609,9 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       parsed: { caddyfile: caddyfileContent },
     });
 
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
-    writeCaddyTool(projectToolsDir);
-
-    const entry = discoverTools(projectDir)[0];
+    const entry = setupCaddyTool(ctx.projectDir);
     const outputDir = "output";
-
-    const tool = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-      undefined,
-      entry.toolDir,
-    );
+    const tool = createCustomToolFromEntry(entry, provider, entry.toolDir);
 
     const result = await tool.execute({
       domain: "example.com",
@@ -635,22 +643,9 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       parsed: undefined, // no structured output, falls back to raw string
     });
 
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
-    writeCaddyTool(projectToolsDir);
-
-    const entry = discoverTools(projectDir)[0];
+    const entry = setupCaddyTool(ctx.projectDir);
     const outputDir = "output";
-
-    const tool = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-      undefined,
-      entry.toolDir,
-    );
+    const tool = createCustomToolFromEntry(entry, provider, entry.toolDir);
 
     const result = await tool.execute({
       domain: "example.com",
@@ -700,22 +695,12 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
 
     const provider = createMockProvider({ parsed: envoyConfig });
 
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+    const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
     writeEnvoyTool(projectToolsDir);
 
-    const entry = discoverTools(projectDir)[0];
+    const entry = discoverTools(ctx.projectDir)[0];
     const outputDir = "output";
-
-    const tool = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-      undefined,
-      entry.toolDir,
-    );
+    const tool = createCustomToolFromEntry(entry, provider, entry.toolDir);
 
     const result = await tool.execute({
       serviceName: "web-api",
@@ -744,10 +729,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       parsed: { caddyfile: "updated content" },
     });
 
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
-    writeCaddyTool(projectToolsDir);
-    const entry = discoverTools(projectDir)[0];
+    const entry = setupCaddyTool(ctx.projectDir);
 
     const outputDir = "output";
     // Create existing file under toolDir since resolveFilePath anchors to it
@@ -756,15 +738,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     const filePath = path.join(absOutputDir, "Caddyfile");
     fs.writeFileSync(filePath, "original content", "utf-8");
 
-    const tool = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-      undefined,
-      entry.toolDir,
-    );
+    const tool = createCustomToolFromEntry(entry, provider, entry.toolDir);
 
     const result = await tool.execute({
       domain: "example.com",
@@ -785,19 +759,8 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
 
   it("input validation rejects invalid input", () => {
     const provider = createMockProvider();
-
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
-    writeCaddyTool(projectToolsDir);
-    const entry = discoverTools(projectDir)[0];
-
-    const tool = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-    );
+    const entry = setupCaddyTool(ctx.projectDir);
+    const tool = createCustomToolFromEntry(entry, provider);
 
     // Missing required fields
     expect(tool.validate({}).valid).toBe(false);
@@ -816,34 +779,12 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
 });
 
 describe("Tool E2E: Verification", () => {
-  let tmpDir: string;
-  let origHome: string | undefined;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-verify-"));
-    origHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-  });
-
-  afterEach(() => {
-    process.env.HOME = origHome;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  const ctx = useTempDir();
 
   it("Caddy tool: verify passes (no verification command)", async () => {
     const provider = createMockProvider();
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
-    writeCaddyTool(projectToolsDir);
-    const entry = discoverTools(projectDir)[0];
-
-    const tool = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-    );
+    const entry = setupCaddyTool(ctx.projectDir);
+    const tool = createCustomToolFromEntry(entry, provider);
 
     const result = await tool.verify({});
     expect(result.passed).toBe(true);
@@ -856,18 +797,10 @@ describe("Tool E2E: Verification", () => {
     { timeout: 15_000 },
     async () => {
       const provider = createMockProvider();
-      const projectDir = path.join(tmpDir, "project");
-      const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+      const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
       writeEnvoyTool(projectToolsDir);
-      const entry = discoverTools(projectDir)[0];
-
-      const tool = new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-      );
+      const entry = discoverTools(ctx.projectDir)[0];
+      const tool = createCustomToolFromEntry(entry, provider);
 
       // yamllint IS in the whitelist and child_process is "required",
       // so verify() will attempt execution. Since yamllint isn't installed
@@ -885,19 +818,11 @@ describe("Tool E2E: Verification", () => {
 });
 
 describe("Tool E2E: Policy Filtering", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-policy-"));
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  const ctx = useTempDir();
 
   it("blockedTools prevents tool from being loaded", () => {
     // Write policy file
-    const dojopsDir = path.join(tmpDir, ".dojops");
+    const dojopsDir = path.join(ctx.tmpDir, ".dojops");
     fs.mkdirSync(dojopsDir, { recursive: true });
     fs.writeFileSync(
       path.join(dojopsDir, "policy.yaml"),
@@ -905,13 +830,13 @@ describe("Tool E2E: Policy Filtering", () => {
       "utf-8",
     );
 
-    const policy = loadToolPolicy(tmpDir);
+    const policy = loadToolPolicy(ctx.tmpDir);
     expect(isToolAllowed("caddy-config", policy)).toBe(false);
     expect(isToolAllowed("envoy-config", policy)).toBe(true);
   });
 
   it("allowedTools restricts to only listed tools", () => {
-    const dojopsDir = path.join(tmpDir, ".dojops");
+    const dojopsDir = path.join(ctx.tmpDir, ".dojops");
     fs.mkdirSync(dojopsDir, { recursive: true });
     fs.writeFileSync(
       path.join(dojopsDir, "policy.yaml"),
@@ -919,13 +844,13 @@ describe("Tool E2E: Policy Filtering", () => {
       "utf-8",
     );
 
-    const policy = loadToolPolicy(tmpDir);
+    const policy = loadToolPolicy(ctx.tmpDir);
     expect(isToolAllowed("caddy-config", policy)).toBe(true);
     expect(isToolAllowed("envoy-config", policy)).toBe(false);
   });
 
   it("no policy file means everything is allowed", () => {
-    const policy = loadToolPolicy(tmpDir);
+    const policy = loadToolPolicy(ctx.tmpDir);
     expect(isToolAllowed("anything", policy)).toBe(true);
   });
 });
@@ -961,42 +886,14 @@ describe("Tool E2E: Serialization", () => {
 });
 
 describe("Tool E2E: systemPromptHash Stability", () => {
-  let tmpDir: string;
-  let origHome: string | undefined;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-hash-"));
-    origHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-  });
-
-  afterEach(() => {
-    process.env.HOME = origHome;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  const ctx = useTempDir();
 
   it("same manifest produces same systemPromptHash", () => {
     const provider = createMockProvider();
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
-    writeCaddyTool(projectToolsDir);
-    const entry = discoverTools(projectDir)[0];
+    const entry = setupCaddyTool(ctx.projectDir);
 
-    const tool1 = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-    );
-
-    const tool2 = new CustomTool(
-      entry.manifest,
-      provider,
-      entry.toolDir,
-      entry.source,
-      entry.inputSchemaRaw,
-    );
+    const tool1 = createCustomToolFromEntry(entry, provider);
+    const tool2 = createCustomToolFromEntry(entry, provider);
 
     expect(tool1.systemPromptHash).toBe(tool2.systemPromptHash);
     expect(tool1.systemPromptHash).toMatch(/^[a-f0-9]{64}$/);
@@ -1004,17 +901,14 @@ describe("Tool E2E: systemPromptHash Stability", () => {
 
   it("different system prompts produce different hashes", () => {
     const provider = createMockProvider();
-    const projectDir = path.join(tmpDir, "project");
-    const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+    const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
     writeCaddyTool(projectToolsDir);
     writeEnvoyTool(projectToolsDir);
 
-    const entries = discoverTools(projectDir);
+    const entries = discoverTools(ctx.projectDir);
     expect(entries).toHaveLength(2);
 
-    const tools = entries.map(
-      (e) => new CustomTool(e.manifest, provider, e.toolDir, e.source, e.inputSchemaRaw),
-    );
+    const tools = entries.map((e) => createCustomToolFromEntry(e, provider));
 
     expect(tools[0].systemPromptHash).not.toBe(tools[1].systemPromptHash);
   });

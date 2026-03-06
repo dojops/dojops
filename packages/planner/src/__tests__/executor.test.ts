@@ -559,7 +559,11 @@ describe("PlannerExecutor", () => {
       // taskEnd is called for all tasks
       expect(logger.taskEnd).toHaveBeenCalledWith("t1", "completed");
       expect(logger.taskEnd).toHaveBeenCalledWith("t2", "failed", "intentional failure");
-      expect(logger.taskEnd).toHaveBeenCalledWith("t3", "skipped");
+      expect(logger.taskEnd).toHaveBeenCalledWith(
+        "t3",
+        "skipped",
+        expect.stringContaining("failed dependency"),
+      );
     });
   });
 });

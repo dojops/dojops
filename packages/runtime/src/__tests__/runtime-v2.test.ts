@@ -54,6 +54,18 @@ function createMockProvider(content: string): LLMProvider {
   };
 }
 
+/** Create a V2 module, mock provider, and runtime in one call. */
+function createRuntime(
+  content = "",
+  moduleOverrides?: Partial<DopsModuleV2["frontmatter"]>,
+  runtimeOpts?: ConstructorParameters<typeof DopsRuntimeV2>[2],
+) {
+  const module = createV2Module(moduleOverrides);
+  const provider = createMockProvider(content);
+  const runtime = new DopsRuntimeV2(module, provider, runtimeOpts);
+  return { module, provider, runtime };
+}
+
 describe("DopsRuntimeV2", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,10 +97,7 @@ describe("DopsRuntimeV2", () => {
   });
 
   it("returns default risk when not declared", () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
+    const { runtime } = createRuntime();
     expect(runtime.risk).toEqual({
       level: "LOW",
       rationale: "No risk classification declared",
@@ -96,10 +105,7 @@ describe("DopsRuntimeV2", () => {
   });
 
   it("returns default executionMode when not declared", () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
+    const { runtime } = createRuntime();
     expect(runtime.executionMode).toEqual({
       mode: "generate",
       deterministic: false,
@@ -108,10 +114,7 @@ describe("DopsRuntimeV2", () => {
   });
 
   it("computes systemPromptHash and moduleHash", () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
+    const { runtime } = createRuntime();
     expect(runtime.systemPromptHash).toBeDefined();
     expect(runtime.systemPromptHash.length).toBe(64); // SHA-256 hex
     expect(runtime.moduleHash).toBeDefined();
@@ -119,29 +122,19 @@ describe("DopsRuntimeV2", () => {
   });
 
   it("extracts keywords from sections", () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
+    const { runtime } = createRuntime();
     expect(runtime.keywords).toEqual(["terraform", "hcl"]);
   });
 });
 
 describe("DopsRuntimeV2.validate", () => {
   it("accepts valid input with prompt", () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
-    const result = runtime.validate({ prompt: "Create an S3 bucket" });
-    expect(result.valid).toBe(true);
+    const { runtime } = createRuntime();
+    expect(runtime.validate({ prompt: "Create an S3 bucket" }).valid).toBe(true);
   });
 
   it("accepts input with prompt and existingContent", () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
+    const { runtime } = createRuntime();
     const result = runtime.validate({
       prompt: "Add versioning",
       existingContent: 'resource "aws_s3_bucket" {}',
@@ -150,20 +143,14 @@ describe("DopsRuntimeV2.validate", () => {
   });
 
   it("rejects empty prompt", () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
+    const { runtime } = createRuntime();
     const result = runtime.validate({ prompt: "" });
     expect(result.valid).toBe(false);
     expect(result.error).toBeDefined();
   });
 
   it("rejects missing prompt", () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
+    const { runtime } = createRuntime();
     const result = runtime.validate({});
     expect(result.valid).toBe(false);
     expect(result.error).toBeDefined();
@@ -177,9 +164,7 @@ describe("DopsRuntimeV2.generate", () => {
 
   it("calls LLM without schema and returns raw content", async () => {
     const rawHCL = 'resource "aws_s3_bucket" "main" {\n  bucket = "my-bucket"\n}';
-    const module = createV2Module();
-    const provider = createMockProvider(rawHCL);
-    const runtime = new DopsRuntimeV2(module, provider);
+    const { provider, runtime } = createRuntime(rawHCL);
 
     const result = await runtime.generate({ prompt: "Create S3 bucket" });
 
@@ -200,9 +185,7 @@ describe("DopsRuntimeV2.generate", () => {
   it("strips markdown code fences from LLM response", async () => {
     const fencedContent =
       '```hcl\nresource "aws_s3_bucket" "main" {\n  bucket = "my-bucket"\n}\n```';
-    const module = createV2Module();
-    const provider = createMockProvider(fencedContent);
-    const runtime = new DopsRuntimeV2(module, provider);
+    const { runtime } = createRuntime(fencedContent);
 
     const result = await runtime.generate({ prompt: "Create S3 bucket" });
 
@@ -285,9 +268,7 @@ describe("DopsRuntimeV2.generate", () => {
   });
 
   it("sets isUpdate to true when existingContent is provided", async () => {
-    const module = createV2Module();
-    const provider = createMockProvider("updated content");
-    const runtime = new DopsRuntimeV2(module, provider);
+    const { provider, runtime } = createRuntime("updated content");
 
     const result = await runtime.generate({
       prompt: "Add versioning",
@@ -352,10 +333,7 @@ describe("DopsRuntimeV2.verify", () => {
   });
 
   it("passes verification for content without verification config", async () => {
-    const module = createV2Module();
-    const provider = createMockProvider("");
-    const runtime = new DopsRuntimeV2(module, provider);
-
+    const { runtime } = createRuntime();
     const result = await runtime.verify("some raw content");
     expect(result.passed).toBe(true);
     expect(result.issues).toHaveLength(0);

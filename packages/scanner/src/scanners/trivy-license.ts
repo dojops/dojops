@@ -23,6 +23,34 @@ interface TrivyLicenseOutput {
   Results?: TrivyLicenseResult[];
 }
 
+function parseLicenseResults(rawOutput: string): ScanFinding[] {
+  const findings: ScanFinding[] = [];
+  try {
+    const output: TrivyLicenseOutput = JSON.parse(rawOutput);
+    if (!output.Results) return findings;
+    for (const result of output.Results) {
+      if (!result.Licenses) continue;
+      for (const lic of result.Licenses) {
+        findings.push({
+          id: deterministicFindingId("trivy-lic", lic.PkgName, lic.Name, lic.Category),
+          tool: "trivy-license",
+          severity: mapTrivySeverity(lic.Severity),
+          category: "LICENSE",
+          file: lic.FilePath ?? result.Target,
+          message: `${lic.PkgName}: ${lic.Name} license (${lic.Category})`,
+          recommendation: lic.Link
+            ? `Review license terms: ${lic.Link}`
+            : "Review license compliance requirements",
+          autoFixAvailable: false,
+        });
+      }
+    }
+  } catch {
+    findings.push(parseErrorFinding("trivy-license", "LICENSE"));
+  }
+  return findings;
+}
+
 export async function scanTrivyLicense(projectPath: string): Promise<ScannerResult> {
   let rawOutput: string;
   try {
@@ -49,33 +77,6 @@ export async function scanTrivyLicense(projectPath: string): Promise<ScannerResu
     }
   }
 
-  const findings: ScanFinding[] = [];
-
-  try {
-    const output: TrivyLicenseOutput = JSON.parse(rawOutput);
-    if (output.Results) {
-      for (const result of output.Results) {
-        if (result.Licenses) {
-          for (const lic of result.Licenses) {
-            findings.push({
-              id: deterministicFindingId("trivy-lic", lic.PkgName, lic.Name, lic.Category),
-              tool: "trivy-license",
-              severity: mapTrivySeverity(lic.Severity),
-              category: "LICENSE",
-              file: lic.FilePath ?? result.Target,
-              message: `${lic.PkgName}: ${lic.Name} license (${lic.Category})`,
-              recommendation: lic.Link
-                ? `Review license terms: ${lic.Link}`
-                : "Review license compliance requirements",
-              autoFixAvailable: false,
-            });
-          }
-        }
-      }
-    }
-  } catch {
-    findings.push(parseErrorFinding("trivy-license", "LICENSE"));
-  }
-
+  const findings = parseLicenseResults(rawOutput);
   return { tool: "trivy-license", findings, rawOutput };
 }

@@ -60,8 +60,10 @@ function displayIssues(issues: VerificationResult["issues"]): void {
   for (const issue of issues) {
     const labelInner = issue.severity === "warning" ? pc.yellow("WARN ") : pc.dim("INFO ");
     const label = issue.severity === "error" ? pc.red("ERROR") : labelInner;
-    const lineInfo = issue.line ? ` ${pc.dim(`line ${issue.line}`)}` : "";
-    const ruleInfo = issue.rule ? ` ${pc.dim(`[${issue.rule}]`)}` : "";
+    const lineText = `line ${issue.line}`;
+    const lineInfo = issue.line ? ` ${pc.dim(lineText)}` : "";
+    const ruleText = `[${issue.rule}]`;
+    const ruleInfo = issue.rule ? ` ${pc.dim(ruleText)}` : "";
     console.log(`  ${label}${lineInfo}${ruleInfo}  ${issue.message}`);
   }
   console.log();
