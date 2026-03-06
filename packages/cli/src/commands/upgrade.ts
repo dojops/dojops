@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { runBin } from "../safe-exec";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
@@ -83,8 +83,7 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
   if (!confirmed) return;
 
   try {
-    execFileSync("npm", ["install", "-g", `@dojops/cli@${latestVersion}`], {
-      // NOSONAR — S4721: execFileSync with array args, version validated by SEMVER_RE
+    runBin("npm", ["install", "-g", `@dojops/cli@${latestVersion}`], {
       stdio: "inherit",
       timeout: 120_000,
     });

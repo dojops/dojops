@@ -8,6 +8,7 @@ import * as p from "@clack/prompts";
 import { createProvider, createRouter, createDebugger, createDiffAnalyzer } from "@dojops/api";
 import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
+import { writeFileOwnerOnly } from "../secure-fs";
 import { extractFlagValue, hasFlag } from "../parser";
 import { resolveProvider, resolveToken, resolveOllamaHost, resolveOllamaTls } from "../config";
 import { findProjectRoot } from "../state";
@@ -36,9 +37,7 @@ export async function serveCredentialsCommand(): Promise<void> {
   const key = crypto.randomBytes(32).toString("base64url");
   const dir = path.dirname(SERVER_JSON_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(SERVER_JSON_PATH, JSON.stringify({ apiKey: key }, null, 2) + "\n", {
-    mode: 0o600, // NOSONAR — S2612: restrictive permissions, owner-only read/write for credentials
-  });
+  writeFileOwnerOnly(SERVER_JSON_PATH, JSON.stringify({ apiKey: key }, null, 2) + "\n");
 
   p.note(
     [

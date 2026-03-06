@@ -14,6 +14,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { mkdirOwnerOnly, writeFileOwnerOnly } from "../secure-fs";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -230,11 +231,11 @@ export async function getCopilotUserInfo(githubToken: string): Promise<CopilotUs
 
 export function saveCopilotAuth(auth: StoredCopilotAuth): void {
   if (!fs.existsSync(getTokenDir())) {
-    fs.mkdirSync(getTokenDir(), { recursive: true, mode: 0o700 }); // NOSONAR — S2612: restrictive permissions, owner-only access for token storage
+    mkdirOwnerOnly(getTokenDir());
   }
   // Atomic write: tmp + rename to prevent corruption on kill
   const tmpFile = getTokenFile() + ".tmp";
-  fs.writeFileSync(tmpFile, JSON.stringify(auth, null, 2) + "\n", { mode: 0o600 }); // NOSONAR — S2612: restrictive permissions, owner-only read/write for credentials
+  writeFileOwnerOnly(tmpFile, JSON.stringify(auth, null, 2) + "\n");
   fs.renameSync(tmpFile, getTokenFile());
 }
 

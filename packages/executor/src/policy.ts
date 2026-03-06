@@ -51,6 +51,26 @@ export const DEVOPS_WRITE_ALLOWLIST: string[] = [
   "*.timer",
 ];
 
+/** Match a string against a simple glob pattern with `*` wildcards (no regex). */
+function globMatch(str: string, pattern: string): boolean {
+  const parts = pattern.split("*");
+  let pos = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const seg = parts[i];
+    if (i === 0) {
+      if (!str.startsWith(seg)) return false;
+      pos = seg.length;
+    } else if (i === parts.length - 1) {
+      return str.endsWith(seg) && str.length - seg.length >= pos;
+    } else {
+      const idx = str.indexOf(seg, pos);
+      if (idx === -1) return false;
+      pos = idx + seg.length;
+    }
+  }
+  return pos === str.length;
+}
+
 /**
  * Tests whether a file path matches a DevOps allowlist pattern.
  * Supports simple glob matching: `*` (single segment wildcard) and `**` (recursive).
@@ -67,15 +87,12 @@ export function matchesAllowlistPattern(filePath: string, pattern: string): bool
 
   // Handle * in filename (e.g. "Dockerfile.*", "docker-compose*.yml")
   if (pattern.includes("*")) {
-    const regexStr =
-      "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$"; // NOSONAR - replacement strings, not regex patterns
-    const regex = new RegExp(regexStr); // NOSONAR — S5852: regexStr built from escaped path components
-    // Match against the full relative path or just the basename for simple patterns
-    if (!pattern.includes("/")) {
-      const basename = normalized.includes("/") ? normalized.split("/").pop()! : normalized;
-      return regex.test(basename);
-    }
-    return regex.test(normalized);
+    const target = !pattern.includes("/")
+      ? normalized.includes("/")
+        ? normalized.split("/").pop()!
+        : normalized
+      : normalized;
+    return globMatch(target, pattern);
   }
 
   // Exact match (or basename match for simple filenames)

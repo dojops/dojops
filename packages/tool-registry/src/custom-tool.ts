@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { execFileSync } from "node:child_process";
+import { runBin } from "./safe-exec";
 import { z } from "zod";
 import {
   DevOpsTool,
@@ -265,8 +265,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
     }
 
     try {
-      execFileSync(parts[0], parts.slice(1), {
-        // NOSONAR — S4721: execFileSync with whitelisted verification binary and array args
+      runBin(parts[0], parts.slice(1), {
         cwd: this.toolDir,
         encoding: "utf-8",
         timeout: 10_000,

@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { runBin } from "./safe-exec";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -104,12 +104,12 @@ function executeVerificationCommand(
   }
 
   try {
-    const rawOutput = execFileSync(binary, finalArgs, {
+    const rawOutput = runBin(binary, finalArgs, {
       encoding: "utf-8",
       timeout: config.timeout,
       stdio: "pipe",
       cwd: tmpDir,
-    });
+    }) as string;
     return { rawOutput };
   } catch (err: unknown) {
     if (isENOENT(err)) {

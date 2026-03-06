@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { runBin } from "../safe-exec";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { scanRepo, enrichWithLLM } from "@dojops/core";
@@ -423,8 +423,7 @@ async function offerContextReview(contextMdPath: string): Promise<void> {
 
   p.log.info(`Opening ${pc.cyan(contextMdPath)} in ${pc.cyan(editor)}...`);
   try {
-    execFileSync(editorParts[0], [...editorParts.slice(1), contextMdPath], {
-      // NOSONAR — S4721: editor binary validated against EDITOR_ALLOWLIST
+    runBin(editorParts[0], [...editorParts.slice(1), contextMdPath], {
       stdio: "inherit",
     });
     p.log.success("Context file updated.");

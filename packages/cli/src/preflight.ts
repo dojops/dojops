@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import nodePath from "node:path";
-import { execSync, execFileSync } from "node:child_process";
+import { runBin, runShellCmd } from "./safe-exec";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import {
@@ -38,8 +38,7 @@ export function resolveBinary(name: string): string | undefined {
 
   try {
     const bin = process.platform === "win32" ? "where" : "which";
-    const result = execFileSync(bin, [name], {
-      // NOSONAR — S4721: execFileSync with hardcoded which/where binary
+    const result = runBin(bin, [name], {
       timeout: 5_000,
       stdio: ["ignore", "pipe", "ignore"],
     });
@@ -63,12 +62,13 @@ export function resolveModule(npmPackage: string): string | undefined {
 
   // Check npm global prefix (handles globally-installed library-only packages)
   try {
-    const prefix = execSync("npm config get prefix", {
-      // NOSONAR — S4721: hardcoded npm command
-      timeout: 5_000,
-      stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf-8",
-    }).trim();
+    const prefix = (
+      runShellCmd("npm config get prefix", {
+        timeout: 5_000,
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf-8",
+      }) as string
+    ).trim();
     const globalPath = nodePath.join(prefix, "lib", "node_modules", npmPackage);
     if (fs.existsSync(globalPath)) {
       return globalPath;
@@ -202,12 +202,13 @@ export function collectMissingToolsForDomains(domains: string[]): ToolDependency
  */
 function needsSudo(): boolean {
   try {
-    const prefix = execSync("npm config get prefix", {
-      // NOSONAR — S4721: hardcoded npm command
-      timeout: 5_000,
-      stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf-8",
-    }).trim();
+    const prefix = (
+      runShellCmd("npm config get prefix", {
+        timeout: 5_000,
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf-8",
+      }) as string
+    ).trim();
     fs.accessSync(prefix, fs.constants.W_OK);
     return false;
   } catch {
@@ -226,8 +227,7 @@ function hasSudo(): boolean {
  * Install an npm package globally using sudo.
  */
 function npmInstallGlobalSudo(pkg: string): void {
-  execFileSync("sudo", ["npm", "install", "-g", pkg], {
-    // NOSONAR — S4721: execFileSync with array args, user-selected package
+  runBin("sudo", ["npm", "install", "-g", pkg], {
     timeout: 120_000,
     stdio: "pipe",
   });
@@ -237,8 +237,7 @@ function npmInstallGlobalSudo(pkg: string): void {
  * Install an npm package globally without elevated permissions.
  */
 function npmInstallGlobal(pkg: string): void {
-  execFileSync("npm", ["install", "-g", pkg], {
-    // NOSONAR — S4721: execFileSync with array args, user-selected package
+  runBin("npm", ["install", "-g", pkg], {
     timeout: 120_000,
     stdio: "pipe",
   });

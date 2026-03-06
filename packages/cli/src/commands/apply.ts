@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { runBin } from "../safe-exec";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { DeterministicProvider } from "@dojops/core";
@@ -853,8 +853,7 @@ function runPostApplyInstall(root: string): void {
   const installSpinner = p.spinner();
   installSpinner.start(`Running ${installCmd.join(" ")}...`);
   try {
-    execFileSync(installCmd[0], installCmd.slice(1), {
-      // NOSONAR — S4721: execFileSync with array args from trusted resolveInstallCommand()
+    runBin(installCmd[0], installCmd.slice(1), {
       cwd: root,
       encoding: "utf-8",
       timeout: 120_000,

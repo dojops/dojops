@@ -2,7 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { runBin } from "./safe-exec";
+import { writeFileOwnerOnly } from "./secure-fs";
 import { RepoContextSchemaV1, RepoContextSchemaV2 } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 
@@ -440,7 +441,7 @@ export function createAuditKey(rootDir: string): void {
   const keyFile = path.join(dojopsDir(rootDir), "audit-key");
   if (fs.existsSync(keyFile)) return;
   const key = crypto.randomBytes(32).toString("hex");
-  fs.writeFileSync(keyFile, key + "\n", { mode: 0o600 }); // NOSONAR — S2612: restrictive permissions, owner-only read/write
+  writeFileOwnerOnly(keyFile, key + "\n");
 }
 
 export function computeAuditHash(entry: AuditEntry, hmacKey?: string | null): string {
@@ -795,13 +796,12 @@ export function listScanReports(rootDir: string): Array<Record<string, unknown>>
 
 export function checkGitDirty(cwd: string): { dirty: boolean; files: string[] } {
   try {
-    const output = execFileSync("git", ["status", "--porcelain"], {
-      // NOSONAR — S4721: hardcoded git command with array args
+    const output = runBin("git", ["status", "--porcelain"], {
       cwd,
       encoding: "utf-8",
       timeout: 5_000,
       stdio: ["pipe", "pipe", "pipe"],
-    });
+    }) as string;
     const files = output
       .split("\n")
       .map((l) => l.trim())

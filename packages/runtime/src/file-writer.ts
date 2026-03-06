@@ -122,7 +122,7 @@ export function resolveFilePath(templatePath: string, input: Record<string, unkn
   let resolved = templatePath;
   for (const [key, value] of Object.entries(input)) {
     if (typeof value === "string") {
-      resolved = resolved.replace(new RegExp(`\\{${key}\\}`, "g"), value); // NOSONAR - dynamic regex
+      resolved = resolved.replaceAll(`{${key}}`, value);
     }
   }
 
@@ -206,10 +206,33 @@ function expandScopePattern(pattern: string, input: Record<string, unknown>): st
   let expanded = pattern;
   for (const [key, value] of Object.entries(input)) {
     if (typeof value === "string") {
-      expanded = expanded.replace(new RegExp(`\\{${key}\\}`, "g"), value); // NOSONAR - dynamic regex
+      expanded = expanded.replaceAll(`{${key}}`, value);
     }
   }
   return path.normalize(expanded).replaceAll("\\", "/");
+}
+
+/** Match a path against a glob pattern with `*` wildcards (no regex). */
+function matchGlobPattern(filePath: string, pattern: string): boolean {
+  const parts = pattern.split("*");
+  let pos = 0;
+  for (let i = 0; i < parts.length; i++) {
+    const segment = parts[i];
+    if (i === 0) {
+      if (!filePath.startsWith(segment)) return false;
+      pos = segment.length;
+    } else if (i === parts.length - 1) {
+      if (!filePath.endsWith(segment)) return false;
+      if (filePath.length - segment.length < pos) return false;
+    } else {
+      const idx = filePath.indexOf(segment, pos);
+      if (idx === -1) return false;
+      // Wildcards should not cross directory boundaries
+      if (filePath.slice(pos, idx).includes("/")) return false;
+      pos = idx + segment.length;
+    }
+  }
+  return true;
 }
 
 /** Test if a normalized path matches a single expanded scope pattern. */
@@ -222,11 +245,7 @@ function matchesSinglePattern(normalizedResolved: string, normalizedExpanded: st
   }
 
   if (normalizedExpanded.includes("*")) {
-    const regexStr =
-      "^" +
-      normalizedExpanded.replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`).replaceAll("*", "[^/]*") +
-      "$"; // NOSONAR - escape-for-regex pattern
-    return new RegExp(regexStr).test(normalizedResolved); // NOSONAR — S5852: regexStr built from escaped path components
+    return matchGlobPattern(normalizedResolved, normalizedExpanded);
   }
 
   return false;

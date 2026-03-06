@@ -105,7 +105,7 @@ function substituteVariables(prompt: string, context: PromptContext): string {
   // existingContent is trusted (read from filesystem by readExistingConfig), not user-typed
   if (context.existingContent !== undefined) {
     const injectAs = context.updateConfig?.injectAs ?? "existingContent";
-    result = result.replace(new RegExp(`\\{${injectAs}\\}`, "g"), context.existingContent); // NOSONAR - dynamic regex
+    result = result.replaceAll(`{${injectAs}}`, context.existingContent);
     // Always substitute {existingContent} as fallback if injectAs differs
     if (injectAs !== "existingContent") {
       result = result.replaceAll("{existingContent}", context.existingContent);
@@ -117,7 +117,7 @@ function substituteVariables(prompt: string, context: PromptContext): string {
     for (const [key, value] of Object.entries(context.input)) {
       if (typeof value === "string") {
         const safe = sanitizeInputValue(value);
-        result = result.replace(new RegExp(`\\{${key}\\}`, "g"), safe); // NOSONAR - dynamic regex
+        result = result.replaceAll(`{${key}}`, safe);
       }
     }
   }
@@ -216,7 +216,7 @@ function substituteV2Variables(prompt: string, context: PromptContextV2): string
   // {existingContent} — trusted (read from filesystem)
   if (context.existingContent !== undefined) {
     const injectAs = context.updateConfig?.injectAs ?? "existingContent";
-    result = result.replace(new RegExp(`\\{${injectAs}\\}`, "g"), context.existingContent); // NOSONAR - dynamic regex
+    result = result.replaceAll(`{${injectAs}}`, context.existingContent);
     if (injectAs !== "existingContent") {
       result = result.replaceAll("{existingContent}", context.existingContent);
     }

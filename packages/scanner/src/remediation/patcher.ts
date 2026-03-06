@@ -50,11 +50,13 @@ function applyUpdateVersionPackageJson(
 function applyUpdateVersionRequirements(ctx: FixContext, filesModified: string[]): void {
   const [pkgName, newVersion] = ctx.patch.split(">=");
   if (!pkgName || !newVersion) return;
-  const updated = ctx.content.replace(
-    new RegExp(`^${escapeRegex(pkgName.trim())}[><=!~].+$`, "m"), // NOSONAR — S5852: safe, input is escaped via escapeRegex
-    `${pkgName.trim()}>=${newVersion}`,
+  const trimmed = pkgName.trim();
+  const lines = ctx.content.split("\n");
+  const idx = lines.findIndex(
+    (line) => line.startsWith(trimmed) && /[><=!~]/.test(line[trimmed.length] ?? ""),
   );
-  atomicWriteFileSync(ctx.filePath, updated);
+  if (idx >= 0) lines[idx] = `${trimmed}>=${newVersion}`;
+  atomicWriteFileSync(ctx.filePath, idx >= 0 ? lines.join("\n") : ctx.content);
   filesModified.push(ctx.file);
 }
 
@@ -124,8 +126,4 @@ export function applyFixes(plan: RemediationPlan, projectPath: string): PatchRes
   }
 
   return { filesModified: [...new Set(filesModified)], errors };
-}
-
-function escapeRegex(str: string): string {
-  return str.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }

@@ -13,6 +13,12 @@ export interface RouteOptions {
   projectDomains?: string[];
 }
 
+function isWordChar(ch: string): boolean {
+  return (
+    (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || (ch >= "0" && ch <= "9") || ch === "_"
+  );
+}
+
 export class AgentRouter {
   private readonly agents: SpecialistAgent[];
 
@@ -34,13 +40,19 @@ export class AgentRouter {
    */
   private matchesKeyword(lower: string, kw: string): boolean {
     if (kw.includes(" ")) {
-      // Multi-word keywords are specific enough for substring match
       return lower.includes(kw);
     }
-    // Single-word: use word boundary matching
-    // \b handles punctuation, hyphens, and whitespace boundaries
-    const escaped = kw.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-    return new RegExp(String.raw`\b${escaped}\b`).test(lower); // NOSONAR — S5852: safe, keyword is escaped and uses bounded word boundary
+    // Word boundary matching without regex
+    let start = 0;
+    while (start <= lower.length - kw.length) {
+      const idx = lower.indexOf(kw, start);
+      if (idx === -1) return false;
+      const before = idx === 0 || !isWordChar(lower[idx - 1]);
+      const after = idx + kw.length === lower.length || !isWordChar(lower[idx + kw.length]);
+      if (before && after) return true;
+      start = idx + 1;
+    }
+    return false;
   }
 
   route(prompt: string, options?: RouteOptions): RouteResult {

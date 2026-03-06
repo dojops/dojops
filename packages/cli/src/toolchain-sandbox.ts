@@ -10,7 +10,8 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import https from "node:https";
-import { execFileSync } from "node:child_process";
+import { runBin } from "./safe-exec";
+import { mkdirExecutable, chmodExecutable } from "./secure-fs";
 import {
   SystemTool,
   InstalledTool,
@@ -55,7 +56,7 @@ function migrateToolchainDir(): void {
  */
 export function ensureToolchainDir(): void {
   migrateToolchainDir();
-  fs.mkdirSync(TOOLCHAIN_BIN_DIR, { recursive: true, mode: 0o755 }); // NOSONAR — S2612: standard permissions for bin directory (owner rwx, group/other rx)
+  mkdirExecutable(TOOLCHAIN_BIN_DIR);
 }
 
 /**
@@ -183,8 +184,7 @@ export function downloadToTemp(url: string): Promise<string> {
  */
 export function extractZip(archivePath: string, destDir: string): void {
   fs.mkdirSync(destDir, { recursive: true });
-  execFileSync("unzip", ["-o", archivePath, "-d", destDir], {
-    // NOSONAR — S4721: execFileSync with hardcoded unzip and array args
+  runBin("unzip", ["-o", archivePath, "-d", destDir], {
     timeout: 60_000,
     stdio: "pipe",
   });
@@ -195,8 +195,7 @@ export function extractZip(archivePath: string, destDir: string): void {
  */
 export function extractTarGz(archivePath: string, destDir: string): void {
   fs.mkdirSync(destDir, { recursive: true });
-  execFileSync("tar", ["xzf", archivePath, "-C", destDir], {
-    // NOSONAR — S4721: execFileSync with hardcoded tar and array args
+  runBin("tar", ["xzf", archivePath, "-C", destDir], {
     timeout: 60_000,
     stdio: "pipe",
   });
@@ -207,8 +206,7 @@ export function extractTarGz(archivePath: string, destDir: string): void {
  */
 export function extractTarXz(archivePath: string, destDir: string): void {
   fs.mkdirSync(destDir, { recursive: true });
-  execFileSync("tar", ["xJf", archivePath, "-C", destDir], {
-    // NOSONAR — S4721: execFileSync with hardcoded tar and array args
+  runBin("tar", ["xJf", archivePath, "-C", destDir], {
     timeout: 60_000,
     stdio: "pipe",
   });
@@ -270,7 +268,7 @@ export async function installSystemTool(
     // Copy to bin directory
     const destPath = path.join(TOOLCHAIN_BIN_DIR, tool.binaryName);
     fs.copyFileSync(binarySource, destPath);
-    fs.chmodSync(destPath, 0o755); // NOSONAR - 0o755 is standard for executable binaries (owner rwx, group/other rx)
+    chmodExecutable(destPath);
 
     // Update registry
     const stat = fs.statSync(destPath);
@@ -330,7 +328,7 @@ function verifyBinaryHash(binaryPath: string, tool: SystemTool, version: string)
  */
 function commandExists(name: string): boolean {
   try {
-    execFileSync("which", [name], { timeout: 5_000, stdio: "pipe" }); // NOSONAR — S4721: execFileSync with hardcoded which and array args
+    runBin("which", [name], { timeout: 5_000, stdio: "pipe" });
     return true;
   } catch {
     return false;
@@ -351,7 +349,7 @@ export async function installAnsible(tool: SystemTool): Promise<InstalledTool> {
 
   // Strategy 1: pipx binary
   if (commandExists("pipx")) {
-    execFileSync("pipx", ["install", "ansible"], { timeout: 300_000, stdio: "pipe" }); // NOSONAR — S4721: execFileSync with hardcoded args
+    runBin("pipx", ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
     binaryPath = findInstalledBinary("ansible");
     return registerAnsible(tool, binaryPath);
   }
@@ -359,8 +357,7 @@ export async function installAnsible(tool: SystemTool): Promise<InstalledTool> {
   // Strategy 2: python3 -m pipx
   if (commandExists("python3")) {
     try {
-      execFileSync("python3", ["-m", "pipx", "install", "ansible"], {
-        // NOSONAR — S4721: execFileSync with hardcoded args
+      runBin("python3", ["-m", "pipx", "install", "ansible"], {
         timeout: 300_000,
         stdio: "pipe",
       });
@@ -374,10 +371,10 @@ export async function installAnsible(tool: SystemTool): Promise<InstalledTool> {
   // Strategy 3: sandbox venv
   const python = commandExists("python3") ? "python3" : "python";
   fs.mkdirSync(venvDir, { recursive: true });
-  execFileSync(python, ["-m", "venv", venvDir], { timeout: 60_000, stdio: "pipe" }); // NOSONAR — S4721: execFileSync with hardcoded args, python resolved from commandExists
+  runBin(python, ["-m", "venv", venvDir], { timeout: 60_000, stdio: "pipe" });
 
   const venvPip = path.join(venvDir, "bin", "pip");
-  execFileSync(venvPip, ["install", "ansible"], { timeout: 300_000, stdio: "pipe" }); // NOSONAR — S4721: execFileSync with hardcoded args, pip from venv path
+  runBin(venvPip, ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
 
   // Symlink venv ansible binary into toolchain bin
   const venvBinary = path.join(venvDir, "bin", "ansible");
@@ -395,12 +392,11 @@ export async function installAnsible(tool: SystemTool): Promise<InstalledTool> {
 
 function findInstalledBinary(name: string): string {
   try {
-    const result = execFileSync("which", [name], {
-      // NOSONAR — S4721: execFileSync with hardcoded which and array args
+    const result = runBin("which", [name], {
       timeout: 5_000,
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf-8",
-    });
+    }) as string;
     return result.trim();
   } catch {
     return name;
@@ -495,8 +491,7 @@ export function cleanAllToolchain(): { removed: string[] } {
 export function verifyTool(tool: SystemTool): string | undefined {
   try {
     const [cmd, ...args] = tool.verifyCommand;
-    const result = execFileSync(cmd, args, {
-      // NOSONAR — S4721: execFileSync with tool.verifyCommand (trusted config)
+    const result = runBin(cmd, args, {
       timeout: 10_000,
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf-8",
@@ -504,7 +499,7 @@ export function verifyTool(tool: SystemTool): string | undefined {
         ...process.env,
         PATH: `${TOOLCHAIN_BIN_DIR}${path.delimiter}${process.env.PATH ?? ""}`,
       },
-    });
+    }) as string;
     return result.trim().split("\n")[0];
   } catch {
     return undefined;
