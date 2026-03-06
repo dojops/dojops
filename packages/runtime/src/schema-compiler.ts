@@ -7,9 +7,49 @@ import { InputFieldDef } from "./spec";
  * Validates and constructs a RegExp from a pattern string.
  * Rejects patterns with nested quantifiers (common ReDoS vectors).
  */
+function hasNestedQuantifiers(pattern: string): boolean {
+  // Check for adjacent quantifiers like a++, a**, a*+, a{2}+
+  for (let i = 1; i < pattern.length; i++) {
+    const prev = pattern[i - 1];
+    const cur = pattern[i];
+    if (
+      (prev === "+" || prev === "*" || prev === "}") &&
+      (cur === "+" || cur === "*" || cur === "{")
+    ) {
+      return true;
+    }
+    // Also check for optional marker: a+?+ or a*?*
+    if (
+      i >= 2 &&
+      pattern[i - 1] === "?" &&
+      (pattern[i - 2] === "+" || pattern[i - 2] === "*") &&
+      (cur === "+" || cur === "*" || cur === "{")
+    ) {
+      return true;
+    }
+  }
+  // Check for grouped quantifiers like (a+)+, (a*)* via depth tracking
+  let depth = 0;
+  let groupHasQuantifier = false;
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === "(" && pattern[i - 1] !== "\\") {
+      depth++;
+      groupHasQuantifier = false;
+    } else if (pattern[i] === ")" && pattern[i - 1] !== "\\") {
+      if (groupHasQuantifier && i + 1 < pattern.length) {
+        const next = pattern[i + 1];
+        if (next === "+" || next === "*" || next === "{") return true;
+      }
+      depth--;
+    } else if (depth > 0 && (pattern[i] === "+" || pattern[i] === "*")) {
+      groupHasQuantifier = true;
+    }
+  }
+  return false;
+}
+
 function safeRegex(pattern: string): RegExp {
-  if (/[+*{]\s*\??[+*{]/.test(pattern) || /\([^)]*[+*]\)[^)]*[+*{]/.test(pattern)) {
-    // NOSONAR - safe: ReDoS guard patterns with bounded character classes
+  if (hasNestedQuantifiers(pattern)) {
     throw new Error(`Potentially unsafe regex pattern rejected: "${pattern}"`);
   }
   try {

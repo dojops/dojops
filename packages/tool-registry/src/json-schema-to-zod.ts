@@ -15,17 +15,50 @@ export interface JSONSchemaObject {
   pattern?: string;
 }
 
-/**
- * Validates and constructs a RegExp from a pattern string.
- * Rejects patterns with nested quantifiers (common ReDoS vectors).
- */
+function hasNestedQuantifiers(pattern: string): boolean {
+  for (let i = 1; i < pattern.length; i++) {
+    const prev = pattern[i - 1];
+    const cur = pattern[i];
+    if (
+      (prev === "+" || prev === "*" || prev === "}") &&
+      (cur === "+" || cur === "*" || cur === "{")
+    ) {
+      return true;
+    }
+    if (
+      i >= 2 &&
+      pattern[i - 1] === "?" &&
+      (pattern[i - 2] === "+" || pattern[i - 2] === "*") &&
+      (cur === "+" || cur === "*" || cur === "{")
+    ) {
+      return true;
+    }
+  }
+  let depth = 0;
+  let groupHasQuantifier = false;
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === "(" && pattern[i - 1] !== "\\") {
+      depth++;
+      groupHasQuantifier = false;
+    } else if (pattern[i] === ")" && pattern[i - 1] !== "\\") {
+      if (groupHasQuantifier && i + 1 < pattern.length) {
+        const next = pattern[i + 1];
+        if (next === "+" || next === "*" || next === "{") return true;
+      }
+      depth--;
+    } else if (depth > 0 && (pattern[i] === "+" || pattern[i] === "*")) {
+      groupHasQuantifier = true;
+    }
+  }
+  return false;
+}
+
 function safeRegex(pattern: string): RegExp {
-  if (/[+*{]\s*\??[+*{]/.test(pattern) || /\([^)]*[+*]\)[^)]*[+*{]/.test(pattern)) {
-    // NOSONAR - safe: ReDoS guard patterns with bounded character classes
+  if (hasNestedQuantifiers(pattern)) {
     throw new Error(`Potentially unsafe regex pattern rejected: "${pattern}"`);
   }
   try {
-    return new RegExp(pattern); // NOSONAR — S5852: pattern is from tool schema, validated by safeRegex guard
+    return new RegExp(pattern); // NOSONAR — S5852: pattern validated by hasNestedQuantifiers guard
   } catch {
     throw new Error(`Invalid regex pattern: "${pattern}"`);
   }
