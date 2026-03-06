@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { AgentRouter } from "@dojops/core";
-import { HistoryStore } from "../store";
+import { HistoryStore, logRouteError } from "../store";
 import { GenerateRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
@@ -35,14 +35,7 @@ export function createGenerateRouter(agentRouter: AgentRouter, store: HistorySto
 
       res.json({ ...response, historyId: entry.id });
     } catch (err) {
-      store.add({
-        type: "generate",
-        request: req.body,
-        response: null,
-        durationMs: Date.now() - start,
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      logRouteError(store, "generate", req.body, start, err);
       next(err);
     }
   });

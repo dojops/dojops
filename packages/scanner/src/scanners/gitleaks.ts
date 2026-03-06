@@ -5,6 +5,7 @@ import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, parseErrorFinding, skippedResult } from "../scanner-utils";
 
 interface GitleaksResult {
   RuleID: string;
@@ -48,12 +49,7 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
   } catch (err: unknown) {
     if (isENOENT(err)) {
       cleanup(reportFile);
-      return {
-        tool: "gitleaks",
-        findings: [],
-        skipped: true,
-        skipReason: "gitleaks not found",
-      };
+      return skippedResult("gitleaks", "gitleaks not found");
     }
     // gitleaks exits with code 1 when leaks are found
     const execErr = err as { stdout?: string; stderr?: string; status?: number; code?: number };
@@ -64,12 +60,7 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
       if (exitCode === 1 && !execErr.stderr) {
         return { tool: "gitleaks", findings: [] };
       }
-      return {
-        tool: "gitleaks",
-        findings: [],
-        skipped: true,
-        skipReason: `gitleaks failed: ${execErr.stderr ?? "unknown error"}`,
-      };
+      return skippedResult("gitleaks", `gitleaks failed: ${execErr.stderr ?? "unknown error"}`);
     }
   }
 
@@ -93,15 +84,7 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
   } catch {
     // Only add parse warning if there was actual output to parse (not empty/no leaks)
     if (rawOutput && rawOutput.trim().length > 0) {
-      findings.push({
-        id: "gitleaks-parse-error",
-        tool: "gitleaks",
-        severity: "MEDIUM",
-        category: "SECRETS",
-        message:
-          "Failed to parse gitleaks output. The tool may have produced unexpected output format.",
-        autoFixAvailable: false,
-      });
+      findings.push(parseErrorFinding("gitleaks", "SECRETS"));
     }
   }
 
@@ -124,8 +107,4 @@ function cleanup(filePath: string): void {
   } catch {
     // ignore
   }
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

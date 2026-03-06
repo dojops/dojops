@@ -53,6 +53,10 @@ function validateInput(schema: z.ZodType, input: unknown): { valid: boolean; err
   return { valid: false, error: result.error.message };
 }
 
+function failedOutput(err: unknown): ToolOutput {
+  return { success: false, error: err instanceof Error ? err.message : String(err) };
+}
+
 const DEFAULT_RISK: DopsRisk = { level: "LOW", rationale: "No risk classification declared" };
 
 function getRisk(frontmatter: { risk?: DopsRisk }): DopsRisk {
@@ -74,6 +78,23 @@ function parseKeywords(keywordsStr: string): string[] {
     .split(",")
     .map((k) => k.trim())
     .filter((k) => k.length > 0);
+}
+
+/** Build standard ToolMetadata from a parsed .dops module. */
+function buildToolMetadata(
+  frontmatter: { meta: { version: string; icon?: string }; risk?: DopsRisk },
+  moduleHash: string,
+  systemPromptHash: string,
+): ToolMetadata {
+  return {
+    toolType: "built-in",
+    toolVersion: frontmatter.meta.version,
+    toolHash: moduleHash,
+    toolSource: "dops",
+    systemPromptHash,
+    riskLevel: getRisk(frontmatter).level,
+    icon: frontmatter.meta.icon,
+  };
 }
 
 /**
@@ -183,10 +204,7 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
         usage: response.usage,
       };
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return failedOutput(err);
     }
   }
 
@@ -218,10 +236,7 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
         usage: genResult.usage,
       };
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return failedOutput(err);
     }
   }
 
@@ -267,15 +282,7 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
   }
 
   get metadata(): ToolMetadata {
-    return {
-      toolType: "built-in",
-      toolVersion: this.module.frontmatter.meta.version,
-      toolHash: this._moduleHash,
-      toolSource: "dops",
-      systemPromptHash: this._systemPromptHash,
-      riskLevel: this.risk.level,
-      icon: this.module.frontmatter.meta.icon,
-    };
+    return buildToolMetadata(this.module.frontmatter, this._moduleHash, this._systemPromptHash);
   }
 
   get risk(): DopsRisk {
@@ -477,10 +484,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
         usage: response.usage,
       };
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return failedOutput(err);
     }
   }
 
@@ -539,10 +543,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
         usage: genResult.usage,
       };
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return failedOutput(err);
     }
   }
 
@@ -594,15 +595,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   }
 
   get metadata(): ToolMetadata {
-    return {
-      toolType: "built-in",
-      toolVersion: this.module.frontmatter.meta.version,
-      toolHash: this._moduleHash,
-      toolSource: "dops",
-      systemPromptHash: this._systemPromptHash,
-      riskLevel: this.risk.level,
-      icon: this.module.frontmatter.meta.icon,
-    };
+    return buildToolMetadata(this.module.frontmatter, this._moduleHash, this._systemPromptHash);
   }
 
   get risk(): DopsRisk {

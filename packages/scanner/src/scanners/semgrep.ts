@@ -1,6 +1,7 @@
 import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { parseErrorFinding, skippedResult } from "../scanner-utils";
 
 // Semgrep JSON output types
 interface SemgrepResult {
@@ -53,23 +54,16 @@ export async function scanSemgrep(projectPath: string): Promise<ScannerResult> {
     rawOutput = result.stdout;
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return {
-        tool: "semgrep",
-        findings: [],
-        skipped: true,
-        skipReason: "semgrep not found in PATH",
-      };
+      return skippedResult("semgrep", "semgrep not found in PATH");
     }
     // Semgrep exits non-zero when findings are present — check for stdout
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
-      return {
-        tool: "semgrep",
-        findings: [],
-        skipped: true,
-        skipReason: `semgrep failed: ${execErr.stderr?.slice(0, 200) ?? "unknown error"}`,
-      };
+      return skippedResult(
+        "semgrep",
+        `semgrep failed: ${execErr.stderr?.slice(0, 200) ?? "unknown error"}`,
+      );
     }
   }
 
@@ -102,14 +96,7 @@ export async function scanSemgrep(projectPath: string): Promise<ScannerResult> {
       }
     }
   } catch {
-    findings.push({
-      id: deterministicFindingId("semgrep", "parse-error"),
-      tool: "semgrep",
-      severity: "MEDIUM",
-      category: "SECURITY",
-      message: "Failed to parse semgrep output",
-      autoFixAvailable: false,
-    });
+    findings.push(parseErrorFinding("semgrep", "SECURITY"));
   }
 
   return { tool: "semgrep", findings, rawOutput };

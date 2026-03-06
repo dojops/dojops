@@ -18,6 +18,10 @@ import { jsonSchemaToZod, JSONSchemaObject } from "./json-schema-to-zod";
 import { serialize } from "./serializers";
 import { validateSystemPrompt } from "./prompt-validator";
 
+function failedOutput(err: unknown): ToolOutput {
+  return { success: false, error: err instanceof Error ? err.message : String(err) };
+}
+
 export const ALLOWED_VERIFICATION_BINARIES = [
   "terraform",
   "kubectl",
@@ -171,10 +175,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
         data: { generated: data, isUpdate },
       };
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return failedOutput(err);
     }
   }
 
@@ -205,10 +206,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
 
       return { ...result, filesWritten, filesModified };
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return failedOutput(err);
     }
   }
 

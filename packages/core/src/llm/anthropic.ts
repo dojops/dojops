@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
-import { parseAndValidate } from "./json-validator";
-import { redactSecrets } from "./redact";
+import { buildLLMResponse, extractApiError } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
 
 export class AnthropicProvider implements LLMProvider {
@@ -87,11 +86,9 @@ export class AnthropicProvider implements LLMProvider {
       if (usedPrefill) {
         content = "{" + content;
       }
-      const parsed = parseAndValidate(content, req.schema);
-      return { content, parsed, usage };
     }
 
-    return { content, usage };
+    return buildLLMResponse(content, usage, req);
   }
 
   async listModels(): Promise<string[]> {
@@ -103,23 +100,4 @@ export class AnthropicProvider implements LLMProvider {
       return [];
     }
   }
-}
-
-/** Extract a clean error message from Anthropic SDK errors. */
-function extractApiError(err: unknown): string {
-  if (err instanceof Error) {
-    // Anthropic SDK embeds JSON like: "400 {"type":"error","error":{"type":"...","message":"..."}}"
-    const jsonMatch = /\{[\s\S]*\}/.exec(err.message);
-    if (jsonMatch) {
-      try {
-        const body = JSON.parse(jsonMatch[0]);
-        const msg = body?.error?.message;
-        if (typeof msg === "string") return redactSecrets(msg);
-      } catch {
-        // fall through
-      }
-    }
-    return redactSecrets(err.message);
-  }
-  return redactSecrets(String(err));
 }

@@ -14,6 +14,7 @@ import {
   findSystemTool,
   isToolSupportedOnCurrentPlatform,
 } from "@dojops/core";
+import { toErrorMessage } from "./exit-codes";
 import {
   TOOLCHAIN_BIN_DIR,
   loadToolchainRegistry,
@@ -223,7 +224,7 @@ function hasSudo(): boolean {
  * is not writable and sudo is available.
  */
 function npmInstallGlobal(pkg: string, useSudo: boolean): void {
-  // NOSONAR - boolean parameter is clear and intentional
+  // NOSONAR — boolean param is intentional
   if (useSudo) {
     execFileSync("sudo", ["npm", "install", "-g", pkg], {
       timeout: 120_000,
@@ -307,7 +308,7 @@ export async function offerToolInstall(options?: {
       installed.push(pkg);
     } catch (err) {
       s.stop(`${pc.red("\u2717")} ${dep.name} failed.`);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = toErrorMessage(err);
       p.log.warn(`Failed to install ${dep.name}: ${msg}`);
     }
   }
@@ -422,7 +423,7 @@ export async function offerSystemToolInstall(options?: {
       installed.push(name);
     } catch (err) {
       s.stop(`${pc.red("\u2717")} ${tool.name} failed.`);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = toErrorMessage(err);
       p.log.warn(`Failed to install ${tool.name}: ${msg}`);
     }
   }

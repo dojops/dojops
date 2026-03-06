@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { InfraDiffAnalyzer } from "@dojops/core";
-import { HistoryStore } from "../store";
+import { HistoryStore, logRouteError } from "../store";
 import { DiffRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
@@ -31,14 +31,7 @@ export function createDiffRouter(analyzer: InfraDiffAnalyzer, store: HistoryStor
 
       res.json({ ...response, historyId: entry.id });
     } catch (err) {
-      store.add({
-        type: "diff",
-        request: req.body,
-        response: null,
-        durationMs: Date.now() - start,
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      logRouteError(store, "diff", req.body, start, err);
       next(err);
     }
   });

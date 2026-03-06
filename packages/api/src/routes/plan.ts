@@ -3,7 +3,7 @@ import { LLMProvider } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
 import { decompose, PlannerExecutor } from "@dojops/planner";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { HistoryStore } from "../store";
+import { HistoryStore, logRouteError } from "../store";
 import { PlanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
@@ -87,14 +87,7 @@ export function createPlanRouter(
 
       res.json({ ...response, historyId: entry.id });
     } catch (err) {
-      store.add({
-        type: "plan",
-        request: req.body,
-        response: null,
-        durationMs: Date.now() - start,
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      logRouteError(store, "plan", req.body, start, err);
       next(err);
     }
   });

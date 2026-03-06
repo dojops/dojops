@@ -38,6 +38,13 @@ export function parseGenericJson(output: string): VerificationIssue[] {
   return issues;
 }
 
+function extractMessage(obj: Record<string, unknown>, item: unknown): string {
+  if (typeof obj.message === "string") return obj.message;
+  if (typeof obj.summary === "string") return obj.summary;
+  if (typeof obj.error === "string") return obj.error;
+  return JSON.stringify(item);
+}
+
 function extractIssue(item: unknown): VerificationIssue {
   if (typeof item === "string") {
     return { severity: "error", message: item };
@@ -46,14 +53,7 @@ function extractIssue(item: unknown): VerificationIssue {
     const obj = item as Record<string, unknown>;
     return {
       severity: mapSeverity(obj.severity ?? obj.level ?? obj.type),
-      message:
-        typeof obj.message === "string"
-          ? obj.message
-          : typeof obj.summary === "string"
-            ? obj.summary
-            : typeof obj.error === "string"
-              ? obj.error
-              : JSON.stringify(item),
+      message: extractMessage(obj, item),
       line: typeof obj.line === "number" ? obj.line : undefined,
       rule:
         typeof obj.rule === "string" || typeof obj.code === "string"

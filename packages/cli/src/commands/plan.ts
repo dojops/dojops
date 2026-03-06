@@ -4,7 +4,7 @@ import { decompose } from "@dojops/planner";
 import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
-import { ExitCode, CLIError } from "../exit-codes";
+import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { classifyPlanRisk } from "../risk-classifier";
 import { wrapForNote } from "../formatter";
 import * as yaml from "js-yaml";
@@ -74,7 +74,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     });
   } catch (err) {
     if (!isJson) s.stop("Decomposition failed.");
-    throw new CLIError(ExitCode.GENERAL_ERROR, err instanceof Error ? err.message : String(err));
+    throw new CLIError(ExitCode.GENERAL_ERROR, toErrorMessage(err));
   }
   if (!isJson) s.stop("Tasks decomposed.");
 

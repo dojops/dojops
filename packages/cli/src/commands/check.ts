@@ -7,18 +7,178 @@ import { CommandHandler } from "../types";
 import { wrapForNote } from "../formatter";
 import { hasFlag } from "../parser";
 import { findProjectRoot, loadContext, appendAudit, getCurrentUser } from "../state";
-import { ExitCode, CLIError } from "../exit-codes";
+import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 
 const MAX_FILES = 20;
 const MAX_FILE_SIZE = 50 * 1024; // 50 KB
 
+function readDevopsFiles(root: string, devopsFiles: string[]): { path: string; content: string }[] {
+  const fileContents: { path: string; content: string }[] = [];
+  for (const filePath of devopsFiles.slice(0, MAX_FILES)) {
+    const absPath = path.join(root, filePath);
+    try {
+      const stat = fs.statSync(absPath);
+      if (stat.size > MAX_FILE_SIZE) continue;
+      const content = fs.readFileSync(absPath, "utf-8");
+      fileContents.push({ path: filePath, content });
+    } catch {
+      // File missing or unreadable — skip
+    }
+  }
+  return fileContents;
+}
+
+function getScoreStyle(score: number): { color: (s: string) => string; label: string } {
+  if (score >= 76) return { color: pc.green, label: "Excellent" };
+  if (score >= 51) return { color: pc.cyan, label: "Good" };
+  if (score >= 26) return { color: pc.yellow, label: "Basic" };
+  return { color: pc.red, label: "Minimal" };
+}
+
+function renderFindings(
+  findings: Array<{ severity: string; file: string; message: string; recommendation: string }>,
+): void {
+  const severityOrder = ["critical", "error", "warning", "info"] as const;
+  const severityColors: Record<string, (s: string) => string> = {
+    critical: pc.red,
+    error: pc.red,
+    warning: pc.yellow,
+    info: pc.dim,
+  };
+
+  if (findings.length > 0) {
+    const lines: string[] = [];
+    for (const sev of severityOrder) {
+      const items = findings.filter((f) => f.severity === sev);
+      if (items.length === 0) continue;
+      const color = severityColors[sev];
+      lines.push(`${color(pc.bold(sev.toUpperCase()))} (${items.length})`);
+      for (const f of items) {
+        lines.push(
+          `  ${color("●")} ${pc.cyan(f.file)} — ${f.message}`,
+          `    ${pc.dim("→")} ${f.recommendation}`,
+        );
+      }
+      lines.push("");
+    }
+    p.note(wrapForNote(lines.join("\n")), `Findings (${findings.length})`);
+  } else {
+    p.log.success("No findings — your DevOps configuration looks great!");
+  }
+}
+
+function applyFixContent(fixContent: string, root: string): number {
+  const fileRegex = /FILE:\s*(.+?)\n```[^\n]*\n([\s\S]*?)```/g;
+  let match;
+  let filesFixed = 0;
+  while ((match = fileRegex.exec(fixContent)) !== null) {
+    const filePath = match[1].trim();
+    const content = match[2];
+    const absPath = path.join(root, filePath);
+    try {
+      if (fs.existsSync(absPath)) {
+        fs.copyFileSync(absPath, absPath + ".bak");
+      }
+      fs.writeFileSync(absPath, content, "utf-8");
+      p.log.success(`Fixed: ${pc.cyan(filePath)}`);
+      filesFixed++;
+    } catch (writeErr) {
+      p.log.warn(
+        `Failed to write ${filePath}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`,
+      );
+    }
+  }
+  return filesFixed;
+}
+
+async function handleFixMode(
+  report: {
+    findings: Array<{ severity: string; file: string; message: string; recommendation: string }>;
+  },
+  fileContents: { path: string; content: string }[],
+  provider: { generate(req: { system: string; prompt: string }): Promise<{ content: string }> },
+  root: string,
+  autoApprove: boolean,
+): Promise<void> {
+  const fixableFindings = report.findings.filter(
+    (f) => f.severity === "critical" || f.severity === "error",
+  );
+
+  if (fixableFindings.length === 0) {
+    p.log.info("No critical/error findings to fix.");
+    return;
+  }
+
+  const fixSpinner = p.spinner();
+  fixSpinner.start(`Generating fixes for ${fixableFindings.length} finding(s)...`);
+
+  try {
+    const fixPrompt = [
+      "You are a DevOps configuration expert. Fix the following issues in the project files.",
+      "For each fix, output the complete corrected file content.",
+      "",
+      "Findings to fix:",
+      ...fixableFindings.map(
+        (f) => `- [${f.severity}] ${f.file}: ${f.message}\n  Recommendation: ${f.recommendation}`,
+      ),
+      "",
+      "Current file contents:",
+      ...fileContents
+        .filter((fc) => fixableFindings.some((f) => f.file === fc.path))
+        .map((fc) => `\n--- ${fc.path} ---\n${fc.content}`),
+    ].join("\n");
+
+    const fixResult = await provider.generate({
+      system:
+        "You are a DevOps expert. Generate corrected file contents to fix the identified issues. " +
+        "Output each fix as: FILE: <path>\n```\n<corrected content>\n```",
+      prompt: fixPrompt,
+    });
+
+    fixSpinner.stop("Fixes generated.");
+    const fixContent = fixResult.content;
+    p.note(wrapForNote(fixContent), "Proposed Fixes");
+
+    let approved = autoApprove;
+    if (!approved) {
+      const confirm = await p.confirm({
+        message: `Apply ${fixableFindings.length} fix(es)?`,
+      });
+      if (p.isCancel(confirm)) {
+        p.log.info("Fixes cancelled.");
+      } else {
+        approved = confirm;
+      }
+    }
+
+    if (approved) {
+      const filesFixed = applyFixContent(fixContent, root);
+      if (filesFixed === 0) {
+        p.log.info("No files were modified (could not parse fix output).");
+      }
+    }
+  } catch (fixErr) {
+    fixSpinner.stop("Fix generation failed.");
+    p.log.error(`Fix failed: ${fixErr instanceof Error ? fixErr.message : String(fixErr)}`);
+  }
+}
+
+function makeCheckAuditEntry(status: "success" | "failure", durationMs: number) {
+  return {
+    timestamp: new Date().toISOString(),
+    user: getCurrentUser(),
+    command: "check",
+    action: "devops-check",
+    status,
+    durationMs,
+  } as const;
+}
+
 export const checkCommand: CommandHandler = async (_args, cliCtx) => {
-  // F-6: `dojops check provider` — test provider connectivity
   if (_args[0] === "provider") {
     return checkProviderCommand(_args.slice(1), cliCtx);
   }
 
-  // FEAT #4: --fix flag for auto-remediation
   const fixMode = hasFlag(_args, "--fix");
   const autoApprove = hasFlag(_args, "--yes") || cliCtx.globalOpts.nonInteractive;
 
@@ -44,26 +204,12 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     return;
   }
 
-  // Read file contents (up to MAX_FILES, each up to MAX_FILE_SIZE)
-  const fileContents: { path: string; content: string }[] = [];
-  for (const filePath of ctx.devopsFiles.slice(0, MAX_FILES)) {
-    const absPath = path.join(root, filePath);
-    try {
-      const stat = fs.statSync(absPath);
-      if (stat.size > MAX_FILE_SIZE) continue;
-      const content = fs.readFileSync(absPath, "utf-8");
-      fileContents.push({ path: filePath, content });
-    } catch {
-      // File missing or unreadable — skip
-    }
-  }
-
+  const fileContents = readDevopsFiles(root, ctx.devopsFiles);
   if (fileContents.length === 0) {
     p.log.warn("Could not read any DevOps files. Nothing to check.");
     return;
   }
 
-  // Get provider
   let provider;
   try {
     provider = cliCtx.getProvider();
@@ -80,8 +226,6 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   if (!isStructured) s.start(`Analyzing ${fileContents.length} DevOps files...`);
 
   const checker = new DevOpsChecker(provider);
-
-  // Strip rootPath from context for privacy
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { rootPath: _rp, ...contextForLLM } = ctx;
   const contextJson = JSON.stringify(contextForLLM, null, 2);
@@ -89,40 +233,19 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   try {
     const report = await checker.check(contextJson, fileContents);
     if (!isStructured) s.stop("Analysis complete.");
-
     const durationMs = Date.now() - start;
 
-    // JSON output mode
     if (cliCtx.globalOpts.output === "json") {
       console.log(JSON.stringify(report, null, 2));
-      appendAudit(root, {
-        timestamp: new Date().toISOString(),
-        user: getCurrentUser(),
-        command: "check",
-        action: "devops-check",
-        status: "success",
-        durationMs,
-      });
+      appendAudit(root, makeCheckAuditEntry("success", durationMs));
       return;
     }
 
-    // Maturity score
-    let scoreColor: (s: string) => string;
-    if (report.score >= 76) scoreColor = pc.green;
-    else if (report.score >= 51) scoreColor = pc.cyan;
-    else if (report.score >= 26) scoreColor = pc.yellow;
-    else scoreColor = pc.red;
-
-    let scoreLabel: string;
-    if (report.score >= 76) scoreLabel = "Excellent";
-    else if (report.score >= 51) scoreLabel = "Good";
-    else if (report.score >= 26) scoreLabel = "Basic";
-    else scoreLabel = "Minimal";
-
+    const { color: scoreColor, label: scoreLabel } = getScoreStyle(report.score);
     p.note(
       wrapForNote(
         [
-          `${pc.bold("Score:")} ${scoreColor(`${report.score}/100`)} ${pc.dim(`(${scoreLabel})`)}`,
+          `${pc.bold("Score:")} ${scoreColor(report.score + "/100")} ${pc.dim("(" + scoreLabel + ")")}`,
           "",
           report.summary,
         ].join("\n"),
@@ -130,154 +253,22 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
       "DevOps Maturity",
     );
 
-    // Findings by severity
-    const severityOrder = ["critical", "error", "warning", "info"] as const;
-    const severityColors: Record<string, (s: string) => string> = {
-      critical: pc.red,
-      error: pc.red,
-      warning: pc.yellow,
-      info: pc.dim,
-    };
+    renderFindings(report.findings);
 
-    if (report.findings.length > 0) {
-      const lines: string[] = [];
-      for (const sev of severityOrder) {
-        const items = report.findings.filter((f) => f.severity === sev);
-        if (items.length === 0) continue;
-        const color = severityColors[sev];
-        lines.push(`${color(pc.bold(sev.toUpperCase()))} (${items.length})`);
-        for (const f of items) {
-          lines.push(
-            `  ${color("●")} ${pc.cyan(f.file)} — ${f.message}`,
-            `    ${pc.dim("→")} ${f.recommendation}`,
-          );
-        }
-        lines.push("");
-      }
-      p.note(wrapForNote(lines.join("\n")), `Findings (${report.findings.length})`);
-    } else {
-      p.log.success("No findings — your DevOps configuration looks great!");
-    }
-
-    // Missing files
     if (report.missingFiles.length > 0) {
       const missingLines = report.missingFiles.map((f) => `  ${pc.yellow("○")} ${f}`);
       p.note(wrapForNote(missingLines.join("\n")), "Recommended missing files");
     }
 
-    // FEAT #4: --fix mode — auto-remediate high-severity findings
     if (fixMode && report.findings.length > 0) {
-      const fixableFindings = report.findings.filter(
-        (f) => f.severity === "critical" || f.severity === "error",
-      );
-
-      if (fixableFindings.length === 0) {
-        p.log.info("No critical/error findings to fix.");
-      } else {
-        const fixSpinner = p.spinner();
-        fixSpinner.start(`Generating fixes for ${fixableFindings.length} finding(s)...`);
-
-        try {
-          const fixPrompt = [
-            "You are a DevOps configuration expert. Fix the following issues in the project files.",
-            "For each fix, output the complete corrected file content.",
-            "",
-            "Findings to fix:",
-            ...fixableFindings.map(
-              (f) =>
-                `- [${f.severity}] ${f.file}: ${f.message}\n  Recommendation: ${f.recommendation}`,
-            ),
-            "",
-            "Current file contents:",
-            ...fileContents
-              .filter((fc) => fixableFindings.some((f) => f.file === fc.path))
-              .map((fc) => `\n--- ${fc.path} ---\n${fc.content}`),
-          ].join("\n");
-
-          const fixResult = await provider.generate({
-            system:
-              "You are a DevOps expert. Generate corrected file contents to fix the identified issues. " +
-              "Output each fix as: FILE: <path>\n```\n<corrected content>\n```",
-            prompt: fixPrompt,
-          });
-
-          fixSpinner.stop("Fixes generated.");
-
-          // Parse and display fixes — LLMResponse has { content: string }
-          const fixContent = fixResult.content;
-
-          p.note(wrapForNote(fixContent), "Proposed Fixes");
-
-          // Apply fixes with approval
-          let approved = autoApprove;
-          if (!approved) {
-            const confirm = await p.confirm({
-              message: `Apply ${fixableFindings.length} fix(es)?`,
-            });
-            if (p.isCancel(confirm)) {
-              p.log.info("Fixes cancelled.");
-            } else {
-              approved = confirm;
-            }
-          }
-
-          if (approved) {
-            // Parse FILE: <path> blocks and write them
-            const fileRegex = /FILE:\s*(.+?)\n```[^\n]*\n([\s\S]*?)```/g;
-            let match;
-            let filesFixed = 0;
-            while ((match = fileRegex.exec(fixContent)) !== null) {
-              const filePath = match[1].trim();
-              const content = match[2];
-              const absPath = path.join(root, filePath);
-              try {
-                // Create backup
-                if (fs.existsSync(absPath)) {
-                  fs.copyFileSync(absPath, absPath + ".bak");
-                }
-                fs.writeFileSync(absPath, content, "utf-8");
-                p.log.success(`Fixed: ${pc.cyan(filePath)}`);
-                filesFixed++;
-              } catch (writeErr) {
-                p.log.warn(
-                  `Failed to write ${filePath}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`,
-                );
-              }
-            }
-            if (filesFixed === 0) {
-              p.log.info("No files were modified (could not parse fix output).");
-            }
-          }
-        } catch (fixErr) {
-          fixSpinner.stop("Fix generation failed.");
-          p.log.error(`Fix failed: ${fixErr instanceof Error ? fixErr.message : String(fixErr)}`);
-        }
-      }
+      await handleFixMode(report, fileContents, provider, root, autoApprove);
     }
 
-    // Audit
-    appendAudit(root, {
-      timestamp: new Date().toISOString(),
-      user: getCurrentUser(),
-      command: "check",
-      action: "devops-check",
-      status: "success",
-      durationMs,
-    });
+    appendAudit(root, makeCheckAuditEntry("success", durationMs));
   } catch (err) {
     if (!isStructured) s.stop("Analysis failed.");
-    appendAudit(root, {
-      timestamp: new Date().toISOString(),
-      user: getCurrentUser(),
-      command: "check",
-      action: "devops-check",
-      status: "failure",
-      durationMs: Date.now() - start,
-    });
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Check failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    appendAudit(root, makeCheckAuditEntry("failure", Date.now() - start));
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Check failed: ${toErrorMessage(err)}`);
   }
 };
 
@@ -354,7 +345,7 @@ async function checkProviderCommand(
           status: "error",
           provider: provider.name,
           latencyMs: latency,
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
         }),
       );
       return;
@@ -362,7 +353,7 @@ async function checkProviderCommand(
 
     throw new CLIError(
       ExitCode.GENERAL_ERROR,
-      `Provider ${provider.name} connectivity check failed: ${err instanceof Error ? err.message : String(err)}`,
+      `Provider ${provider.name} connectivity check failed: ${toErrorMessage(err)}`,
     );
   }
 }

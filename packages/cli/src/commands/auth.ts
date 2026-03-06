@@ -114,6 +114,39 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
   p.log.info(pc.dim('You can now run: dojops "your prompt here"'));
 }
 
+async function selectCopilotModel(currentModel: string | undefined): Promise<string | undefined> {
+  const ms = p.spinner();
+  ms.start("Fetching available Copilot models...");
+  const llm = createProvider({ provider: "github-copilot" });
+  const models = await llm.listModels?.();
+  ms.stop("Models fetched.");
+
+  if (!models || models.length === 0) return undefined;
+
+  const customValue = "__custom__";
+  const choice = await p.select({
+    message: "Select default model for github-copilot:",
+    options: [
+      ...models.map((m) => ({ value: m, label: m })),
+      { value: customValue, label: "Custom model..." },
+    ],
+    initialValue: currentModel ?? "gpt-4o",
+  });
+
+  if (p.isCancel(choice)) return undefined;
+
+  let model = choice as string;
+  if (model === customValue) {
+    const custom = await p.text({
+      message: "Enter custom model name:",
+      placeholder: "e.g. gpt-4o, claude-3.5-sonnet, o1-mini",
+    });
+    model = !p.isCancel(custom) && custom ? (custom as string) : "";
+  }
+
+  return model || undefined;
+}
+
 async function copilotLoginFlow(): Promise<void> {
   const s = p.spinner();
   s.start("Starting GitHub Copilot OAuth Device Flow...");
@@ -142,42 +175,10 @@ async function copilotLoginFlow(): Promise<void> {
     config.defaultProvider = "github-copilot";
   }
 
-  // Fetch available models and let user pick
   try {
-    const ms = p.spinner();
-    ms.start("Fetching available Copilot models...");
-    const llm = createProvider({ provider: "github-copilot" });
-    const models = await llm.listModels?.();
-    ms.stop("Models fetched.");
-
-    if (models && models.length > 0) {
-      const customValue = "__custom__";
-      const choice = await p.select({
-        message: "Select default model for github-copilot:",
-        options: [
-          ...models.map((m) => ({ value: m, label: m })),
-          { value: customValue, label: "Custom model..." },
-        ],
-        initialValue: config.defaultModel ?? "gpt-4o",
-      });
-
-      if (!p.isCancel(choice)) {
-        let model = choice as string;
-        if (model === customValue) {
-          const custom = await p.text({
-            message: "Enter custom model name:",
-            placeholder: "e.g. gpt-4o, claude-3.5-sonnet, o1-mini",
-          });
-          if (!p.isCancel(custom) && custom) {
-            model = custom as string;
-          } else {
-            model = "";
-          }
-        }
-        if (model) {
-          config.defaultModel = model;
-        }
-      }
+    const selectedModel = await selectCopilotModel(config.defaultModel);
+    if (selectedModel) {
+      config.defaultModel = selectedModel;
     }
   } catch {
     // Model fetching failed — user can set model later via dojops config

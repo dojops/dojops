@@ -4,6 +4,7 @@ import { ScannerResult, ScanFinding } from "../types";
 import { discoverProjectDirs } from "../discovery";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, parseErrorFinding, skippedResult } from "../scanner-utils";
 
 const PIP_INDICATORS = ["requirements.txt", "Pipfile", "setup.py", "pyproject.toml"];
 
@@ -58,12 +59,7 @@ function getPipFindingFile(
 export async function scanPip(projectPath: string): Promise<ScannerResult> {
   const projectDirs = discoverProjectDirs(projectPath, PIP_INDICATORS);
   if (projectDirs.length === 0) {
-    return {
-      tool: "pip-audit",
-      findings: [],
-      skipped: true,
-      skipReason: "No Python dependency file found",
-    };
+    return skippedResult("pip-audit", "No Python dependency file found");
   }
 
   const allFindings: ScanFinding[] = [];
@@ -102,22 +98,15 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
     rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
-      return {
-        tool: "pip-audit",
-        findings: [],
-        skipped: true,
-        skipReason: "pip-audit not found",
-      };
+      return skippedResult("pip-audit", "pip-audit not found");
     }
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
-      return {
-        tool: "pip-audit",
-        findings: [],
-        skipped: true,
-        skipReason: `pip-audit failed${subProject ? " (" + subProject + ")" : ""}: ${execErr.stderr ?? "unknown error"}`,
-      };
+      return skippedResult(
+        "pip-audit",
+        `pip-audit failed${subProject ? " (" + subProject + ")" : ""}: ${execErr.stderr ?? "unknown error"}`,
+      );
     }
   }
 
@@ -144,20 +133,8 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
       }
     }
   } catch {
-    findings.push({
-      id: "pip-audit-parse-error",
-      tool: "pip-audit",
-      severity: "MEDIUM",
-      category: "SECURITY",
-      message:
-        "Failed to parse pip-audit output. The tool may have produced unexpected output format.",
-      autoFixAvailable: false,
-    });
+    findings.push(parseErrorFinding("pip-audit", "SECURITY"));
   }
 
   return { tool: "pip-audit", findings, rawOutput };
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

@@ -1,10 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
+import { ScannerResult, ScanFinding } from "../types";
 import { listSubDirs } from "../discovery";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, mapLintLevel, parseErrorFinding, skippedResult } from "../scanner-utils";
 
 interface ShellCheckResult {
   file: string;
@@ -66,12 +67,7 @@ function resolveShellcheck(): string {
 export async function scanShellcheck(projectPath: string): Promise<ScannerResult> {
   const scripts = findShellScripts(projectPath);
   if (scripts.length === 0) {
-    return {
-      tool: "shellcheck",
-      findings: [],
-      skipped: true,
-      skipReason: "No shell scripts found",
-    };
+    return skippedResult("shellcheck", "No shell scripts found");
   }
 
   const shellcheckBin = resolveShellcheck();
@@ -88,12 +84,7 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
       rawOutput = result.stdout;
     } catch (err: unknown) {
       if (isENOENT(err)) {
-        return {
-          tool: "shellcheck",
-          findings: [],
-          skipped: true,
-          skipReason: "shellcheck not found",
-        };
+        return skippedResult("shellcheck", "shellcheck not found");
       }
       // shellcheck exits non-zero when issues found, but still outputs JSON
       const execErr = err as { stdout?: string; stderr?: string };
@@ -113,7 +104,7 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
         allFindings.push({
           id: deterministicFindingId("shellcheck", String(r.code), relPath, String(r.line)),
           tool: "shellcheck",
-          severity: mapLevel(r.level),
+          severity: mapLintLevel(r.level),
           category: "IAC",
           file: relPath,
           line: r.line,
@@ -123,15 +114,7 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
         });
       }
     } catch {
-      allFindings.push({
-        id: "shellcheck-parse-error",
-        tool: "shellcheck",
-        severity: "MEDIUM",
-        category: "IAC",
-        message:
-          "Failed to parse shellcheck output. The tool may have produced unexpected output format.",
-        autoFixAvailable: false,
-      });
+      allFindings.push(parseErrorFinding("shellcheck", "IAC"));
     }
   }
 
@@ -197,9 +180,9 @@ function findShellScripts(projectPath: string): string[] {
         // Symlink containment: resolve and verify within project root
         if (entry.isSymbolicLink() && !isContainedPath(fullPath)) continue;
 
-        if (entry.name.endsWith(".sh") || entry.name.endsWith(".bash")) {
-          if (!addScript(fullPath)) return;
-        } else if (!entry.name.includes(".") && hasShellShebang(fullPath)) {
+        const isShellExt = entry.name.endsWith(".sh") || entry.name.endsWith(".bash");
+        const isShebangScript = !entry.name.includes(".") && hasShellShebang(fullPath);
+        if (isShellExt || isShebangScript) {
           if (!addScript(fullPath)) return;
         }
       }
@@ -236,21 +219,4 @@ function findShellScripts(projectPath: string): string[] {
   }
 
   return results;
-}
-
-function mapLevel(level: string): ScanSeverity {
-  switch (level) {
-    case "error":
-      return "HIGH";
-    case "info":
-    case "style":
-      return "LOW";
-    case "warning":
-    default:
-      return "MEDIUM";
-  }
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { runScan } from "@dojops/scanner";
 import type { ScanType } from "@dojops/scanner";
-import { HistoryStore } from "../store";
+import { HistoryStore, logRouteError } from "../store";
 import { ScanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
@@ -76,14 +76,7 @@ export function createScanRouter(store: HistoryStore, rootDir?: string): Router 
 
       res.json({ ...report, historyId: entry.id });
     } catch (err) {
-      store.add({
-        type: "scan",
-        request: req.body,
-        response: null,
-        durationMs: Date.now() - start,
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      logRouteError(store, "scan", req.body, start, err);
       next(err);
     } finally {
       scanInProgress = false;

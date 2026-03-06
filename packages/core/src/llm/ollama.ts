@@ -2,7 +2,7 @@ import https from "node:https";
 import axios from "axios";
 import { z } from "zod";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
-import { parseAndValidate } from "./json-validator";
+import { buildLLMResponse } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
 
 const OLLAMA_TIMEOUT_MS = 120_000;
@@ -132,12 +132,7 @@ export class OllamaProvider implements LLMProvider {
       throw err;
     }
 
-    if (req.schema) {
-      const parsed = parseAndValidate(content, req.schema);
-      return { content, parsed, usage };
-    }
-
-    return { content, usage };
+    return buildLLMResponse(content, usage, req);
   }
 
   async listModels(): Promise<string[]> {

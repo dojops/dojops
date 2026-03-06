@@ -319,29 +319,29 @@ function validatePlanData(data: unknown): PlanState {
     throw new Error("Plan must have a string 'id'");
   }
   if (typeof plan.goal !== "string") {
-    throw new Error("Plan must have a string 'goal'");
+    throw new TypeError("Plan must have a string 'goal'");
   }
   if (typeof plan.createdAt !== "string") {
-    throw new Error("Plan must have a string 'createdAt'");
+    throw new TypeError("Plan must have a string 'createdAt'");
   }
   if (typeof plan.risk !== "string" || !VALID_RISK_LEVELS.has(plan.risk)) {
-    throw new Error(
+    throw new TypeError(
       `Plan 'risk' must be one of ${[...VALID_RISK_LEVELS].join(", ")}, got: ${String(plan.risk)}`,
     );
   }
   if (!Array.isArray(plan.tasks)) {
-    throw new Error("Plan must have an array 'tasks'");
+    throw new TypeError("Plan must have an array 'tasks'");
   }
   for (const task of plan.tasks) {
     if (typeof task !== "object" || task === null) {
-      throw new Error("Each task must be a non-null object");
+      throw new TypeError("Each task must be a non-null object");
     }
     if (typeof task.id !== "string" || typeof task.tool !== "string") {
-      throw new Error("Each task must have string 'id' and 'tool'");
+      throw new TypeError("Each task must have string 'id' and 'tool'");
     }
   }
   if (!Array.isArray(plan.files)) {
-    throw new Error("Plan must have an array 'files'");
+    throw new TypeError("Plan must have an array 'files'");
   }
   if (
     typeof plan.approvalStatus !== "string" ||
@@ -555,6 +555,22 @@ function rotateAuditIfNeeded(file: string): string | null {
   return null;
 }
 
+function findLastValidAuditEntry(file: string): AuditEntry | null {
+  const content = fs.readFileSync(file, "utf-8").trimEnd();
+  if (content.length === 0) return null;
+  const lines = content.split("\n");
+  for (let j = lines.length - 1; j >= 0; j--) {
+    try {
+      return JSON.parse(lines[j]) as AuditEntry;
+    } catch {
+      if (j === lines.length - 1) {
+        console.warn("[audit] Last audit entry is corrupt — scanning for last valid entry");
+      }
+    }
+  }
+  return null;
+}
+
 export function appendAudit(rootDir: string, entry: AuditEntry): void {
   const file = auditFile(rootDir);
   const dir = path.dirname(file);
@@ -589,28 +605,10 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
     let seq = 1;
 
     if (fs.existsSync(file)) {
-      const content = fs.readFileSync(file, "utf-8").trimEnd();
-      if (content.length > 0) {
-        const lines = content.split("\n");
-        const lastLine = lines[lines.length - 1];
-        try {
-          const lastEntry = JSON.parse(lastLine) as AuditEntry;
-          previousHash = lastEntry.hash ?? "genesis";
-          seq = (lastEntry.seq ?? 0) + 1;
-        } catch {
-          // Corrupt last line — scan backwards for last valid entry
-          console.warn("[audit] Last audit entry is corrupt — scanning for last valid entry");
-          for (let j = lines.length - 2; j >= 0; j--) {
-            try {
-              const prev = JSON.parse(lines[j]) as AuditEntry;
-              previousHash = prev.hash ?? "genesis";
-              seq = (prev.seq ?? 0) + 1;
-              break;
-            } catch {
-              /* continue scanning */
-            }
-          }
-        }
+      const chainTip = findLastValidAuditEntry(file);
+      if (chainTip) {
+        previousHash = chainTip.hash ?? "genesis";
+        seq = (chainTip.seq ?? 0) + 1;
       }
     }
 
@@ -664,6 +662,41 @@ export function readAudit(
   });
 }
 
+function verifyAuditEntry(
+  entry: AuditEntry,
+  expectedSeq: number,
+  expectedPreviousHash: string,
+  hmacKey: string | null,
+  lineNum: number,
+  errors: AuditVerificationResult["errors"],
+): void {
+  if (entry.seq !== expectedSeq) {
+    errors.push({
+      seq: entry.seq ?? expectedSeq,
+      line: lineNum,
+      reason: `Expected seq ${expectedSeq}, got ${entry.seq}`,
+    });
+  }
+
+  if (entry.previousHash !== expectedPreviousHash) {
+    errors.push({
+      seq: entry.seq ?? expectedSeq,
+      line: lineNum,
+      reason: `Previous hash mismatch`,
+    });
+  }
+
+  const recomputedHmac = hmacKey ? computeAuditHash(entry, hmacKey) : null;
+  const recomputedPlain = computeAuditHash(entry, null);
+  if (entry.hash !== recomputedHmac && entry.hash !== recomputedPlain) {
+    errors.push({
+      seq: entry.seq ?? expectedSeq,
+      line: lineNum,
+      reason: `Hash mismatch (tampered)`,
+    });
+  }
+}
+
 export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
   const file = auditFile(rootDir);
   if (!fs.existsSync(file)) return { valid: true, totalEntries: 0, errors: [] };
@@ -688,47 +721,19 @@ export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
       continue;
     }
 
-    // Legacy entry without hash fields
     if (entry.seq == null || entry.hash == null) {
       if (chainStarted) {
-        // Hash-less entry after chain has started → error (potential tampering)
         errors.push({
           seq: expectedSeq,
           line: i + 1,
           reason: "Hash fields missing in chained entry",
         });
       }
-      // Legacy entries before chain starts are OK — skip them
       continue;
     }
     chainStarted = true;
 
-    if (entry.seq !== expectedSeq) {
-      errors.push({
-        seq: entry.seq ?? expectedSeq,
-        line: i + 1,
-        reason: `Expected seq ${expectedSeq}, got ${entry.seq}`,
-      });
-    }
-
-    if (entry.previousHash !== expectedPreviousHash) {
-      errors.push({
-        seq: entry.seq ?? expectedSeq,
-        line: i + 1,
-        reason: `Previous hash mismatch`,
-      });
-    }
-
-    // Try HMAC first, then fall back to plain SHA-256 for legacy entries
-    const recomputedHmac = hmacKey ? computeAuditHash(entry, hmacKey) : null;
-    const recomputedPlain = computeAuditHash(entry, null);
-    if (entry.hash !== recomputedHmac && entry.hash !== recomputedPlain) {
-      errors.push({
-        seq: entry.seq ?? expectedSeq,
-        line: i + 1,
-        reason: `Hash mismatch (tampered)`,
-      });
-    }
+    verifyAuditEntry(entry, expectedSeq, expectedPreviousHash, hmacKey, i + 1, errors);
 
     expectedPreviousHash = entry.hash;
     expectedSeq = entry.seq + 1;

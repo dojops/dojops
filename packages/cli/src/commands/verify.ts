@@ -7,7 +7,7 @@ import * as p from "@clack/prompts";
 import * as yaml from "js-yaml";
 import { verifyWithBinary } from "@dojops/runtime";
 import { CLIContext } from "../types";
-import { ExitCode, CLIError } from "../exit-codes";
+import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 
 /** Matches VerificationResult from @dojops/sdk (CLI does not depend on SDK directly). */
 interface VerificationResult {
@@ -78,7 +78,7 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
       throw err;
     }
     if (!isStructured) spinner.stop("Verification failed");
-    throw new CLIError(ExitCode.GENERAL_ERROR, err instanceof Error ? err.message : String(err));
+    throw new CLIError(ExitCode.GENERAL_ERROR, toErrorMessage(err));
   }
 
   if (!isStructured) spinner.stop(`Verified with ${pc.cyan(result.tool)}`);
@@ -134,7 +134,7 @@ async function verifyTerraformContent(hcl: string): Promise<VerificationResult> 
           issues: [{ severity: "warning", message: "terraform not found — skipped" }],
         };
       }
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = toErrorMessage(err);
       return {
         passed: false,
         tool: "terraform validate",
@@ -161,7 +161,7 @@ async function verifyTerraformContent(hcl: string): Promise<VerificationResult> 
       const execErr = err as { stdout?: string; stderr?: string };
       rawOutput = execErr.stdout ?? "";
       if (!rawOutput) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = toErrorMessage(err);
         return {
           passed: false,
           tool: "terraform validate",

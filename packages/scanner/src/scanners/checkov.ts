@@ -1,6 +1,7 @@
-import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
+import { ScannerResult, ScanFinding } from "../types";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, mapTrivySeverity, parseErrorFinding, skippedResult } from "../scanner-utils";
 
 interface CheckovFailedCheck {
   check_id: string;
@@ -33,22 +34,12 @@ export async function scanCheckov(projectPath: string): Promise<ScannerResult> {
     rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
-      return {
-        tool: "checkov",
-        findings: [],
-        skipped: true,
-        skipReason: "checkov not found",
-      };
+      return skippedResult("checkov", "checkov not found");
     }
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
-      return {
-        tool: "checkov",
-        findings: [],
-        skipped: true,
-        skipReason: `checkov failed: ${execErr.stderr ?? "unknown error"}`,
-      };
+      return skippedResult("checkov", `checkov failed: ${execErr.stderr ?? "unknown error"}`);
     }
   }
 
@@ -70,7 +61,7 @@ export async function scanCheckov(projectPath: string): Promise<ScannerResult> {
               check.resource || "",
             ),
             tool: "checkov",
-            severity: mapSeverity(check.severity),
+            severity: mapTrivySeverity(check.severity),
             category: "IAC",
             file: check.file_path,
             line: check.file_line_range?.[0],
@@ -82,37 +73,8 @@ export async function scanCheckov(projectPath: string): Promise<ScannerResult> {
       }
     }
   } catch {
-    findings.push({
-      id: "checkov-parse-error",
-      tool: "checkov",
-      severity: "MEDIUM",
-      category: "SECURITY",
-      message:
-        "Failed to parse checkov output. The tool may have produced unexpected output format.",
-      autoFixAvailable: false,
-    });
+    findings.push(parseErrorFinding("checkov", "SECURITY"));
   }
 
   return { tool: "checkov", findings, rawOutput };
-}
-
-function mapSeverity(severity?: string): ScanSeverity {
-  if (!severity) return "MEDIUM";
-  switch (severity.toUpperCase()) {
-    case "CRITICAL":
-      return "CRITICAL";
-    case "HIGH":
-      return "HIGH";
-    case "MEDIUM":
-      return "MEDIUM";
-    case "LOW":
-    case "INFO":
-      return "LOW";
-    default:
-      return "MEDIUM";
-  }
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

@@ -1,9 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
+import { ScannerResult, ScanFinding } from "../types";
 import { listSubDirs } from "../discovery";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, mapLintLevel, parseErrorFinding, skippedResult } from "../scanner-utils";
 
 interface HadolintResult {
   line: number;
@@ -18,12 +19,7 @@ export async function scanHadolint(projectPath: string): Promise<ScannerResult> 
   // Find Dockerfiles
   const dockerfiles = findDockerfiles(projectPath);
   if (dockerfiles.length === 0) {
-    return {
-      tool: "hadolint",
-      findings: [],
-      skipped: true,
-      skipReason: "No Dockerfile found",
-    };
+    return skippedResult("hadolint", "No Dockerfile found");
   }
 
   const allFindings: ScanFinding[] = [];
@@ -39,12 +35,7 @@ export async function scanHadolint(projectPath: string): Promise<ScannerResult> 
       rawOutput = result.stdout;
     } catch (err: unknown) {
       if (isENOENT(err)) {
-        return {
-          tool: "hadolint",
-          findings: [],
-          skipped: true,
-          skipReason: "hadolint not found",
-        };
+        return skippedResult("hadolint", "hadolint not found");
       }
       // hadolint exits non-zero when issues found, but still outputs JSON
       const execErr = err as { stdout?: string; stderr?: string };
@@ -64,7 +55,7 @@ export async function scanHadolint(projectPath: string): Promise<ScannerResult> 
         allFindings.push({
           id: deterministicFindingId("hadolint", r.code, relPath, String(r.line)),
           tool: "hadolint",
-          severity: mapLevel(r.level),
+          severity: mapLintLevel(r.level),
           category: "SECURITY",
           file: relPath,
           line: r.line,
@@ -74,15 +65,7 @@ export async function scanHadolint(projectPath: string): Promise<ScannerResult> 
         });
       }
     } catch {
-      allFindings.push({
-        id: "hadolint-parse-error",
-        tool: "hadolint",
-        severity: "MEDIUM",
-        category: "SECURITY",
-        message:
-          "Failed to parse hadolint output. The tool may have produced unexpected output format.",
-        autoFixAvailable: false,
-      });
+      allFindings.push(parseErrorFinding("hadolint", "SECURITY"));
     }
   }
 
@@ -157,22 +140,4 @@ function checkDirForDockerfiles(dir: string, add: (filePath: string) => void): v
   } catch {
     // Skip unreadable directories
   }
-}
-
-function mapLevel(level: string): ScanSeverity {
-  switch (level) {
-    case "error":
-      return "HIGH";
-    case "warning":
-      return "MEDIUM";
-    case "info":
-    case "style":
-      return "LOW";
-    default:
-      return "MEDIUM";
-  }
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

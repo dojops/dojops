@@ -25,6 +25,54 @@ function restoreBackup(filePath: string): boolean {
   return false;
 }
 
+function isWithinProject(file: string, root: string): boolean {
+  const absFile = path.resolve(file);
+  return absFile.startsWith(root + path.sep);
+}
+
+function deleteProjectFiles(files: string[], root: string): number {
+  let deleted = 0;
+  for (const file of files) {
+    try {
+      if (!isWithinProject(file, root)) {
+        p.log.warn(`Skipping out-of-project file: ${file}`);
+        continue;
+      }
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+        p.log.success(`Removed: ${file}`);
+        deleted++;
+      } else {
+        p.log.warn(`Not found: ${file}`);
+      }
+    } catch (err) {
+      p.log.error(`Failed: ${(err as Error).message}`);
+    }
+  }
+  return deleted;
+}
+
+function restoreProjectFiles(files: string[], root: string): number {
+  let restored = 0;
+  for (const file of files) {
+    try {
+      if (!isWithinProject(file, root)) {
+        p.log.warn(`Skipping out-of-project file: ${file}`);
+        continue;
+      }
+      if (restoreBackup(file)) {
+        p.log.success(`Restored: ${file}`);
+        restored++;
+      } else {
+        p.log.warn(`No .bak found: ${file}`);
+      }
+    } catch (err) {
+      p.log.error(`Restore failed: ${(err as Error).message}`);
+    }
+  }
+  return restored;
+}
+
 export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
@@ -104,44 +152,8 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
 
   const startTime = Date.now();
   try {
-    let deleted = 0;
-    for (const file of filesToDelete) {
-      try {
-        const absFile = path.resolve(file);
-        if (!absFile.startsWith(root + path.sep)) {
-          p.log.warn(`Skipping out-of-project file: ${file}`);
-          continue;
-        }
-        if (fs.existsSync(file)) {
-          fs.unlinkSync(file);
-          p.log.success(`Removed: ${file}`);
-          deleted++;
-        } else {
-          p.log.warn(`Not found: ${file}`);
-        }
-      } catch (err) {
-        p.log.error(`Failed: ${(err as Error).message}`);
-      }
-    }
-
-    let restored = 0;
-    for (const file of filesToRestore) {
-      try {
-        const absFile = path.resolve(file);
-        if (!absFile.startsWith(root + path.sep)) {
-          p.log.warn(`Skipping out-of-project file: ${file}`);
-          continue;
-        }
-        if (restoreBackup(file)) {
-          p.log.success(`Restored: ${file}`);
-          restored++;
-        } else {
-          p.log.warn(`No .bak found: ${file}`);
-        }
-      } catch (err) {
-        p.log.error(`Restore failed: ${(err as Error).message}`);
-      }
-    }
+    const deleted = deleteProjectFiles(filesToDelete, root);
+    const restored = restoreProjectFiles(filesToRestore, root);
 
     appendAudit(root, {
       timestamp: new Date().toISOString(),

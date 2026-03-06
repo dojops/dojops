@@ -20,6 +20,95 @@ export class SafeExecutor {
     this.approvalHandler = options.approvalHandler ?? new AutoApproveHandler();
   }
 
+  private handleTimeoutError(
+    err: unknown,
+    phase: string,
+  ): { status: "timeout" | "failed"; error: string } {
+    const isTimeout = err instanceof PolicyViolationError && err.rule === "timeoutMs";
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return {
+      status: isTimeout ? "timeout" : "failed",
+      error: isTimeout ? `${phase} phase timed out` : errorMessage,
+    };
+  }
+
+  private accumulateTokenUsage(usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  }): void {
+    if (usage) {
+      this.tokenUsage.prompt += usage.promptTokens;
+      this.tokenUsage.completion += usage.completionTokens;
+      this.tokenUsage.total += usage.totalTokens;
+    }
+  }
+
+  private async runVerification(
+    tool: DevOpsTool,
+    generateOutput: ToolOutput,
+  ): Promise<
+    | { ok: true; verification: VerificationResult | undefined }
+    | { ok: false; verification: VerificationResult; error: string }
+  > {
+    if (!tool.verify || this.policy.skipVerification) {
+      return { ok: true, verification: undefined };
+    }
+
+    try {
+      const verification = await withTimeout(
+        tool.verify(generateOutput.data),
+        this.policy.verifyTimeoutMs ?? this.policy.timeoutMs,
+        "Verify phase timed out",
+      );
+
+      if (!verification.passed) {
+        const errorMessages = verification.issues
+          .filter((i) => i.severity === "error")
+          .map((i) => i.message)
+          .join("; ");
+        return { ok: false, verification, error: `Verification failed: ${errorMessages}` };
+      }
+
+      return { ok: true, verification };
+    } catch (verifyErr) {
+      const message = `Verification threw unexpectedly: ${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}`;
+      const verification: VerificationResult = {
+        passed: false,
+        tool: tool.name,
+        issues: [{ severity: "error", message }],
+      };
+      return { ok: false, verification, error: `Verification error: ${message}` };
+    }
+  }
+
+  private extractDeclaredPaths(data: unknown): string[] {
+    const paths: string[] = [];
+    const obj = data as Record<string, unknown>;
+    if (typeof obj.filePath === "string") paths.push(obj.filePath);
+    if (typeof obj.outputPath === "string") paths.push(obj.outputPath);
+    if (Array.isArray(obj.files)) {
+      for (const f of obj.files) {
+        if (typeof f === "string") paths.push(f);
+        if (f && typeof f === "object" && typeof (f as Record<string, unknown>).path === "string") {
+          paths.push((f as Record<string, unknown>).path as string);
+        }
+      }
+    }
+    return paths;
+  }
+
+  private checkFilePaths(filePaths: string[]): string | undefined {
+    for (const filePath of filePaths) {
+      try {
+        checkWriteAllowed(filePath, this.policy);
+      } catch (policyErr) {
+        return policyErr instanceof Error ? policyErr.message : String(policyErr);
+      }
+    }
+    return undefined;
+  }
+
   async executeTask(
     taskId: string,
     tool: DevOpsTool,
@@ -47,10 +136,7 @@ export class SafeExecutor {
         this.policy.generateTimeoutMs ?? this.policy.timeoutMs,
       );
     } catch (err) {
-      const isTimeout = err instanceof PolicyViolationError && err.rule === "timeoutMs";
-      const status = isTimeout ? ("timeout" as const) : ("failed" as const);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      const error = isTimeout ? "Generate phase timed out" : errorMessage;
+      const { status, error } = this.handleTimeoutError(err, "Generate");
       return this.buildResult(taskId, tool.name, status, startTime, {
         error,
         filesWritten,
@@ -58,12 +144,7 @@ export class SafeExecutor {
       });
     }
 
-    // Accumulate token usage from generate output
-    if (generateOutput.usage) {
-      this.tokenUsage.prompt += generateOutput.usage.promptTokens;
-      this.tokenUsage.completion += generateOutput.usage.completionTokens;
-      this.tokenUsage.total += generateOutput.usage.totalTokens;
-    }
+    this.accumulateTokenUsage(generateOutput.usage);
 
     if (!generateOutput.success) {
       return this.buildResult(taskId, tool.name, "failed", startTime, {
@@ -75,51 +156,18 @@ export class SafeExecutor {
       });
     }
 
-    // Verification step: run after generate, before approval/execute
-    let verification: VerificationResult | undefined;
-    if (tool.verify && !this.policy.skipVerification) {
-      try {
-        verification = await withTimeout(
-          tool.verify(generateOutput.data),
-          this.policy.verifyTimeoutMs ?? this.policy.timeoutMs,
-          "Verify phase timed out",
-        );
-
-        if (!verification.passed) {
-          const errorMessages = verification.issues
-            .filter((i) => i.severity === "error")
-            .map((i) => i.message)
-            .join("; ");
-          return this.buildResult(taskId, tool.name, "failed", startTime, {
-            error: `Verification failed: ${errorMessages}`,
-            output: generateOutput.data,
-            verification,
-            filesWritten,
-            usage: generateOutput.usage,
-            metadata: meta,
-          });
-        }
-      } catch (verifyErr) {
-        verification = {
-          passed: false,
-          tool: tool.name,
-          issues: [
-            {
-              severity: "error",
-              message: `Verification threw unexpectedly: ${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}`,
-            },
-          ],
-        };
-        return this.buildResult(taskId, tool.name, "failed", startTime, {
-          error: `Verification error: ${verification.issues[0].message}`,
-          output: generateOutput.data,
-          verification,
-          filesWritten,
-          usage: generateOutput.usage,
-          metadata: meta,
-        });
-      }
+    const verifyResult = await this.runVerification(tool, generateOutput);
+    if (!verifyResult.ok) {
+      return this.buildResult(taskId, tool.name, "failed", startTime, {
+        error: verifyResult.error,
+        output: generateOutput.data,
+        verification: verifyResult.verification,
+        filesWritten,
+        usage: generateOutput.usage,
+        metadata: meta,
+      });
     }
+    const { verification } = verifyResult;
 
     if (!tool.execute) {
       return this.buildResult(taskId, tool.name, "completed", startTime, {
@@ -133,7 +181,6 @@ export class SafeExecutor {
     }
 
     let approval: ApprovalDecision;
-
     if (this.policy.requireApproval) {
       const preview = buildPreview(generateOutput, tool.name);
       approval = await this.approvalHandler.requestApproval({
@@ -157,40 +204,19 @@ export class SafeExecutor {
       approval = "approved";
     }
 
-    // Pre-execution policy check: validate declared output file paths BEFORE execution.
-    // This prevents tools from writing to unauthorized locations.
     if (this.policy.allowWrite && generateOutput.data) {
-      const declaredPaths: string[] = [];
-      const data = generateOutput.data as Record<string, unknown>;
-      // Extract file paths from common tool output patterns
-      if (typeof data.filePath === "string") declaredPaths.push(data.filePath);
-      if (typeof data.outputPath === "string") declaredPaths.push(data.outputPath);
-      if (Array.isArray(data.files)) {
-        for (const f of data.files) {
-          if (typeof f === "string") declaredPaths.push(f);
-          if (
-            f &&
-            typeof f === "object" &&
-            typeof (f as Record<string, unknown>).path === "string"
-          ) {
-            declaredPaths.push((f as Record<string, unknown>).path as string);
-          }
-        }
-      }
-      for (const filePath of declaredPaths) {
-        try {
-          checkWriteAllowed(filePath, this.policy);
-        } catch (policyErr) {
-          return this.buildResult(taskId, tool.name, "failed", startTime, {
-            error: `Pre-execution policy violation on declared output path: ${policyErr instanceof Error ? policyErr.message : String(policyErr)}`,
-            output: generateOutput.data,
-            approval,
-            verification,
-            filesWritten,
-            usage: generateOutput.usage,
-            metadata: meta,
-          });
-        }
+      const declaredPaths = this.extractDeclaredPaths(generateOutput.data);
+      const violation = this.checkFilePaths(declaredPaths);
+      if (violation) {
+        return this.buildResult(taskId, tool.name, "failed", startTime, {
+          error: `Pre-execution policy violation on declared output path: ${violation}`,
+          output: generateOutput.data,
+          approval,
+          verification,
+          filesWritten,
+          usage: generateOutput.usage,
+          metadata: meta,
+        });
       }
     }
 
@@ -201,29 +227,22 @@ export class SafeExecutor {
         "Execute phase timed out",
       );
 
-      // Extract file metadata from tool output
       if (executeOutput.filesWritten) filesWritten.push(...executeOutput.filesWritten);
       if (executeOutput.filesModified) filesModified.push(...executeOutput.filesModified);
 
-      // Post-hoc policy enforcement: secondary check on actually written files.
-      // Pre-execution check validates declared paths, this catches any additional writes.
       if (this.policy.allowWrite) {
-        const allFiles = [...filesWritten, ...filesModified];
-        for (const filePath of allFiles) {
-          try {
-            checkWriteAllowed(filePath, this.policy);
-          } catch (policyErr) {
-            return this.buildResult(taskId, tool.name, "failed", startTime, {
-              error: `Policy violation on written file: ${policyErr instanceof Error ? policyErr.message : String(policyErr)}`,
-              output: executeOutput.data,
-              approval,
-              verification,
-              filesWritten,
-              filesModified,
-              usage: generateOutput.usage,
-              metadata: meta,
-            });
-          }
+        const violation = this.checkFilePaths([...filesWritten, ...filesModified]);
+        if (violation) {
+          return this.buildResult(taskId, tool.name, "failed", startTime, {
+            error: `Policy violation on written file: ${violation}`,
+            output: executeOutput.data,
+            approval,
+            verification,
+            filesWritten,
+            filesModified,
+            usage: generateOutput.usage,
+            metadata: meta,
+          });
         }
       }
 
@@ -250,10 +269,7 @@ export class SafeExecutor {
         metadata: meta,
       });
     } catch (err) {
-      const isTimeout = err instanceof PolicyViolationError && err.rule === "timeoutMs";
-      const status = isTimeout ? ("timeout" as const) : ("failed" as const);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      const error = isTimeout ? "Execute phase timed out" : errorMessage;
+      const { status, error } = this.handleTimeoutError(err, "Execute");
       return this.buildResult(taskId, tool.name, status, startTime, {
         error,
         approval,

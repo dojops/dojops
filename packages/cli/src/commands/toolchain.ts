@@ -2,7 +2,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { SYSTEM_TOOLS, findSystemTool, isToolSupportedOnCurrentPlatform } from "@dojops/core";
 import { CommandHandler } from "../types";
-import { ExitCode, CLIError } from "../exit-codes";
+import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import {
   loadToolchainRegistry,
   installSystemTool,
@@ -12,33 +12,43 @@ import {
 } from "../toolchain-sandbox";
 import { resolveBinary } from "../preflight";
 
+interface ToolStatus {
+  installed: ReturnType<typeof loadToolchainRegistry>["tools"][number] | undefined;
+  systemBinary: string | undefined;
+  supported: boolean;
+}
+
+function getToolStatus(
+  tool: (typeof SYSTEM_TOOLS)[number],
+  registry: ReturnType<typeof loadToolchainRegistry>,
+): ToolStatus {
+  return {
+    installed: registry.tools.find((t) => t.name === tool.name),
+    systemBinary: resolveBinary(tool.binaryName),
+    supported: isToolSupportedOnCurrentPlatform(tool),
+  };
+}
+
+function getStatusString(s: ToolStatus): string {
+  if (s.installed) return "installed";
+  if (s.systemBinary) return "system";
+  if (s.supported) return "available";
+  return "unsupported";
+}
+
 export const toolchainListCommand: CommandHandler = async (_args, ctx) => {
   const registry = loadToolchainRegistry();
 
   if (ctx.globalOpts.output === "json") {
     const data = SYSTEM_TOOLS.map((tool) => {
-      const installed = registry.tools.find((t) => t.name === tool.name);
-      const supported = isToolSupportedOnCurrentPlatform(tool);
-      const systemBinary = resolveBinary(tool.binaryName);
-
-      let status: string;
-      if (installed) {
-        status = "installed";
-      } else if (systemBinary) {
-        status = "system";
-      } else if (supported) {
-        status = "available";
-      } else {
-        status = "unsupported";
-      }
-
+      const s = getToolStatus(tool, registry);
       return {
         name: tool.name,
         description: tool.description,
-        status,
-        version: installed?.version ?? tool.latestVersion,
-        binaryPath: installed?.binaryPath ?? systemBinary ?? null,
-        installedAt: installed?.installedAt ?? null,
+        status: getStatusString(s),
+        version: s.installed?.version ?? tool.latestVersion,
+        binaryPath: s.installed?.binaryPath ?? s.systemBinary ?? null,
+        installedAt: s.installed?.installedAt ?? null,
       };
     });
     console.log(JSON.stringify(data, null, 2));
@@ -46,16 +56,14 @@ export const toolchainListCommand: CommandHandler = async (_args, ctx) => {
   }
 
   const lines = SYSTEM_TOOLS.map((tool) => {
-    const installed = registry.tools.find((t) => t.name === tool.name);
-    const supported = isToolSupportedOnCurrentPlatform(tool);
-    const systemBinary = resolveBinary(tool.binaryName);
+    const s = getToolStatus(tool, registry);
 
     let statusLabel: string;
-    if (installed) {
-      statusLabel = pc.green("installed") + pc.dim(` (v${installed.version})`);
-    } else if (systemBinary) {
-      statusLabel = pc.blue("system") + pc.dim(` (${systemBinary})`);
-    } else if (supported) {
+    if (s.installed) {
+      statusLabel = pc.green("installed") + pc.dim(` (v${s.installed.version})`);
+    } else if (s.systemBinary) {
+      statusLabel = pc.blue("system") + pc.dim(` (${s.systemBinary})`);
+    } else if (s.supported) {
       statusLabel = pc.yellow("available");
     } else {
       statusLabel = pc.dim("unsupported");
@@ -186,7 +194,7 @@ async function doInstall(name: string): Promise<void> {
     }
   } catch (err) {
     if (!isStructured) s.stop(`${pc.red("\u2717")} ${tool.name} installation failed.`);
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     p.log.error(msg);
     throw new CLIError(ExitCode.GENERAL_ERROR, `Failed to install ${tool.name}: ${msg}`);
   }

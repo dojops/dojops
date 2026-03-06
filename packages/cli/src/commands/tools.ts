@@ -9,7 +9,7 @@ import { parseDopsFileAny, validateDopsModuleAny } from "@dojops/runtime";
 import { parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { CommandHandler, CLIContext } from "../types";
-import { ExitCode, CLIError } from "../exit-codes";
+import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { findProjectRoot } from "../state";
 
@@ -56,6 +56,13 @@ const InitModuleResponseSchema = z.object({
 type InitModuleResponse = z.infer<typeof InitModuleResponseSchema>;
 
 const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "https://hub.dojops.ai";
+
+function throwHubError(err: unknown): never {
+  throw new CLIError(
+    ExitCode.GENERAL_ERROR,
+    `Failed to connect to hub at ${DEFAULT_HUB_URL}: ${toErrorMessage(err)}`,
+  );
+}
 
 /**
  * `dojops tools list` — discovers and lists custom tools (manifest-based + .dops files).
@@ -238,7 +245,7 @@ function validateLegacyManifest(resolvedDir: string, toolPath: string): void {
     if (err instanceof CLIError) throw err;
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `Failed to parse module manifest: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to parse module manifest: ${toErrorMessage(err)}`,
     );
   }
 }
@@ -307,7 +314,7 @@ function validateDopsFile(filePath: string): void {
     if (err instanceof CLIError) throw err;
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `Failed to parse DOPS file: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to parse DOPS file: ${toErrorMessage(err)}`,
     );
   }
 }
@@ -317,86 +324,111 @@ function validateDopsFile(filePath: string): void {
  * Uses AI to generate best practices and prompts when a provider is configured.
  * Falls back to legacy tool.yaml + input.schema.json with --legacy flag.
  */
+type FileFormatType = "yaml" | "json" | "hcl" | "raw" | "ini" | "toml";
+
+interface InitWizardResult {
+  toolName: string;
+  description: string;
+  technology: string;
+  fileFormat: FileFormatType;
+  outputFilePath: string;
+  useLLM: boolean;
+}
+
+async function runInitWizard(
+  ctx: CLIContext,
+  isLegacy: boolean,
+): Promise<InitWizardResult | undefined> {
+  const nameInput = await p.text({
+    message: "Module name (lowercase, hyphens allowed):",
+    placeholder: "my-tool",
+    validate: (val) => {
+      if (!val) return "Name is required";
+      if (!/^[a-z0-9-]+$/.test(val)) return "Must be lowercase alphanumeric with hyphens";
+      return undefined;
+    },
+  });
+  if (p.isCancel(nameInput)) return undefined;
+  const toolName = nameInput;
+
+  const descInput = await p.text({
+    message: "Short description:",
+    placeholder: `${toolName} configuration generator`,
+  });
+  if (p.isCancel(descInput)) return undefined;
+  const description = descInput || `${toolName} configuration generator`;
+
+  const techInput = await p.text({
+    message: "What technology? (e.g., Nginx, Redis, PostgreSQL, Caddy)",
+    placeholder: titleCase(toolName),
+  });
+  if (p.isCancel(techInput)) return undefined;
+  const technology = techInput || titleCase(toolName);
+
+  const formatInput = await p.select({
+    message: "Output file format:",
+    options: [
+      { value: "yaml", label: "YAML" },
+      { value: "json", label: "JSON" },
+      { value: "hcl", label: "HCL" },
+      { value: "raw", label: "Raw text (conf, ini, etc.)" },
+      { value: "ini", label: "INI" },
+      { value: "toml", label: "TOML" },
+    ],
+  });
+  if (p.isCancel(formatInput)) return undefined;
+  const fileFormat = formatInput as FileFormatType;
+
+  const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
+  const filePathInput = await p.text({
+    message: "Output file path:",
+    placeholder: `${toolName}.${fileExt}`,
+  });
+  if (p.isCancel(filePathInput)) return undefined;
+  const outputFilePath = filePathInput || `${toolName}.${fileExt}`;
+
+  let useLLM = false;
+  if (!isLegacy) {
+    let providerAvailable = false;
+    try {
+      ctx.getProvider();
+      providerAvailable = true;
+    } catch {
+      // No provider configured
+    }
+
+    if (providerAvailable) {
+      const llmInput = await p.confirm({
+        message: "Generate module content with AI?",
+        initialValue: true,
+      });
+      if (p.isCancel(llmInput)) return undefined;
+      useLLM = llmInput;
+    }
+  }
+
+  return { toolName, description, technology, fileFormat, outputFilePath, useLLM };
+}
+
 export const toolsInitCommand: CommandHandler = async (args, ctx) => {
-  // Find first positional (non-flag) arg as tool name
   let toolName = args.find((a) => !a.startsWith("-"));
   let description = "";
   let technology = "";
-  let fileFormat = "yaml" as "yaml" | "json" | "hcl" | "raw" | "ini" | "toml";
+  let fileFormat: FileFormatType = "yaml";
   let outputFilePath = "";
   let useLLM = false;
   const isNonInteractive = args.includes("--non-interactive") || ctx.globalOpts.nonInteractive;
   const isLegacy = args.includes("--legacy");
 
-  // Interactive wizard when no name provided and not in non-interactive mode
   if (!toolName && !isNonInteractive) {
-    const nameInput = await p.text({
-      message: "Module name (lowercase, hyphens allowed):",
-      placeholder: "my-tool",
-      validate: (val) => {
-        if (!val) return "Name is required";
-        if (!/^[a-z0-9-]+$/.test(val)) return "Must be lowercase alphanumeric with hyphens";
-        return undefined;
-      },
-    });
-    if (p.isCancel(nameInput)) return;
-    toolName = nameInput;
-
-    const descInput = await p.text({
-      message: "Short description:",
-      placeholder: `${toolName} configuration generator`,
-    });
-    if (p.isCancel(descInput)) return;
-    description = descInput || `${toolName} configuration generator`;
-
-    const techInput = await p.text({
-      message: "What technology? (e.g., Nginx, Redis, PostgreSQL, Caddy)",
-      placeholder: titleCase(toolName),
-    });
-    if (p.isCancel(techInput)) return;
-    technology = techInput || titleCase(toolName);
-
-    const formatInput = await p.select({
-      message: "Output file format:",
-      options: [
-        { value: "yaml", label: "YAML" },
-        { value: "json", label: "JSON" },
-        { value: "hcl", label: "HCL" },
-        { value: "raw", label: "Raw text (conf, ini, etc.)" },
-        { value: "ini", label: "INI" },
-        { value: "toml", label: "TOML" },
-      ],
-    });
-    if (p.isCancel(formatInput)) return;
-    fileFormat = formatInput as typeof fileFormat;
-
-    const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
-    const filePathInput = await p.text({
-      message: "Output file path:",
-      placeholder: `${toolName}.${fileExt}`,
-    });
-    if (p.isCancel(filePathInput)) return;
-    outputFilePath = filePathInput || `${toolName}.${fileExt}`;
-
-    // Only offer LLM generation if not in legacy mode
-    if (!isLegacy) {
-      let providerAvailable = false;
-      try {
-        ctx.getProvider();
-        providerAvailable = true;
-      } catch {
-        // No provider configured
-      }
-
-      if (providerAvailable) {
-        const llmInput = await p.confirm({
-          message: "Generate module content with AI?",
-          initialValue: true,
-        });
-        if (p.isCancel(llmInput)) return;
-        useLLM = llmInput;
-      }
-    }
+    const result = await runInitWizard(ctx, isLegacy);
+    if (!result) return;
+    toolName = result.toolName;
+    description = result.description;
+    technology = result.technology;
+    fileFormat = result.fileFormat;
+    outputFilePath = result.outputFilePath;
+    useLLM = result.useLLM;
   }
 
   if (!toolName) {
@@ -411,14 +443,12 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
     );
   }
 
-  // Apply defaults for non-interactive mode
   if (!description) description = `${toolName} configuration generator`;
   if (!technology) technology = titleCase(toolName);
   const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
   if (!outputFilePath) outputFilePath = `${toolName}.${fileExt}`;
 
   if (isLegacy) {
-    // Legacy mode: scaffold tool.yaml + input.schema.json
     const legacyPrompt = `You are a ${toolName} configuration expert. Generate valid configuration based on the user's requirements. Respond with valid JSON only.`;
     const legacyFilePath = `{outputPath}/${outputFilePath}`;
     return scaffoldLegacyTool(
@@ -430,7 +460,6 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
     );
   }
 
-  // Default: scaffold v2 .dops file
   const toolsDir = path.resolve(".dojops", "modules");
   const dopsPath = path.join(toolsDir, `${toolName}.dops`);
 
@@ -440,7 +469,6 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
 
   fs.mkdirSync(toolsDir, { recursive: true });
 
-  // Try LLM-powered generation
   let llmContent: InitModuleResponse | undefined;
   if (useLLM) {
     llmContent = await generateModuleWithLLM(ctx, {
@@ -524,7 +552,7 @@ Respond with JSON containing:
     return parsed;
   } catch (err) {
     spinner.stop("AI generation failed — using defaults");
-    p.log.warn(pc.dim(`LLM error: ${err instanceof Error ? err.message : String(err)}`));
+    p.log.warn(pc.dim(`LLM error: ${toErrorMessage(err)}`));
     return undefined;
   }
 }
@@ -861,10 +889,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
   } catch (err) {
     spinner.stop("Validation failed");
     if (err instanceof CLIError) throw err;
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Failed to parse: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Failed to parse: ${toErrorMessage(err)}`);
   }
 
   const { meta } = module.frontmatter;
@@ -949,10 +974,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
   } catch (err) {
     if (err instanceof CLIError) throw err;
     spinner.stop("Publish failed");
-    throw new CLIError(
-      ExitCode.GENERAL_ERROR,
-      `Failed to connect to hub at ${DEFAULT_HUB_URL}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    throwHubError(err);
   }
 };
 
@@ -966,6 +988,74 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
  *
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  */
+async function resolveLatestVersion(slug: string, toolName: string): Promise<string> {
+  const infoRes = await fetch(`${DEFAULT_HUB_URL}/api/packages/${slug}`);
+  if (!infoRes.ok) {
+    if (infoRes.status === 404) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Module "${toolName}" not found on hub.`);
+    }
+    const data = await infoRes.json().catch(() => ({}));
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `Hub error: ${(data as { error?: string }).error || infoRes.statusText}`,
+    );
+  }
+  const info = await infoRes.json();
+  if (!info.latestVersion) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Module "${toolName}" has no published versions.`,
+    );
+  }
+  return info.latestVersion.semver;
+}
+
+async function downloadAndVerify(
+  slug: string,
+  version: string,
+  toolName: string,
+): Promise<{ fileBuffer: Buffer; actualHash: string; expectedHash: string | null }> {
+  const downloadRes = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${version}`);
+  if (!downloadRes.ok) {
+    if (downloadRes.status === 404) {
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Version ${version} not found for "${toolName}".`,
+      );
+    }
+    throw new CLIError(ExitCode.GENERAL_ERROR, `Download failed (${downloadRes.status})`);
+  }
+
+  const fileBuffer = Buffer.from(await downloadRes.arrayBuffer());
+  const expectedHash = downloadRes.headers.get("x-checksum-sha256");
+  const actualHash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+  if (expectedHash && actualHash !== expectedHash) {
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `SHA256 integrity check failed! The downloaded file does not match the publisher's hash.\n` +
+        `  Publisher: ${expectedHash}\n` +
+        `  Download:  ${actualHash}\n` +
+        `This may indicate the file was tampered with. Aborting install.`,
+    );
+  }
+  if (!expectedHash) {
+    p.log.warn("No publisher hash available — skipping integrity verification.");
+  }
+
+  return { fileBuffer, actualHash, expectedHash };
+}
+
+function resolveInstallDir(isGlobal: boolean): string {
+  if (isGlobal) {
+    return path.join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".dojops", "tools");
+  }
+  const projectRoot = findProjectRoot();
+  return projectRoot
+    ? path.join(projectRoot, ".dojops", "tools")
+    : path.resolve(".dojops", "tools");
+}
+
 export const toolsInstallCommand: CommandHandler = async (args) => {
   const toolName = args[0];
   if (!toolName) {
@@ -973,7 +1063,6 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name required.");
   }
 
-  // Parse flags
   let version: string | undefined;
   const versionIdx = args.indexOf("--version");
   if (versionIdx !== -1 && args[versionIdx + 1]) {
@@ -984,101 +1073,37 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
   const spinner = p.spinner();
   spinner.start(`Fetching ${pc.cyan(toolName)} from hub...`);
 
-  // Resolve slug (tool name is the slug in the hub)
   const slug = toolName.toLowerCase().replace(/[^a-z0-9-]/g, "-"); // NOSONAR - character class pattern
 
   try {
-    // 1. Get package info to find the latest version if none specified
     if (!version) {
-      const infoRes = await fetch(`${DEFAULT_HUB_URL}/api/packages/${slug}`);
-      if (!infoRes.ok) {
-        spinner.stop("Not found");
-        if (infoRes.status === 404) {
-          throw new CLIError(ExitCode.VALIDATION_ERROR, `Module "${toolName}" not found on hub.`);
-        }
-        const data = await infoRes.json().catch(() => ({}));
-        throw new CLIError(
-          ExitCode.GENERAL_ERROR,
-          `Hub error: ${(data as { error?: string }).error || infoRes.statusText}`,
-        );
-      }
-      const info = await infoRes.json();
-      if (info.latestVersion) {
-        version = info.latestVersion.semver;
-      } else {
-        spinner.stop("No versions");
-        throw new CLIError(
-          ExitCode.VALIDATION_ERROR,
-          `Module "${toolName}" has no published versions.`,
-        );
-      }
+      version = await resolveLatestVersion(slug, toolName);
     }
 
     spinner.message(`Downloading ${pc.cyan(toolName)} v${version}...`);
+    const { fileBuffer, actualHash, expectedHash } = await downloadAndVerify(
+      slug,
+      version,
+      toolName,
+    );
 
-    // 2. Download the .dops file
-    const downloadRes = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${version}`);
-    if (!downloadRes.ok) {
-      spinner.stop("Download failed");
-      if (downloadRes.status === 404) {
-        throw new CLIError(
-          ExitCode.VALIDATION_ERROR,
-          `Version ${version} not found for "${toolName}".`,
-        );
-      }
-      throw new CLIError(ExitCode.GENERAL_ERROR, `Download failed (${downloadRes.status})`);
-    }
-
-    const fileBuffer = Buffer.from(await downloadRes.arrayBuffer());
-    const expectedHash = downloadRes.headers.get("x-checksum-sha256");
-
-    // 3. Verify integrity — compare locally computed hash against publisher's attestation
-    const actualHash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-    if (expectedHash && actualHash !== expectedHash) {
-      spinner.stop("Integrity check failed");
-      throw new CLIError(
-        ExitCode.GENERAL_ERROR,
-        `SHA256 integrity check failed! The downloaded file does not match the publisher's hash.\n` +
-          `  Publisher: ${expectedHash}\n` +
-          `  Download:  ${actualHash}\n` +
-          `This may indicate the file was tampered with. Aborting install.`,
-      );
-    }
-    if (!expectedHash) {
-      p.log.warn("No publisher hash available — skipping integrity verification.");
-    }
-
-    // 4. Validate the downloaded file
     spinner.message("Validating...");
-    const content = fileBuffer.toString("utf-8");
     let module;
     try {
       const { parseDopsString } = await import("@dojops/runtime");
-      module = parseDopsString(content);
+      module = parseDopsString(fileBuffer.toString("utf-8"));
     } catch (err) {
-      spinner.stop("Validation failed");
       throw new CLIError(
         ExitCode.VALIDATION_ERROR,
-        `Downloaded file is not a valid .dops module: ${err instanceof Error ? err.message : String(err)}`,
+        `Downloaded file is not a valid .dops module: ${toErrorMessage(err)}`,
       );
     }
 
-    // 5. Write to disk
-    let destDir: string;
-    if (isGlobal) {
-      destDir = path.join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".dojops", "tools");
-    } else {
-      const projectRoot = findProjectRoot();
-      destDir = projectRoot
-        ? path.join(projectRoot, ".dojops", "tools")
-        : path.resolve(".dojops", "tools");
-    }
-
+    const destDir = resolveInstallDir(isGlobal);
     fs.mkdirSync(destDir, { recursive: true });
     const destPath = path.join(destDir, `${module.frontmatter.meta.name}.dops`);
 
     if (fs.existsSync(destPath)) {
-      // Read existing version for comparison
       try {
         const existing = parseDopsFileAny(destPath);
         p.log.info(
@@ -1092,7 +1117,6 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
     }
 
     fs.writeFileSync(destPath, fileBuffer);
-
     spinner.stop("Installed successfully");
 
     const loc = isGlobal ? "global" : "project";
@@ -1112,10 +1136,7 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
   } catch (err) {
     if (err instanceof CLIError) throw err;
     spinner.stop("Failed");
-    throw new CLIError(
-      ExitCode.GENERAL_ERROR,
-      `Failed to connect to hub at ${DEFAULT_HUB_URL}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    throwHubError(err);
   }
 };
 
@@ -1205,9 +1226,6 @@ export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
   } catch (err) {
     if (err instanceof CLIError) throw err;
     if (!isJson) spinner.stop("Search failed");
-    throw new CLIError(
-      ExitCode.GENERAL_ERROR,
-      `Failed to connect to hub at ${DEFAULT_HUB_URL}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    throwHubError(err);
   }
 };

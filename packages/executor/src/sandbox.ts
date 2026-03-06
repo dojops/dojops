@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as crypto from "node:crypto";
+import { atomicWriteFileSync } from "@dojops/sdk";
 import { ExecutionPolicy } from "./types";
-import { checkWriteAllowed, checkFileSize, PolicyViolationError } from "./policy";
+import { checkWriteAllowed, checkFileSize, isPathWithin, PolicyViolationError } from "./policy";
 
 export interface SandboxedFs {
   writeFileSync(filePath: string, content: string): void;
@@ -16,20 +16,7 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
     writeFileSync(filePath: string, content: string): void {
       checkWriteAllowed(filePath, policy);
       checkFileSize(Buffer.byteLength(content, "utf-8"), policy);
-      const dir = path.dirname(filePath);
-      fs.mkdirSync(dir, { recursive: true });
-      const tmpPath = `${filePath}.${crypto.randomBytes(4).toString("hex")}.tmp`;
-      try {
-        fs.writeFileSync(tmpPath, content, "utf-8");
-        fs.renameSync(tmpPath, filePath);
-      } catch (err) {
-        try {
-          fs.unlinkSync(tmpPath);
-        } catch {
-          /* .tmp already gone */
-        }
-        throw err;
-      }
+      atomicWriteFileSync(filePath, content);
     },
 
     mkdirSync(dirPath: string): void {
@@ -53,15 +40,11 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
         throw err;
       }
 
-      // Reject reads from denied paths (with separator to prevent prefix collision)
+      // Reject reads from denied paths
       for (const denied of policy.deniedWritePaths) {
-        const deniedResolved = path.resolve(denied);
-        const deniedWithSep = deniedResolved.endsWith(path.sep)
-          ? deniedResolved
-          : deniedResolved + path.sep;
-        if (resolved.startsWith(deniedWithSep) || resolved === deniedResolved) {
+        if (isPathWithin(resolved, denied)) {
           throw new PolicyViolationError(
-            `Read from ${resolved} is denied by policy (matches ${deniedResolved})`,
+            `Read from ${resolved} is denied by policy (matches ${path.resolve(denied)})`,
             "deniedWritePaths",
           );
         }

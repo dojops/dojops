@@ -5,6 +5,7 @@ import { ScannerResult, ScanFinding } from "../types";
 import { discoverProjectDirs } from "../discovery";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, skippedResult } from "../scanner-utils";
 
 interface NpmVulnerability {
   severity: string;
@@ -39,81 +40,62 @@ function detectPackageManager(dir: string): PackageManager | null {
   return null;
 }
 
-export async function scanNpm(projectPath: string): Promise<ScannerResult> {
-  const projectDirs = discoverProjectDirs(projectPath, [
-    "package-lock.json",
-    "yarn.lock",
-    "pnpm-lock.yaml",
-  ]);
-
-  // FEAT #2: If no lockfile exists but package.json does, generate a temporary lockfile
-  if (projectDirs.length === 0) {
-    const pkgJsonDirs = discoverProjectDirs(projectPath, ["package.json"]);
-    if (pkgJsonDirs.length === 0) {
-      return {
-        tool: "npm-audit",
-        findings: [],
-        skipped: true,
-        skipReason: "No package.json or lockfile found",
-      };
-    }
-
-    // Try generating a temporary lockfile in a temp directory
-    const tmpDirs: string[] = [];
-    for (const dir of pkgJsonDirs) {
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-audit-"));
+async function generateTempLockfiles(pkgJsonDirs: string[]): Promise<string[]> {
+  const tmpDirs: string[] = [];
+  for (const dir of pkgJsonDirs) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-audit-"));
+    try {
+      fs.copyFileSync(path.join(dir, "package.json"), path.join(tmpDir, "package.json"));
+      await execFileAsync("npm", ["install", "--package-lock-only", "--ignore-scripts"], {
+        encoding: "utf-8",
+        timeout: 60_000,
+        cwd: tmpDir,
+      });
+      tmpDirs.push(tmpDir);
+    } catch {
       try {
-        fs.copyFileSync(path.join(dir, "package.json"), path.join(tmpDir, "package.json"));
-        await execFileAsync("npm", ["install", "--package-lock-only", "--ignore-scripts"], {
-          encoding: "utf-8",
-          timeout: 60_000,
-          cwd: tmpDir,
-        });
-        tmpDirs.push(tmpDir);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
       } catch {
-        // Clean up on failure
-        try {
-          fs.rmSync(tmpDir, { recursive: true, force: true });
-        } catch {
-          // ignore cleanup failure
-        }
+        // ignore cleanup failure
       }
     }
-
-    if (tmpDirs.length === 0) {
-      return {
-        tool: "npm-audit",
-        findings: [],
-        skipped: true,
-        skipReason: "No lockfile found and failed to generate temporary lockfile for audit",
-      };
-    }
-
-    // Audit the temporary directories, then clean them up
-    const allFindings: ScanFinding[] = [];
-    let combinedRawOutput = "";
-    for (const tmpDir of tmpDirs) {
-      try {
-        const result = await auditDir(tmpDir, projectPath, "npm");
-        if (!result.skipped) {
-          allFindings.push(...result.findings);
-          if (result.rawOutput) combinedRawOutput += result.rawOutput + "\n";
-        }
-      } finally {
-        try {
-          fs.rmSync(tmpDir, { recursive: true, force: true });
-        } catch {
-          // ignore cleanup failure
-        }
-      }
-    }
-    return {
-      tool: "npm-audit",
-      findings: allFindings,
-      rawOutput: combinedRawOutput || undefined,
-    };
   }
+  return tmpDirs;
+}
 
+function cleanupTmpDir(tmpDir: string): void {
+  try {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch {
+    // ignore cleanup failure
+  }
+}
+
+async function auditTempDirs(tmpDirs: string[], projectPath: string): Promise<ScannerResult> {
+  const allFindings: ScanFinding[] = [];
+  let combinedRawOutput = "";
+  for (const tmpDir of tmpDirs) {
+    try {
+      const result = await auditDir(tmpDir, projectPath, "npm");
+      if (!result.skipped) {
+        allFindings.push(...result.findings);
+        if (result.rawOutput) combinedRawOutput += result.rawOutput + "\n";
+      }
+    } finally {
+      cleanupTmpDir(tmpDir);
+    }
+  }
+  return {
+    tool: "npm-audit",
+    findings: allFindings,
+    rawOutput: combinedRawOutput || undefined,
+  };
+}
+
+async function scanWithLockfiles(
+  projectDirs: string[],
+  projectPath: string,
+): Promise<ScannerResult> {
   const allFindings: ScanFinding[] = [];
   let combinedRawOutput = "";
 
@@ -123,7 +105,6 @@ export async function scanNpm(projectPath: string): Promise<ScannerResult> {
 
     const result = await auditDir(dir, projectPath, pm);
     if (result.skipped) {
-      // If the tool itself isn't found, bail out entirely
       if (result.skipReason?.endsWith("not found")) {
         return result;
       }
@@ -134,6 +115,33 @@ export async function scanNpm(projectPath: string): Promise<ScannerResult> {
   }
 
   return { tool: "npm-audit", findings: allFindings, rawOutput: combinedRawOutput || undefined };
+}
+
+export async function scanNpm(projectPath: string): Promise<ScannerResult> {
+  const projectDirs = discoverProjectDirs(projectPath, [
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+  ]);
+
+  if (projectDirs.length > 0) {
+    return scanWithLockfiles(projectDirs, projectPath);
+  }
+
+  const pkgJsonDirs = discoverProjectDirs(projectPath, ["package.json"]);
+  if (pkgJsonDirs.length === 0) {
+    return skippedResult("npm-audit", "No package.json or lockfile found");
+  }
+
+  const tmpDirs = await generateTempLockfiles(pkgJsonDirs);
+  if (tmpDirs.length === 0) {
+    return skippedResult(
+      "npm-audit",
+      "No lockfile found and failed to generate temporary lockfile for audit",
+    );
+  }
+
+  return auditTempDirs(tmpDirs, projectPath);
 }
 
 async function auditDir(dir: string, rootPath: string, pm: PackageManager): Promise<ScannerResult> {
@@ -150,23 +158,16 @@ async function auditDir(dir: string, rootPath: string, pm: PackageManager): Prom
     rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
-      return {
-        tool: "npm-audit",
-        findings: [],
-        skipped: true,
-        skipReason: `${pm} not found`,
-      };
+      return skippedResult("npm-audit", `${pm} not found`);
     }
     // audit commands exit non-zero when vulnerabilities are found but still output JSON
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
-      return {
-        tool: "npm-audit",
-        findings: [],
-        skipped: true,
-        skipReason: `${pm} audit failed${subProject ? " (" + subProject + ")" : ""}: ${execErr.stderr ?? "unknown error"}`,
-      };
+      return skippedResult(
+        "npm-audit",
+        `${pm} audit failed${subProject ? " (" + subProject + ")" : ""}: ${execErr.stderr ?? "unknown error"}`,
+      );
     }
   }
 
@@ -304,21 +305,11 @@ function parsePnpmAudit(
   const advisories: Record<string, unknown> = audit.advisories ?? {};
   for (const advisory of Object.values(advisories) as Array<Record<string, unknown>>) {
     const prefix = subProject ? `${subProject}: ` : "";
-    const moduleName =
-      typeof advisory.module_name === "string"
-        ? advisory.module_name
-        : typeof advisory.name === "string"
-          ? advisory.name
-          : "unknown";
+    const moduleName = extractPnpmModuleName(advisory);
     const severity = mapSeverity(
       typeof advisory.severity === "string" ? advisory.severity : "moderate",
     );
-    const title =
-      typeof advisory.title === "string"
-        ? advisory.title
-        : typeof advisory.overview === "string"
-          ? advisory.overview
-          : "vulnerability";
+    const title = extractPnpmTitle(advisory);
     const patchedVersions =
       typeof advisory.patched_versions === "string" ? advisory.patched_versions : undefined;
     const cves = Array.isArray(advisory.cves) ? advisory.cves : [];
@@ -344,6 +335,18 @@ function parsePnpmAudit(
   }
 }
 
+function extractPnpmModuleName(advisory: Record<string, unknown>): string {
+  if (typeof advisory.module_name === "string") return advisory.module_name;
+  if (typeof advisory.name === "string") return advisory.name;
+  return "unknown";
+}
+
+function extractPnpmTitle(advisory: Record<string, unknown>): string {
+  if (typeof advisory.title === "string") return advisory.title;
+  if (typeof advisory.overview === "string") return advisory.overview;
+  return "vulnerability";
+}
+
 function mapSeverity(severity: string): ScanFinding["severity"] {
   switch (severity) {
     case "critical":
@@ -358,8 +361,4 @@ function mapSeverity(severity: string): ScanFinding["severity"] {
     default:
       return "MEDIUM";
   }
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

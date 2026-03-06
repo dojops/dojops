@@ -16,6 +16,29 @@ import {
 } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
+function deleteProjectFiles(files: string[], root: string): number {
+  let deleted = 0;
+  for (const file of files) {
+    try {
+      const absFile = path.resolve(file);
+      if (!absFile.startsWith(root + path.sep)) {
+        p.log.warn(`Skipping out-of-project file: ${file}`);
+        continue;
+      }
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+        p.log.success(`Deleted: ${file}`);
+        deleted++;
+      } else {
+        p.log.warn(`Not found: ${file}`);
+      }
+    } catch (err) {
+      p.log.error(`Failed to delete ${file}: ${(err as Error).message}`);
+    }
+  }
+  return deleted;
+}
+
 export async function cleanCommand(
   args: string[],
   ctx: CLIContext,
@@ -103,25 +126,7 @@ export async function cleanCommand(
 
   const startTime = Date.now();
   try {
-    let deleted = 0;
-    for (const file of allFiles) {
-      try {
-        const absFile = path.resolve(file);
-        if (!absFile.startsWith(root + path.sep)) {
-          p.log.warn(`Skipping out-of-project file: ${file}`);
-          continue;
-        }
-        if (fs.existsSync(file)) {
-          fs.unlinkSync(file);
-          p.log.success(`Deleted: ${file}`);
-          deleted++;
-        } else {
-          p.log.warn(`Not found: ${file}`);
-        }
-      } catch (err) {
-        p.log.error(`Failed to delete ${file}: ${(err as Error).message}`);
-      }
-    }
+    const deleted = deleteProjectFiles(allFiles, root);
 
     appendAudit(root, {
       timestamp: new Date().toISOString(),

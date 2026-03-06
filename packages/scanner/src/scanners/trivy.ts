@@ -1,6 +1,7 @@
-import { ScannerResult, ScanFinding, ScanSeverity, ScanCategory } from "../types";
+import { ScannerResult, ScanFinding, ScanCategory } from "../types";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, mapTrivySeverity, parseErrorFinding, skippedResult } from "../scanner-utils";
 
 interface TrivyCVSS {
   V3Score?: number;
@@ -61,22 +62,12 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
     rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
-      return {
-        tool: "trivy",
-        findings: [],
-        skipped: true,
-        skipReason: "trivy not found",
-      };
+      return skippedResult("trivy", "trivy not found");
     }
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
-      return {
-        tool: "trivy",
-        findings: [],
-        skipped: true,
-        skipReason: `trivy failed: ${execErr.stderr ?? "unknown error"}`,
-      };
+      return skippedResult("trivy", `trivy failed: ${execErr.stderr ?? "unknown error"}`);
     }
   }
 
@@ -92,7 +83,7 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
             findings.push({
               id: deterministicFindingId("trivy", vuln.VulnerabilityID, vuln.PkgName),
               tool: "trivy",
-              severity: mapSeverity(vuln.Severity),
+              severity: mapTrivySeverity(vuln.Severity),
               category: "SECURITY",
               file: result.Target,
               message: `${vuln.PkgName}@${vuln.InstalledVersion}: ${vuln.VulnerabilityID}${vuln.Title ? " — " + vuln.Title : ""}`,
@@ -113,7 +104,7 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
             findings.push({
               id: deterministicFindingId("trivy", misconfig.ID, result.Target),
               tool: "trivy",
-              severity: mapSeverity(misconfig.Severity),
+              severity: mapTrivySeverity(misconfig.Severity),
               category: "IAC",
               file: result.Target,
               message: `${misconfig.ID}: ${misconfig.Title}`,
@@ -142,14 +133,7 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
       }
     }
   } catch {
-    findings.push({
-      id: "trivy-parse-error",
-      tool: "trivy",
-      severity: "MEDIUM",
-      category: "SECURITY",
-      message: "Failed to parse trivy output. The tool may have produced unexpected output format.",
-      autoFixAvailable: false,
-    });
+    findings.push(parseErrorFinding("trivy", "SECURITY"));
   }
 
   return { tool: "trivy", findings, rawOutput };
@@ -167,22 +151,6 @@ function extractCvssScore(cvss?: Record<string, TrivyCVSS>): number | undefined 
   return best;
 }
 
-function mapSeverity(severity: string): ScanSeverity {
-  switch (severity.toUpperCase()) {
-    case "CRITICAL":
-      return "CRITICAL";
-    case "HIGH":
-      return "HIGH";
-    case "MEDIUM":
-      return "MEDIUM";
-    case "LOW":
-    case "UNKNOWN":
-      return "LOW";
-    default:
-      return "MEDIUM";
-  }
-}
-
 // Re-export for shared use
 export function mapTrivyCategory(type: "vuln" | "misconfig" | "secret"): ScanCategory {
   switch (type) {
@@ -193,8 +161,4 @@ export function mapTrivyCategory(type: "vuln" | "misconfig" | "secret"): ScanCat
     case "secret":
       return "SECRETS";
   }
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

@@ -1,7 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
-import { parseAndValidate } from "./json-validator";
-import { redactSecrets } from "./redact";
+import { buildLLMResponse, extractApiError } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
 
 export class GeminiProvider implements LLMProvider {
@@ -73,12 +72,7 @@ export class GeminiProvider implements LLMProvider {
         }
       : undefined;
 
-    if (req.schema) {
-      const parsed = parseAndValidate(content, req.schema);
-      return { content, parsed, usage };
-    }
-
-    return { content, usage };
+    return buildLLMResponse(content, usage, req);
   }
 
   async listModels(): Promise<string[]> {
@@ -95,21 +89,4 @@ export class GeminiProvider implements LLMProvider {
       return [];
     }
   }
-}
-
-function extractApiError(err: unknown): string {
-  if (err instanceof Error) {
-    const jsonMatch = /\{[\s\S]*\}/.exec(err.message);
-    if (jsonMatch) {
-      try {
-        const body = JSON.parse(jsonMatch[0]);
-        const msg = body?.error?.message ?? body?.message;
-        if (typeof msg === "string") return redactSecrets(msg);
-      } catch {
-        // fall through
-      }
-    }
-    return redactSecrets(err.message);
-  }
-  return redactSecrets(String(err));
 }

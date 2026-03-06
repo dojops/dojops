@@ -1,6 +1,13 @@
 import * as path from "node:path";
 import { ExecutionPolicy } from "./types";
 
+/** Check if a resolved path is contained within a base directory path. */
+export function isPathWithin(resolvedPath: string, basePath: string): boolean {
+  const baseResolved = path.resolve(basePath);
+  const baseWithSep = baseResolved.endsWith(path.sep) ? baseResolved : baseResolved + path.sep;
+  return resolvedPath.startsWith(baseWithSep) || resolvedPath === baseResolved;
+}
+
 export class PolicyViolationError extends Error {
   constructor(
     message: string,
@@ -132,26 +139,16 @@ export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy): vo
   const resolved = path.resolve(filePath);
 
   for (const denied of policy.deniedWritePaths) {
-    const deniedResolved = path.resolve(denied);
-    const deniedWithSep = deniedResolved.endsWith(path.sep)
-      ? deniedResolved
-      : deniedResolved + path.sep;
-    if (resolved.startsWith(deniedWithSep) || resolved === deniedResolved) {
+    if (isPathWithin(resolved, denied)) {
       throw new PolicyViolationError(
-        `Write to ${resolved} is denied by policy (matches ${deniedResolved})`,
+        `Write to ${resolved} is denied by policy (matches ${path.resolve(denied)})`,
         "deniedWritePaths",
       );
     }
   }
 
   if (policy.allowedWritePaths.length > 0) {
-    const allowed = policy.allowedWritePaths.some((p) => {
-      const allowedResolved = path.resolve(p);
-      const allowedWithSep = allowedResolved.endsWith(path.sep)
-        ? allowedResolved
-        : allowedResolved + path.sep;
-      return resolved.startsWith(allowedWithSep) || resolved === allowedResolved;
-    });
+    const allowed = policy.allowedWritePaths.some((p) => isPathWithin(resolved, p));
     if (!allowed) {
       throw new PolicyViolationError(
         `Write to ${resolved} is not in allowed paths`,

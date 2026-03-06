@@ -68,48 +68,247 @@ function showConfig(config: DojOpsConfig): void {
   p.note(lines.join("\n"), title);
 }
 
-export async function configCommand(args: string[], ctx: CLIContext): Promise<void> {
-  // dojops config show (--show is remapped by compat.ts)
-  if (args[0] === "show") {
-    const config = loadConfig();
-    if (ctx.globalOpts.output === "json") {
-      const safeConfig = {
-        ...config,
-        tokens: Object.fromEntries(
-          Object.entries(config.tokens ?? {}).map(([k, v]) => [k, v ? "***" : null]),
-        ),
-      };
-      console.log(JSON.stringify(safeConfig, null, 2));
-    } else {
-      showConfig(config);
-    }
+function handleShowSubcommand(ctx: CLIContext): void {
+  const config = loadConfig();
+  if (ctx.globalOpts.output === "json") {
+    const safeConfig = {
+      ...config,
+      tokens: Object.fromEntries(
+        Object.entries(config.tokens ?? {}).map(([k, v]) => [k, v ? "***" : null]),
+      ),
+    };
+    console.log(JSON.stringify(safeConfig, null, 2));
+  } else {
+    showConfig(config);
+  }
+}
+
+async function handleResetSubcommand(ctx: CLIContext): Promise<void> {
+  const configPath = getConfigPath();
+  if (!fs.existsSync(configPath)) {
+    p.log.info("No configuration file to reset.");
     return;
   }
 
-  // dojops config reset — delete configuration file
-  if (args[0] === "reset") {
-    const configPath = getConfigPath();
-    if (!fs.existsSync(configPath)) {
-      p.log.info("No configuration file to reset.");
+  if (!ctx.globalOpts.nonInteractive) {
+    const confirmed = await p.confirm({
+      message: `Delete configuration at ${configPath}?`,
+    });
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.log.info("Cancelled.");
       return;
     }
+  }
 
-    if (!ctx.globalOpts.nonInteractive) {
-      const confirmed = await p.confirm({
-        message: `Delete configuration at ${configPath}?`,
-      });
-      if (p.isCancel(confirmed) || !confirmed) {
-        p.log.info("Cancelled.");
-        return;
-      }
-    }
+  fs.unlinkSync(configPath);
+  p.log.success("Configuration reset successfully.");
+}
 
-    fs.unlinkSync(configPath);
-    p.log.success("Configuration reset successfully.");
+function applyProviderFlag(config: DojOpsConfig, providerFlag: string): void {
+  try {
+    validateProvider(providerFlag);
+  } catch (err) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
+  }
+  config.defaultProvider = providerFlag;
+}
+
+function applyTokenFlag(
+  config: DojOpsConfig,
+  tokenFlag: string,
+  providerFlag: string | undefined,
+): void {
+  const provider = providerFlag ?? config.defaultProvider ?? "openai";
+  if (provider === "ollama" || provider === "github-copilot") {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      provider === "ollama"
+        ? "Ollama runs locally and does not require an API token."
+        : "GitHub Copilot uses OAuth Device Flow. Run: dojops auth login --provider github-copilot",
+    );
+  }
+  config.tokens = config.tokens ?? {};
+  config.tokens[provider] = tokenFlag;
+}
+
+function applyTemperatureFlag(config: DojOpsConfig, temperatureFlag: string): void {
+  const temp = Number.parseFloat(temperatureFlag);
+  if (!Number.isFinite(temp) || temp < 0 || temp > 2) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Temperature must be a number between 0 and 2.");
+  }
+  config.defaultTemperature = temp;
+}
+
+function handleDirectFlags(
+  config: DojOpsConfig,
+  providerFlag: string | undefined,
+  tokenFlag: string | undefined,
+  modelFlag: string | undefined,
+  temperatureFlag: string | undefined,
+): void {
+  if (providerFlag) applyProviderFlag(config, providerFlag);
+  if (tokenFlag) applyTokenFlag(config, tokenFlag, providerFlag);
+  if (modelFlag) config.defaultModel = modelFlag;
+  if (temperatureFlag) applyTemperatureFlag(config, temperatureFlag);
+
+  saveConfig(config);
+  p.log.success("Configuration saved.");
+  showConfig(config);
+}
+
+async function ensureCopilotAuth(provider: string): Promise<void> {
+  if (provider !== "github-copilot" || isCopilotAuthenticated()) return;
+
+  const cs = p.spinner();
+  cs.start("Starting GitHub Copilot OAuth Device Flow...");
+  await copilotLogin({
+    onDeviceCode: (userCode, verificationUri) => {
+      cs.stop("Device code received.");
+      p.note(
+        [
+          `Code: ${pc.bold(pc.cyan(userCode))}`,
+          `URL:  ${pc.underline(verificationUri)}`,
+          "",
+          "Open the URL above and paste the code to authorize DojOps.",
+        ].join("\n"),
+        "GitHub Device Authorization",
+      );
+      cs.start("Waiting for authorization...");
+    },
+    onStatus: (msg) => cs.message(msg),
+  });
+  cs.stop("Authenticated with GitHub Copilot.");
+}
+
+async function fetchAndSelectModel(
+  provider: string,
+  token: string | undefined,
+  ollamaHost: string | undefined,
+  ollamaTls: boolean | undefined,
+  config: DojOpsConfig,
+  modelSuggestions: Record<string, string>,
+  isStructured: boolean,
+): Promise<string | symbol | null> {
+  if (!token && provider !== "ollama" && provider !== "github-copilot") return null;
+
+  try {
+    const s = p.spinner();
+    if (!isStructured) s.start("Fetching available models...");
+    const llm = createProvider({
+      provider,
+      apiKey: token || undefined,
+      ollamaHost,
+      ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
+    });
+    const models = await llm.listModels?.();
+    if (!isStructured) s.stop("Models fetched.");
+
+    if (!models?.length) return null;
+
+    const customValue = "__custom__";
+    const choice = await p.select({
+      message: "Select default model:",
+      options: [
+        ...models.map((m) => ({ value: m, label: m })),
+        { value: customValue, label: "Custom model..." },
+      ],
+      initialValue: config.defaultModel ?? models[0],
+    });
+
+    if (choice !== customValue) return choice as string;
+
+    return p.text({
+      message: "Enter custom model name:",
+      placeholder: modelSuggestions[provider] ?? "",
+      defaultValue: config.defaultModel ?? "",
+    });
+  } catch {
+    return null;
+  }
+}
+
+function applyOllamaSettings(config: DojOpsConfig, answers: Record<string, unknown>): void {
+  const host = answers.ollamaHost as string;
+  if (host && host !== "http://localhost:11434") {
+    config.ollamaHost = host;
+  } else {
+    delete config.ollamaHost;
+  }
+  const tls = answers.ollamaTls;
+  if (tls === false) {
+    config.ollamaTlsRejectUnauthorized = false;
+  } else {
+    delete config.ollamaTlsRejectUnauthorized;
+  }
+}
+
+async function updateDefaultProvider(
+  config: DojOpsConfig,
+  chosenProvider: string,
+  nonInteractive: boolean,
+): Promise<void> {
+  if (!config.defaultProvider) {
+    config.defaultProvider = chosenProvider;
+    return;
+  }
+  if (config.defaultProvider === chosenProvider) return;
+  if (nonInteractive) return;
+
+  const switchDefault = await p.confirm({
+    message: `Default provider is currently ${pc.bold(config.defaultProvider)}. Switch default to ${pc.bold(chosenProvider)}?`,
+    initialValue: false,
+  });
+  if (!p.isCancel(switchDefault) && switchDefault) {
+    config.defaultProvider = chosenProvider;
+  }
+}
+
+async function offerAdditionalProvider(
+  config: DojOpsConfig,
+  chosenProvider: string,
+): Promise<void> {
+  const unconfigured = VALID_PROVIDERS.filter(
+    (prov) =>
+      prov !== "ollama" &&
+      prov !== "github-copilot" &&
+      prov !== chosenProvider &&
+      !config.tokens?.[prov],
+  );
+  if (unconfigured.length === 0) return;
+
+  const addAnother = await p.confirm({
+    message: "Configure another provider?",
+    initialValue: false,
+  });
+  if (p.isCancel(addAnother) || !addAnother) return;
+
+  const nextProvider = await p.select({
+    message: "Select provider:",
+    options: unconfigured.map((v) => ({ value: v, label: v })),
+  });
+  if (p.isCancel(nextProvider)) return;
+
+  const nextToken = await p.password({
+    message: `API key for ${nextProvider}:`,
+  });
+  if (p.isCancel(nextToken) || !nextToken) return;
+
+  config.tokens = config.tokens ?? {};
+  config.tokens[nextProvider as string] = nextToken as string;
+  saveConfig(config);
+  p.log.success(`Token saved for ${pc.bold(nextProvider as string)}.`);
+}
+
+export async function configCommand(args: string[], ctx: CLIContext): Promise<void> {
+  if (args[0] === "show") {
+    handleShowSubcommand(ctx);
     return;
   }
 
-  // dojops config profile <subcommand> — handled in Phase 6
+  if (args[0] === "reset") {
+    return handleResetSubcommand(ctx);
+  }
+
   if (args[0] === "profile") {
     const { configProfileCommand } = await import("./config-profile");
     return configProfileCommand(args.slice(1), ctx);
@@ -120,51 +319,8 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   const modelFlag = extractFlagValue(args, "--model") ?? ctx.globalOpts.model;
   const temperatureFlag = extractFlagValue(args, "--temperature");
 
-  // Direct flags mode
   if (providerFlag || tokenFlag || modelFlag || temperatureFlag) {
-    const config = loadConfig();
-
-    if (providerFlag) {
-      try {
-        validateProvider(providerFlag);
-      } catch (err) {
-        throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
-      }
-      config.defaultProvider = providerFlag;
-    }
-
-    if (tokenFlag) {
-      const provider = providerFlag ?? config.defaultProvider ?? "openai";
-      if (provider === "ollama" || provider === "github-copilot") {
-        throw new CLIError(
-          ExitCode.VALIDATION_ERROR,
-          provider === "ollama"
-            ? "Ollama runs locally and does not require an API token."
-            : "GitHub Copilot uses OAuth Device Flow. Run: dojops auth login --provider github-copilot",
-        );
-      }
-      config.tokens = config.tokens ?? {};
-      config.tokens[provider] = tokenFlag;
-    }
-
-    if (modelFlag) {
-      config.defaultModel = modelFlag;
-    }
-
-    if (temperatureFlag) {
-      const temp = Number.parseFloat(temperatureFlag);
-      if (!Number.isFinite(temp) || temp < 0 || temp > 2) {
-        throw new CLIError(
-          ExitCode.VALIDATION_ERROR,
-          "Temperature must be a number between 0 and 2.",
-        );
-      }
-      config.defaultTemperature = temp;
-    }
-
-    saveConfig(config);
-    p.log.success("Configuration saved.");
-    showConfig(config);
+    handleDirectFlags(loadConfig(), providerFlag, tokenFlag, modelFlag, temperatureFlag);
     return;
   }
 
@@ -235,70 +391,22 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
         const provider = results.provider as string;
         const token = (results.token as string) || config.tokens?.[provider];
 
-        // GitHub Copilot: run OAuth Device Flow if needed before fetching models
-        if (provider === "github-copilot" && !isCopilotAuthenticated()) {
-          const cs = p.spinner();
-          cs.start("Starting GitHub Copilot OAuth Device Flow...");
-          await copilotLogin({
-            onDeviceCode: (userCode, verificationUri) => {
-              cs.stop("Device code received.");
-              p.note(
-                [
-                  `Code: ${pc.bold(pc.cyan(userCode))}`,
-                  `URL:  ${pc.underline(verificationUri)}`,
-                  "",
-                  "Open the URL above and paste the code to authorize DojOps.",
-                ].join("\n"),
-                "GitHub Device Authorization",
-              );
-              cs.start("Waiting for authorization...");
-            },
-            onStatus: (msg) => cs.message(msg),
-          });
-          cs.stop("Authenticated with GitHub Copilot.");
-        }
+        await ensureCopilotAuth(provider);
 
-        // Try fetching models dynamically
-        if (token || provider === "ollama" || provider === "github-copilot") {
-          try {
-            const isStructured = ctx.globalOpts.output !== "table";
-            const s = p.spinner();
-            if (!isStructured) s.start("Fetching available models...");
-            const ollamaHost = (results.ollamaHost as string) || undefined;
-            const ollamaTls = results.ollamaTls as boolean | undefined;
-            const llm = createProvider({
-              provider,
-              apiKey: token || undefined,
-              ollamaHost,
-              ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
-            });
-            const models = await llm.listModels?.();
-            if (!isStructured) s.stop("Models fetched.");
+        const isStructured = ctx.globalOpts.output !== "table";
+        const ollamaHost = (results.ollamaHost as string) || undefined;
+        const ollamaTls = results.ollamaTls as boolean | undefined;
 
-            if (models?.length) {
-              const customValue = "__custom__";
-              const choice = await p.select({
-                message: "Select default model:",
-                options: [
-                  ...models.map((m) => ({ value: m, label: m })),
-                  { value: customValue, label: "Custom model..." },
-                ],
-                initialValue: config.defaultModel ?? models[0],
-              });
-
-              if (choice === customValue) {
-                return p.text({
-                  message: "Enter custom model name:",
-                  placeholder: modelSuggestions[provider] ?? "",
-                  defaultValue: config.defaultModel ?? "",
-                });
-              }
-              return choice as string;
-            }
-          } catch {
-            // Fall back to text input on failure
-          }
-        }
+        const selected = await fetchAndSelectModel(
+          provider,
+          token,
+          ollamaHost,
+          ollamaTls,
+          config,
+          modelSuggestions,
+          isStructured,
+        );
+        if (selected !== null) return selected;
 
         return p.text({
           message: "Default model (press Enter to skip):",
@@ -325,75 +433,17 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     config.defaultModel = answers.model as string;
   }
 
-  // Persist Ollama host settings
   if (chosenProvider === "ollama") {
-    const host = answers.ollamaHost as string;
-    if (host && host !== "http://localhost:11434") {
-      config.ollamaHost = host;
-    } else {
-      delete config.ollamaHost;
-    }
-    const tls = answers.ollamaTls;
-    if (tls === false) {
-      config.ollamaTlsRejectUnauthorized = false;
-    } else {
-      delete config.ollamaTlsRejectUnauthorized;
-    }
+    applyOllamaSettings(config, answers);
   }
 
-  // Smart default handling: don't blindly overwrite existing default
-  const hadDefault = !!config.defaultProvider;
-  if (!hadDefault) {
-    // No existing default — set to chosen provider
-    config.defaultProvider = chosenProvider;
-  } else if (config.defaultProvider === chosenProvider) {
-    // Same provider — no change needed
-  } else if (!ctx.globalOpts.nonInteractive) {
-    // Different provider selected — ask whether to switch default
-    const switchDefault = await p.confirm({
-      message: `Default provider is currently ${pc.bold(config.defaultProvider)}. Switch default to ${pc.bold(chosenProvider)}?`,
-      initialValue: false,
-    });
-    if (!p.isCancel(switchDefault) && switchDefault) {
-      config.defaultProvider = chosenProvider;
-    }
-  }
+  await updateDefaultProvider(config, chosenProvider, !!ctx.globalOpts.nonInteractive);
 
   saveConfig(config);
   p.log.success("Configuration saved.");
   showConfig(config);
 
-  // Offer to configure another provider (interactive only)
   if (!ctx.globalOpts.nonInteractive) {
-    const unconfigured = VALID_PROVIDERS.filter(
-      (prov) =>
-        prov !== "ollama" &&
-        prov !== "github-copilot" &&
-        prov !== chosenProvider &&
-        !config.tokens?.[prov],
-    );
-    if (unconfigured.length > 0) {
-      const addAnother = await p.confirm({
-        message: "Configure another provider?",
-        initialValue: false,
-      });
-      if (!p.isCancel(addAnother) && addAnother) {
-        const nextProvider = await p.select({
-          message: "Select provider:",
-          options: unconfigured.map((v) => ({ value: v, label: v })),
-        });
-        if (!p.isCancel(nextProvider)) {
-          const nextToken = await p.password({
-            message: `API key for ${nextProvider}:`,
-          });
-          if (!p.isCancel(nextToken) && nextToken) {
-            config.tokens = config.tokens ?? {};
-            config.tokens[nextProvider as string] = nextToken as string;
-            saveConfig(config);
-            p.log.success(`Token saved for ${pc.bold(nextProvider as string)}.`);
-          }
-        }
-      }
-    }
+    await offerAdditionalProvider(config, chosenProvider);
   }
 }

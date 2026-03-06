@@ -27,7 +27,7 @@ import { remapLegacyArgs } from "./compat";
 import { printHelp, printCommandHelp, printBanner } from "./help";
 import { resolveCommand, registerCommand, registerSubcommand } from "./commands";
 import { CLIContext } from "./types";
-import { ExitCode, CLIError } from "./exit-codes";
+import { ExitCode, CLIError, toErrorMessage } from "./exit-codes";
 import { getDojopsVersion } from "./state";
 
 // ── Late-registered commands (Phases 2-6) ──────────────────────────
@@ -325,7 +325,7 @@ async function main() {
       if (err.message) p.log.error(err.message);
       process.exit(err.exitCode);
     }
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     p.log.error(msg);
     if (globalOpts.debug) {
       console.error(err);
@@ -338,8 +338,9 @@ async function main() {
   }
 }
 
-// Top-level async IIFE to avoid unhandled promise rejection
+// Top-level async IIFE — CJS module, top-level await not supported
 (async () => {
+  // NOSONAR
   try {
     await main();
   } catch (err) {
@@ -349,7 +350,7 @@ async function main() {
       }
       process.exit(err.exitCode);
     }
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     console.error(msg);
     process.exit(ExitCode.GENERAL_ERROR);
   }

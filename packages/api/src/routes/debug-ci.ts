@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { CIDebugger } from "@dojops/core";
-import { HistoryStore } from "../store";
+import { HistoryStore, logRouteError } from "../store";
 import { DebugCIRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
@@ -25,14 +25,7 @@ export function createDebugCIRouter(debugger_: CIDebugger, store: HistoryStore):
 
       res.json({ ...response, historyId: entry.id });
     } catch (err) {
-      store.add({
-        type: "debug-ci",
-        request: req.body,
-        response: null,
-        durationMs: Date.now() - start,
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      logRouteError(store, "debug-ci", req.body, start, err);
       next(err);
     }
   });

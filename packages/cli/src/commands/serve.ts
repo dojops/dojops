@@ -11,7 +11,7 @@ import { CLIContext } from "../types";
 import { extractFlagValue, hasFlag } from "../parser";
 import { resolveProvider, resolveToken, resolveOllamaHost, resolveOllamaTls } from "../config";
 import { findProjectRoot } from "../state";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, toErrorMessage } from "../exit-codes";
 
 const SERVER_JSON_PATH = path.join(os.homedir(), ".dojops", "server.json");
 
@@ -52,59 +52,33 @@ export async function serveCredentialsCommand(): Promise<void> {
   );
 }
 
-export async function serveCommand(args: string[], ctx: CLIContext): Promise<void> {
-  // Dispatch subcommand
-  if (args[0] === "credentials") {
-    return serveCredentialsCommand();
-  }
-
-  const noAuth = hasFlag(args, "--no-auth");
-  const portArg = extractFlagValue(args, "--port");
-  const port = portArg
-    ? Number.parseInt(portArg, 10)
-    : Number.parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
-
-  if (Number.isNaN(port) || port < 1 || port > 65535) {
-    p.log.error(`Invalid port: "${portArg ?? process.env.DOJOPS_API_PORT}". Must be 1-65535.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
-  }
-
-  // E-1: TLS support via --tls-cert and --tls-key flags
+function resolveTlsOptions(args: string[]): { cert: Buffer; key: Buffer } | undefined {
   const tlsCertPath = extractFlagValue(args, "--tls-cert");
   const tlsKeyPath = extractFlagValue(args, "--tls-key");
-  let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
 
-  if (tlsCertPath || tlsKeyPath) {
-    if (!tlsCertPath || !tlsKeyPath) {
-      p.log.error("Both --tls-cert and --tls-key must be provided together.");
-      process.exit(ExitCode.VALIDATION_ERROR);
-    }
-    try {
-      tlsOptions = {
-        cert: fs.readFileSync(tlsCertPath),
-        key: fs.readFileSync(tlsKeyPath),
-      };
-    } catch (err) {
-      p.log.error(`Failed to read TLS files: ${err instanceof Error ? err.message : String(err)}`);
-      process.exit(ExitCode.VALIDATION_ERROR);
-    }
+  if (!tlsCertPath && !tlsKeyPath) return undefined;
+
+  if (!tlsCertPath || !tlsKeyPath) {
+    p.log.error("Both --tls-cert and --tls-key must be provided together.");
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
+  try {
+    return {
+      cert: fs.readFileSync(tlsCertPath),
+      key: fs.readFileSync(tlsKeyPath),
+    };
+  } catch (err) {
+    p.log.error(`Failed to read TLS files: ${toErrorMessage(err)}`);
+    process.exit(ExitCode.VALIDATION_ERROR);
+  }
+}
 
-  const { createApp, HistoryStore } = await import("@dojops/api");
-
-  // FEAT #1: --provider flag for serve command
-  const providerFlag = extractFlagValue(args, "--provider") ?? ctx.globalOpts.provider;
-  // BUG #1: Use resolveProvider() which checks CLI flag → env var → config → default
-  const providerName = resolveProvider(providerFlag, ctx.config);
-  const model = ctx.globalOpts.model ?? ctx.config.defaultModel;
-  const apiKey = resolveToken(providerName, ctx.config);
-
-  // Resolve Ollama host settings from config
-  const ollamaHost =
-    providerName === "ollama" ? resolveOllamaHost(undefined, ctx.config) : undefined;
-  const ollamaTls = providerName === "ollama" ? resolveOllamaTls(undefined, ctx.config) : undefined;
-
-  // Populate env vars so createProvider() inside the API also picks them up
+function populateProviderEnvVars(
+  providerName: string,
+  model: string | undefined,
+  apiKey: string | undefined,
+  ollamaHost: string | undefined,
+): void {
   if (providerName) process.env.DOJOPS_PROVIDER = providerName;
   if (model) process.env.DOJOPS_MODEL = model;
   if (ollamaHost && !process.env.OLLAMA_HOST) process.env.OLLAMA_HOST = ollamaHost;
@@ -118,20 +92,17 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     const envVar = envVarMap[providerName] ?? "OPENAI_API_KEY";
     if (!process.env[envVar]) process.env[envVar] = apiKey;
   }
+}
 
-  // A1: Require API key (or --no-auth) for non-local providers
-  // UX #8: When --no-auth is explicitly set, disable auth regardless of env/server.json
-  // Auto-load from ~/.dojops/server.json when DOJOPS_API_KEY is not set
+function resolveServerApiKey(noAuth: boolean, providerName: string): string | string[] | undefined {
   const serverApiKey = noAuth ? undefined : (process.env.DOJOPS_API_KEY ?? loadServerApiKey());
 
-  // SEC #2: Warn when --no-auth disables authentication
   if (noAuth) {
     p.log.warn(
       pc.bold(pc.yellow("WARNING:")) +
         " API authentication disabled (--no-auth). Do not expose to untrusted networks.",
     );
-  }
-  if (!serverApiKey && !noAuth) {
+  } else if (!serverApiKey) {
     if (providerName === "ollama" || providerName === "github-copilot") {
       p.log.warn(
         `No API key configured (DOJOPS_API_KEY). The API is unprotected. ` +
@@ -147,7 +118,66 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     }
   }
 
-  // Startup validation: warn if no LLM API key configured for cloud providers
+  return serverApiKey;
+}
+
+async function loadContext7Providers(): Promise<{
+  docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
+  context7Provider?: {
+    resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
+    queryDocs(libraryId: string, query: string): Promise<string>;
+  };
+}> {
+  if (process.env.DOJOPS_CONTEXT_ENABLED !== "true") return {};
+
+  try {
+    const { createDocAugmenter, Context7Client } = await import("@dojops/context");
+    return {
+      docAugmenter: createDocAugmenter({
+        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
+      }),
+      context7Provider: new Context7Client({
+        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
+      }),
+    };
+  } catch {
+    return {};
+  }
+}
+
+export async function serveCommand(args: string[], ctx: CLIContext): Promise<void> {
+  if (args[0] === "credentials") {
+    return serveCredentialsCommand();
+  }
+
+  const noAuth = hasFlag(args, "--no-auth");
+  const portArg = extractFlagValue(args, "--port");
+  const port = portArg
+    ? Number.parseInt(portArg, 10)
+    : Number.parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
+
+  if (Number.isNaN(port) || port < 1 || port > 65535) {
+    p.log.error(`Invalid port: "${portArg ?? process.env.DOJOPS_API_PORT}". Must be 1-65535.`);
+    process.exit(ExitCode.VALIDATION_ERROR);
+  }
+
+  const tlsOptions = resolveTlsOptions(args);
+
+  const { createApp, HistoryStore } = await import("@dojops/api");
+
+  const providerFlag = extractFlagValue(args, "--provider") ?? ctx.globalOpts.provider;
+  const providerName = resolveProvider(providerFlag, ctx.config);
+  const model = ctx.globalOpts.model ?? ctx.config.defaultModel;
+  const apiKey = resolveToken(providerName, ctx.config);
+
+  const ollamaHost =
+    providerName === "ollama" ? resolveOllamaHost(undefined, ctx.config) : undefined;
+  const ollamaTls = providerName === "ollama" ? resolveOllamaTls(undefined, ctx.config) : undefined;
+
+  populateProviderEnvVars(providerName, model, apiKey, ollamaHost);
+
+  const serverApiKey = resolveServerApiKey(noAuth, providerName);
+
   if (providerName !== "ollama" && providerName !== "github-copilot" && !apiKey) {
     p.log.warn(
       `No LLM API key found for ${pc.bold(providerName)}. Requests will fail until a key is configured.`,
@@ -164,42 +194,17 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
   });
 
-  // A27: Validate provider connectivity at startup
   if (provider.listModels) {
     try {
       await provider.listModels();
       p.log.success(`Provider "${providerName}" connectivity verified.`);
     } catch (err) {
-      p.log.warn(
-        `Provider "${providerName}" connectivity check failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      p.log.warn(`Provider "${providerName}" connectivity check failed: ${toErrorMessage(err)}`);
       p.log.info("The server will start, but requests may fail until the provider is available.");
     }
   }
 
-  // Context7 documentation augmentation (opt-in)
-  let docAugmenter:
-    | { augmentPrompt(s: string, kw: string[], q: string): Promise<string> }
-    | undefined;
-  let context7Provider:
-    | {
-        resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
-        queryDocs(libraryId: string, query: string): Promise<string>;
-      }
-    | undefined;
-  if (process.env.DOJOPS_CONTEXT_ENABLED === "true") {
-    try {
-      const { createDocAugmenter, Context7Client } = await import("@dojops/context");
-      docAugmenter = createDocAugmenter({
-        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
-      });
-      context7Provider = new Context7Client({
-        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
-      });
-    } catch {
-      // Context package not available — continue without
-    }
-  }
+  const { docAugmenter, context7Provider } = await loadContext7Providers();
 
   const projectRoot = findProjectRoot() ?? undefined;
   const registry = createToolRegistry(provider, projectRoot, {
@@ -243,7 +248,6 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     p.note(noteLines.join("\n"), "Server Started");
     p.log.success(`DojOps API server running on ${dashboardUrl}`);
 
-    // E-1: Warn when serving over plain HTTP with auth enabled (API key in cleartext)
     if (!tlsOptions && serverApiKey) {
       p.log.warn(
         `Server is running over ${pc.bold("plain HTTP")} with API key authentication enabled. ` +
@@ -269,7 +273,6 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     process.exit(ExitCode.GENERAL_ERROR);
   });
 
-  // A23: Graceful shutdown with 30s drain for in-flight LLM requests
   const shutdown = () => {
     p.log.info("Shutting down server (30s drain)...");
     server.close(() => {

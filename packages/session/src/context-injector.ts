@@ -1,6 +1,24 @@
 import fs from "node:fs";
 import path from "node:path";
 
+function formatLanguageName(l: unknown): string {
+  if (typeof l === "string") return l;
+  if (
+    l &&
+    typeof l === "object" &&
+    "name" in l &&
+    typeof (l as { name?: string }).name === "string"
+  ) {
+    return (l as { name: string }).name;
+  }
+  return "unknown";
+}
+
+function formatLanguages(languages: unknown): string {
+  if (!Array.isArray(languages)) return String(languages);
+  return languages.map(formatLanguageName).join(", ");
+}
+
 export function buildSessionContext(rootDir: string): string {
   const parts: string[] = [];
 
@@ -12,14 +30,7 @@ export function buildSessionContext(rootDir: string): string {
       parts.push("## Project Context");
       if (ctx.name) parts.push(`Project: ${ctx.name}`);
       if (ctx.languages?.length) {
-        const langs = Array.isArray(ctx.languages)
-          ? ctx.languages
-              .map((l: { name?: string }) =>
-                typeof l === "string" ? l : typeof l?.name === "string" ? l.name : "unknown",
-              )
-              .join(", ")
-          : String(ctx.languages);
-        parts.push(`Languages: ${langs}`);
+        parts.push(`Languages: ${formatLanguages(ctx.languages)}`);
       }
       if (ctx.packageManagers?.length)
         parts.push(`Package managers: ${ctx.packageManagers.join(", ")}`);

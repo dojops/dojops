@@ -4,7 +4,7 @@ import { Router } from "express";
 import { LLMProvider, AgentRouter } from "@dojops/core";
 import { ChatSession, cleanExpiredSessions } from "@dojops/session";
 import type { ChatSessionState } from "@dojops/session";
-import { HistoryStore } from "../store";
+import { HistoryStore, logRouteError, toErrorMessage } from "../store";
 import { ChatRequestSchema, ChatSessionRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
@@ -169,16 +169,9 @@ export function createChatRouter(
         result = await session.send(message);
       } catch (sendErr) {
         // Return 500 with error message rather than crashing the route
-        store.add({
-          type: "chat",
-          request: { sessionId: session.id, message },
-          response: null,
-          durationMs: Date.now() - start,
-          success: false,
-          error: sendErr instanceof Error ? sendErr.message : String(sendErr),
-        });
+        logRouteError(store, "chat", { sessionId: session.id, message }, start, sendErr);
         res.status(500).json({
-          error: sendErr instanceof Error ? sendErr.message : String(sendErr),
+          error: toErrorMessage(sendErr),
           sessionId: session.id,
         });
         return;
@@ -201,14 +194,7 @@ export function createChatRouter(
 
       res.json(response);
     } catch (err) {
-      store.add({
-        type: "chat",
-        request: req.body,
-        response: null,
-        durationMs: Date.now() - start,
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      logRouteError(store, "chat", req.body, start, err);
       next(err);
     }
   });

@@ -66,3 +66,26 @@ export class HistoryStore {
     this.idIndex.clear();
   }
 }
+
+/** Extract a message string from an unknown error value. */
+export function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** Log a failed route operation to the history store. */
+export function logRouteError(
+  store: HistoryStore,
+  type: HistoryEntry["type"],
+  request: unknown,
+  start: number,
+  err: unknown,
+): void {
+  store.add({
+    type,
+    request,
+    response: null,
+    durationMs: Date.now() - start,
+    success: false,
+    error: toErrorMessage(err),
+  });
+}

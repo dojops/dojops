@@ -1,6 +1,7 @@
-import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
+import { ScannerResult, ScanFinding } from "../types";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, mapTrivySeverity, parseErrorFinding, skippedResult } from "../scanner-utils";
 
 interface TrivyLicenseResult {
   Target: string;
@@ -36,22 +37,15 @@ export async function scanTrivyLicense(projectPath: string): Promise<ScannerResu
     rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
-      return {
-        tool: "trivy-license",
-        findings: [],
-        skipped: true,
-        skipReason: "trivy not found",
-      };
+      return skippedResult("trivy-license", "trivy not found");
     }
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
-      return {
-        tool: "trivy-license",
-        findings: [],
-        skipped: true,
-        skipReason: `trivy license scan failed: ${execErr.stderr ?? "unknown error"}`,
-      };
+      return skippedResult(
+        "trivy-license",
+        `trivy license scan failed: ${execErr.stderr ?? "unknown error"}`,
+      );
     }
   }
 
@@ -66,7 +60,7 @@ export async function scanTrivyLicense(projectPath: string): Promise<ScannerResu
             findings.push({
               id: deterministicFindingId("trivy-lic", lic.PkgName, lic.Name, lic.Category),
               tool: "trivy-license",
-              severity: mapSeverity(lic.Severity),
+              severity: mapTrivySeverity(lic.Severity),
               category: "LICENSE",
               file: lic.FilePath ?? result.Target,
               message: `${lic.PkgName}: ${lic.Name} license (${lic.Category})`,
@@ -80,36 +74,8 @@ export async function scanTrivyLicense(projectPath: string): Promise<ScannerResu
       }
     }
   } catch {
-    findings.push({
-      id: "trivy-license-parse-error",
-      tool: "trivy-license",
-      severity: "MEDIUM",
-      category: "LICENSE",
-      message:
-        "Failed to parse trivy license scan output. The tool may have produced unexpected output format.",
-      autoFixAvailable: false,
-    });
+    findings.push(parseErrorFinding("trivy-license", "LICENSE"));
   }
 
   return { tool: "trivy-license", findings, rawOutput };
-}
-
-function mapSeverity(severity: string): ScanSeverity {
-  switch (severity.toUpperCase()) {
-    case "CRITICAL":
-      return "CRITICAL";
-    case "HIGH":
-      return "HIGH";
-    case "MEDIUM":
-      return "MEDIUM";
-    case "LOW":
-    case "UNKNOWN":
-      return "LOW";
-    default:
-      return "MEDIUM";
-  }
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

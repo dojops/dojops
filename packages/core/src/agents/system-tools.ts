@@ -40,6 +40,19 @@ export interface ToolRegistry {
   updatedAt: string;
 }
 
+// Common target sets — eliminates duplication across 12 tool definitions
+const UNIX_TARGETS: Array<{ platform: Platform; arch: Arch }> = [
+  { platform: "linux", arch: "x64" },
+  { platform: "linux", arch: "arm64" },
+  { platform: "darwin", arch: "x64" },
+  { platform: "darwin", arch: "arm64" },
+];
+
+const UNIX_AND_WIN_TARGETS: Array<{ platform: Platform; arch: Arch }> = [
+  ...UNIX_TARGETS,
+  { platform: "win32", arch: "x64" },
+];
+
 export const SYSTEM_TOOLS: SystemTool[] = [
   {
     name: "terraform",
@@ -53,13 +66,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://releases.hashicorp.com/terraform/{{version}}/terraform_{{version}}_{{platform}}_{{arch}}.zip",
     platformMap: { linux: "linux", darwin: "darwin", win32: "windows" },
     archMap: { x64: "amd64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-      { platform: "win32", arch: "x64" },
-    ],
+    supportedTargets: UNIX_AND_WIN_TARGETS,
   },
   {
     name: "kubectl",
@@ -71,12 +78,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     urlTemplate: "https://dl.k8s.io/release/v{{version}}/bin/{{platform}}/{{arch}}/kubectl",
     platformMap: { linux: "linux", darwin: "darwin", win32: "windows" },
     archMap: { x64: "amd64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
   },
   {
     name: "gh",
@@ -89,12 +91,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/cli/cli/releases/download/v{{version}}/gh_{{version}}_{{platform}}_{{arch}}.tar.gz",
     platformMap: { linux: "linux", darwin: "macOS", win32: "windows" },
     archMap: { x64: "amd64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
     binaryPathInArchive: "gh_{{version}}_{{platform}}_{{arch}}/bin/gh",
   },
   {
@@ -108,12 +105,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/hadolint/hadolint/releases/download/v{{version}}/hadolint-{{platform}}-{{arch}}",
     platformMap: { linux: "Linux", darwin: "Darwin", win32: "Windows" },
     archMap: { x64: "x86_64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
   },
   {
     name: "trivy",
@@ -127,12 +119,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/aquasecurity/trivy/releases/download/v{{version}}/trivy_{{version}}_{{platform}}-{{arch}}.tar.gz",
     platformMap: { linux: "Linux", darwin: "macOS", win32: "Windows" },
     archMap: { x64: "64bit", arm64: "ARM64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
   },
   {
     name: "gitleaks",
@@ -145,12 +132,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/gitleaks/gitleaks/releases/download/v{{version}}/gitleaks_{{version}}_{{platform}}_{{arch}}.tar.gz",
     platformMap: { linux: "linux", darwin: "darwin", win32: "windows" },
     archMap: { x64: "x64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
   },
   {
     name: "ansible",
@@ -162,12 +144,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     urlTemplate: "",
     platformMap: { linux: "linux", darwin: "darwin", win32: "win32" },
     archMap: { x64: "x64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
   },
   {
     name: "helm",
@@ -179,12 +156,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     urlTemplate: "https://get.helm.sh/helm-v{{version}}-{{platform}}-{{arch}}.tar.gz",
     platformMap: { linux: "linux", darwin: "darwin", win32: "windows" },
     archMap: { x64: "amd64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
     binaryPathInArchive: "{{platform}}-{{arch}}/helm",
   },
   {
@@ -198,12 +170,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/koalaman/shellcheck/releases/download/v{{version}}/shellcheck-v{{version}}.{{platform}}.{{arch}}.tar.xz",
     platformMap: { linux: "linux", darwin: "darwin", win32: "win32" },
     archMap: { x64: "x86_64", arm64: "aarch64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
     binaryPathInArchive: "shellcheck-v{{version}}/shellcheck",
   },
   {
@@ -217,12 +184,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/rhysd/actionlint/releases/download/v{{version}}/actionlint_{{version}}_{{platform}}_{{arch}}.tar.gz",
     platformMap: { linux: "linux", darwin: "darwin", win32: "windows" },
     archMap: { x64: "amd64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
   },
   {
     name: "promtool",
@@ -235,12 +197,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/prometheus/prometheus/releases/download/v{{version}}/prometheus-{{version}}.{{platform}}-{{arch}}.tar.gz",
     platformMap: { linux: "linux", darwin: "darwin", win32: "win32" },
     archMap: { x64: "amd64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
     binaryPathInArchive: "prometheus-{{version}}.{{platform}}-{{arch}}/promtool",
   },
   {
@@ -254,12 +211,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/CircleCI-Public/circleci-cli/releases/download/v{{version}}/circleci-cli_{{version}}_{{platform}}_{{arch}}.tar.gz",
     platformMap: { linux: "linux", darwin: "darwin", win32: "win32" },
     archMap: { x64: "amd64", arm64: "arm64" },
-    supportedTargets: [
-      { platform: "linux", arch: "x64" },
-      { platform: "linux", arch: "arm64" },
-      { platform: "darwin", arch: "x64" },
-      { platform: "darwin", arch: "arm64" },
-    ],
+    supportedTargets: UNIX_TARGETS,
     binaryPathInArchive: "circleci-cli_{{version}}_{{platform}}_{{arch}}/circleci",
   },
 ];

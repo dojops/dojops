@@ -1,5 +1,6 @@
 import { ScannerResult } from "../types";
 import { execFileAsync } from "../exec-async";
+import { isENOENT, skippedResult } from "../scanner-utils";
 
 export async function scanTrivySbom(projectPath: string): Promise<ScannerResult> {
   let rawOutput: string;
@@ -11,22 +12,15 @@ export async function scanTrivySbom(projectPath: string): Promise<ScannerResult>
     rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
-      return {
-        tool: "trivy-sbom",
-        findings: [],
-        skipped: true,
-        skipReason: "trivy not found",
-      };
+      return skippedResult("trivy-sbom", "trivy not found");
     }
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
-      return {
-        tool: "trivy-sbom",
-        findings: [],
-        skipped: true,
-        skipReason: `trivy fs --format cyclonedx failed: ${execErr.stderr ?? "unknown error"}`,
-      };
+      return skippedResult(
+        "trivy-sbom",
+        `trivy fs --format cyclonedx failed: ${execErr.stderr ?? "unknown error"}`,
+      );
     }
   }
 
@@ -35,8 +29,4 @@ export async function scanTrivySbom(projectPath: string): Promise<ScannerResult>
     findings: [],
     sbomOutput: rawOutput,
   };
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }

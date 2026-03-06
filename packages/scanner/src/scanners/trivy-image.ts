@@ -1,6 +1,7 @@
-import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
+import { ScannerResult, ScanFinding } from "../types";
 import { execFileAsync } from "../exec-async";
 import { deterministicFindingId } from "../finding-id";
+import { isENOENT, mapTrivySeverity, parseErrorFinding, skippedResult } from "../scanner-utils";
 
 interface TrivyImageVulnerability {
   VulnerabilityID: string;
@@ -29,12 +30,7 @@ const SAFE_IMAGE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_./:@-]{0,254}$/;
 
 export async function scanTrivyImage(imageName: string): Promise<ScannerResult> {
   if (!SAFE_IMAGE_NAME.test(imageName)) {
-    return {
-      tool: "trivy-image",
-      findings: [],
-      skipped: true,
-      skipReason: "Invalid image name format",
-    };
+    return skippedResult("trivy-image", "Invalid image name format");
   }
 
   let rawOutput: string;
@@ -46,22 +42,15 @@ export async function scanTrivyImage(imageName: string): Promise<ScannerResult> 
     rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
-      return {
-        tool: "trivy-image",
-        findings: [],
-        skipped: true,
-        skipReason: "trivy not found",
-      };
+      return skippedResult("trivy-image", "trivy not found");
     }
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
-      return {
-        tool: "trivy-image",
-        findings: [],
-        skipped: true,
-        skipReason: `trivy image scan failed: ${execErr.stderr ?? "unknown error"}`,
-      };
+      return skippedResult(
+        "trivy-image",
+        `trivy image scan failed: ${execErr.stderr ?? "unknown error"}`,
+      );
     }
   }
 
@@ -76,7 +65,7 @@ export async function scanTrivyImage(imageName: string): Promise<ScannerResult> 
             findings.push({
               id: deterministicFindingId("trivy-img", vuln.VulnerabilityID, vuln.PkgName),
               tool: "trivy-image",
-              severity: mapSeverity(vuln.Severity),
+              severity: mapTrivySeverity(vuln.Severity),
               category: "SECURITY",
               file: result.Target,
               message: `${vuln.PkgName}@${vuln.InstalledVersion}: ${vuln.VulnerabilityID}${vuln.Title ? " \u2014 " + vuln.Title : ""}`,
@@ -93,15 +82,7 @@ export async function scanTrivyImage(imageName: string): Promise<ScannerResult> 
       }
     }
   } catch {
-    findings.push({
-      id: "trivy-image-parse-error",
-      tool: "trivy-image",
-      severity: "MEDIUM",
-      category: "SECURITY",
-      message:
-        "Failed to parse trivy image scan output. The tool may have produced unexpected output format.",
-      autoFixAvailable: false,
-    });
+    findings.push(parseErrorFinding("trivy-image", "SECURITY"));
   }
 
   return { tool: "trivy-image", findings, rawOutput };
@@ -119,24 +100,4 @@ function extractCvssScore(
     }
   }
   return best;
-}
-
-function mapSeverity(severity: string): ScanSeverity {
-  switch (severity.toUpperCase()) {
-    case "CRITICAL":
-      return "CRITICAL";
-    case "HIGH":
-      return "HIGH";
-    case "MEDIUM":
-      return "MEDIUM";
-    case "LOW":
-    case "UNKNOWN":
-      return "LOW";
-    default:
-      return "MEDIUM";
-  }
-}
-
-function isENOENT(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === "ENOENT";
 }
