@@ -400,15 +400,7 @@ async function generateAndApplyFixes(
       return null;
     }
 
-    return promptAndApplyFixes(
-      plan,
-      fixCtx.report,
-      fixCtx.scanRoot,
-      fixCtx.scanType,
-      fixCtx.context,
-      fixCtx.root,
-      fixCtx.autoApprove,
-    );
+    return promptAndApplyFixes(plan, fixCtx);
   } catch (err) {
     remSpinner.stop("Remediation failed");
     p.log.error(toErrorMessage(err));
@@ -418,12 +410,7 @@ async function generateAndApplyFixes(
 
 async function promptAndApplyFixes(
   plan: RemediationPlan,
-  report: ScanReport,
-  scanRoot: string,
-  scanType: ScanType,
-  context: RepoContext | undefined,
-  root: string,
-  autoApprove: boolean,
+  fixCtx: FixContext,
 ): Promise<ScanReport | null> {
   p.note(
     wrapForNote(
@@ -434,10 +421,10 @@ async function promptAndApplyFixes(
     "Remediation Plan",
   );
 
-  const approved = await getApproval(autoApprove, plan.fixes.length);
+  const approved = await getApproval(fixCtx.autoApprove, plan.fixes.length);
   if (!approved) return null;
 
-  return applyFixesAndRescan(plan, report, scanRoot, scanType, context, root);
+  return applyFixesAndRescan(plan, fixCtx);
 }
 
 async function getApproval(autoApprove: boolean, fixCount: number): Promise<boolean> {
@@ -453,14 +440,8 @@ async function getApproval(autoApprove: boolean, fixCount: number): Promise<bool
   return confirm;
 }
 
-async function applyFixesAndRescan(
-  plan: RemediationPlan,
-  report: ScanReport,
-  scanRoot: string,
-  scanType: ScanType,
-  context: RepoContext | undefined,
-  root: string,
-): Promise<ScanReport> {
+async function applyFixesAndRescan(plan: RemediationPlan, fixCtx: FixContext): Promise<ScanReport> {
+  const { report, scanRoot, scanType, context, root } = fixCtx;
   for (const fix of plan.fixes) {
     const fixPath = path.resolve(root, fix.file);
     if (fs.existsSync(fixPath)) {

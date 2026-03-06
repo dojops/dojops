@@ -1098,6 +1098,34 @@ function resolveInstallDir(isGlobal: boolean): string {
     : path.resolve(".dojops", "tools");
 }
 
+async function parseDownloadedModule(
+  fileBuffer: Buffer,
+): Promise<ReturnType<typeof parseDopsFileAny>> {
+  try {
+    const { parseDopsString } = await import("@dojops/runtime");
+    return parseDopsString(fileBuffer.toString("utf-8"));
+  } catch (err) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Downloaded file is not a valid .dops module: ${toErrorMessage(err)}`,
+    );
+  }
+}
+
+function logUpgradeIfExists(destPath: string, version: string): void {
+  if (!fs.existsSync(destPath)) return;
+  try {
+    const existing = parseDopsFileAny(destPath);
+    p.log.info(
+      pc.dim(
+        `Upgrading ${existing.frontmatter.meta.name} v${existing.frontmatter.meta.version} -> v${version}`,
+      ),
+    );
+  } catch {
+    // Overwrite invalid file
+  }
+}
+
 export const toolsInstallCommand: CommandHandler = async (args) => {
   const toolName = args[0];
   if (!toolName) {
@@ -1130,34 +1158,13 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
     );
 
     spinner.message("Validating...");
-    let module;
-    try {
-      const { parseDopsString } = await import("@dojops/runtime");
-      module = parseDopsString(fileBuffer.toString("utf-8"));
-    } catch (err) {
-      throw new CLIError(
-        ExitCode.VALIDATION_ERROR,
-        `Downloaded file is not a valid .dops module: ${toErrorMessage(err)}`,
-      );
-    }
+    const module = await parseDownloadedModule(fileBuffer);
 
     const destDir = resolveInstallDir(isGlobal);
     fs.mkdirSync(destDir, { recursive: true });
     const destPath = path.join(destDir, `${module.frontmatter.meta.name}.dops`);
 
-    if (fs.existsSync(destPath)) {
-      try {
-        const existing = parseDopsFileAny(destPath);
-        p.log.info(
-          pc.dim(
-            `Upgrading ${existing.frontmatter.meta.name} v${existing.frontmatter.meta.version} -> v${version}`,
-          ),
-        );
-      } catch {
-        // Overwrite invalid file
-      }
-    }
-
+    logUpgradeIfExists(destPath, version);
     fs.writeFileSync(destPath, fileBuffer);
     spinner.stop("Installed successfully");
 

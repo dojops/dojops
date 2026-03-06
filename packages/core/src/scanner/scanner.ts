@@ -478,32 +478,27 @@ function detectPacker(root: string): boolean {
   return listChildDirs(root).some((d) => hasPkrFiles(path.join(root, d)));
 }
 
+function detectKubernetes(root: string): boolean {
+  if (K8S_STRONG_DIRS.some((d) => fs.existsSync(path.join(root, d)))) return true;
+  return K8S_WEAK_DIRS.some((d) => {
+    const dirPath = path.join(root, d);
+    return fs.existsSync(dirPath) && dirContainsK8sManifests(dirPath);
+  });
+}
+
 export function detectInfra(root: string): InfraDetection {
   const { hasTerraform, tfProviders, hasState } = detectTerraform(root);
-
-  let hasKubernetes = K8S_STRONG_DIRS.some((d) => fs.existsSync(path.join(root, d)));
-  if (!hasKubernetes) {
-    hasKubernetes = K8S_WEAK_DIRS.some((d) => {
-      const dirPath = path.join(root, d);
-      return fs.existsSync(dirPath) && dirContainsK8sManifests(dirPath);
-    });
-  }
 
   return {
     hasTerraform,
     tfProviders,
     hasState,
-    hasKubernetes,
+    hasKubernetes: detectKubernetes(root),
     hasHelm: existsInRootOrChild(root, ["Chart.yaml", "charts"]),
-    hasAnsible:
-      ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, f))) ||
-      listChildDirs(root).some((d) =>
-        ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, d, f))),
-      ),
+    hasAnsible: existsInRootOrChild(root, ANSIBLE_INDICATORS),
     hasKustomize: existsInRootOrChild(root, ["kustomization.yaml", "kustomization.yml"]),
     hasVagrant: fs.existsSync(path.join(root, "Vagrantfile")),
-    hasPulumi:
-      fs.existsSync(path.join(root, "Pulumi.yaml")) || fs.existsSync(path.join(root, "Pulumi.yml")),
+    hasPulumi: existsInRootOrChild(root, ["Pulumi.yaml", "Pulumi.yml"]),
     hasCloudFormation: detectCloudFormation(root),
     hasPacker: detectPacker(root),
     hasCdk: existsInRootOrChild(root, ["cdk.json"]),
@@ -516,63 +511,29 @@ export function detectInfra(root: string): InfraDetection {
 
 // ── Monitoring detection ─────────────────────────────────────────────
 
-export function detectMonitoring(root: string): MonitoringDetection {
-  let hasPrometheus =
-    fs.existsSync(path.join(root, "prometheus.yml")) ||
-    fs.existsSync(path.join(root, "prometheus.yaml"));
-  if (!hasPrometheus) {
-    hasPrometheus = listChildDirs(root).some(
-      (d) =>
-        fs.existsSync(path.join(root, d, "prometheus.yml")) ||
-        fs.existsSync(path.join(root, d, "prometheus.yaml")),
-    );
-  }
-
-  let hasNginx = fs.existsSync(path.join(root, "nginx.conf"));
-  if (!hasNginx) {
-    hasNginx = listChildDirs(root).some((d) => fs.existsSync(path.join(root, d, "nginx.conf")));
-  }
-
-  let hasSystemd = false;
+function detectSystemdInDir(dir: string): boolean {
   try {
-    const entries = fs.readdirSync(root);
-    hasSystemd = entries.some((f) => f.endsWith(".service"));
+    return fs.readdirSync(dir).some((f) => f.endsWith(".service"));
   } catch {
-    // Root unreadable
+    return false;
   }
-  if (!hasSystemd) {
-    hasSystemd = listChildDirs(root).some((d) => {
-      try {
-        return fs.readdirSync(path.join(root, d)).some((f) => f.endsWith(".service"));
-      } catch {
-        return false;
-      }
-    });
-  }
+}
 
-  const hasHaproxy = fs.existsSync(path.join(root, "haproxy.cfg"));
+function detectSystemd(root: string): boolean {
+  if (detectSystemdInDir(root)) return true;
+  return listChildDirs(root).some((d) => detectSystemdInDir(path.join(root, d)));
+}
 
-  const hasTomcat = fs.existsSync(path.join(root, "server.xml"));
-
-  const hasApache =
-    fs.existsSync(path.join(root, "httpd.conf")) ||
-    fs.existsSync(path.join(root, "apache2.conf")) ||
-    fs.existsSync(path.join(root, ".htaccess"));
-
-  const hasCaddy = fs.existsSync(path.join(root, "Caddyfile"));
-
-  const hasEnvoy =
-    fs.existsSync(path.join(root, "envoy.yaml")) || fs.existsSync(path.join(root, "envoy.yml"));
-
+export function detectMonitoring(root: string): MonitoringDetection {
   return {
-    hasPrometheus,
-    hasNginx,
-    hasSystemd,
-    hasHaproxy,
-    hasTomcat,
-    hasApache,
-    hasCaddy,
-    hasEnvoy,
+    hasPrometheus: existsInRootOrChild(root, ["prometheus.yml", "prometheus.yaml"]),
+    hasNginx: existsInRootOrChild(root, ["nginx.conf"]),
+    hasSystemd: detectSystemd(root),
+    hasHaproxy: fs.existsSync(path.join(root, "haproxy.cfg")),
+    hasTomcat: fs.existsSync(path.join(root, "server.xml")),
+    hasApache: existsInRootOrChild(root, ["httpd.conf", "apache2.conf", ".htaccess"]),
+    hasCaddy: fs.existsSync(path.join(root, "Caddyfile")),
+    hasEnvoy: existsInRootOrChild(root, ["envoy.yaml", "envoy.yml"]),
   };
 }
 
