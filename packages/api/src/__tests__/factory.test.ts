@@ -85,11 +85,11 @@ describe("factory", () => {
   });
 
   describe("createTools", () => {
-    it("creates all 12 built-in tools", () => {
+    it("creates all 13 built-in tools", () => {
       process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const tools = createTools(provider);
-      expect(tools).toHaveLength(12);
+      expect(tools).toHaveLength(13);
       const names = tools.map((t) => t.name);
       expect(names).toContain("github-actions");
       expect(names).toContain("terraform");
@@ -100,6 +100,7 @@ describe("factory", () => {
       expect(names).toContain("dockerfile");
       expect(names).toContain("nginx");
       expect(names).toContain("makefile");
+      expect(names).toContain("jenkinsfile");
       expect(names).toContain("gitlab-ci");
       expect(names).toContain("prometheus");
       expect(names).toContain("systemd");

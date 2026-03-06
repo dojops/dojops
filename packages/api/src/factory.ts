@@ -109,7 +109,7 @@ interface DocProvider {
 }
 
 /**
- * Creates all DevOps tools. Uses tool-registry to instantiate all 12 built-in tools
+ * Creates all DevOps tools. Uses tool-registry to instantiate all 13 built-in tools
  * plus any discovered plugin tools.
  *
  * @param provider - LLM provider for tool generation

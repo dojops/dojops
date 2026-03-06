@@ -1719,7 +1719,7 @@ test
 });
 
 // ═════════════════════════════════════════════════════════
-// 5. BUILT-IN MODULES REGRESSION: verify all 12 modules
+// 5. BUILT-IN MODULES REGRESSION: verify all 13 modules
 //    have scope, risk, execution sections
 // ═════════════════════════════════════════════════════════
 
@@ -1739,13 +1739,14 @@ describe("Built-in Module Regression: New Sections", () => {
   const LOW_RISK_TOOLS = new Set([
     "github-actions",
     "gitlab-ci",
+    "jenkinsfile",
     "makefile",
     "prometheus",
     "docker-compose",
   ]);
 
-  it("has exactly 12 built-in modules", () => {
-    expect(moduleFiles.length).toBe(12);
+  it("has exactly 13 built-in modules", () => {
+    expect(moduleFiles.length).toBe(13);
   });
 
   for (const file of moduleFiles) {

@@ -10,6 +10,7 @@ export const TOOL_FILE_MAP: Record<string, string[]> = {
   "docker-compose": ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"],
   "github-actions": [".github/workflows/ci.yml", ".github/workflows/ci.yaml"],
   "gitlab-ci": [".gitlab-ci.yml", ".gitlab-ci.yaml"],
+  jenkinsfile: ["Jenkinsfile"],
   terraform: ["main.tf"],
   nginx: ["nginx.conf"],
   makefile: ["Makefile"],

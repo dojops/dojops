@@ -13,6 +13,7 @@ export const TOOL_LIBRARY_MAP: Record<string, string> = {
   nginx: "nginx",
   makefile: "gnu make",
   "gitlab-ci": "gitlab ci",
+  jenkinsfile: "jenkins",
   prometheus: "prometheus",
   systemd: "systemd",
 };

@@ -1,0 +1,91 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: jenkinsfile
+  version: 2.0.0
+  description: "Generate Jenkins pipeline configurations (Jenkinsfile)"
+  author: dojops
+  license: MIT
+  tags: [jenkins, ci, cd, pipeline, devops, groovy]
+
+context:
+  technology: Jenkins Pipeline
+  fileFormat: raw
+  outputGuidance: |
+    Generate a valid Jenkinsfile using Declarative Pipeline syntax.
+    Output raw Groovy/Jenkinsfile content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid Jenkinsfile that Jenkins can parse and execute.
+    Use Declarative Pipeline syntax (pipeline { ... }) unless the user explicitly requests Scripted Pipeline.
+  bestPractices:
+    - Use Declarative Pipeline syntax with pipeline { agent ... stages { ... } }
+    - Define explicit agent (e.g., agent any, agent { docker 'image' }, agent { label 'node' })
+    - Organize work into logical stages (Build, Test, Deploy)
+    - Use environment block for environment variables
+    - Use credentials() helper for secrets — never hardcode credentials
+    - Add post block with always, success, failure, cleanup sections
+    - Use when directives to conditionally run stages (branch, expression, etc.)
+    - Use parameters block for user-configurable builds
+    - Use tools block to auto-install JDK, Maven, Gradle, Node.js
+    - Add timeout and retry for flaky steps
+    - Use stash/unstash or archiveArtifacts for passing files between stages
+    - Use parallel blocks for concurrent test execution
+    - Use options block for buildDiscarder, timestamps, disableConcurrentBuilds
+  context7Libraries:
+    - name: jenkins
+      query: "Jenkins Declarative Pipeline syntax, stages, agent, post, when, credentials, parameters"
+
+files:
+  - path: "Jenkinsfile"
+    format: raw
+
+detection:
+  paths: ["Jenkinsfile"]
+  updateMode: true
+
+verification:
+  structural: []
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["Jenkinsfile"]
+
+risk:
+  level: LOW
+  rationale: "CI/CD pipeline changes require code review"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Jenkinsfile
+
+## Prompt
+
+You are a Jenkins CI/CD expert specializing in Declarative Pipeline syntax.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+jenkins, jenkinsfile, pipeline, declarative, scripted, groovy,
+stage, agent, post, build, deploy, ci, cd, continuous-integration,
+multibranch, blue-ocean, shared-library
