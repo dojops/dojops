@@ -1,4 +1,4 @@
-/* global document, fetch, navigator, setTimeout, setInterval, clearInterval, sessionStorage */
+/* global document, fetch, navigator, setTimeout, setInterval, clearInterval, sessionStorage, console */
 
 const API = "/api";
 
@@ -907,7 +907,7 @@ function renderOverviewStatCards(data) {
   let html = '<div class="stat-grid--6">';
   html += renderStatCard(data.totalPlans, "Total Plans", "");
   html += renderStatCard(
-    data.totalExecutions === undefined ? "—" : data.totalExecutions,
+    data.totalExecutions === undefined ? "\u2014" : data.totalExecutions,
     "Executions",
     "",
   );
@@ -917,7 +917,11 @@ function renderOverviewStatCards(data) {
     "Avg Exec Time",
     "",
   );
-  html += renderStatCard(data.totalScans !== undefined ? data.totalScans : "—", "Total Scans", "");
+  html += renderStatCard(
+    data.totalScans === undefined ? "\u2014" : data.totalScans,
+    "Total Scans",
+    "",
+  );
   html += renderStatCard(
     data.totalFindings,
     "Total Findings",
@@ -1072,11 +1076,9 @@ async function loadSecurity() {
   }
 }
 
-function renderSecurity(data) {
-  if (data.totalScans === 0) {
-    return renderMetricsEmpty("No scans yet", "Run a security scan to see findings here.");
-  }
+// ── Security helper renderers (extracted to reduce cognitive complexity) ──
 
+function renderSecurityStatCards(data) {
   let html = '<div class="stat-grid">';
   html += renderStatCard(data.totalScans, "Total Scans", "");
   html += renderStatCard(
@@ -1095,10 +1097,12 @@ function renderSecurity(data) {
     data.bySeverity.high > 0 ? "warning" : "success",
   );
   html += "</div>";
+  return html;
+}
 
-  // Severity bar
+function renderSeverityDistribution(data) {
   let total = data.totalFindings || 1;
-  html += '<div class="metrics-section">';
+  let html = '<div class="metrics-section">';
   html += '<div class="metrics-section__title">Severity Distribution</div>';
   html += '<div class="severity-bar">';
   html +=
@@ -1136,169 +1140,189 @@ function renderSecurity(data) {
     data.bySeverity.low +
     ")</div>";
   html += "</div></div>";
+  return html;
+}
 
-  // Category breakdown
-  if (data.byCategory) {
-    html += '<div class="metrics-section">';
-    html += '<div class="metrics-section__title">Category Breakdown</div>';
-    html += '<div class="category-grid">';
+function renderCategoryBreakdown(data) {
+  if (!data.byCategory) return "";
+  let html = '<div class="metrics-section">';
+  html += '<div class="metrics-section__title">Category Breakdown</div>';
+  html += '<div class="category-grid">';
 
-    const categories = [
-      {
-        key: "security",
-        label: "Security",
-        iconClass: "security",
-        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
-      },
-      {
-        key: "dependency",
-        label: "Dependencies",
-        iconClass: "dependencies",
-        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
-      },
-      {
-        key: "iac",
-        label: "IaC",
-        iconClass: "iac",
-        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>',
-      },
-      {
-        key: "secrets",
-        label: "Secrets",
-        iconClass: "secrets",
-        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
-      },
-    ];
+  const categories = [
+    {
+      key: "security",
+      label: "Security",
+      iconClass: "security",
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    },
+    {
+      key: "dependency",
+      label: "Dependencies",
+      iconClass: "dependencies",
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
+    },
+    {
+      key: "iac",
+      label: "IaC",
+      iconClass: "iac",
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>',
+    },
+    {
+      key: "secrets",
+      label: "Secrets",
+      iconClass: "secrets",
+      icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    },
+  ];
 
-    for (const cat of categories) {
-      const count = data.byCategory[cat.key] || 0;
+  for (const cat of categories) {
+    const count = data.byCategory[cat.key] || 0;
+    html +=
+      '<div class="category-card">' +
+      '<div class="category-card__icon category-card__icon--' +
+      cat.iconClass +
+      '">' +
+      cat.icon +
+      "</div>" +
+      '<div class="category-card__count">' +
+      count +
+      "</div>" +
+      '<div class="category-card__label">' +
+      cat.label +
+      "</div></div>";
+  }
+
+  html += "</div></div>";
+  return html;
+}
+
+function renderFindingsTrendChart(data) {
+  if (data.findingsTrend.length === 0) return "";
+  let html = '<div class="metrics-section glass-card">';
+  html += '<div class="metrics-section__title">Findings Trend</div>';
+  let maxVal = Math.max(
+    1,
+    ...data.findingsTrend.map(function (d) {
+      return d.critical + d.high + d.medium + d.low;
+    }),
+  );
+  html += '<div class="trend-chart">';
+  for (const point of data.findingsTrend) {
+    let cH = (point.critical / maxVal) * 100;
+    let hH = (point.high / maxVal) * 100;
+    let mH = (point.medium / maxVal) * 100;
+    let lH = (point.low / maxVal) * 100;
+    html += '<div class="trend-chart__bar-group">';
+    if (point.low > 0)
       html +=
-        '<div class="category-card">' +
-        '<div class="category-card__icon category-card__icon--' +
-        cat.iconClass +
-        '">' +
-        cat.icon +
-        "</div>" +
-        '<div class="category-card__count">' +
-        count +
-        "</div>" +
-        '<div class="category-card__label">' +
-        cat.label +
-        "</div></div>";
-    }
-
-    html += "</div></div>";
+        '<div class="trend-chart__bar trend-chart__bar--low" style="height:' + lH + '%"></div>';
+    if (point.medium > 0)
+      html +=
+        '<div class="trend-chart__bar trend-chart__bar--medium" style="height:' + mH + '%"></div>';
+    if (point.high > 0)
+      html +=
+        '<div class="trend-chart__bar trend-chart__bar--high" style="height:' + hH + '%"></div>';
+    if (point.critical > 0)
+      html +=
+        '<div class="trend-chart__bar trend-chart__bar--critical" style="height:' +
+        cH +
+        '%"></div>';
+    html += '<span class="trend-chart__label">' + escapeHtml(point.date.slice(5)) + "</span>";
+    html += "</div>";
   }
+  html += "</div></div>";
+  return html;
+}
 
-  // Findings trend chart
-  if (data.findingsTrend.length > 0) {
-    html += '<div class="metrics-section glass-card">';
-    html += '<div class="metrics-section__title">Findings Trend</div>';
-    let maxVal = Math.max(
-      1,
-      ...data.findingsTrend.map(function (d) {
-        return d.critical + d.high + d.medium + d.low;
+function renderIssuesFilterSection(data) {
+  if (data.topIssues.length === 0) return "";
+
+  // Extract unique severities and tools for filter dropdowns
+  let severities = [
+    ...new Set(
+      data.topIssues.map(function (i) {
+        return i.severity;
       }),
-    );
-    html += '<div class="trend-chart">';
-    for (const point of data.findingsTrend) {
-      let cH = (point.critical / maxVal) * 100;
-      let hH = (point.high / maxVal) * 100;
-      let mH = (point.medium / maxVal) * 100;
-      let lH = (point.low / maxVal) * 100;
-      html += '<div class="trend-chart__bar-group">';
-      if (point.low > 0)
-        html +=
-          '<div class="trend-chart__bar trend-chart__bar--low" style="height:' + lH + '%"></div>';
-      if (point.medium > 0)
-        html +=
-          '<div class="trend-chart__bar trend-chart__bar--medium" style="height:' +
-          mH +
-          '%"></div>';
-      if (point.high > 0)
-        html +=
-          '<div class="trend-chart__bar trend-chart__bar--high" style="height:' + hH + '%"></div>';
-      if (point.critical > 0)
-        html +=
-          '<div class="trend-chart__bar trend-chart__bar--critical" style="height:' +
-          cH +
-          '%"></div>';
-      html += '<span class="trend-chart__label">' + escapeHtml(point.date.slice(5)) + "</span>";
-      html += "</div>";
-    }
-    html += "</div></div>";
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+  let tools = [
+    ...new Set(
+      data.topIssues.map(function (i) {
+        return i.tool;
+      }),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+
+  let html = '<div class="metrics-section glass-card">';
+  html += '<div class="metrics-section__title">All Issues (' + data.topIssues.length + ")</div>";
+
+  // Filter toolbar
+  html += '<div class="filter-toolbar">';
+  html += '<div class="filter-group">';
+  html += '<label class="filter-label">Severity</label>';
+  html += '<select id="issues-sev-filter" class="filter-select" data-action="filterIssues">';
+  html += '<option value="">All</option>';
+  for (const sev of severities) {
+    html += '<option value="' + escapeHtml(sev) + '">' + escapeHtml(sev) + "</option>";
+  }
+  html += "</select></div>";
+  html += '<div class="filter-group">';
+  html += '<label class="filter-label">Tool</label>';
+  html += '<select id="issues-tool-filter" class="filter-select" data-action="filterIssues">';
+  html += '<option value="">All</option>';
+  for (const tool of tools) {
+    html += '<option value="' + escapeHtml(tool) + '">' + escapeHtml(tool) + "</option>";
+  }
+  html += "</select></div></div>";
+
+  html += '<div id="issues-table-wrap"></div>';
+  html += '<div id="issues-pagination" class="pagination"></div>';
+  html += "</div>";
+
+  // Store data for filtering/pagination
+  _state.issuesData = data.topIssues;
+  _state.issuesPage = 1;
+  setTimeout(function () {
+    filterIssuesTable();
+  }, 0);
+
+  return html;
+}
+
+function renderScanHistorySection(data) {
+  if (data.scanHistory.length === 0) return "";
+
+  let sortedScans = data.scanHistory.slice().sort(function (a, b) {
+    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+  });
+
+  let html = '<div class="metrics-section glass-card">';
+  html += '<div class="metrics-section__title">Scan History (' + sortedScans.length + ")</div>";
+  html += '<div id="scan-history-table-wrap"></div>';
+  html += '<div id="scan-history-pagination" class="pagination"></div>';
+  html += "</div>";
+
+  _state.scanHistoryData = sortedScans;
+  _state.scanHistoryPage = 1;
+  setTimeout(function () {
+    renderScanHistoryPage();
+  }, 0);
+
+  return html;
+}
+
+function renderSecurity(data) {
+  if (data.totalScans === 0) {
+    return renderMetricsEmpty("No scans yet", "Run a security scan to see findings here.");
   }
 
-  // All issues table with pagination and filtering
-  if (data.topIssues.length > 0) {
-    // Extract unique severities and tools for filter dropdowns
-    let severities = [
-      ...new Set(
-        data.topIssues.map(function (i) {
-          return i.severity;
-        }),
-      ),
-    ].sort((a, b) => a.localeCompare(b));
-    let tools = [
-      ...new Set(
-        data.topIssues.map(function (i) {
-          return i.tool;
-        }),
-      ),
-    ].sort((a, b) => a.localeCompare(b));
-
-    html += '<div class="metrics-section glass-card">';
-    html += '<div class="metrics-section__title">All Issues (' + data.topIssues.length + ")</div>";
-
-    // Filter toolbar
-    html += '<div class="filter-toolbar">';
-    html += '<div class="filter-group">';
-    html += '<label class="filter-label">Severity</label>';
-    html += '<select id="issues-sev-filter" class="filter-select" data-action="filterIssues">';
-    html += '<option value="">All</option>';
-    for (const sev of severities) {
-      html += '<option value="' + escapeHtml(sev) + '">' + escapeHtml(sev) + "</option>";
-    }
-    html += "</select></div>";
-    html += '<div class="filter-group">';
-    html += '<label class="filter-label">Tool</label>';
-    html += '<select id="issues-tool-filter" class="filter-select" data-action="filterIssues">';
-    html += '<option value="">All</option>';
-    for (const tool of tools) {
-      html += '<option value="' + escapeHtml(tool) + '">' + escapeHtml(tool) + "</option>";
-    }
-    html += "</select></div></div>";
-
-    html += '<div id="issues-table-wrap"></div>';
-    html += '<div id="issues-pagination" class="pagination"></div>';
-    html += "</div>";
-
-    // Store data globally for filtering/pagination
-    _state.issuesData = data.topIssues;
-    _state.issuesPage = 1;
-    setTimeout(function () {
-      filterIssuesTable();
-    }, 0);
-  }
-
-  // Scan history with pagination (sorted by time, newest first)
-  if (data.scanHistory.length > 0) {
-    let sortedScans = data.scanHistory.slice().sort(function (a, b) {
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    });
-
-    html += '<div class="metrics-section glass-card">';
-    html += '<div class="metrics-section__title">Scan History (' + sortedScans.length + ")</div>";
-    html += '<div id="scan-history-table-wrap"></div>';
-    html += '<div id="scan-history-pagination" class="pagination"></div>';
-    html += "</div>";
-
-    _state.scanHistoryData = sortedScans;
-    _state.scanHistoryPage = 1;
-    setTimeout(function () {
-      renderScanHistoryPage();
-    }, 0);
-  }
+  let html = renderSecurityStatCards(data);
+  html += renderSeverityDistribution(data);
+  html += renderCategoryBreakdown(data);
+  html += renderFindingsTrendChart(data);
+  html += renderIssuesFilterSection(data);
+  html += renderScanHistorySection(data);
 
   return html;
 }
@@ -1322,23 +1346,15 @@ async function loadAudit() {
   }
 }
 
-function renderAudit(data) {
-  if (data.totalEntries === 0) {
-    return renderMetricsEmpty(
-      "No audit entries",
-      "Execute DojOps commands to populate the audit trail.",
-    );
-  }
+// ── Audit helper renderers (extracted to reduce cognitive complexity) ──
 
-  let html = "";
-
-  // Chain integrity badge
+function renderChainIntegrityBadge(data) {
   let valid = data.chainIntegrity.valid;
   let badgeClass = valid ? "integrity-badge--valid" : "integrity-badge--invalid";
   let badgeIcon = valid
     ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
     : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-  html +=
+  return (
     '<div class="integrity-badge ' +
     badgeClass +
     '">' +
@@ -1354,10 +1370,12 @@ function renderAudit(data) {
     " entries, " +
     data.chainIntegrity.errors +
     " error(s)</div>" +
-    "</div></div>";
+    "</div></div>"
+  );
+}
 
-  // Status breakdown
-  html += '<div class="status-breakdown">';
+function renderAuditStatusBreakdown(data) {
+  let html = '<div class="status-breakdown">';
   html +=
     '<div class="status-breakdown__item"><span class="status-breakdown__count status-breakdown__count--success">' +
     data.byStatus.success +
@@ -1371,9 +1389,11 @@ function renderAudit(data) {
     data.byStatus.cancelled +
     '</span><span class="status-breakdown__label">Cancelled</span></div>';
   html += "</div>";
+  return html;
+}
 
-  // Integrity detail
-  html +=
+function renderIntegrityDetail(data) {
+  return (
     '<div class="integrity-detail">' +
     '<div class="integrity-detail__item">' +
     '<span class="integrity-detail__label">Entries:</span>' +
@@ -1396,60 +1416,78 @@ function renderAudit(data) {
         escapeHtml(data.chainIntegrity.latestHash) +
         "</span></div>"
       : "") +
-    "</div>";
+    "</div>"
+  );
+}
 
-  // Command distribution
-  if (data.byCommand.length > 0) {
-    html += '<div class="metrics-section glass-card">';
-    html += '<div class="metrics-section__title">Command Distribution</div>';
+function renderCommandDistribution(data) {
+  if (data.byCommand.length === 0) return "";
+  let html = '<div class="metrics-section glass-card">';
+  html += '<div class="metrics-section__title">Command Distribution</div>';
+  html +=
+    '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
+  for (const item of data.byCommand) {
     html +=
-      '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
-    for (const item of data.byCommand) {
-      html +=
-        '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
-        escapeHtml(item.command) +
-        '</code></td><td style="font-family:var(--font-mono)">' +
-        item.count +
-        "</td></tr>";
+      '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
+      escapeHtml(item.command) +
+      '</code></td><td style="font-family:var(--font-mono)">' +
+      item.count +
+      "</td></tr>";
+  }
+  html += "</tbody></table></div>";
+  return html;
+}
+
+function renderRecentAuditEntries(data) {
+  if (data.timeline.length === 0) return "";
+  let html = '<div class="metrics-section">';
+  html += '<div class="metrics-section__title">Recent Entries</div>';
+  html += '<div class="audit-entries-grid">';
+  let max = Math.min(data.timeline.length, 20);
+  for (let j = 0; j < max; j++) {
+    let entry = data.timeline[j];
+    let statusChip = statusToChip(entry.status);
+    let hashDisplay = entry.hash
+      ? '<span class="audit-entry-card__hash" title="' +
+        escapeHtml(entry.hash) +
+        '">' +
+        escapeHtml(entry.hash.slice(0, 12)) +
+        "...</span>"
+      : "";
+    html +=
+      '<div class="audit-entry-card" style="animation-delay:' +
+      j * 0.02 +
+      's">' +
+      '<span class="audit-entry-card__cmd">' +
+      escapeHtml(entry.command) +
+      "</span>" +
+      '<span class="audit-entry-card__action">' +
+      escapeHtml(entry.action) +
+      "</span>" +
+      statusChip +
+      hashDisplay +
+      "</div>";
+    if (j < max - 1 && entry.hash) {
+      html += '<div class="audit-entry-card__chain-arrow">&#x25BC;</div>';
     }
-    html += "</tbody></table></div>";
+  }
+  html += "</div></div>";
+  return html;
+}
+
+function renderAudit(data) {
+  if (data.totalEntries === 0) {
+    return renderMetricsEmpty(
+      "No audit entries",
+      "Execute DojOps commands to populate the audit trail.",
+    );
   }
 
-  // Recent entries with hash chain
-  if (data.timeline.length > 0) {
-    html += '<div class="metrics-section">';
-    html += '<div class="metrics-section__title">Recent Entries</div>';
-    html += '<div class="audit-entries-grid">';
-    let max = Math.min(data.timeline.length, 20);
-    for (let j = 0; j < max; j++) {
-      let entry = data.timeline[j];
-      let statusChip = statusToChip(entry.status);
-      let hashDisplay = entry.hash
-        ? '<span class="audit-entry-card__hash" title="' +
-          escapeHtml(entry.hash) +
-          '">' +
-          escapeHtml(entry.hash.slice(0, 12)) +
-          "...</span>"
-        : "";
-      html +=
-        '<div class="audit-entry-card" style="animation-delay:' +
-        j * 0.02 +
-        's">' +
-        '<span class="audit-entry-card__cmd">' +
-        escapeHtml(entry.command) +
-        "</span>" +
-        '<span class="audit-entry-card__action">' +
-        escapeHtml(entry.action) +
-        "</span>" +
-        statusChip +
-        hashDisplay +
-        "</div>";
-      if (j < max - 1 && entry.hash) {
-        html += '<div class="audit-entry-card__chain-arrow">&#x25BC;</div>';
-      }
-    }
-    html += "</div></div>";
-  }
+  let html = renderChainIntegrityBadge(data);
+  html += renderAuditStatusBreakdown(data);
+  html += renderIntegrityDetail(data);
+  html += renderCommandDistribution(data);
+  html += renderRecentAuditEntries(data);
 
   return html;
 }
@@ -1585,13 +1623,17 @@ function goScanHistoryPage(p) {
 
 // ── Shared pagination renderer ────────────────────────
 
+function pluralSuffix(count) {
+  return count === 1 ? "" : "s";
+}
+
 function renderPagination(currentPage, totalPages, totalItems, goFnName) {
   if (totalPages <= 1)
     return (
       '<span class="pagination__info">' +
       totalItems +
       " item" +
-      (totalItems !== 1 ? "s" : "") +
+      pluralSuffix(totalItems) +
       "</span>"
     );
 
@@ -1599,7 +1641,7 @@ function renderPagination(currentPage, totalPages, totalItems, goFnName) {
     '<span class="pagination__info">' +
     totalItems +
     " item" +
-    (totalItems !== 1 ? "s" : "") +
+    pluralSuffix(totalItems) +
     " &middot; Page " +
     currentPage +
     " of " +
@@ -1857,4 +1899,4 @@ document.addEventListener("change", function (e) {
   }
 });
 
-init();
+init().catch(console.error);

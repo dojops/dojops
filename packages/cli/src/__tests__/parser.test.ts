@@ -74,52 +74,19 @@ describe("parseGlobalOptions", () => {
 });
 
 describe("parseCommandPath", () => {
-  it("parses single command", () => {
-    const { command, positional } = parseCommandPath(["plan", "Create CI"]);
-    expect(command).toEqual(["plan"]);
-    expect(positional).toEqual(["Create CI"]);
-  });
-
-  it("parses nested command", () => {
-    const { command, positional } = parseCommandPath(["debug", "ci", "ERROR: tsc failed"]);
-    expect(command).toEqual(["debug", "ci"]);
-    expect(positional).toEqual(["ERROR: tsc failed"]);
-  });
-
-  it("parses analyze diff", () => {
-    const { command, positional } = parseCommandPath(["analyze", "diff", "terraform output"]);
-    expect(command).toEqual(["analyze", "diff"]);
-    expect(positional).toEqual(["terraform output"]);
-  });
-
-  it("returns empty command for unknown first arg", () => {
-    const { command, positional } = parseCommandPath(["Create a Terraform config"]);
-    expect(command).toEqual([]);
-    expect(positional).toEqual(["Create a Terraform config"]);
-  });
-
-  it("parses config profile subcommand", () => {
-    const { command, positional } = parseCommandPath(["config", "profile", "staging"]);
-    expect(command).toEqual(["config", "profile"]);
-    expect(positional).toEqual(["staging"]);
-  });
-
-  it("parses agents list", () => {
-    const { command, positional } = parseCommandPath(["agents", "list"]);
-    expect(command).toEqual(["agents", "list"]);
-    expect(positional).toEqual([]);
-  });
-
-  it("handles config show", () => {
-    const { command, positional } = parseCommandPath(["config", "show"]);
-    expect(command).toEqual(["config", "show"]);
-    expect(positional).toEqual([]);
-  });
-
-  it("parses tools load", () => {
-    const { command, positional } = parseCommandPath(["tools", "load"]);
-    expect(command).toEqual(["tools", "load"]);
-    expect(positional).toEqual([]);
+  it.each([
+    [["plan", "Create CI"], ["plan"], ["Create CI"]],
+    [["debug", "ci", "ERROR: tsc failed"], ["debug", "ci"], ["ERROR: tsc failed"]],
+    [["analyze", "diff", "terraform output"], ["analyze", "diff"], ["terraform output"]],
+    [["Create a Terraform config"], [], ["Create a Terraform config"]],
+    [["config", "profile", "staging"], ["config", "profile"], ["staging"]],
+    [["agents", "list"], ["agents", "list"], []],
+    [["config", "show"], ["config", "show"], []],
+    [["tools", "load"], ["tools", "load"], []],
+  ] as const)("parses %j correctly", (input, expectedCmd, expectedPos) => {
+    const { command, positional } = parseCommandPath([...input]);
+    expect(command).toEqual([...expectedCmd]);
+    expect(positional).toEqual([...expectedPos]);
   });
 });
 

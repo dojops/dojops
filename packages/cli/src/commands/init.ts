@@ -75,18 +75,28 @@ function appendIfNonEmpty(lines: string[], label: string, parts: string[]): void
   }
 }
 
-function formatScanSummary(ctx: RepoContext): string[] {
-  const lines: string[] = [];
-
-  if (ctx.languages.length > 0) {
-    const langs = ctx.languages.map((l) => `${l.name} (${l.indicator})`).join(", ");
-    lines.push(`${pc.cyan("Languages:")}     ${langs}`);
-    if (ctx.primaryLanguage) {
-      lines.push(`${pc.cyan("Primary:")}       ${ctx.primaryLanguage}`);
-    }
-  } else {
-    lines.push(`${pc.cyan("Languages:")}     ${pc.dim("none detected")}`);
+function formatLanguagesSummary(ctx: RepoContext): string[] {
+  if (ctx.languages.length === 0) {
+    return [`${pc.cyan("Languages:")}     ${pc.dim("none detected")}`];
   }
+  const langs = ctx.languages.map((l) => `${l.name} (${l.indicator})`).join(", ");
+  const lines = [`${pc.cyan("Languages:")}     ${langs}`];
+  if (ctx.primaryLanguage) lines.push(`${pc.cyan("Primary:")}       ${ctx.primaryLanguage}`);
+  return lines;
+}
+
+function collectScriptParts(ctx: RepoContext): string[] {
+  if (!ctx.scripts) return [];
+  const parts: string[] = [];
+  if (ctx.scripts.shellScripts.length > 0) parts.push(`${ctx.scripts.shellScripts.length} shell`);
+  if (ctx.scripts.pythonScripts.length > 0)
+    parts.push(`${ctx.scripts.pythonScripts.length} python`);
+  if (ctx.scripts.hasJustfile) parts.push("Justfile");
+  return parts;
+}
+
+function formatScanSummary(ctx: RepoContext): string[] {
+  const lines: string[] = [...formatLanguagesSummary(ctx)];
 
   if (ctx.packageManager) {
     const lockfileSuffix = ctx.packageManager.lockfile ? ` (${ctx.packageManager.lockfile})` : "";
@@ -101,20 +111,8 @@ function formatScanSummary(ctx: RepoContext): string[] {
   appendIfNonEmpty(lines, "Container:", collectContainerParts(ctx));
   appendIfNonEmpty(lines, "Infra:", collectInfraParts(ctx));
   appendIfNonEmpty(lines, "Monitoring:", collectMonitoringParts(ctx));
-
-  if (ctx.scripts) {
-    const scriptParts: string[] = [];
-    if (ctx.scripts.shellScripts.length > 0)
-      scriptParts.push(`${ctx.scripts.shellScripts.length} shell`);
-    if (ctx.scripts.pythonScripts.length > 0)
-      scriptParts.push(`${ctx.scripts.pythonScripts.length} python`);
-    if (ctx.scripts.hasJustfile) scriptParts.push("Justfile");
-    appendIfNonEmpty(lines, "Scripts:", scriptParts);
-  }
-
-  if (ctx.security) {
-    appendIfNonEmpty(lines, "Security:", collectSecurityParts(ctx));
-  }
+  appendIfNonEmpty(lines, "Scripts:", collectScriptParts(ctx));
+  if (ctx.security) appendIfNonEmpty(lines, "Security:", collectSecurityParts(ctx));
 
   if (ctx.devopsFiles && ctx.devopsFiles.length > 0) {
     lines.push(`${pc.cyan("DevOps files:")} ${ctx.devopsFiles.length} detected`);

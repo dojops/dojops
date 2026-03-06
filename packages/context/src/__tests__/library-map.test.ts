@@ -21,29 +21,17 @@ describe("library-map", () => {
   });
 
   describe("resolveLibraryQuery", () => {
-    it("resolves tool domain keywords", () => {
-      expect(resolveLibraryQuery("github-actions")).toBe("github actions");
-      expect(resolveLibraryQuery("terraform")).toBe("terraform");
-    });
-
-    it("resolves agent domain keywords", () => {
-      expect(resolveLibraryQuery("ci")).toBe("github actions");
-      expect(resolveLibraryQuery("monitoring")).toBe("prometheus");
-    });
-
-    it("is case-insensitive", () => {
-      expect(resolveLibraryQuery("Terraform")).toBe("terraform");
-      expect(resolveLibraryQuery("KUBERNETES")).toBe("kubernetes");
-    });
-
-    it("returns the keyword itself for unknown domains", () => {
-      expect(resolveLibraryQuery("react")).toBe("react");
-      expect(resolveLibraryQuery("unknown-tool")).toBe("unknown-tool");
-    });
-
-    it("prefers tool map over agent map", () => {
-      // "terraform" exists in both maps
-      expect(resolveLibraryQuery("terraform")).toBe("terraform");
+    it.each([
+      ["github-actions", "github actions"],
+      ["terraform", "terraform"],
+      ["ci", "github actions"],
+      ["monitoring", "prometheus"],
+      ["Terraform", "terraform"],
+      ["KUBERNETES", "kubernetes"],
+      ["react", "react"],
+      ["unknown-tool", "unknown-tool"],
+    ])("resolves %s to %s", (input, expected) => {
+      expect(resolveLibraryQuery(input)).toBe(expected);
     });
   });
 });

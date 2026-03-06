@@ -44,8 +44,7 @@ function collectContextBullets(ctx: RepoContext): string[] {
   const bullets: string[] = [];
   if (ctx.primaryLanguage) bullets.push(`- Primary language: ${ctx.primaryLanguage}`);
   if (ctx.packageManager) bullets.push(`- Package manager: ${ctx.packageManager.name}`);
-  bullets.push(...collectCIBullets(ctx));
-  bullets.push(...collectInfraBullets(ctx));
+  bullets.push(...collectCIBullets(ctx), ...collectInfraBullets(ctx));
   return bullets;
 }
 

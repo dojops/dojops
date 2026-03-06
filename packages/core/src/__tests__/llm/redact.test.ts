@@ -2,53 +2,71 @@ import { describe, it, expect } from "vitest";
 import { redactSecrets } from "../../llm/redact";
 
 describe("redactSecrets", () => {
-  it("redacts OpenAI sk- prefixed keys", () => {
-    const msg = "Error: Invalid API key sk-abcdefghijklmnopqrstuvwxyz1234";
-    const result = redactSecrets(msg);
-    expect(result).toContain("sk-***REDACTED***");
-    expect(result).not.toContain("abcdefghijklmnopqrstuvwxyz");
-  });
-
-  it("redacts OpenAI sk-proj- prefixed keys", () => {
-    const msg = "Key is sk-proj-AbCdEfGhIjKlMnOpQrStUvWx_12345678";
-    const result = redactSecrets(msg);
-    expect(result).toContain("***REDACTED***");
-    expect(result).not.toContain("AbCdEfGhIjKlMn");
-  });
-
-  it("redacts Gemini AIza keys", () => {
-    const msg = "API error with key AIzaSyA1234567890abcdefghijklmnopqrstuv";
-    const result = redactSecrets(msg);
-    expect(result).toContain("AIza***REDACTED***");
-    expect(result).not.toContain("SyA1234567890");
-  });
-
-  it("redacts Bearer tokens", () => {
-    const msg = "Token: Bearer sk-test-token-12345.abcdef was rejected";
-    const result = redactSecrets(msg);
-    expect(result).toContain("Bearer ***REDACTED***");
-    expect(result).not.toContain("sk-test-token");
-  });
-
-  it("redacts Authorization header values", () => {
-    const msg = "Header Authorization: my-secret-value";
-    const result = redactSecrets(msg);
-    expect(result).toContain("Authorization: ***REDACTED***");
-    expect(result).not.toContain("my-secret-value");
-  });
-
-  it("redacts x-api-key header values", () => {
-    const msg = "x-api-key: super-secret-key-12345";
-    const result = redactSecrets(msg);
-    expect(result).toContain("x-api-key: ***REDACTED***");
-    expect(result).not.toContain("super-secret-key");
-  });
-
-  it("redacts key embedded mid-sentence", () => {
-    const msg = "Failed to authenticate with sk-AAAABBBBCCCCDDDDEEEEFFFFGGGG to OpenAI";
-    const result = redactSecrets(msg);
-    expect(result).toContain("sk-***REDACTED***");
-    expect(result).not.toContain("AAAABBBB");
+  it.each([
+    [
+      "OpenAI sk-",
+      "Error: Invalid API key sk-abcdefghijklmnopqrstuvwxyz1234",
+      "sk-***REDACTED***",
+      "abcdefghijklmnopqrstuvwxyz",
+    ],
+    [
+      "OpenAI sk-proj-",
+      "Key is sk-proj-AbCdEfGhIjKlMnOpQrStUvWx_12345678",
+      "***REDACTED***",
+      "AbCdEfGhIjKlMn",
+    ],
+    [
+      "Gemini AIza",
+      "API error with key AIzaSyA1234567890abcdefghijklmnopqrstuv",
+      "AIza***REDACTED***",
+      "SyA1234567890",
+    ],
+    [
+      "Bearer token",
+      "Token: Bearer sk-test-token-12345.abcdef was rejected",
+      "Bearer ***REDACTED***",
+      "sk-test-token",
+    ],
+    [
+      "Authorization header",
+      "Header Authorization: my-secret-value",
+      "Authorization: ***REDACTED***",
+      "my-secret-value",
+    ],
+    [
+      "x-api-key header",
+      "x-api-key: super-secret-key-12345",
+      "x-api-key: ***REDACTED***",
+      "super-secret-key",
+    ],
+    [
+      "key mid-sentence",
+      "Failed to authenticate with sk-AAAABBBBCCCCDDDDEEEEFFFFGGGG to OpenAI",
+      "sk-***REDACTED***",
+      "AAAABBBB",
+    ],
+    [
+      "claude- prefix",
+      "Model claude-sonnet-4-5-20250929-abcdef not found",
+      "claude-***REDACTED***",
+      "sonnet-4-5",
+    ],
+    [
+      "Anthropic sk-ant-",
+      "Error: Invalid key sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+      "sk-ant-***REDACTED***",
+      "AbCdEfGhIjKlMn",
+    ],
+    [
+      "DeepSeek ds-",
+      "Failed auth with key ds-AbCdEfGhIjKlMnOpQrStUvWxYz",
+      "ds-***REDACTED***",
+      "AbCdEfGhIjKlMn",
+    ],
+  ])("redacts %s keys", (_label, input, shouldContain, shouldNotContain) => {
+    const result = redactSecrets(input);
+    expect(result).toContain(shouldContain);
+    expect(result).not.toContain(shouldNotContain);
   });
 
   it("returns plain messages unchanged", () => {
@@ -66,25 +84,5 @@ describe("redactSecrets", () => {
     expect(result).toContain("sk-***REDACTED***");
     expect(result).toContain("AIza***REDACTED***");
     expect(result).not.toContain("key1abcdef");
-  });
-
-  it("redacts claude- prefixed strings (model names in errors)", () => {
-    const msg = "Model claude-sonnet-4-5-20250929-abcdef not found";
-    const result = redactSecrets(msg);
-    expect(result).toContain("claude-***REDACTED***");
-  });
-
-  it("redacts Anthropic sk-ant- prefixed keys", () => {
-    const msg = "Error: Invalid key sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789";
-    const result = redactSecrets(msg);
-    expect(result).toContain("sk-ant-***REDACTED***");
-    expect(result).not.toContain("AbCdEfGhIjKlMn");
-  });
-
-  it("redacts DeepSeek ds- prefixed keys", () => {
-    const msg = "Failed auth with key ds-AbCdEfGhIjKlMnOpQrStUvWxYz";
-    const result = redactSecrets(msg);
-    expect(result).toContain("ds-***REDACTED***");
-    expect(result).not.toContain("AbCdEfGhIjKlMn");
   });
 });

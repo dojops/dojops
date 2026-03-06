@@ -2,43 +2,18 @@ import { describe, it, expect } from "vitest";
 import { sanitizeUserInput, wrapAsData, sanitizeSystemPrompt } from "../../llm/sanitizer";
 
 describe("sanitizeUserInput", () => {
-  it("strips Unicode direction-override characters", () => {
-    expect(sanitizeUserInput("hello\u202Eworld")).toBe("helloworld");
-  });
-
-  it("strips bidi marks", () => {
-    expect(sanitizeUserInput("left\u200Eright\u200Fend")).toBe("leftrightend");
-  });
-
-  it("strips zero-width characters", () => {
-    expect(sanitizeUserInput("a\u200Bb\u200Cc\u200Dd\uFEFFe")).toBe("abcde");
-  });
-
-  it("strips multiple bidi override chars (U+2066-U+2069)", () => {
-    expect(sanitizeUserInput("\u2066\u2067\u2068\u2069text")).toBe("text");
-  });
-
-  it("strips all U+202A-U+202E chars", () => {
-    expect(sanitizeUserInput("\u202A\u202B\u202C\u202D\u202Etext")).toBe("text");
-  });
-
-  it("returns empty string unchanged", () => {
-    expect(sanitizeUserInput("")).toBe("");
-  });
-
-  it("returns normal ASCII unchanged", () => {
-    const input = "Create a Terraform config for S3";
-    expect(sanitizeUserInput(input)).toBe(input);
-  });
-
-  it("preserves legitimate Unicode (CJK, accents, emoji)", () => {
-    const input = "Deploy to région パリ 🚀";
-    expect(sanitizeUserInput(input)).toBe(input);
-  });
-
-  it("strips mixed legitimate + direction-override chars", () => {
-    const input = "hello\u202E inject \u200B world";
-    expect(sanitizeUserInput(input)).toBe("hello inject  world");
+  it.each([
+    ["direction-override", "hello\u202Eworld", "helloworld"],
+    ["bidi marks", "left\u200Eright\u200Fend", "leftrightend"],
+    ["zero-width chars", "a\u200Bb\u200Cc\u200Dd\uFEFFe", "abcde"],
+    ["U+2066-U+2069", "\u2066\u2067\u2068\u2069text", "text"],
+    ["U+202A-U+202E", "\u202A\u202B\u202C\u202D\u202Etext", "text"],
+    ["empty string", "", ""],
+    ["normal ASCII", "Create a Terraform config for S3", "Create a Terraform config for S3"],
+    ["legitimate Unicode", "Deploy to région パリ 🚀", "Deploy to région パリ 🚀"],
+    ["mixed chars", "hello\u202E inject \u200B world", "hello inject  world"],
+  ])("strips %s correctly", (_label, input, expected) => {
+    expect(sanitizeUserInput(input)).toBe(expected);
   });
 });
 

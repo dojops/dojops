@@ -103,68 +103,67 @@ function parseThresholdValue(stripped: string): number | undefined {
   return Number.isNaN(val) ? undefined : val;
 }
 
+type SectionType = "thresholds" | "ignore" | "none";
+
+function detectSection(stripped: string): SectionType | null {
+  if (stripped === "thresholds:") return "thresholds";
+  if (stripped === "ignore:") return "ignore";
+  if (!stripped.startsWith(" ") && !stripped.startsWith("-") && stripped.endsWith(":"))
+    return "none";
+  return null;
+}
+
+function parseThresholdLine(stripped: string, thresholds: ScanPolicyThresholds): void {
+  if (stripped.startsWith("critical:")) {
+    const val = parseThresholdValue(stripped);
+    if (val !== undefined) thresholds.critical = val;
+  } else if (stripped.startsWith("high:")) {
+    const val = parseThresholdValue(stripped);
+    if (val !== undefined) thresholds.high = val;
+  }
+}
+
+function parseIgnoreLine(
+  stripped: string,
+  currentEntry: Partial<ScanPolicyIgnoreEntry> | null,
+  ignoreList: ScanPolicyIgnoreEntry[],
+): Partial<ScanPolicyIgnoreEntry> | null {
+  if (stripped.startsWith("- id:")) {
+    if (currentEntry?.id) ignoreList.push(currentEntry as ScanPolicyIgnoreEntry);
+    return { id: stripQuotes(stripped.slice(5)) };
+  }
+  if (stripped.startsWith("reason:") && currentEntry) {
+    currentEntry.reason = stripQuotes(stripped.slice(7));
+  }
+  return currentEntry;
+}
+
 function parseScanPolicyYaml(content: string): ScanPolicy {
   const policy: ScanPolicy = {};
-  const lines = content.split("\n");
-  let inThresholds = false;
-  let inIgnore = false;
+  let section: SectionType = "none";
   let currentIgnoreEntry: Partial<ScanPolicyIgnoreEntry> | null = null;
 
-  for (const raw of lines) {
-    const stripped = raw.trimEnd().trim();
-
+  for (const raw of content.split("\n")) {
+    const stripped = raw.trim();
     if (!stripped || stripped.startsWith("#")) continue;
 
-    // Detect top-level section switches
-    if (stripped === "thresholds:") {
-      inThresholds = true;
-      inIgnore = false;
-      policy.thresholds = {};
-      continue;
-    }
-    if (stripped === "ignore:") {
-      inIgnore = true;
-      inThresholds = false;
-      policy.ignore = [];
+    const detected = detectSection(stripped);
+    if (detected !== null) {
+      if (detected === "thresholds") policy.thresholds = {};
+      if (detected === "ignore") policy.ignore = [];
+      section = detected;
       continue;
     }
 
-    // Unknown top-level key resets context (must be checked before section parsing)
-    if (!stripped.startsWith(" ") && !stripped.startsWith("-") && stripped.endsWith(":")) {
-      inThresholds = false;
-      inIgnore = false;
-      continue;
-    }
-
-    if (inThresholds) {
-      if (stripped.startsWith("critical:")) {
-        const val = parseThresholdValue(stripped);
-        if (val !== undefined) policy.thresholds!.critical = val;
-      } else if (stripped.startsWith("high:")) {
-        const val = parseThresholdValue(stripped);
-        if (val !== undefined) policy.thresholds!.high = val;
-      }
-      continue;
-    }
-
-    if (inIgnore) {
-      if (stripped.startsWith("- id:")) {
-        if (currentIgnoreEntry?.id) {
-          policy.ignore!.push(currentIgnoreEntry as ScanPolicyIgnoreEntry);
-        }
-        currentIgnoreEntry = { id: stripQuotes(stripped.slice(5)) };
-      } else if (stripped.startsWith("reason:") && currentIgnoreEntry) {
-        currentIgnoreEntry.reason = stripQuotes(stripped.slice(7));
-      }
+    if (section === "thresholds") {
+      parseThresholdLine(stripped, policy.thresholds!);
+    } else if (section === "ignore") {
+      currentIgnoreEntry = parseIgnoreLine(stripped, currentIgnoreEntry, policy.ignore!);
     }
   }
 
-  // Push last ignore entry
-  if (currentIgnoreEntry?.id && inIgnore) {
-    policy.ignore!.push({
-      id: currentIgnoreEntry.id,
-      reason: currentIgnoreEntry.reason ?? "",
-    });
+  if (currentIgnoreEntry?.id && section === "ignore") {
+    policy.ignore!.push({ id: currentIgnoreEntry.id, reason: currentIgnoreEntry.reason ?? "" });
   }
 
   return policy;

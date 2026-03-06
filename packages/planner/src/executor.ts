@@ -61,10 +61,7 @@ function resolveInputRefs(
   return resolved;
 }
 
-function topologicalSort(tasks: TaskNode[]): TaskNode[] {
-  const taskMap = new Map(tasks.map((t) => [t.id, t]));
-
-  // Validate all dependsOn references point to existing task IDs
+function validateDependencies(tasks: TaskNode[], taskMap: Map<string, TaskNode>): void {
   for (const task of tasks) {
     for (const dep of task.dependsOn) {
       if (!taskMap.has(dep)) {
@@ -72,10 +69,14 @@ function topologicalSort(tasks: TaskNode[]): TaskNode[] {
       }
     }
   }
+}
 
+function buildGraphMaps(tasks: TaskNode[]): {
+  inDegree: Map<string, number>;
+  adjacency: Map<string, string[]>;
+} {
   const inDegree = new Map<string, number>();
   const adjacency = new Map<string, string[]>();
-
   for (const task of tasks) {
     inDegree.set(task.id, task.dependsOn.length);
     for (const dep of task.dependsOn) {
@@ -84,6 +85,14 @@ function topologicalSort(tasks: TaskNode[]): TaskNode[] {
       adjacency.set(dep, existing);
     }
   }
+  return { inDegree, adjacency };
+}
+
+function topologicalSort(tasks: TaskNode[]): TaskNode[] {
+  const taskMap = new Map(tasks.map((t) => [t.id, t]));
+  validateDependencies(tasks, taskMap);
+
+  const { inDegree, adjacency } = buildGraphMaps(tasks);
 
   const queue: string[] = [];
   for (const [id, degree] of inDegree) {
@@ -213,8 +222,24 @@ export class PlannerExecutor {
     }
   }
 
+  private advanceReadyTasks(
+    wave: string[],
+    dependants: Map<string, string[]>,
+    inDegree: Map<string, number>,
+    processed: Set<string>,
+    ready: Set<string>,
+  ): void {
+    for (const completedId of wave) {
+      for (const dep of dependants.get(completedId) ?? []) {
+        if (processed.has(dep)) continue;
+        const newDegree = (inDegree.get(dep) ?? 1) - 1;
+        inDegree.set(dep, newDegree);
+        if (newDegree === 0) ready.add(dep);
+      }
+    }
+  }
+
   async execute(graph: TaskGraph, options?: PlannerExecuteOptions): Promise<PlannerResult> {
-    // Validate graph first (topologicalSort checks for cycles/bad refs)
     topologicalSort(graph.tasks);
 
     const taskMap = new Map(graph.tasks.map((t) => [t.id, t]));
@@ -223,20 +248,8 @@ export class PlannerExecutor {
     const completedTaskIds = options?.completedTaskIds ?? new Set<string>();
     const maxConcurrency = options?.maxConcurrency ?? 3;
 
-    // Build in-degree map for wave-based parallel execution
-    const inDegree = new Map<string, number>();
-    const dependants = new Map<string, string[]>();
+    const { inDegree, adjacency: dependants } = buildGraphMaps(graph.tasks);
 
-    for (const task of graph.tasks) {
-      inDegree.set(task.id, task.dependsOn.length);
-      for (const dep of task.dependsOn) {
-        const existing = dependants.get(dep) ?? [];
-        existing.push(task.id);
-        dependants.set(dep, existing);
-      }
-    }
-
-    // Collect tasks that are ready (in-degree == 0)
     const ready = new Set<string>();
     for (const [id, degree] of inDegree) {
       if (degree === 0) ready.add(id);
@@ -245,7 +258,6 @@ export class PlannerExecutor {
     const processed = new Set<string>();
 
     while (ready.size > 0) {
-      // Execute all ready tasks in parallel
       const wave = [...ready];
       ready.clear();
 
@@ -255,22 +267,13 @@ export class PlannerExecutor {
         await this.executeTask(task, completedTaskIds, failed, results);
       });
 
-      // Warn when a wave has mixed success/failure (A10/A30)
       if (wave.some((id) => failed.has(id)) && wave.some((id) => !failed.has(id))) {
         console.warn(
           `[planner] Wave completed with mixed results — some tasks failed while others succeeded. Manual review recommended.`,
         );
       }
 
-      // After wave completes, find newly ready tasks
-      for (const completedId of wave) {
-        for (const dep of dependants.get(completedId) ?? []) {
-          if (processed.has(dep)) continue;
-          const newDegree = (inDegree.get(dep) ?? 1) - 1;
-          inDegree.set(dep, newDegree);
-          if (newDegree === 0) ready.add(dep);
-        }
-      }
+      this.advanceReadyTasks(wave, dependants, inDegree, processed, ready);
     }
 
     const allResults = Array.from(results.values());

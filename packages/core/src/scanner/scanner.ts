@@ -966,25 +966,32 @@ function readSortedEntries(dir: string): fs.Dirent[] {
   }
 }
 
+interface TreeEntryContext {
+  dir: string;
+  prefix: string;
+  connector: string;
+  childPrefix: string;
+  depth: number;
+  maxDepth: number;
+  lines: string[];
+}
+
 /** Process a single directory entry and add it to the tree lines. */
-function processTreeEntry(
-  entry: fs.Dirent,
-  dir: string,
-  prefix: string,
-  connector: string,
-  childPrefix: string,
-  depth: number,
-  maxDepth: number,
-  lines: string[],
-): void {
+function processTreeEntry(entry: fs.Dirent, ctx: TreeEntryContext): void {
   if (entry.isDirectory()) {
     if (isSkippedDir(entry)) return;
-    lines.push(`${prefix}${connector}${entry.name}/`);
-    if (depth < maxDepth) {
-      walkTree(path.join(dir, entry.name), `${prefix}${childPrefix}`, depth + 1, maxDepth, lines);
+    ctx.lines.push(`${ctx.prefix}${ctx.connector}${entry.name}/`);
+    if (ctx.depth < ctx.maxDepth) {
+      walkTree(
+        path.join(ctx.dir, entry.name),
+        `${ctx.prefix}${ctx.childPrefix}`,
+        ctx.depth + 1,
+        ctx.maxDepth,
+        ctx.lines,
+      );
     }
   } else {
-    lines.push(`${prefix}${connector}${entry.name}`);
+    ctx.lines.push(`${ctx.prefix}${ctx.connector}${entry.name}`);
   }
 }
 
@@ -1007,7 +1014,7 @@ function walkTree(
     const isLast = i === entries.length - 1;
     const connector = isLast ? "└── " : "├── ";
     const childPrefix = isLast ? "    " : "│   ";
-    processTreeEntry(entries[i], dir, prefix, connector, childPrefix, depth, maxDepth, lines);
+    processTreeEntry(entries[i], { dir, prefix, connector, childPrefix, depth, maxDepth, lines });
   }
 }
 

@@ -8,48 +8,20 @@ function expectRisk(tool: string, description: string, expected: "LOW" | "MEDIUM
 }
 
 describe("classifyPlanRisk", () => {
-  it("returns LOW for GitHub Actions CI job", () => {
-    expectRisk("github-actions", "Create CI pipeline for Node.js app", "LOW");
-  });
-
-  it("returns LOW for Makefile generation", () => {
-    expectRisk("makefile", "Create Makefile for build automation", "LOW");
-  });
-
-  it("returns LOW for Prometheus config", () => {
-    expectRisk("prometheus", "Create alerting rules", "LOW");
-  });
-
-  it("returns MEDIUM for Dockerfile modification", () => {
-    expectRisk("dockerfile", "Create multi-stage Dockerfile", "MEDIUM");
-  });
-
-  it("returns MEDIUM for Terraform without high-risk keywords", () => {
-    expectRisk("terraform", "Create S3 bucket", "MEDIUM");
-  });
-
-  it("returns MEDIUM for Kubernetes deployment", () => {
-    expectRisk("kubernetes", "Deploy application", "MEDIUM");
-  });
-
-  it("returns HIGH for IAM policy task", () => {
-    expectRisk("terraform", "Create IAM policy for S3 access", "HIGH");
-  });
-
-  it("returns HIGH for security group modifications", () => {
-    expectRisk("terraform", "Update security group rules", "HIGH");
-  });
-
-  it("returns HIGH for production deployment", () => {
-    expectRisk("kubernetes", "Deploy to production cluster", "HIGH");
-  });
-
-  it("returns HIGH for secret management", () => {
-    expectRisk("ansible", "Configure secret rotation", "HIGH");
-  });
-
-  it("returns HIGH for RBAC configuration", () => {
-    expectRisk("kubernetes", "Set up RBAC for service accounts", "HIGH");
+  it.each([
+    ["github-actions", "Create CI pipeline for Node.js app", "LOW"],
+    ["makefile", "Create Makefile for build automation", "LOW"],
+    ["prometheus", "Create alerting rules", "LOW"],
+    ["dockerfile", "Create multi-stage Dockerfile", "MEDIUM"],
+    ["terraform", "Create S3 bucket", "MEDIUM"],
+    ["kubernetes", "Deploy application", "MEDIUM"],
+    ["terraform", "Create IAM policy for S3 access", "HIGH"],
+    ["terraform", "Update security group rules", "HIGH"],
+    ["kubernetes", "Deploy to production cluster", "HIGH"],
+    ["ansible", "Configure secret rotation", "HIGH"],
+    ["kubernetes", "Set up RBAC for service accounts", "HIGH"],
+  ] as const)("returns %s risk for %s (%s)", (tool, description, expected) => {
+    expectRisk(tool, description, expected);
   });
 
   it("returns highest risk when mixed tasks", () => {

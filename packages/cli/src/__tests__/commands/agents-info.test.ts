@@ -102,64 +102,26 @@ function makeCtx(output = "table"): CLIContext {
   };
 }
 
+async function expectAgentFound(input: string, expectedAgent: string): Promise<void> {
+  await agentsCommand(["info", input], makeCtx());
+  const { note } = await import("@clack/prompts");
+  expect(note).toHaveBeenCalledWith(expect.stringContaining(expectedAgent), expect.any(String));
+}
+
 describe("agents info — partial name matching", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("finds agent by exact name", async () => {
-    await agentsCommand(["info", "terraform-specialist"], makeCtx());
-    // Should not throw — note() is called with agent info
-    const { note } = await import("@clack/prompts");
-    expect(note).toHaveBeenCalledWith(
-      expect.stringContaining("terraform-specialist"),
-      expect.stringContaining("terraform-specialist"),
-    );
-  });
-
-  it("finds agent by exact name case-insensitively", async () => {
-    await agentsCommand(["info", "Terraform-Specialist"], makeCtx());
-    const { note } = await import("@clack/prompts");
-    expect(note).toHaveBeenCalledWith(
-      expect.stringContaining("terraform-specialist"),
-      expect.any(String),
-    );
-  });
-
-  it("finds agent by prefix (terraform → terraform-specialist)", async () => {
-    await agentsCommand(["info", "terraform"], makeCtx());
-    const { note } = await import("@clack/prompts");
-    expect(note).toHaveBeenCalledWith(
-      expect.stringContaining("terraform-specialist"),
-      expect.any(String),
-    );
-  });
-
-  it("finds agent by prefix (docker → docker-specialist)", async () => {
-    await agentsCommand(["info", "docker"], makeCtx());
-    const { note } = await import("@clack/prompts");
-    expect(note).toHaveBeenCalledWith(
-      expect.stringContaining("docker-specialist"),
-      expect.any(String),
-    );
-  });
-
-  it("finds agent by segment match (security → security-auditor)", async () => {
-    await agentsCommand(["info", "security"], makeCtx());
-    const { note } = await import("@clack/prompts");
-    expect(note).toHaveBeenCalledWith(
-      expect.stringContaining("security-auditor"),
-      expect.any(String),
-    );
-  });
-
-  it("finds agent by segment match (cloud → cloud-architect)", async () => {
-    await agentsCommand(["info", "cloud"], makeCtx());
-    const { note } = await import("@clack/prompts");
-    expect(note).toHaveBeenCalledWith(
-      expect.stringContaining("cloud-architect"),
-      expect.any(String),
-    );
+  it.each([
+    ["terraform-specialist", "terraform-specialist"],
+    ["Terraform-Specialist", "terraform-specialist"],
+    ["terraform", "terraform-specialist"],
+    ["docker", "docker-specialist"],
+    ["security", "security-auditor"],
+    ["cloud", "cloud-architect"],
+  ])("finds agent by input '%s' → %s", async (input, expected) => {
+    await expectAgentFound(input, expected);
   });
 
   it("suggests close matches when agent not found by substring", async () => {
