@@ -22,6 +22,8 @@ import {
 
 export const TOOLCHAIN_DIR = path.join(os.homedir(), ".dojops", "toolchain");
 export const TOOLCHAIN_BIN_DIR = path.join(TOOLCHAIN_DIR, "bin");
+export const TOOLCHAIN_NODE_MODULES = path.join(TOOLCHAIN_DIR, "node_modules");
+export const TOOLCHAIN_NPM_BIN = path.join(TOOLCHAIN_NODE_MODULES, ".bin");
 export const REGISTRY_FILE = path.join(TOOLCHAIN_DIR, "registry.json");
 
 // Legacy paths for auto-migration
@@ -87,8 +89,10 @@ export function saveToolchainRegistry(registry: ToolRegistry): void {
  */
 export function prependToolchainBinToPath(): void {
   const currentPath = process.env.PATH ?? "";
-  if (!currentPath.includes(TOOLCHAIN_BIN_DIR)) {
-    process.env.PATH = `${TOOLCHAIN_BIN_DIR}${path.delimiter}${currentPath}`;
+  const dirs = [TOOLCHAIN_BIN_DIR, TOOLCHAIN_NPM_BIN];
+  const toAdd = dirs.filter((d) => !currentPath.includes(d));
+  if (toAdd.length > 0) {
+    process.env.PATH = `${toAdd.join(path.delimiter)}${path.delimiter}${currentPath}`;
   }
 }
 
@@ -474,6 +478,13 @@ export function cleanAllToolchain(): { removed: string[] } {
   const venvsDir = path.join(TOOLCHAIN_DIR, "venvs");
   try {
     fs.rmSync(venvsDir, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+
+  // Remove sandboxed npm node_modules
+  try {
+    fs.rmSync(TOOLCHAIN_NODE_MODULES, { recursive: true, force: true });
   } catch {
     /* ignore */
   }

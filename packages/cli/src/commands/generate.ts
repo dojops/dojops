@@ -1,10 +1,11 @@
 import * as fs from "node:fs";
+import * as path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
 import { sanitizeUserInput } from "@dojops/core";
 import { isDevOpsFile } from "@dojops/executor";
-import { createToolRegistry } from "@dojops/tool-registry";
+import { createToolRegistry, discoverUserDopsFiles } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -127,11 +128,34 @@ const MODULE_KEYWORDS: Record<string, string[]> = {
  * Auto-detect a module from the prompt based on keyword matching.
  * Returns the module name if a strong match is found, undefined otherwise.
  */
-function autoDetectModule(prompt: string): string | undefined {
+export function autoDetectModule(prompt: string): string | undefined {
   const lower = prompt.toLowerCase();
   for (const [moduleName, keywords] of Object.entries(MODULE_KEYWORDS)) {
     for (const kw of keywords) {
       if (lower.includes(kw)) return moduleName;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Auto-detect an installed (hub/custom) module by matching .dops filenames against the prompt.
+ * Only checks names not already covered by MODULE_KEYWORDS.
+ */
+export function autoDetectInstalledModule(
+  prompt: string,
+  projectRoot: string | undefined,
+): string | undefined {
+  const dopsFiles = discoverUserDopsFiles(projectRoot);
+  if (dopsFiles.length === 0) return undefined;
+
+  const lower = prompt.toLowerCase();
+  for (const entry of dopsFiles) {
+    const name = path.basename(entry.filePath, ".dops");
+    if (MODULE_KEYWORDS[name]) continue;
+    const lowerName = name.toLowerCase();
+    if (lower.includes(lowerName) || lower.includes(lowerName.replace(/-/g, " "))) {
+      return name;
     }
   }
   return undefined;
@@ -373,7 +397,10 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const { docAugmenter, context7Provider } = await initContext7();
   const projectContextStr = buildProjectContextString(projectRoot);
 
-  const toolName = ctx.globalOpts.tool ?? autoDetectModule(prompt);
+  const toolName =
+    ctx.globalOpts.tool ??
+    autoDetectModule(prompt) ??
+    autoDetectInstalledModule(prompt, projectRoot);
   if (toolName) {
     const toolCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
     const registry = createToolRegistry(provider, projectRoot, {

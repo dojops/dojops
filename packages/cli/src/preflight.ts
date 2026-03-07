@@ -17,6 +17,10 @@ import {
 import { toErrorMessage } from "./exit-codes";
 import {
   TOOLCHAIN_BIN_DIR,
+  TOOLCHAIN_DIR,
+  TOOLCHAIN_NODE_MODULES,
+  TOOLCHAIN_NPM_BIN,
+  ensureToolchainDir,
   loadToolchainRegistry,
   installSystemTool,
   verifyTool,
@@ -24,15 +28,17 @@ import {
 
 /**
  * Attempt to resolve a binary on PATH.
- * Checks ~/.dojops/tools/bin/ first (if it exists), then system PATH.
+ * Checks toolchain sandbox first (bin/ and node_modules/.bin/), then system PATH.
  * Returns the absolute path if found, undefined otherwise.
  */
 export function resolveBinary(name: string): string | undefined {
-  // Check sandbox first
-  if (fs.existsSync(TOOLCHAIN_BIN_DIR)) {
-    const sandboxPath = nodePath.join(TOOLCHAIN_BIN_DIR, name);
-    if (fs.existsSync(sandboxPath)) {
-      return sandboxPath;
+  // Check sandbox first (system tools bin, then npm bin)
+  for (const dir of [TOOLCHAIN_BIN_DIR, TOOLCHAIN_NPM_BIN]) {
+    if (fs.existsSync(dir)) {
+      const sandboxPath = nodePath.join(dir, name);
+      if (fs.existsSync(sandboxPath)) {
+        return sandboxPath;
+      }
     }
   }
 
@@ -51,13 +57,19 @@ export function resolveBinary(name: string): string | undefined {
 
 /**
  * Attempt to resolve a library-only (no binary) dependency.
- * Checks local node_modules first, then the npm global prefix.
+ * Checks local node_modules, then toolchain sandbox, then npm global prefix.
  */
 export function resolveModule(npmPackage: string): string | undefined {
   try {
     return require.resolve(npmPackage);
   } catch {
-    // Fall through to global check
+    // Fall through to sandbox / global check
+  }
+
+  // Check sandboxed toolchain node_modules
+  const sandboxPath = nodePath.join(TOOLCHAIN_NODE_MODULES, npmPackage);
+  if (fs.existsSync(sandboxPath)) {
+    return sandboxPath;
   }
 
   // Check npm global prefix (handles globally-installed library-only packages)
@@ -197,64 +209,21 @@ export function collectMissingToolsForDomains(domains: string[]): ToolDependency
 }
 
 /**
- * Check whether npm global installs need elevated permissions.
- * Returns true if the npm global prefix directory is not writable.
+ * Install an npm package into the sandboxed toolchain (~/.dojops/toolchain/).
+ * No elevated permissions required.
  */
-function needsSudo(): boolean {
-  try {
-    const prefix = (
-      runShellCmd("npm config get prefix", {
-        timeout: 5_000,
-        stdio: ["ignore", "pipe", "ignore"],
-        encoding: "utf-8",
-      }) as string
-    ).trim();
-    fs.accessSync(prefix, fs.constants.W_OK);
-    return false;
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Check whether sudo is available on the system.
- */
-function hasSudo(): boolean {
-  return !!resolveBinary("sudo");
-}
-
-/**
- * Install an npm package globally using sudo.
- */
-function npmInstallGlobalSudo(pkg: string): void {
-  runBin("sudo", ["npm", "install", "-g", pkg], {
+function npmInstallSandboxed(pkg: string): void {
+  ensureToolchainDir();
+  runBin("npm", ["install", "--prefix", TOOLCHAIN_DIR, pkg], {
     timeout: 120_000,
     stdio: "pipe",
   });
 }
 
-/**
- * Install an npm package globally without elevated permissions.
- */
-function npmInstallGlobal(pkg: string): void {
-  runBin("npm", ["install", "-g", pkg], {
-    timeout: 120_000,
-    stdio: "pipe",
-  });
-}
-
-/**
- * Interactively offer to install missing tool dependencies.
- * Respects non-interactive mode (skips prompt, only warns).
- * Detects permission issues and uses sudo when needed.
- * Returns the list of successfully installed package names.
- */
-/** Prompt user to select tools and resolve sudo requirements. Returns packages to install and whether to use sudo. */
-async function selectToolsForInstall(
-  missing: ToolDependency[],
-): Promise<{ selected: string[]; useSudo: boolean } | null> {
+/** Prompt user to select tools to install into the toolchain sandbox. */
+async function selectToolsForInstall(missing: ToolDependency[]): Promise<string[] | null> {
   const selected = await p.multiselect({
-    message: "Select tools to install globally:",
+    message: "Select tools to install into toolchain (~/.dojops/toolchain/):",
     options: missing.map((dep) => ({
       value: dep.npmPackage,
       label: dep.name,
@@ -265,36 +234,18 @@ async function selectToolsForInstall(
 
   if (p.isCancel(selected) || selected.length === 0) return null;
 
-  const useSudo = needsSudo();
-  if (useSudo && !hasSudo()) {
-    const cmds = selected.map((pkg) => `  sudo npm install -g ${pkg}`);
-    p.log.warn(
-      `Global npm directory requires elevated permissions.\nRun manually:\n${cmds.join("\n")}`,
-    );
-    return null;
-  }
-
-  if (useSudo) {
-    p.log.info(pc.dim("Elevated permissions required — using sudo for global install."));
-  }
-
-  return { selected, useSudo };
+  return selected;
 }
 
-/** Install a list of npm packages globally. Returns successfully installed package names. */
-function installNpmPackages(
-  packages: string[],
-  missing: ToolDependency[],
-  useSudo: boolean,
-): string[] {
+/** Install a list of npm packages into the toolchain sandbox. Returns successfully installed package names. */
+function installNpmPackages(packages: string[], missing: ToolDependency[]): string[] {
   const installed: string[] = [];
   for (const pkg of packages) {
     const dep = missing.find((d) => d.npmPackage === pkg)!;
-    const prefix = useSudo ? "sudo " : "";
     const s = p.spinner();
-    s.start(`Installing ${dep.name} (${prefix}npm install -g ${pkg})...`);
+    s.start(`Installing ${dep.name} into toolchain...`);
     try {
-      (useSudo ? npmInstallGlobalSudo : npmInstallGlobal)(pkg);
+      npmInstallSandboxed(pkg);
       s.stop(`${pc.green("\u2713")} ${dep.name} installed.`);
       installed.push(pkg);
     } catch (err) {
@@ -325,12 +276,12 @@ export async function offerToolInstall(options?: {
 
   if (options?.nonInteractive) return [];
 
-  const selection = await selectToolsForInstall(missing);
-  if (!selection) return [];
+  const selected = await selectToolsForInstall(missing);
+  if (!selected) return [];
 
-  const installed = installNpmPackages(selection.selected, missing, selection.useSudo);
+  const installed = installNpmPackages(selected, missing);
   if (installed.length > 0) {
-    p.log.success(`${installed.length} tool(s) installed.`);
+    p.log.success(`${installed.length} tool(s) installed to ~/.dojops/toolchain/.`);
   }
 
   return installed;

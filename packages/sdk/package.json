@@ -1,6 +1,6 @@
 {
   "name": "@dojops/sdk",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Base tool abstraction and Zod validation for DojOps DevOps agents",
   "license": "MIT",
   "repository": {

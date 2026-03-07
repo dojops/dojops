@@ -42,8 +42,10 @@ describe("getInstallCommand", () => {
     expect(getInstallCommand(shellcheck, "npx")).toBe("npx shellcheck");
   });
 
-  it("returns npm global install command", () => {
-    expect(getInstallCommand(shellcheck, "npm")).toBe("npm install -g shellcheck");
+  it("returns npm sandboxed install command", () => {
+    expect(getInstallCommand(shellcheck, "npm")).toBe(
+      "dojops init (installs shellcheck into ~/.dojops/toolchain/)",
+    );
   });
 
   it("returns pnpm global add command", () => {
@@ -52,7 +54,9 @@ describe("getInstallCommand", () => {
 
   it("handles scoped packages", () => {
     expect(getInstallCommand(opaWasm, "npx")).toBe("npx @open-policy-agent/opa-wasm");
-    expect(getInstallCommand(opaWasm, "npm")).toBe("npm install -g @open-policy-agent/opa-wasm");
+    expect(getInstallCommand(opaWasm, "npm")).toBe(
+      "dojops init (installs @open-policy-agent/opa-wasm into ~/.dojops/toolchain/)",
+    );
     expect(getInstallCommand(opaWasm, "pnpm")).toBe("pnpm add -g @open-policy-agent/opa-wasm");
   });
 });

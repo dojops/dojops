@@ -40,7 +40,7 @@ export type PackageRunner = "npx" | "npm" | "pnpm";
  * Returns the install/run command for a dependency using the given runner.
  *
  * - npx: `npx <package>`
- * - npm: `npm install -g <package>`
+ * - npm: `dojops init` (sandboxed install into ~/.dojops/toolchain/)
  * - pnpm: `pnpm add -g <package>`
  */
 export function getInstallCommand(dep: ToolDependency, runner: PackageRunner): string {
@@ -48,7 +48,7 @@ export function getInstallCommand(dep: ToolDependency, runner: PackageRunner): s
     case "npx":
       return `npx ${dep.npmPackage}`;
     case "npm":
-      return `npm install -g ${dep.npmPackage}`;
+      return `dojops init (installs ${dep.npmPackage} into ~/.dojops/toolchain/)`;
     case "pnpm":
       return `pnpm add -g ${dep.npmPackage}`;
   }

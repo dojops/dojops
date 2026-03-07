@@ -17,7 +17,11 @@ vi.mock("@clack/prompts", () => ({
 
 // Mock toolchain-sandbox for system tool tests
 vi.mock("../toolchain-sandbox", () => ({
+  TOOLCHAIN_DIR: "/mock/.dojops/toolchain",
   TOOLCHAIN_BIN_DIR: "/mock/.dojops/toolchain/bin",
+  TOOLCHAIN_NODE_MODULES: "/mock/.dojops/toolchain/node_modules",
+  TOOLCHAIN_NPM_BIN: "/mock/.dojops/toolchain/node_modules/.bin",
+  ensureToolchainDir: vi.fn(),
   loadToolchainRegistry: vi.fn(() => ({ tools: [], updatedAt: "" })),
   installSystemTool: vi.fn(),
   verifyTool: vi.fn(),

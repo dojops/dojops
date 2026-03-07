@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-03-07
+
+### Added
+
+- **Jenkinsfile Module**: New `jenkinsfile.dops` v2 built-in module for generating Jenkins declarative pipeline configurations. Added Jenkinsfile keyword routing in `MODULE_KEYWORDS` and canonical detection paths in the decomposer — total built-in modules: **13**
+- **Installed Module Auto-Detection**: Hub-installed and custom `.dops` modules (in `.dojops/tools/` or `.dojops/modules/`) are now automatically detected from natural language prompts. Previously, only the 13 built-in modules were keyword-matched; installed modules silently fell through to the generic agent router
+- **SonarCloud Integration**: Added `sonar-project.properties` for static analysis with SonarCloud. Quality Gate badge added to README
+- **Centralized `safe-exec` Modules**: New `safe-exec.ts` in `@dojops/runtime`, `@dojops/cli`, and `@dojops/tool-registry` — all OS command execution routed through `execFileSync` with array arguments (no shell injection). Single audit point for SonarCloud S4721 compliance
+- **Sandboxed npm Tool Dependencies**: `dojops init` now installs npm tool dependencies (shellcheck, pyright, snyk, dockerfilelint, yaml-lint, hcl2json, opa-wasm) into `~/.dojops/toolchain/` instead of globally via `npm install -g`. No elevated permissions required. Binary resolution checks both `toolchain/bin/` and `toolchain/node_modules/.bin/`
+
+### Changed
+
+- **Test Coverage**: 2140 → 2275 tests (+135 new tests covering SAST fixes, module detection, cognitive complexity refactors, and edge cases)
+
+### Fixed
+
+- **SAST / SonarCloud — Security Hotspots**
+  - Replaced all `child_process.execSync()` shell calls with `execFileSync()` array-argument form across runtime, CLI, scanner, and tool-registry packages — eliminates OS command injection vectors (S4721)
+  - Hardened OS command execution in scanner binaries (trivy, gitleaks, checkov, hadolint, shellcheck, semgrep) with strict argument arrays
+  - Replaced regex-based ReDoS guard in input sanitizer with iterative character scanning — prevents catastrophic backtracking (S5852)
+
+- **SAST / SonarCloud — Code Smells**
+  - Reduced cognitive complexity across 8 high-complexity functions: `history.ts` (list/show), `tools.ts` (publish/init wizard), `scanner/runner.ts`, `scan.ts` command, and `toolchain.ts` — extracted helper functions, simplified control flow
+  - Reduced code duplication from >5% to <3% across all packages by extracting shared patterns into utility functions
+  - Removed unused imports, variables, and dead code paths flagged by static analysis across all 11 packages
+  - Fixed inconsistent return types, missing `readonly` modifiers, and type narrowing issues
+
+- **SAST / SonarCloud — Bugs**
+  - Fixed null/undefined dereferences in agent loader, custom tool parser, and JSON Schema-to-Zod converter
+  - Fixed edge cases in session serializer, context injector, and memory module where missing properties caused runtime errors
+  - Fixed policy enforcement bypass when tool name contained path separators
+
+- **Ollama `stripCodeFences` Preamble Handling**: `stripCodeFences()` now correctly strips preamble text before code fences (e.g., "Here is the config:\n```yaml\n...") — previously only stripped the fence markers, leaving conversational preamble in generated output
+- **Ollama Schema Double-Encoding**: Fixed double JSON encoding of schema in Ollama provider's `format` parameter — schema was being stringified twice, causing Ollama to receive an escaped string instead of a JSON object
+- **Hub v2 Module Install**: `dojops modules install` now uses `parseDopsStringAny()` (version-detecting parser) instead of the v1-only `parseDopsString()` — v2 modules from the Hub are now correctly parsed and loaded
+- **Chat `/exit` Process Hang**: Chat session now calls `process.exit()` after `/exit` command to prevent the process from hanging due to Ollama HTTP keepalive connections holding the event loop open
+- **Tool → Module Terminology**: All user-facing CLI output strings updated from "tool" to "module" for consistency with the `.dops` module naming convention (internal TypeScript types unchanged)
+
 ## [1.0.6] - 2026-03-04
 
 ### Added
