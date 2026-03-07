@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Node 24 Compatibility**: Fixed `crypto.randomInt(2 ** 48)` off-by-one error in toolchain download temp file naming — Node 24 enforces `max <= 2^48 - 1`, which caused all system tool installations to fail with `ERR_OUT_OF_RANGE`
+
 - **SAST / SonarCloud — Security Hotspots**
   - Replaced all `child_process.execSync()` shell calls with `execFileSync()` array-argument form across runtime, CLI, scanner, and tool-registry packages — eliminates OS command injection vectors (S4721)
   - Hardened OS command execution in scanner binaries (trivy, gitleaks, checkov, hadolint, shellcheck, semgrep) with strict argument arrays
