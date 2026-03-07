@@ -19,6 +19,7 @@ export interface GlobalOptions {
   debug: boolean;
   quiet: boolean;
   noColor: boolean;
+  dryRun: boolean;
 }
 
 export interface CLIContext {
@@ -41,4 +42,5 @@ export const DEFAULT_GLOBAL_OPTIONS: GlobalOptions = {
   debug: false,
   quiet: false,
   noColor: false,
+  dryRun: false,
 };

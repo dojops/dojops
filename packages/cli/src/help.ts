@@ -59,6 +59,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--quiet")}            Suppress non-essential output`);
   console.log(`  ${pc.cyan("--agent=NAME")}       Force routing to a specific specialist agent`);
   console.log(`  ${pc.cyan("--timeout=<ms>")}     Global timeout for operations`);
+  console.log(`  ${pc.cyan("--dry-run")}          Preview changes without writing files`);
   console.log(`  ${pc.cyan("--no-color")}         Disable color output`);
   console.log(`  ${pc.cyan("--non-interactive")}  Disable interactive prompts`);
   console.log(`  ${pc.cyan("--help, -h")}         Show this help message`);
@@ -69,7 +70,6 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--skip-verify")}      Skip external config validation`);
   console.log();
   console.log(pc.bold("APPLY OPTIONS"));
-  console.log(`  ${pc.cyan("--dry-run")}              Preview changes without executing`);
   console.log(`  ${pc.cyan("--resume")}               Resume a partially-applied plan`);
   console.log(`  ${pc.cyan("--yes")}                  Auto-approve all executions`);
   console.log(
@@ -107,6 +107,11 @@ export function printHelp(): void {
   console.log(
     `  ${pc.cyan("--message=<text>")}   Single chat message (non-interactive) ${pc.dim("(alias: -m)")}`,
   );
+  console.log(`  ${pc.cyan("export [id]")}        Export session(s) as Markdown or JSON`);
+  console.log(
+    `  ${pc.cyan("  --format=<fmt>")}   Export format: markdown ${pc.dim("(default)")}, json`,
+  );
+  console.log(`  ${pc.cyan("  --output=<path>")}  Write to file instead of stdout`);
   console.log();
   console.log(pc.bold("SERVE OPTIONS"));
   console.log(`  ${pc.cyan("--port=N")}           API server port ${pc.dim("(default: 3000)")}`);
@@ -450,6 +455,11 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--token=KEY")}      Save API token for current provider`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(`  ${pc.cyan("show")}             Display current configuration`);
+      console.log(
+        `  ${pc.cyan("get <key>")}        Get a config value (e.g., defaultProvider, tokens.openai)`,
+      );
+      console.log(`  ${pc.cyan("set <key> <val>")}  Set a config value with validation`);
+      console.log(`  ${pc.cyan("validate")}         Validate config file integrity and values`);
       console.log(`  ${pc.cyan("profile create")}   Save current config as a named profile`);
       console.log(`  ${pc.cyan("profile use")}      Switch to a named profile`);
       console.log(`  ${pc.cyan("profile list")}     List all profiles`);
@@ -463,6 +473,9 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops config show`);
       console.log(`  ${pc.dim("$")} dojops config --provider=anthropic`);
       console.log(`  ${pc.dim("$")} dojops config --token=sk-...`);
+      console.log(`  ${pc.dim("$")} dojops config get defaultProvider`);
+      console.log(`  ${pc.dim("$")} dojops config set defaultModel gpt-4o`);
+      console.log(`  ${pc.dim("$")} dojops config validate`);
       console.log(`  ${pc.dim("$")} dojops config profile create staging`);
       console.log(`  ${pc.dim("$")} dojops config profile use staging`);
       console.log(`  ${pc.dim("$")} dojops config profile list`);
@@ -574,7 +587,12 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("dojops status")} — System health diagnostics`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} dojops status`);
+      console.log(`  ${pc.dim("$")} dojops status --fix`);
       console.log(`  ${pc.dim("$")} dojops doctor   ${pc.dim("(alias)")}`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(
+        `  ${pc.cyan("--fix")}   Auto-fix common issues (permissions, missing directories)`,
+      );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Runs diagnostic checks on your DojOps installation:`);
       console.log(`  - Node.js version (>= 18)`);
@@ -585,10 +603,14 @@ export function printCommandHelp(command: string): void {
       console.log(`  - Config file permissions`);
       console.log(`  - Agent tool dependencies (ShellCheck, Snyk, etc.)`);
       console.log();
+      console.log(`  With --fix, auto-remediates: creates .dojops/ directory, fixes config`);
+      console.log(`  permissions (0o600), ensures toolchain directory exists.`);
+      console.log();
       console.log(`  When missing tools are detected, offers to install them interactively.`);
       console.log(`  Use --non-interactive to skip the install prompt.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops status`);
+      console.log(`  ${pc.dim("$")} dojops status --fix`);
       console.log(`  ${pc.dim("$")} dojops status --output json`);
       console.log();
       break;

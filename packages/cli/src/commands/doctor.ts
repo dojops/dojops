@@ -10,8 +10,10 @@ import {
 import { CLIContext } from "../types";
 import { getConfigPath, resolveProvider, resolveOllamaHost } from "../config";
 import { ExitCode } from "../exit-codes";
+import { hasFlag } from "../parser";
 import {
   findProjectRoot,
+  initProject,
   loadContext,
   listPlans,
   listExecutions,
@@ -25,7 +27,7 @@ import {
   offerSystemToolInstall,
   SYSTEM_TOOL_DOMAINS,
 } from "../preflight";
-import { loadToolchainRegistry } from "../toolchain-sandbox";
+import { loadToolchainRegistry, ensureToolchainDir } from "../toolchain-sandbox";
 
 interface Check {
   name: string;
@@ -269,7 +271,51 @@ function formatChecks(checks: Check[]): string[] {
   });
 }
 
+/** Auto-fix issues that can be remediated without user intervention. */
+function autoFix(checks: Check[], ctx: CLIContext): number {
+  let fixed = 0;
+
+  // Fix: Create .dojops/ if missing
+  const initCheck = checks.find((c) => c.name === "Project initialized (.dojops/)");
+  if (initCheck?.status === "warn") {
+    try {
+      initProject(ctx.cwd);
+      initCheck.status = "pass";
+      initCheck.detail = `${ctx.cwd}/.dojops/ (created)`;
+      p.log.success(`Fixed: Created .dojops/ in ${ctx.cwd}`);
+      fixed++;
+    } catch {
+      // ignore — will remain as warning
+    }
+  }
+
+  // Fix: Config file permissions (should be 0o600)
+  const permCheck = checks.find((c) => c.name === "Config file permissions");
+  if (permCheck?.status === "warn") {
+    const configPath = getConfigPath();
+    try {
+      fs.chmodSync(configPath, 0o600); // NOSONAR
+      permCheck.status = "pass";
+      permCheck.detail = `${configPath} (600)`;
+      p.log.success(`Fixed: Set config permissions to 600`);
+      fixed++;
+    } catch {
+      // ignore — will remain as warning
+    }
+  }
+
+  // Fix: Ensure toolchain directory exists
+  try {
+    ensureToolchainDir();
+  } catch {
+    // ignore
+  }
+
+  return fixed;
+}
+
 export async function statusCommand(_args: string[], ctx: CLIContext): Promise<void> {
+  const fixMode = hasFlag(_args, "--fix");
   // Run all checks
   const { check: providerCheck, provider } = checkProvider(ctx);
   const { check: initCheck, root } = checkInitialization();
@@ -296,6 +342,16 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     ...checkSystemTools(projectDomains),
     ...checkProjectMetrics(root),
   );
+
+  // Auto-fix mode
+  if (fixMode) {
+    const fixCount = autoFix(checks, ctx);
+    if (fixCount > 0) {
+      p.log.success(`${fixCount} issue(s) auto-fixed.`);
+    } else {
+      p.log.info("No auto-fixable issues found.");
+    }
+  }
 
   // Output
   if (ctx.globalOpts.output === "json") {

@@ -299,9 +299,157 @@ async function offerAdditionalProvider(
   p.log.success(`Token saved for ${pc.bold(nextProvider as string)}.`);
 }
 
+function handleGetSubcommand(args: string[]): void {
+  const key = args[1];
+  if (!key) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Usage: dojops config get <key>");
+  }
+
+  const config = loadConfig();
+  const value = getNestedValue(config, key);
+
+  if (value === undefined) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Config key "${key}" is not set.`);
+  }
+
+  // Mask token values by default
+  if (key.startsWith("tokens.") && typeof value === "string") {
+    console.log(maskToken(value));
+  } else if (typeof value === "object") {
+    console.log(JSON.stringify(value, null, 2));
+  } else {
+    console.log(String(value));
+  }
+}
+
+function handleSetSubcommand(args: string[]): void {
+  const key = args[1];
+  const value = args.slice(2).join(" ");
+  if (!key || !value) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Usage: dojops config set <key> <value>");
+  }
+
+  const config = loadConfig();
+  setNestedValue(config, key, value);
+  saveConfig(config);
+  p.log.success(`Set ${pc.bold(key)} = ${key.startsWith("tokens.") ? maskToken(value) : value}`);
+}
+
+function handleValidateSubcommand(): void {
+  const configPath = getConfigPath();
+
+  if (!fs.existsSync(configPath)) {
+    p.log.error(`Config file not found: ${configPath}`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "No config file. Run: dojops config");
+  }
+
+  const issues: string[] = [];
+  const config = loadConfig();
+
+  // Check provider validity
+  if (config.defaultProvider && !VALID_PROVIDERS.includes(config.defaultProvider as never)) {
+    issues.push(`Invalid provider: "${config.defaultProvider}"`);
+  }
+
+  // Check temperature range
+  if (config.defaultTemperature != null) {
+    if (config.defaultTemperature < 0 || config.defaultTemperature > 2) {
+      issues.push(`Temperature out of range: ${config.defaultTemperature} (must be 0-2)`);
+    }
+  }
+
+  // Check Ollama host URL
+  if (config.ollamaHost) {
+    try {
+      const u = new URL(config.ollamaHost);
+      if (u.protocol !== "http:" && u.protocol !== "https:") {
+        issues.push(`Ollama host must use http:// or https://: "${config.ollamaHost}"`);
+      }
+    } catch {
+      issues.push(`Invalid Ollama host URL: "${config.ollamaHost}"`);
+    }
+  }
+
+  // Check file permissions
+  try {
+    const stat = fs.statSync(configPath);
+    const mode = (stat.mode & 0o777).toString(8);
+    if (mode !== "600") {
+      issues.push(`Insecure file permissions: ${mode} (should be 600)`);
+    }
+  } catch {
+    issues.push("Could not check file permissions");
+  }
+
+  if (issues.length > 0) {
+    for (const issue of issues) {
+      p.log.warn(`${pc.yellow("!")} ${issue}`);
+    }
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `${issues.length} validation issue(s) found.`);
+  }
+
+  p.log.success("Configuration is valid.");
+}
+
+function getNestedValue(obj: DojOpsConfig, dotPath: string): unknown {
+  const parts = dotPath.split(".");
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current == null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+function setNestedValue(obj: DojOpsConfig, dotPath: string, raw: string): void {
+  const parts = dotPath.split(".");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let current: any = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (current[parts[i]] == null || typeof current[parts[i]] !== "object") {
+      current[parts[i]] = {};
+    }
+    current = current[parts[i]];
+  }
+  const key = parts[parts.length - 1];
+
+  // Validate known keys
+  if (dotPath === "defaultProvider") {
+    validateProvider(raw);
+  }
+  if (dotPath === "defaultTemperature") {
+    const t = Number.parseFloat(raw);
+    if (!Number.isFinite(t) || t < 0 || t > 2) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, "Temperature must be between 0 and 2.");
+    }
+    current[key] = t;
+    return;
+  }
+  if (dotPath === "ollamaTlsRejectUnauthorized") {
+    current[key] = raw !== "false" && raw !== "0";
+    return;
+  }
+  current[key] = raw;
+}
+
 export async function configCommand(args: string[], ctx: CLIContext): Promise<void> {
   if (args[0] === "show") {
     handleShowSubcommand(ctx);
+    return;
+  }
+
+  if (args[0] === "get") {
+    handleGetSubcommand(args);
+    return;
+  }
+
+  if (args[0] === "set") {
+    handleSetSubcommand(args);
+    return;
+  }
+
+  if (args[0] === "validate") {
+    handleValidateSubcommand();
     return;
   }
 

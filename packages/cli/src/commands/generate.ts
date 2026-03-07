@@ -214,6 +214,11 @@ async function handleToolDirect(
 
   if (writePath) {
     validateWritePath(writePath, allowAllPaths);
+    if (ctx.globalOpts.dryRun) {
+      p.log.info(`${pc.yellow("[dry-run]")} Would write to ${pc.underline(writePath)}`);
+      outputFormatted(ctx.globalOpts.output, "module", toolName, content);
+      return;
+    }
     backupAndWrite(writePath, content, false);
     if (ctx.globalOpts.output === "json") {
       console.log(JSON.stringify({ module: toolName, content, written: writePath }));
@@ -372,6 +377,11 @@ function handleWriteOutput(
   agentName: string,
 ): void {
   validateWritePath(writePath, allowAllPaths);
+  if (ctx.globalOpts.dryRun) {
+    p.log.info(`${pc.yellow("[dry-run]")} Would write to ${pc.underline(writePath)}`);
+    outputFormatted(ctx.globalOpts.output, "agent", agentName, content);
+    return;
+  }
   backupAndWrite(writePath, content, ctx.globalOpts.verbose);
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify({ agent: agentName, content, written: writePath }));

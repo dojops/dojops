@@ -63,6 +63,7 @@ const BOOLEAN_FLAG_MAP: Record<string, keyof GlobalOptions> = {
   "--no-color": "noColor",
   "--raw": "raw",
   "--non-interactive": "nonInteractive",
+  "--dry-run": "dryRun",
 };
 
 /**
@@ -222,6 +223,9 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "repair",
     "publish",
     "search",
+    "get",
+    "set",
+    "export",
   ]);
 
   const command: string[] = [];

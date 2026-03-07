@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SonarCloud Integration**: Added `sonar-project.properties` for static analysis with SonarCloud. Quality Gate badge added to README
 - **Centralized `safe-exec` Modules**: New `safe-exec.ts` in `@dojops/runtime`, `@dojops/cli`, and `@dojops/tool-registry` — all OS command execution routed through `execFileSync` with array arguments (no shell injection). Single audit point for SonarCloud S4721 compliance
 - **Sandboxed npm Tool Dependencies**: `dojops init` now installs npm tool dependencies (shellcheck, pyright, snyk, dockerfilelint, yaml-lint, hcl2json, opa-wasm) into `~/.dojops/toolchain/` instead of globally via `npm install -g`. No elevated permissions required. Binary resolution checks both `toolchain/bin/` and `toolchain/node_modules/.bin/`
+- **Global `--dry-run` Flag**: Preview changes without writing files on `generate`, `plan`, and `apply` commands. Shows generated content and planned actions without side effects
+- **`doctor --fix` Auto-Remediation**: The `doctor`/`status` command now accepts `--fix` to auto-repair common issues — creates missing `.dojops/` directory, fixes config file permissions (0o600), and ensures toolchain directory exists
+- **Config `get`/`set`/`validate` Subcommands**: Granular config management — `config get <key>` reads any config value (with token masking), `config set <key> <value>` writes with validation, `config validate` checks file integrity, permissions, and value ranges
+- **`chat export` Command**: Export chat sessions as Markdown or JSON — `chat export [sessionId] [--format=json|markdown] [--output=file.md]`. Supports single session or bulk export
 
 ### Changed
 

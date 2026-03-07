@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
@@ -369,7 +370,80 @@ async function runInteractiveLoop(
   process.exit(ExitCode.SUCCESS);
 }
 
+function formatSessionAsMarkdown(session: ChatSessionState): string {
+  const lines: string[] = [];
+  lines.push(`# Chat Session: ${session.name ?? session.id}`);
+  lines.push("");
+  lines.push(`- **ID:** ${session.id}`);
+  lines.push(`- **Created:** ${session.createdAt}`);
+  lines.push(`- **Updated:** ${session.updatedAt}`);
+  lines.push(`- **Mode:** ${session.mode}`);
+  if (session.pinnedAgent) lines.push(`- **Agent:** ${session.pinnedAgent}`);
+  lines.push(`- **Messages:** ${session.metadata.messageCount}`);
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+
+  for (const msg of session.messages) {
+    const role =
+      msg.role === "user" ? "**You**" : msg.role === "assistant" ? "**Agent**" : "**System**";
+    const time = new Date(msg.timestamp).toLocaleString();
+    lines.push(`### ${role} — ${time}`);
+    lines.push("");
+    lines.push(msg.content);
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+async function chatExportCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const rootDir = findProjectRoot(ctx.cwd);
+  if (!rootDir) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      "No .dojops/ project found. Run `dojops init` first.",
+    );
+  }
+
+  const sessions = listChatSessions(rootDir);
+  if (sessions.length === 0) {
+    p.log.info("No chat sessions found.");
+    return;
+  }
+
+  const sessionId = args[1];
+  const format = extractFlagValue(args, "--format") ?? "markdown";
+  const outputPath = extractFlagValue(args, "--output");
+
+  const toExport = sessionId
+    ? sessions.filter((s) => s.id === sessionId || s.name === sessionId)
+    : sessions;
+
+  if (toExport.length === 0) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Session "${sessionId}" not found.`);
+  }
+
+  let content: string;
+  if (format === "json") {
+    content = JSON.stringify(toExport.length === 1 ? toExport[0] : toExport, null, 2);
+  } else {
+    content = toExport.map(formatSessionAsMarkdown).join("\n\n---\n\n");
+  }
+
+  if (outputPath) {
+    fs.writeFileSync(outputPath, content, "utf-8");
+    p.log.success(`Exported ${toExport.length} session(s) to ${pc.underline(outputPath)}`);
+  } else {
+    process.stdout.write(content);
+    if (!content.endsWith("\n")) process.stdout.write("\n");
+  }
+}
+
 export async function chatCommand(args: string[], ctx: CLIContext): Promise<void> {
+  if (args[0] === "export") {
+    return chatExportCommand(args, ctx);
+  }
+
   const sessionName = extractFlagValue(args, "--session");
   const resumeFlag = hasFlag(args, "--resume");
   const deterministic = hasFlag(args, "--deterministic");

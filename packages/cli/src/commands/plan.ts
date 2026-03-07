@@ -248,6 +248,14 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   enrichTasksWithMetadata(graph, registry);
   if (!isJson) displayTaskGraph(graph);
 
+  if (ctx.globalOpts.dryRun) {
+    if (!isJson) {
+      p.log.info(`${pc.yellow("[dry-run]")} Plan not saved — preview only.`);
+    }
+    outputPlanResult("dry-run", graph, ctx.globalOpts.output);
+    return;
+  }
+
   const { planId, root } = persistPlan(graph, registry, ctx, provider.name, skipVerify, isJson);
   const startTime = Date.now();
 
