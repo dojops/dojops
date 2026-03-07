@@ -127,7 +127,7 @@ async function loadContext7Providers(): Promise<{
     queryDocs(libraryId: string, query: string): Promise<string>;
   };
 }> {
-  if (process.env.DOJOPS_CONTEXT_ENABLED !== "true") return {};
+  if (process.env.DOJOPS_CONTEXT_ENABLED === "false") return {};
 
   try {
     const { createDocAugmenter, Context7Client } = await import("@dojops/context");

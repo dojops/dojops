@@ -27,7 +27,7 @@ async function initContext7(): Promise<{
   docAugmenter?: DocAugmenter;
   context7Provider?: Context7Provider;
 }> {
-  if (process.env.DOJOPS_CONTEXT_ENABLED !== "true") {
+  if (process.env.DOJOPS_CONTEXT_ENABLED === "false") {
     return {};
   }
   try {

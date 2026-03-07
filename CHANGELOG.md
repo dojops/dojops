@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Config `get`/`set`/`validate` Subcommands**: Granular config management — `config get <key>` reads any config value (with token masking), `config set <key> <value>` writes with validation, `config validate` checks file integrity, permissions, and value ranges
 - **`chat export` Command**: Export chat sessions as Markdown or JSON — `chat export [sessionId] [--format=json|markdown] [--output=file.md]`. Supports single session or bulk export
 - **Toolchain Install Retry with Context7**: When npm or system tool installation fails during `dojops init`, the CLI now retries automatically and queries Context7 for correct install instructions. If both attempts fail, displays manual installation guidance with Context7 hints when available
+- **Context7 Enabled by Default**: Context7 documentation augmentation is now enabled by default across `generate`, `chat`, `serve`, and toolchain install. Set `DOJOPS_CONTEXT_ENABLED=false` to opt out
 
 ### Changed
 

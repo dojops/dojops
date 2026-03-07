@@ -18,7 +18,7 @@ import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 
 async function loadDocAugmenter(): Promise<DocAugmenter | undefined> {
-  if (process.env.DOJOPS_CONTEXT_ENABLED !== "true") return undefined;
+  if (process.env.DOJOPS_CONTEXT_ENABLED === "false") return undefined;
   try {
     const { createDocAugmenter } = await import("@dojops/context");
     return createDocAugmenter({ apiKey: process.env.DOJOPS_CONTEXT7_API_KEY });
