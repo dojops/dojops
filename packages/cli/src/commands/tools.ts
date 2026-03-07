@@ -1121,9 +1121,15 @@ async function parseDownloadedModule(
   fileBuffer: Buffer,
 ): Promise<ReturnType<typeof parseDopsFileAny>> {
   try {
-    const { parseDopsString } = await import("@dojops/runtime");
-    return parseDopsString(fileBuffer.toString("utf-8"));
+    const { parseDopsStringAny, validateDopsModuleAny } = await import("@dojops/runtime");
+    const module = parseDopsStringAny(fileBuffer.toString("utf-8"));
+    const result = validateDopsModuleAny(module);
+    if (!result.valid) {
+      throw new Error(`Validation failed: ${(result.errors ?? []).join(", ")}`);
+    }
+    return module;
   } catch (err) {
+    if (err instanceof CLIError) throw err;
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
       `Downloaded file is not a valid .dops module: ${toErrorMessage(err)}`,

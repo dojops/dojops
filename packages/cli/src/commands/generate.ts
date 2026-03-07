@@ -106,6 +106,37 @@ function outputFormatted(
   }
 }
 
+/** Module name → prompt keywords for auto-detection. */
+const MODULE_KEYWORDS: Record<string, string[]> = {
+  jenkinsfile: ["jenkinsfile", "jenkins pipeline", "jenkins ci", "jenkins cd"],
+  "github-actions": ["github actions", "github workflow", "github ci"],
+  "gitlab-ci": ["gitlab ci", "gitlab pipeline", "gitlab-ci"],
+  terraform: ["terraform", "hcl", "infrastructure as code"],
+  kubernetes: ["kubernetes", "k8s", "kubectl"],
+  helm: ["helm chart", "helm"],
+  ansible: ["ansible", "playbook"],
+  "docker-compose": ["docker-compose", "docker compose", "compose file"],
+  dockerfile: ["dockerfile", "docker image", "docker build"],
+  nginx: ["nginx", "reverse proxy"],
+  prometheus: ["prometheus", "alerting rules", "prom"],
+  systemd: ["systemd", "service unit", "systemctl"],
+  makefile: ["makefile", "make target"],
+};
+
+/**
+ * Auto-detect a module from the prompt based on keyword matching.
+ * Returns the module name if a strong match is found, undefined otherwise.
+ */
+function autoDetectModule(prompt: string): string | undefined {
+  const lower = prompt.toLowerCase();
+  for (const [moduleName, keywords] of Object.entries(MODULE_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (lower.includes(kw)) return moduleName;
+    }
+  }
+  return undefined;
+}
+
 interface ToolDirectContext {
   provider: ReturnType<CLIContext["getProvider"]>;
   projectRoot: string | undefined;
@@ -140,7 +171,8 @@ async function handleToolDirect(
   }
 
   if (ctx.globalOpts.output !== "json") {
-    p.log.info(`Using module: ${pc.bold(toolName)} (forced via --module)`);
+    const reason = ctx.globalOpts.tool ? "forced via --module" : "auto-detected";
+    p.log.info(`Using module: ${pc.bold(toolName)} (${reason})`);
   }
 
   const structured = isStructuredOutput(ctx);
@@ -160,14 +192,14 @@ async function handleToolDirect(
     validateWritePath(writePath, allowAllPaths);
     backupAndWrite(writePath, content, false);
     if (ctx.globalOpts.output === "json") {
-      console.log(JSON.stringify({ tool: toolName, content, written: writePath }));
+      console.log(JSON.stringify({ module: toolName, content, written: writePath }));
     } else {
       p.log.success(`Written to ${pc.underline(writePath)}`);
     }
     return;
   }
 
-  outputFormatted(ctx.globalOpts.output, "tool", toolName, content);
+  outputFormatted(ctx.globalOpts.output, "module", toolName, content);
 }
 
 function resolveForcedAgent(
@@ -341,16 +373,18 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const { docAugmenter, context7Provider } = await initContext7();
   const projectContextStr = buildProjectContextString(projectRoot);
 
-  const toolName = ctx.globalOpts.tool;
+  const toolName = ctx.globalOpts.tool ?? autoDetectModule(prompt);
   if (toolName) {
-    await handleToolDirect(ctx, prompt, writePath, allowAllPaths, toolName, {
-      provider,
-      projectRoot,
-      docAugmenter,
-      context7Provider,
-      projectContextStr,
+    const toolCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
+    const registry = createToolRegistry(provider, projectRoot, {
+      docAugmenter: toolCtx.docAugmenter,
+      context7Provider: toolCtx.context7Provider,
+      projectContext: toolCtx.projectContextStr,
     });
-    return;
+    if (registry.get(toolName)) {
+      await handleToolDirect(ctx, prompt, writePath, allowAllPaths, toolName, toolCtx);
+      return;
+    }
   }
 
   const { router } = createRouter(provider, projectRoot, docAugmenter);

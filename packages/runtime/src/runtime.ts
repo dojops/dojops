@@ -368,10 +368,17 @@ export interface DopsRuntimeV2Options extends DopsRuntimeOptions {
 export function stripCodeFences(content: string): string {
   const trimmed = content.trim();
 
-  // Match ```<optional-lang>\n...\n``` or ~~~<optional-lang>\n...\n~~~
+  // Match ```<optional-lang>\n...\n``` or ~~~<optional-lang>\n...\n~~~ (anchored to start/end)
   const fenceMatch = /^(?:```|~~~)\w*\n([\s\S]*?)\n(?:```|~~~)$/.exec(trimmed);
   if (fenceMatch) {
     return fenceMatch[1];
+  }
+
+  // Ollama/local models often include preamble text before/after fenced code blocks.
+  // Extract the fenced block from anywhere in the output.
+  const innerMatch = /(?:```|~~~)\w*\n([\s\S]*?)\n(?:```|~~~)/.exec(trimmed);
+  if (innerMatch) {
+    return innerMatch[1];
   }
 
   return trimmed;

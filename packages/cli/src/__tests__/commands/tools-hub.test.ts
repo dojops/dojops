@@ -33,8 +33,9 @@ vi.mock("@dojops/runtime", () => ({
   parseDopsFile: vi.fn(),
   parseDopsFileAny: vi.fn(),
   parseDopsString: vi.fn(),
+  parseDopsStringAny: vi.fn(),
   validateDopsModule: vi.fn(),
-  validateDopsModuleAny: vi.fn(),
+  validateDopsModuleAny: vi.fn(() => ({ valid: true })),
 }));
 
 // Mock @dojops/tool-registry
@@ -54,7 +55,7 @@ const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 import { toolsPublishCommand, toolsInstallCommand, toolsSearchCommand } from "../../commands/tools";
-import { parseDopsFileAny, parseDopsString, validateDopsModuleAny } from "@dojops/runtime";
+import { parseDopsFileAny, parseDopsStringAny, validateDopsModuleAny } from "@dojops/runtime";
 import { CLIContext } from "../../types";
 import { CLIError } from "../../exit-codes";
 
@@ -346,7 +347,9 @@ describe("toolsInstallCommand", () => {
     setupInstallFsMocks();
     mockPackageInfoResponse("test-tool", "1.0.0");
     mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
-    vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
+    vi.mocked(parseDopsStringAny).mockReturnValue(
+      MOCK_MODULE as ReturnType<typeof parseDopsStringAny>,
+    );
 
     await toolsInstallCommand(["test-tool"], makeCtx());
 
@@ -409,7 +412,9 @@ describe("toolsInstallCommand", () => {
     setupInstallFsMocks();
     mockPackageInfoResponse("test-tool", "1.0.0");
     mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
-    vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
+    vi.mocked(parseDopsStringAny).mockReturnValue(
+      MOCK_MODULE as ReturnType<typeof parseDopsStringAny>,
+    );
 
     await toolsInstallCommand(["test-tool"], makeCtx());
 
@@ -422,7 +427,9 @@ describe("toolsInstallCommand", () => {
     mockPackageInfoResponse("test-tool", "1.0.0");
     // No x-checksum-sha256 header
     mockDownloadResponse(sampleArrayBuffer());
-    vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
+    vi.mocked(parseDopsStringAny).mockReturnValue(
+      MOCK_MODULE as ReturnType<typeof parseDopsStringAny>,
+    );
 
     await toolsInstallCommand(["test-tool"], makeCtx());
 
@@ -435,7 +442,9 @@ describe("toolsInstallCommand", () => {
     setupInstallFsMocks();
     // When --version is provided, it should skip the info fetch and go directly to download
     mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
-    vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
+    vi.mocked(parseDopsStringAny).mockReturnValue(
+      MOCK_MODULE as ReturnType<typeof parseDopsStringAny>,
+    );
 
     await toolsInstallCommand(["test-tool", "--version", "2.0.0"], makeCtx());
 
@@ -448,7 +457,9 @@ describe("toolsInstallCommand", () => {
     setupInstallFsMocks();
     mockPackageInfoResponse("test-tool", "1.0.0");
     mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
-    vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
+    vi.mocked(parseDopsStringAny).mockReturnValue(
+      MOCK_MODULE as ReturnType<typeof parseDopsStringAny>,
+    );
 
     await toolsInstallCommand(["test-tool", "--global"], makeCtx());
 
@@ -482,7 +493,7 @@ describe("toolsInstallCommand", () => {
       badHash,
     );
 
-    vi.mocked(parseDopsString).mockImplementation(() => {
+    vi.mocked(parseDopsStringAny).mockImplementation(() => {
       throw new Error("Invalid frontmatter");
     });
 

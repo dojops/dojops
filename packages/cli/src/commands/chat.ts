@@ -365,6 +365,8 @@ async function runInteractiveLoop(
   process.off("SIGINT", saveAndExit);
   saveChatSession(rootDir, session.getState());
   p.outro("Chat session ended.");
+  // Force exit — Ollama's axios keep-alive connections prevent natural shutdown
+  process.exit(ExitCode.SUCCESS);
 }
 
 export async function chatCommand(args: string[], ctx: CLIContext): Promise<void> {
