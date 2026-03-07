@@ -157,6 +157,14 @@ describe("maskToken", () => {
 
 // ── wrapForNote + internal wrapLine / stripAnsi (lines 103-152) ────
 
+function setColumns(value: number | undefined) {
+  Object.defineProperty(process.stdout, "columns", {
+    value,
+    writable: true,
+    configurable: true,
+  });
+}
+
 describe("wrapForNote", () => {
   let originalColumns: number | undefined;
 
@@ -165,20 +173,8 @@ describe("wrapForNote", () => {
   });
 
   afterEach(() => {
-    Object.defineProperty(process.stdout, "columns", {
-      value: originalColumns,
-      writable: true,
-      configurable: true,
-    });
+    setColumns(originalColumns);
   });
-
-  function setColumns(value: number | undefined) {
-    Object.defineProperty(process.stdout, "columns", {
-      value,
-      writable: true,
-      configurable: true,
-    });
-  }
 
   it("returns short text unchanged when it fits within maxWidth", () => {
     setColumns(80);
@@ -202,7 +198,7 @@ describe("wrapForNote", () => {
     const lines = result.split("\n");
     expect(lines.length).toBeGreaterThan(1);
     // Every word should still be present
-    expect(result.replace(/\n/g, " ")).toContain("word");
+    expect(result.replaceAll("\n", " ")).toContain("word");
   });
 
   it("preserves leading indentation on continuation lines", () => {
@@ -286,7 +282,7 @@ describe("wrapForNote", () => {
     // The first and last lines are short, middle line gets wrapped
     expect(lines.length).toBeGreaterThan(3);
     expect(lines[0]).toBe("short");
-    expect(lines[lines.length - 1]).toBe("also short");
+    expect(lines.at(-1)).toBe("also short");
   });
 
   it("handles lines with only whitespace", () => {

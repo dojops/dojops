@@ -15,26 +15,30 @@ export interface JSONSchemaObject {
   pattern?: string;
 }
 
-/** @internal exported for testing */
-export function hasNestedQuantifiers(pattern: string): boolean {
+function isQuantifier(ch: string): boolean {
+  return ch === "+" || ch === "*" || ch === "{";
+}
+
+function hasAdjacentQuantifiers(pattern: string): boolean {
   for (let i = 1; i < pattern.length; i++) {
     const prev = pattern[i - 1];
     const cur = pattern[i];
-    if (
-      (prev === "+" || prev === "*" || prev === "}") &&
-      (cur === "+" || cur === "*" || cur === "{")
-    ) {
+    if ((prev === "+" || prev === "*" || prev === "}") && isQuantifier(cur)) {
       return true;
     }
     if (
       i >= 2 &&
-      pattern[i - 1] === "?" &&
+      prev === "?" &&
       (pattern[i - 2] === "+" || pattern[i - 2] === "*") &&
-      (cur === "+" || cur === "*" || cur === "{")
+      isQuantifier(cur)
     ) {
       return true;
     }
   }
+  return false;
+}
+
+function hasGroupQuantifierNesting(pattern: string): boolean {
   let depth = 0;
   let groupHasQuantifier = false;
   for (let i = 0; i < pattern.length; i++) {
@@ -42,9 +46,8 @@ export function hasNestedQuantifiers(pattern: string): boolean {
       depth++;
       groupHasQuantifier = false;
     } else if (pattern[i] === ")" && pattern[i - 1] !== "\\") {
-      if (groupHasQuantifier && i + 1 < pattern.length) {
-        const next = pattern[i + 1];
-        if (next === "+" || next === "*" || next === "{") return true;
+      if (groupHasQuantifier && i + 1 < pattern.length && isQuantifier(pattern[i + 1])) {
+        return true;
       }
       depth--;
     } else if (depth > 0 && (pattern[i] === "+" || pattern[i] === "*")) {
@@ -52,6 +55,11 @@ export function hasNestedQuantifiers(pattern: string): boolean {
     }
   }
   return false;
+}
+
+/** @internal exported for testing */
+export function hasNestedQuantifiers(pattern: string): boolean {
+  return hasAdjacentQuantifiers(pattern) || hasGroupQuantifierNesting(pattern);
 }
 
 /** @internal exported for testing */

@@ -347,9 +347,7 @@ describe("config", () => {
         mode: 0o600,
       });
       // Verify activeProfile was removed from the written JSON
-      const writtenData = JSON.parse(
-        (fs.writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1],
-      );
+      const writtenData = JSON.parse(vi.mocked(fs.writeFileSync).mock.calls[0][1] as string);
       expect(writtenData.activeProfile).toBeUndefined();
     });
 
@@ -441,9 +439,7 @@ describe("config", () => {
         recursive: true,
         mode: 0o700,
       });
-      const writtenData = JSON.parse(
-        (fs.writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1],
-      );
+      const writtenData = JSON.parse(vi.mocked(fs.writeFileSync).mock.calls[0][1] as string);
       expect(writtenData.activeProfile).toBe("staging");
     });
 
@@ -454,9 +450,7 @@ describe("config", () => {
 
       setActiveProfile("dev");
 
-      const writtenData = JSON.parse(
-        (fs.writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1],
-      );
+      const writtenData = JSON.parse(vi.mocked(fs.writeFileSync).mock.calls[0][1] as string);
       expect(writtenData.activeProfile).toBe("dev");
       expect(writtenData.someField).toBe("value");
     });
@@ -468,9 +462,7 @@ describe("config", () => {
 
       setActiveProfile(undefined);
 
-      const writtenData = JSON.parse(
-        (fs.writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1],
-      );
+      const writtenData = JSON.parse(vi.mocked(fs.writeFileSync).mock.calls[0][1] as string);
       expect(writtenData.activeProfile).toBeUndefined();
     });
 
