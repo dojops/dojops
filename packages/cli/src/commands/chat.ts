@@ -370,28 +370,28 @@ async function runInteractiveLoop(
   process.exit(ExitCode.SUCCESS);
 }
 
+function getRoleLabel(role: string): string {
+  if (role === "user") return "**You**";
+  if (role === "assistant") return "**Agent**";
+  return "**System**";
+}
+
 function formatSessionAsMarkdown(session: ChatSessionState): string {
-  const lines: string[] = [];
-  lines.push(`# Chat Session: ${session.name ?? session.id}`);
-  lines.push("");
-  lines.push(`- **ID:** ${session.id}`);
-  lines.push(`- **Created:** ${session.createdAt}`);
-  lines.push(`- **Updated:** ${session.updatedAt}`);
-  lines.push(`- **Mode:** ${session.mode}`);
+  const lines: string[] = [
+    `# Chat Session: ${session.name ?? session.id}`,
+    "",
+    `- **ID:** ${session.id}`,
+    `- **Created:** ${session.createdAt}`,
+    `- **Updated:** ${session.updatedAt}`,
+    `- **Mode:** ${session.mode}`,
+  ];
   if (session.pinnedAgent) lines.push(`- **Agent:** ${session.pinnedAgent}`);
-  lines.push(`- **Messages:** ${session.metadata.messageCount}`);
-  lines.push("");
-  lines.push("---");
-  lines.push("");
+  lines.push(`- **Messages:** ${session.metadata.messageCount}`, "", "---", "");
 
   for (const msg of session.messages) {
-    const role =
-      msg.role === "user" ? "**You**" : msg.role === "assistant" ? "**Agent**" : "**System**";
+    const role = getRoleLabel(msg.role);
     const time = new Date(msg.timestamp).toLocaleString();
-    lines.push(`### ${role} — ${time}`);
-    lines.push("");
-    lines.push(msg.content);
-    lines.push("");
+    lines.push(`### ${role} — ${time}`, "", msg.content, "");
   }
   return lines.join("\n");
 }

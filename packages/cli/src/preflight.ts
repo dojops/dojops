@@ -304,7 +304,7 @@ async function installNpmPackages(
     for (const { dep, hint } of manualInstall) {
       const lines = [
         `  ${pc.bold(dep.name)} (${dep.npmPackage})`,
-        `    ${pc.dim(`npm install -g ${dep.npmPackage}`)}`,
+        `    ${pc.dim("npm install -g " + dep.npmPackage)}`,
       ];
       if (hint) {
         lines.push(`    ${pc.dim("Context7 hint:")} ${pc.dim(hint.split("\n")[0])}`);
@@ -403,6 +403,66 @@ export function collectMissingSystemToolsForDomains(domains: string[]): typeof S
  * Interactively offer to install missing system tools into the sandbox.
  * Returns the list of successfully installed tool names.
  */
+async function selectSystemToolsToInstall(
+  missing: typeof SYSTEM_TOOLS,
+  options?: { autoInstallAll?: boolean },
+): Promise<string[] | null> {
+  if (options?.autoInstallAll) {
+    return missing.map((t) => t.name);
+  }
+
+  const picked = await p.multiselect({
+    message: "Select system tools to install into toolchain (~/.dojops/toolchain/):",
+    options: missing.map((tool) => ({
+      value: tool.name,
+      label: tool.name,
+      hint: tool.description,
+    })),
+    required: false,
+  });
+
+  if (p.isCancel(picked) || picked.length === 0) {
+    return null;
+  }
+  return picked;
+}
+
+async function installSystemToolWithRetry(
+  name: string,
+): Promise<{ success: true } | { success: false; hint?: string }> {
+  const tool = findSystemTool(name)!;
+  const s = p.spinner();
+  s.start(`Installing ${tool.name}...`);
+
+  try {
+    const result = await installSystemTool(tool);
+    s.stop(`${pc.green("\u2713")} ${tool.name} v${result.version} installed.`);
+    const versionOutput = verifyTool(tool);
+    if (versionOutput) p.log.info(pc.dim(versionOutput));
+    return { success: true };
+  } catch {
+    s.stop(`${pc.yellow("!")} ${tool.name} failed — retrying...`);
+  }
+
+  const [retryResult, hint] = await Promise.allSettled([
+    installSystemTool(tool),
+    lookupInstallHint(tool.name),
+  ]);
+
+  if (retryResult.status === "fulfilled") {
+    p.log.success(
+      `${pc.green("\u2713")} ${tool.name} v${retryResult.value.version} installed on retry.`,
+    );
+    const versionOutput = verifyTool(tool);
+    if (versionOutput) p.log.info(pc.dim(versionOutput));
+    return { success: true };
+  }
+
+  p.log.error(`${pc.red("\u2717")} ${tool.name} could not be installed.`);
+  const installHint = hint.status === "fulfilled" ? hint.value : undefined;
+  return { success: false, hint: installHint };
+}
+
 export async function offerSystemToolInstall(options?: {
   nonInteractive?: boolean;
   domains?: string[];
@@ -417,90 +477,40 @@ export async function offerSystemToolInstall(options?: {
   }
 
   const lines = missing.map((tool) => {
-    const installCmd = pc.dim(`dojops toolchain install ${tool.name}`);
+    const installCmd = pc.dim("dojops toolchain install " + tool.name);
     return `  ${pc.yellow("!")} ${pc.bold(tool.name)} — ${tool.description}\n    ${installCmd}`;
   });
   p.log.warn(`${missing.length} system tool(s) not found:\n${lines.join("\n")}`);
 
-  if (options?.nonInteractive) {
-    return [];
-  }
+  if (options?.nonInteractive) return [];
 
-  // Auto-install all (used by doctor --fix)
-  let selected: string[];
-  if (options?.autoInstallAll) {
-    selected = missing.map((t) => t.name);
-  } else {
-    const picked = await p.multiselect({
-      message: "Select system tools to install into toolchain (~/.dojops/toolchain/):",
-      options: missing.map((tool) => ({
-        value: tool.name,
-        label: tool.name,
-        hint: tool.description,
-      })),
-      required: false,
-    });
-
-    if (p.isCancel(picked) || picked.length === 0) {
-      return [];
-    }
-    selected = picked;
-  }
+  const selected = await selectSystemToolsToInstall(missing, options);
+  if (!selected) return [];
 
   const installed: string[] = [];
   const manualInstall: Array<{ tool: SystemTool; hint?: string }> = [];
 
   for (const name of selected) {
-    const tool = findSystemTool(name)!;
-    const s = p.spinner();
-    s.start(`Installing ${tool.name}...`);
-    try {
-      const result = await installSystemTool(tool);
-      s.stop(`${pc.green("\u2713")} ${tool.name} v${result.version} installed.`);
-      const versionOutput = verifyTool(tool);
-      if (versionOutput) {
-        p.log.info(pc.dim(versionOutput));
-      }
-      installed.push(name);
-      continue;
-    } catch {
-      s.stop(`${pc.yellow("!")} ${tool.name} failed — retrying...`);
-    }
-
-    // Retry once (transient network issues) and look up Context7 hint in parallel
-    const [retryResult, hint] = await Promise.allSettled([
-      installSystemTool(tool),
-      lookupInstallHint(tool.name),
-    ]);
-
-    if (retryResult.status === "fulfilled") {
-      p.log.success(
-        `${pc.green("\u2713")} ${tool.name} v${retryResult.value.version} installed on retry.`,
-      );
-      const versionOutput = verifyTool(tool);
-      if (versionOutput) {
-        p.log.info(pc.dim(versionOutput));
-      }
+    const result = await installSystemToolWithRetry(name);
+    if (result.success) {
       installed.push(name);
     } else {
-      p.log.error(`${pc.red("\u2717")} ${tool.name} could not be installed.`);
-      const installHint = hint.status === "fulfilled" ? hint.value : undefined;
-      manualInstall.push({ tool, hint: installHint });
+      manualInstall.push({ tool: findSystemTool(name)!, hint: result.hint });
     }
   }
 
   if (manualInstall.length > 0) {
     p.log.info(pc.yellow(`\n${manualInstall.length} system tool(s) require manual installation:`));
     for (const { tool, hint } of manualInstall) {
-      const lines = [
+      const infoLines = [
         `  ${pc.bold(tool.name)} — ${tool.description}`,
-        `    ${pc.dim(`dojops toolchain install ${tool.name}`)}`,
-        `    ${pc.dim(`or visit the project page to install manually`)}`,
+        `    ${pc.dim("dojops toolchain install " + tool.name)}`,
+        `    ${pc.dim("or visit the project page to install manually")}`,
       ];
       if (hint) {
-        lines.push(`    ${pc.dim("Context7 hint:")} ${pc.dim(hint.split("\n")[0])}`);
+        infoLines.push(`    ${pc.dim("Context7 hint:")} ${pc.dim(hint.split("\n")[0])}`);
       }
-      p.log.message(lines.join("\n"));
+      p.log.message(infoLines.join("\n"));
     }
   }
 

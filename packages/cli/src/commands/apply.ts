@@ -515,7 +515,7 @@ function createExecutorWithCallbacks(
   jsonOutput: boolean,
 ) {
   const taskTimers = new Map<string, number>();
-  const progress = !jsonOutput ? createProgressReporter(graph.tasks.length) : null;
+  const progress = jsonOutput ? null : createProgressReporter(graph.tasks.length);
   const executor = new PlannerExecutor(tools, {
     taskStart(id, desc) {
       if (progress) {
@@ -533,19 +533,15 @@ function createExecutorWithCallbacks(
     },
     taskEnd(id, status, error) {
       const elapsed = taskTimers.has(id) ? Date.now() - taskTimers.get(id)! : 0;
-      if (progress) {
-        if (error) {
-          progress.fail(id, error);
-        } else {
-          progress.complete(id);
-        }
+      if (progress && error) {
+        progress.fail(id, error);
+      } else if (progress) {
+        progress.complete(id);
+      } else if (error) {
+        p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
       } else {
-        if (error) {
-          p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
-        } else {
-          const label = status === "completed" ? "generated" : statusText(status);
-          p.log.info(`${pc.blue(id)}: ${label}`);
-        }
+        const label = status === "completed" ? "generated" : statusText(status);
+        p.log.info(`${pc.blue(id)}: ${label}`);
       }
       if (ctx.globalOpts.verbose) {
         p.log.info(`  Generated in ${elapsed}ms`);

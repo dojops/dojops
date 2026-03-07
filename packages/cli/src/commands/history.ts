@@ -35,10 +35,8 @@ export async function historyCommand(args: string[], ctx: CLIContext): Promise<v
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PlanState = any;
-
-function applyHistoryFilters(plans: PlanState[], args: string[]): PlanState[] {
+/* eslint-disable @typescript-eslint/no-explicit-any -- plan objects are untyped JSON */
+function applyHistoryFilters(plans: any[], args: string[]): any[] {
   const statusFilter = extractFlagValue(args, "--status");
   const sinceFilter = extractFlagValue(args, "--since");
   const limitFilter = extractFlagValue(args, "--limit");
@@ -47,14 +45,14 @@ function applyHistoryFilters(plans: PlanState[], args: string[]): PlanState[] {
 
   if (statusFilter) {
     const upper = statusFilter.toUpperCase();
-    filtered = filtered.filter((plan: PlanState) => plan.approvalStatus === upper);
+    filtered = filtered.filter((plan: any) => plan.approvalStatus === upper);
   }
 
   if (sinceFilter) {
     const sinceDate = new Date(sinceFilter);
     if (!Number.isNaN(sinceDate.getTime())) {
       filtered = filtered.filter(
-        (plan: PlanState) => new Date(plan.createdAt).getTime() >= sinceDate.getTime(),
+        (plan: any) => new Date(plan.createdAt).getTime() >= sinceDate.getTime(),
       );
     }
   }
@@ -69,10 +67,10 @@ function applyHistoryFilters(plans: PlanState[], args: string[]): PlanState[] {
   return filtered;
 }
 
-function outputPlansJson(plans: PlanState[]): void {
+function outputPlansJson(plans: any[]): void {
   console.log(
     JSON.stringify(
-      plans.map((plan: PlanState) => ({
+      plans.map((plan: any) => ({
         id: plan.id,
         goal: plan.goal,
         status: plan.approvalStatus,
@@ -85,7 +83,7 @@ function outputPlansJson(plans: PlanState[]): void {
   );
 }
 
-function outputPlansYaml(plans: PlanState[]): void {
+function outputPlansYaml(plans: any[]): void {
   console.log("---");
   for (const plan of plans) {
     console.log(`- id: ${plan.id}`);
@@ -104,8 +102,8 @@ function colorizeStatus(approvalStatus: string): string {
   return pc.yellow(approvalStatus);
 }
 
-function outputPlansText(plans: PlanState[]): void {
-  const lines = plans.map((plan: PlanState) => {
+function outputPlansText(plans: any[]): void {
+  const lines = plans.map((plan: any) => {
     const status = colorizeStatus(plan.approvalStatus);
     const date = new Date(plan.createdAt).toLocaleDateString();
     return `  ${pc.cyan(plan.id.padEnd(16))} ${status.padEnd(20)} ${date}  ${pc.dim(plan.goal.slice(0, 50))}`;

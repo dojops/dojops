@@ -318,7 +318,7 @@ function handleGetSubcommand(args: string[]): void {
   } else if (typeof value === "object") {
     console.log(JSON.stringify(value, null, 2));
   } else {
-    console.log(String(value));
+    console.log(`${value}`);
   }
 }
 
@@ -357,7 +357,7 @@ function handleDeleteSubcommand(args: string[]): void {
     }
     current = current[parts[i]];
   }
-  const lastKey = parts[parts.length - 1];
+  const lastKey = parts.at(-1)!;
   if (!(lastKey in current)) {
     throw new CLIError(ExitCode.VALIDATION_ERROR, `Config key "${key}" is not set.`);
   }
@@ -366,30 +366,20 @@ function handleDeleteSubcommand(args: string[]): void {
   p.log.success(`Deleted ${pc.bold(key)}`);
 }
 
-function handleValidateSubcommand(): void {
-  const configPath = getConfigPath();
-
-  if (!fs.existsSync(configPath)) {
-    p.log.error(`Config file not found: ${configPath}`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "No config file. Run: dojops config");
-  }
-
+function validateConfigValues(config: DojOpsConfig): string[] {
   const issues: string[] = [];
-  const config = loadConfig();
 
-  // Check provider validity
   if (config.defaultProvider && !VALID_PROVIDERS.includes(config.defaultProvider as never)) {
     issues.push(`Invalid provider: "${config.defaultProvider}"`);
   }
 
-  // Check temperature range
-  if (config.defaultTemperature != null) {
-    if (config.defaultTemperature < 0 || config.defaultTemperature > 2) {
-      issues.push(`Temperature out of range: ${config.defaultTemperature} (must be 0-2)`);
-    }
+  if (
+    config.defaultTemperature != null &&
+    (config.defaultTemperature < 0 || config.defaultTemperature > 2)
+  ) {
+    issues.push(`Temperature out of range: ${config.defaultTemperature} (must be 0-2)`);
   }
 
-  // Check Ollama host URL
   if (config.ollamaHost) {
     try {
       const u = new URL(config.ollamaHost);
@@ -401,16 +391,32 @@ function handleValidateSubcommand(): void {
     }
   }
 
-  // Check file permissions
+  return issues;
+}
+
+function validateConfigPermissions(configPath: string): string[] {
   try {
     const stat = fs.statSync(configPath);
     const mode = (stat.mode & 0o777).toString(8);
     if (mode !== "600") {
-      issues.push(`Insecure file permissions: ${mode} (should be 600)`);
+      return [`Insecure file permissions: ${mode} (should be 600)`];
     }
   } catch {
-    issues.push("Could not check file permissions");
+    return ["Could not check file permissions"];
   }
+  return [];
+}
+
+function handleValidateSubcommand(): void {
+  const configPath = getConfigPath();
+
+  if (!fs.existsSync(configPath)) {
+    p.log.error(`Config file not found: ${configPath}`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "No config file. Run: dojops config");
+  }
+
+  const config = loadConfig();
+  const issues = [...validateConfigValues(config), ...validateConfigPermissions(configPath)];
 
   if (issues.length > 0) {
     for (const issue of issues) {
@@ -442,7 +448,7 @@ function setNestedValue(obj: DojOpsConfig, dotPath: string, raw: string): void {
     }
     current = current[parts[i]];
   }
-  const key = parts[parts.length - 1];
+  const key = parts.at(-1)!;
 
   // Validate known keys
   if (dotPath === "defaultProvider") {

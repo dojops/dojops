@@ -343,13 +343,13 @@ async function autoFixTools(checks: Check[], projectDomains: string[]): Promise<
   return fixed;
 }
 
-export async function statusCommand(_args: string[], ctx: CLIContext): Promise<void> {
-  const fixMode = hasFlag(_args, "--fix");
-  // Run all checks
+async function collectAllChecks(
+  ctx: CLIContext,
+  projectDomains: string[],
+  root: string | null,
+): Promise<Check[]> {
   const { check: providerCheck, provider } = checkProvider(ctx);
-  const { check: initCheck, root } = checkInitialization();
-  const projectDomains: string[] = root ? (loadContext(root)?.relevantDomains ?? []) : [];
-
+  const { check: initCheck } = checkInitialization();
   const checks: Check[] = [checkNodeVersion(), providerCheck];
 
   const apiKeyCheck = checkApiKey(provider!, ctx);
@@ -372,14 +372,11 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     ...checkProjectMetrics(root),
   );
 
-  // Output
-  if (ctx.globalOpts.output === "json") {
-    console.log(JSON.stringify({ checks }, null, 2));
-    return;
-  }
+  return checks;
+}
 
+function reportCheckSummary(checks: Check[]): { failCount: number; warnCount: number } {
   p.note(formatChecks(checks).join("\n"), "System Diagnostics");
-
   const failCount = checks.filter((c) => c.status === "fail").length;
   const warnCount = checks.filter((c) => c.status === "warn").length;
 
@@ -390,40 +387,60 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
   } else {
     p.log.warn(`${warnCount} warning(s).`);
   }
+  return { failCount, warnCount };
+}
 
-  // --fix: auto-remediate everything possible, then show summary
+async function handleFixMode(
+  checks: Check[],
+  ctx: CLIContext,
+  projectDomains: string[],
+  fixMode: boolean,
+): Promise<void> {
   if (fixMode) {
     const configFixed = autoFixConfig(checks, ctx);
     const toolsFixed = await autoFixTools(checks, projectDomains);
     const totalFixed = configFixed + toolsFixed;
-
     if (totalFixed > 0) {
       p.log.success(`${totalFixed} issue(s) auto-fixed.`);
     } else {
       p.log.info("No auto-fixable issues found.");
     }
-  } else {
-    // Interactive mode: offer to install missing tools with prompts
-    const hasMissingTools = checks.some((c) => c.name.startsWith("Tool:") && c.status === "warn");
-    if (hasMissingTools) {
-      await offerToolInstall({
-        nonInteractive: ctx.globalOpts.nonInteractive,
-        domains: projectDomains,
-      });
-    }
-
-    const hasMissingSystemTools = checks.some(
-      (c) => c.name.startsWith("System:") && c.status === "warn" && c.detail.includes("Not found"),
-    );
-    if (hasMissingSystemTools) {
-      await offerSystemToolInstall({
-        nonInteractive: ctx.globalOpts.nonInteractive,
-        domains: projectDomains,
-      });
-    }
+    return;
   }
 
-  // Exit non-zero when checks failed
+  const hasMissingTools = checks.some((c) => c.name.startsWith("Tool:") && c.status === "warn");
+  if (hasMissingTools) {
+    await offerToolInstall({
+      nonInteractive: ctx.globalOpts.nonInteractive,
+      domains: projectDomains,
+    });
+  }
+
+  const hasMissingSystemTools = checks.some(
+    (c) => c.name.startsWith("System:") && c.status === "warn" && c.detail.includes("Not found"),
+  );
+  if (hasMissingSystemTools) {
+    await offerSystemToolInstall({
+      nonInteractive: ctx.globalOpts.nonInteractive,
+      domains: projectDomains,
+    });
+  }
+}
+
+export async function statusCommand(_args: string[], ctx: CLIContext): Promise<void> {
+  const fixMode = hasFlag(_args, "--fix");
+  const { root } = checkInitialization();
+  const projectDomains: string[] = root ? (loadContext(root)?.relevantDomains ?? []) : [];
+  const checks = await collectAllChecks(ctx, projectDomains, root);
+
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify({ checks }, null, 2));
+    return;
+  }
+
+  const { failCount } = reportCheckSummary(checks);
+  await handleFixMode(checks, ctx, projectDomains, fixMode);
+
   if (failCount > 0) {
     process.exit(ExitCode.GENERAL_ERROR);
   }

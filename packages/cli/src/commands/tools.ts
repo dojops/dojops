@@ -1017,7 +1017,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
       spinner.stop("Publish failed");
       throw new CLIError(
         ExitCode.GENERAL_ERROR,
-        `Hub error (${status}): ${data.error || "Unknown error"}`,
+        `Hub error (${status}): ${String(data.error) || "Unknown error"}`,
       );
     }
 

@@ -162,7 +162,7 @@ export function autoDetectInstalledModule(
     const name = path.basename(entry.filePath, ".dops");
     if (MODULE_KEYWORDS[name]) continue;
     const lowerName = name.toLowerCase();
-    if (lower.includes(lowerName) || lower.includes(lowerName.replace(/-/g, " "))) {
+    if (lower.includes(lowerName) || lower.includes(lowerName.replaceAll("-", " "))) {
       return name;
     }
   }

@@ -27,7 +27,7 @@ export function createProgressReporter(totalSteps: number): ProgressReporter {
 
 class PlainProgressReporter implements ProgressReporter {
   private completed = 0;
-  constructor(private total: number) {}
+  constructor(private readonly total: number) {}
 
   start(stepId: string, description: string): void {
     const pct = Math.round((this.completed / this.total) * 100);
@@ -54,7 +54,7 @@ class TTYProgressReporter implements ProgressReporter {
   private completed = 0;
   private currentStep = "";
 
-  constructor(private total: number) {}
+  constructor(private readonly total: number) {}
 
   start(stepId: string, description: string): void {
     this.currentStep = `${stepId}: ${description}`;
@@ -65,13 +65,15 @@ class TTYProgressReporter implements ProgressReporter {
     this.clearLine();
     this.completed++;
     const pct = Math.round((this.completed / this.total) * 100);
-    console.log(`  ${pc.green("✓")} ${pc.blue(stepId)} ${pc.dim(`(${pct}%)`)}`);
+    const pctLabel = pc.dim("(" + pct + "%)");
+    console.log(`  ${pc.green("✓")} ${pc.blue(stepId)} ${pctLabel}`);
   }
 
   fail(stepId: string, error?: string): void {
     this.clearLine();
     this.completed++;
-    console.log(`  ${pc.red("✗")} ${pc.blue(stepId)}${error ? ` ${pc.dim(error)}` : ""}`);
+    const suffix = error ? " " + pc.dim(error) : "";
+    console.log(`  ${pc.red("✗")} ${pc.blue(stepId)}${suffix}`);
   }
 
   done(): void {

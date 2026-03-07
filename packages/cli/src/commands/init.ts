@@ -5,7 +5,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { scanRepo, enrichWithLLM } from "@dojops/core";
 import type { RepoContext, LLMInsights } from "@dojops/core";
-import { CommandHandler } from "../types";
+import { CLIContext, CommandHandler } from "../types";
 import { toErrorMessage } from "../exit-codes";
 import { initProject, findProjectRoot } from "../state";
 import { offerToolInstall, offerSystemToolInstall } from "../preflight";
@@ -433,6 +433,56 @@ async function offerContextReview(contextMdPath: string): Promise<void> {
   }
 }
 
+function reportInitResult(
+  alreadyExists: boolean,
+  created: string[],
+  ctx: RepoContext | undefined,
+  root: string,
+  contextPath: string,
+): void {
+  if (alreadyExists && created.length === 0) {
+    p.log.info("Project already initialized — context updated.");
+    p.log.info(`  ${pc.dim(contextPath)}`);
+  } else {
+    const lines = created.map((f) => `  ${pc.green("+")} ${f}`);
+    if (ctx) lines.push(`  ${pc.green("+")} .dojops/context.json`);
+    p.note(lines.join("\n"), `Initialized .dojops/ in ${pc.dim(root)}`);
+    p.log.success("Project initialized.");
+  }
+}
+
+async function handleRepoScan(
+  root: string,
+  contextPath: string,
+  contextMdPath: string,
+  cliCtx: CLIContext,
+  skipReview: boolean,
+  isStructured: boolean,
+): Promise<RepoContext> {
+  const s = p.spinner();
+  if (!isStructured) s.start("Scanning repository...");
+  const ctx = scanRepo(root);
+  fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
+  if (!isStructured) s.stop("Repository scanned.");
+
+  p.note(formatScanSummary(ctx).join("\n"), "Repo scan results");
+  fs.writeFileSync(contextMdPath, formatContextMarkdown(ctx));
+
+  let provider;
+  try {
+    provider = cliCtx.getProvider();
+  } catch {
+    // No provider configured — that's fine
+  }
+  await runLLMEnrichment(provider, ctx, contextPath, contextMdPath, isStructured);
+
+  if (!skipReview && !cliCtx.globalOpts.nonInteractive) {
+    await offerContextReview(contextMdPath);
+  }
+  p.log.info(`Context: ${pc.dim(contextMdPath)}`);
+  return ctx;
+}
+
 export const initCommand: CommandHandler = async (_args, cliCtx) => {
   const skipScan = hasFlag(_args, "--skip-scan");
   const skipTools = hasFlag(_args, "--skip-tools");
@@ -446,58 +496,18 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
   const contextPath = path.join(root, ".dojops", "context.json");
   const contextMdPath = path.join(root, ".dojops", "context.md");
 
-  // Scan the repository (unless --skip-scan)
   let ctx: RepoContext | undefined;
-  if (!skipScan) {
-    const s = p.spinner();
-    if (!isStructured) s.start("Scanning repository...");
-    ctx = scanRepo(root);
-    fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
-    if (!isStructured) s.stop("Repository scanned.");
-  }
-
-  if (alreadyExists && created.length === 0) {
-    p.log.info("Project already initialized — context updated.");
-    p.log.info(`  ${pc.dim(contextPath)}`);
-  } else {
-    const lines = created.map((f) => `  ${pc.green("+")} ${f}`);
-    if (ctx) lines.push(`  ${pc.green("+")} .dojops/context.json`);
-    p.note(lines.join("\n"), `Initialized .dojops/ in ${pc.dim(root)}`);
-    p.log.success("Project initialized.");
-  }
-
-  if (ctx) {
-    // Display scan summary
-    const summaryLines = formatScanSummary(ctx);
-    p.note(summaryLines.join("\n"), "Repo scan results");
-
-    // Write context.md
-    fs.writeFileSync(contextMdPath, formatContextMarkdown(ctx));
-
-    // LLM enrichment (optional — only if a provider is configured)
-    let provider;
-    try {
-      provider = cliCtx.getProvider();
-    } catch {
-      // No provider configured — that's fine
-    }
-
-    await runLLMEnrichment(provider, ctx, contextPath, contextMdPath, isStructured);
-
-    // Offer context review (interactive only, unless --skip-review)
-    if (!skipReview && !cliCtx.globalOpts.nonInteractive) {
-      await offerContextReview(contextMdPath);
-    }
-
-    p.log.info(`Context: ${pc.dim(contextMdPath)}`);
-  }
-
   if (skipScan) {
     p.log.info(pc.dim("Skipped repository scan (--skip-scan)."));
+  } else {
+    ctx = await handleRepoScan(root, contextPath, contextMdPath, cliCtx, skipReview, isStructured);
   }
 
-  // Offer to install missing tools (unless --skip-tools)
-  if (!skipTools) {
+  reportInitResult(alreadyExists, created, ctx, root, contextPath);
+
+  if (skipTools) {
+    p.log.info(pc.dim("Skipped tool installation (--skip-tools)."));
+  } else {
     const domains = ctx?.relevantDomains ?? [];
     await offerToolInstall({
       nonInteractive: cliCtx.globalOpts.nonInteractive,
@@ -507,7 +517,5 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
       nonInteractive: cliCtx.globalOpts.nonInteractive,
       domains,
     });
-  } else {
-    p.log.info(pc.dim("Skipped tool installation (--skip-tools)."));
   }
 };
