@@ -318,7 +318,7 @@ function handleGetSubcommand(args: string[]): void {
   } else if (typeof value === "object") {
     console.log(JSON.stringify(value, null, 2));
   } else {
-    console.log(`${value}`);
+    console.log(String(value));
   }
 }
 

@@ -42,7 +42,8 @@ class PlainProgressReporter implements ProgressReporter {
 
   fail(stepId: string, error?: string): void {
     this.completed++;
-    console.log(`  [FAIL] ${stepId}${error ? `: ${error}` : ""}`);
+    const suffix = error ? ": " + error : "";
+    console.log(`  [FAIL] ${stepId}${suffix}`);
   }
 
   done(): void {

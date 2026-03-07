@@ -15,7 +15,8 @@ export interface JSONSchemaObject {
   pattern?: string;
 }
 
-function hasNestedQuantifiers(pattern: string): boolean {
+/** @internal exported for testing */
+export function hasNestedQuantifiers(pattern: string): boolean {
   for (let i = 1; i < pattern.length; i++) {
     const prev = pattern[i - 1];
     const cur = pattern[i];
@@ -53,7 +54,8 @@ function hasNestedQuantifiers(pattern: string): boolean {
   return false;
 }
 
-function safeRegex(pattern: string): RegExp {
+/** @internal exported for testing */
+export function safeRegex(pattern: string): RegExp {
   if (hasNestedQuantifiers(pattern)) {
     throw new Error(`Potentially unsafe regex pattern rejected: "${pattern}"`);
   }

@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
-import { jsonSchemaToZod, JSONSchemaObject } from "../json-schema-to-zod";
+import {
+  jsonSchemaToZod,
+  JSONSchemaObject,
+  hasNestedQuantifiers,
+  safeRegex,
+} from "../json-schema-to-zod";
 
 describe("jsonSchemaToZod", () => {
   it("converts string type", () => {
@@ -190,5 +195,109 @@ describe("jsonSchemaToZod", () => {
     // Port has a default, so parsing undefined should use default
     const result = zod.parse({ port: undefined });
     expect(result.port).toBe(3000);
+  });
+
+  it("converts enum with default", () => {
+    const schema: JSONSchemaObject = { enum: ["a", "b"], default: "b" };
+    const zod = jsonSchemaToZod(schema);
+    expect(zod.parse(undefined)).toBe("b");
+  });
+
+  it("converts string with minLength and maxLength", () => {
+    const schema: JSONSchemaObject = { type: "string", minLength: 2, maxLength: 5 };
+    const zod = jsonSchemaToZod(schema);
+    expect(zod.safeParse("ab").success).toBe(true);
+    expect(zod.safeParse("a").success).toBe(false);
+    expect(zod.safeParse("abcdef").success).toBe(false);
+  });
+
+  it("converts string with valid regex pattern", () => {
+    const schema: JSONSchemaObject = { type: "string", pattern: "^[a-z]+$" };
+    const zod = jsonSchemaToZod(schema);
+    expect(zod.safeParse("abc").success).toBe(true);
+    expect(zod.safeParse("ABC").success).toBe(false);
+  });
+
+  it("converts number with min and max", () => {
+    const schema: JSONSchemaObject = { type: "number", minimum: 1, maximum: 10 };
+    const zod = jsonSchemaToZod(schema);
+    expect(zod.safeParse(5).success).toBe(true);
+    expect(zod.safeParse(0).success).toBe(false);
+    expect(zod.safeParse(11).success).toBe(false);
+  });
+
+  it("converts array without items to z.array(z.unknown())", () => {
+    const schema: JSONSchemaObject = { type: "array" };
+    const zod = jsonSchemaToZod(schema);
+    expect(zod.safeParse([1, "a", true]).success).toBe(true);
+  });
+
+  it("warns on unsupported composition keys (allOf)", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const schema = { allOf: [{ type: "string" }] } as unknown as JSONSchemaObject;
+    const zod = jsonSchemaToZod(schema);
+    expect(zod.safeParse("anything").success).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("allOf"));
+    warnSpy.mockRestore();
+  });
+
+  it("warns on unsupported composition keys (anyOf)", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const schema = { anyOf: [{ type: "string" }] } as unknown as JSONSchemaObject;
+    jsonSchemaToZod(schema);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("anyOf"));
+    warnSpy.mockRestore();
+  });
+});
+
+describe("hasNestedQuantifiers", () => {
+  it("returns false for simple patterns", () => {
+    expect(hasNestedQuantifiers("^[a-z]+$")).toBe(false);
+    expect(hasNestedQuantifiers("abc")).toBe(false);
+    expect(hasNestedQuantifiers("a{1,3}")).toBe(false);
+  });
+
+  it("detects adjacent quantifiers (a++)", () => {
+    expect(hasNestedQuantifiers("a++")).toBe(true);
+  });
+
+  it("detects quantifier after brace (a{1,3}+)", () => {
+    expect(hasNestedQuantifiers("a{1,3}+")).toBe(true);
+  });
+
+  it("detects nested quantifiers (a*+)", () => {
+    expect(hasNestedQuantifiers("a*+")).toBe(true);
+  });
+
+  it("detects lazy quantifier followed by quantifier (a+?+)", () => {
+    expect(hasNestedQuantifiers("a+?+")).toBe(true);
+  });
+
+  it("detects group with inner quantifier followed by outer quantifier", () => {
+    expect(hasNestedQuantifiers("(a+)+")).toBe(true);
+  });
+
+  it("returns false for group without inner quantifier", () => {
+    expect(hasNestedQuantifiers("(abc)+")).toBe(false);
+  });
+
+  it("detects group quantifier with brace", () => {
+    expect(hasNestedQuantifiers("(a*){2}")).toBe(true);
+  });
+});
+
+describe("safeRegex", () => {
+  it("returns RegExp for safe patterns", () => {
+    const re = safeRegex("^[a-z]+$");
+    expect(re).toBeInstanceOf(RegExp);
+    expect(re.test("abc")).toBe(true);
+  });
+
+  it("throws for nested quantifier patterns", () => {
+    expect(() => safeRegex("(a+)+")).toThrow("unsafe regex");
+  });
+
+  it("throws for invalid regex syntax", () => {
+    expect(() => safeRegex("[invalid")).toThrow("Invalid regex");
   });
 });

@@ -433,22 +433,16 @@ async function offerContextReview(contextMdPath: string): Promise<void> {
   }
 }
 
-function reportInitResult(
-  alreadyExists: boolean,
-  created: string[],
-  ctx: RepoContext | undefined,
-  root: string,
-  contextPath: string,
-): void {
-  if (alreadyExists && created.length === 0) {
-    p.log.info("Project already initialized — context updated.");
-    p.log.info(`  ${pc.dim(contextPath)}`);
-  } else {
-    const lines = created.map((f) => `  ${pc.green("+")} ${f}`);
-    if (ctx) lines.push(`  ${pc.green("+")} .dojops/context.json`);
-    p.note(lines.join("\n"), `Initialized .dojops/ in ${pc.dim(root)}`);
-    p.log.success("Project initialized.");
-  }
+function reportInitAlreadyExists(contextPath: string): void {
+  p.log.info("Project already initialized — context updated.");
+  p.log.info(`  ${pc.dim(contextPath)}`);
+}
+
+function reportInitCreated(created: string[], ctx: RepoContext | undefined, root: string): void {
+  const lines = created.map((f) => `  ${pc.green("+")} ${f}`);
+  if (ctx) lines.push(`  ${pc.green("+")} .dojops/context.json`);
+  p.note(lines.join("\n"), `Initialized .dojops/ in ${pc.dim(root)}`);
+  p.log.success("Project initialized.");
 }
 
 async function handleRepoScan(
@@ -503,7 +497,11 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
     ctx = await handleRepoScan(root, contextPath, contextMdPath, cliCtx, skipReview, isStructured);
   }
 
-  reportInitResult(alreadyExists, created, ctx, root, contextPath);
+  if (alreadyExists && created.length === 0) {
+    reportInitAlreadyExists(contextPath);
+  } else {
+    reportInitCreated(created, ctx, root);
+  }
 
   if (skipTools) {
     p.log.info(pc.dim("Skipped tool installation (--skip-tools)."));
