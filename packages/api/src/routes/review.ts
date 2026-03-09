@@ -16,6 +16,54 @@ export interface ReviewPipelineResult {
 }
 
 /**
+ * Read file content from disk with path traversal protection.
+ * Resolves the file relative to projectRoot, validates the real path stays inside projectRoot.
+ */
+function readFileContent(filePath: string, projectRoot: string): string {
+  const absPath = path.resolve(projectRoot, filePath);
+  let realResolved: string;
+  let realRoot: string;
+  try {
+    realResolved = fs.realpathSync(absPath);
+    realRoot = fs.realpathSync(projectRoot);
+  } catch {
+    throw new Error(`File path does not exist: ${filePath}`);
+  }
+  const isInsideRoot = realResolved === realRoot || realResolved.startsWith(realRoot + path.sep);
+  if (!isInsideRoot) {
+    throw new Error(`File path outside project directory: ${filePath}`);
+  }
+  return fs.readFileSync(absPath, "utf-8");
+}
+
+/** Resolve explicit file list, reading content from disk when not provided inline. */
+function resolveExplicitFiles(
+  files: { path: string; content?: string }[],
+  projectRoot: string,
+): { path: string; content: string }[] {
+  return files.map((file) => ({
+    path: file.path,
+    content: file.content ?? readFileContent(file.path, projectRoot),
+  }));
+}
+
+/** Determine which files to review: explicit list, auto-discovered, or error. */
+function resolveReviewFiles(opts: {
+  files?: { path: string; content?: string }[];
+  autoDiscover?: boolean;
+  projectRoot: string;
+}): { path: string; content: string }[] {
+  const hasExplicitFiles = opts.files && opts.files.length > 0;
+  if (hasExplicitFiles) {
+    return resolveExplicitFiles(opts.files!, opts.projectRoot);
+  }
+  if (opts.autoDiscover !== false) {
+    return discoverDevOpsFiles(opts.projectRoot);
+  }
+  throw new Error("No files provided and auto-discovery is disabled");
+}
+
+/**
  * Run the full DevSecOps review pipeline:
  * 1. Discover or resolve files
  * 2. Run matching validation tools against each file
@@ -43,37 +91,11 @@ export async function runReviewPipeline(opts: {
   const { provider, projectRoot, context7Provider, useContext7 } = opts;
 
   // ── Step 1: Resolve files ──
-  let resolvedFiles: { path: string; content: string }[];
-
-  if (opts.files && opts.files.length > 0) {
-    // Explicit files — read content from disk if not provided inline
-    resolvedFiles = [];
-    for (const file of opts.files) {
-      let content = file.content;
-      if (!content) {
-        const absPath = path.resolve(projectRoot, file.path);
-        // Path traversal guard
-        let realResolved: string;
-        let realRoot: string;
-        try {
-          realResolved = fs.realpathSync(absPath);
-          realRoot = fs.realpathSync(projectRoot);
-        } catch {
-          throw new Error(`File path does not exist: ${file.path}`);
-        }
-        if (realResolved !== realRoot && !realResolved.startsWith(realRoot + path.sep)) {
-          throw new Error(`File path outside project directory: ${file.path}`);
-        }
-        content = fs.readFileSync(absPath, "utf-8");
-      }
-      resolvedFiles.push({ path: file.path, content });
-    }
-  } else if (opts.autoDiscover !== false) {
-    // Auto-discover DevOps files in the project
-    resolvedFiles = discoverDevOpsFiles(projectRoot);
-  } else {
-    throw new Error("No files provided and auto-discovery is disabled");
-  }
+  const resolvedFiles = resolveReviewFiles({
+    files: opts.files,
+    autoDiscover: opts.autoDiscover,
+    projectRoot,
+  });
 
   if (resolvedFiles.length === 0) {
     throw new Error("No DevOps configuration files found in the project");
@@ -192,6 +214,84 @@ export function createReviewRouter(
   return router;
 }
 
+/** Detect a doc lookup for a single file and add it to `lookups` if not already seen. */
+function detectDocLookup(
+  file: { path: string; content: string },
+  seen: Set<string>,
+  lookups: { name: string; query: string }[],
+): void {
+  const lower = file.path.toLowerCase();
+
+  const isGitHubAction = lower.includes(".github/workflows") || lower.includes(".github/actions");
+  if (isGitHubAction && !seen.has("github-actions")) {
+    lookups.push({
+      name: "github/docs",
+      query: "GitHub Actions workflow syntax current action versions",
+    });
+    seen.add("github-actions");
+  }
+
+  const isDockerfile = lower.startsWith("dockerfile") || lower.endsWith(".dockerfile");
+  if (isDockerfile && !seen.has("dockerfile")) {
+    lookups.push({ name: "docker/docs", query: "Dockerfile best practices multi-stage build" });
+    seen.add("dockerfile");
+  }
+
+  if (lower.endsWith(".tf") && !seen.has("terraform")) {
+    lookups.push({
+      name: "hashicorp/terraform",
+      query: "Terraform configuration best practices provider versions",
+    });
+    seen.add("terraform");
+  }
+
+  const isYaml = lower.endsWith(".yaml") || lower.endsWith(".yml");
+  const isK8sCandidate = isYaml && !seen.has("github-actions") && !seen.has("k8s");
+  const hasK8sMarkers = file.content.includes("apiVersion:") || file.content.includes("kind:");
+  if (isK8sCandidate && hasK8sMarkers) {
+    lookups.push({
+      name: "kubernetes/kubernetes",
+      query: "Kubernetes manifest best practices API versions",
+    });
+    seen.add("k8s");
+  }
+
+  const isChartYaml = lower === "chart.yaml" || lower === "chart.yml";
+  if (isChartYaml && !seen.has("helm")) {
+    lookups.push({ name: "helm/helm", query: "Helm chart best practices Chart.yaml structure" });
+    seen.add("helm");
+  }
+
+  const isShellScript = lower.endsWith(".sh") || lower.endsWith(".bash");
+  if (isShellScript && !seen.has("shell")) {
+    lookups.push({
+      name: "koalaman/shellcheck",
+      query: "ShellCheck rules common shell scripting mistakes",
+    });
+    seen.add("shell");
+  }
+}
+
+/** Resolve a single doc lookup, returning the formatted doc string or undefined. */
+async function resolveSingleDocLookup(
+  context7Provider: {
+    resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
+    queryDocs(libraryId: string, query: string): Promise<string>;
+  },
+  lookup: { name: string; query: string },
+): Promise<string | undefined> {
+  try {
+    const lib = await context7Provider.resolveLibrary(lookup.name, lookup.query);
+    if (!lib) return undefined;
+    const docs = await context7Provider.queryDocs(lib.id, lookup.query);
+    if (!docs) return undefined;
+    return `### ${lib.name}\n\n${docs}`;
+  } catch {
+    // Context7 failure is non-fatal
+    return undefined;
+  }
+}
+
 /**
  * Fetch Context7 documentation relevant to the files being reviewed.
  */
@@ -202,81 +302,17 @@ async function fetchReviewDocs(
   },
   files: { path: string; content: string }[],
 ): Promise<string | undefined> {
-  const docParts: string[] = [];
   const lookups: { name: string; query: string }[] = [];
   const seen = new Set<string>();
 
   for (const file of files) {
-    const lower = file.path.toLowerCase();
-
-    if (
-      (lower.includes(".github/workflows") || lower.includes(".github/actions")) &&
-      !seen.has("github-actions")
-    ) {
-      lookups.push({
-        name: "github/docs",
-        query: "GitHub Actions workflow syntax current action versions",
-      });
-      seen.add("github-actions");
-    }
-    if (
-      (lower.startsWith("dockerfile") || lower.endsWith(".dockerfile")) &&
-      !seen.has("dockerfile")
-    ) {
-      lookups.push({
-        name: "docker/docs",
-        query: "Dockerfile best practices multi-stage build",
-      });
-      seen.add("dockerfile");
-    }
-    if (lower.endsWith(".tf") && !seen.has("terraform")) {
-      lookups.push({
-        name: "hashicorp/terraform",
-        query: "Terraform configuration best practices provider versions",
-      });
-      seen.add("terraform");
-    }
-    if (
-      (lower.endsWith(".yaml") || lower.endsWith(".yml")) &&
-      !seen.has("github-actions") &&
-      !seen.has("k8s")
-    ) {
-      if (file.content.includes("apiVersion:") || file.content.includes("kind:")) {
-        lookups.push({
-          name: "kubernetes/kubernetes",
-          query: "Kubernetes manifest best practices API versions",
-        });
-        seen.add("k8s");
-      }
-    }
-    if ((lower === "chart.yaml" || lower === "chart.yml") && !seen.has("helm")) {
-      lookups.push({
-        name: "helm/helm",
-        query: "Helm chart best practices Chart.yaml structure",
-      });
-      seen.add("helm");
-    }
-    if ((lower.endsWith(".sh") || lower.endsWith(".bash")) && !seen.has("shell")) {
-      lookups.push({
-        name: "koalaman/shellcheck",
-        query: "ShellCheck rules common shell scripting mistakes",
-      });
-      seen.add("shell");
-    }
+    detectDocLookup(file, seen, lookups);
   }
 
+  const docParts: string[] = [];
   for (const lookup of lookups) {
-    try {
-      const lib = await context7Provider.resolveLibrary(lookup.name, lookup.query);
-      if (lib) {
-        const docs = await context7Provider.queryDocs(lib.id, lookup.query);
-        if (docs) {
-          docParts.push(`### ${lib.name}\n\n${docs}`);
-        }
-      }
-    } catch {
-      // Context7 failure is non-fatal
-    }
+    const doc = await resolveSingleDocLookup(context7Provider, lookup);
+    if (doc) docParts.push(doc);
   }
 
   return docParts.length > 0 ? docParts.join("\n\n---\n\n") : undefined;

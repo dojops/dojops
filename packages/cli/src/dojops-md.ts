@@ -120,6 +120,57 @@ function buildOverviewSection(ctx: RepoContext): string {
   return lines.join("\n");
 }
 
+/** Collect container-related items from context. */
+function collectContainerItems(ctx: RepoContext): string[] {
+  const items: string[] = [];
+  if (ctx.container.hasDockerfile) items.push("Dockerfile");
+  if (ctx.container.hasCompose) {
+    items.push(`Docker Compose (\`${ctx.container.composePath ?? "compose.yml"}\`)`);
+  }
+  return items;
+}
+
+/** Collect infrastructure-related items from context. */
+function collectInfraItems(ctx: RepoContext): string[] {
+  const items: string[] = [];
+  if (ctx.infra.hasTerraform) {
+    const providers =
+      ctx.infra.tfProviders.length > 0 ? ` (${ctx.infra.tfProviders.join(", ")})` : "";
+    items.push(`Terraform${providers}`);
+  }
+  const infraFlags: [boolean, string][] = [
+    [ctx.infra.hasKubernetes, "Kubernetes"],
+    [ctx.infra.hasHelm, "Helm"],
+    [ctx.infra.hasAnsible, "Ansible"],
+    [ctx.infra.hasKustomize, "Kustomize"],
+    [ctx.infra.hasPulumi, "Pulumi"],
+    [ctx.infra.hasCloudFormation, "CloudFormation"],
+  ];
+  for (const [flag, name] of infraFlags) {
+    if (flag) items.push(name);
+  }
+  return items;
+}
+
+/** Collect monitoring-related items from context. */
+function collectMonitoringItems(ctx: RepoContext): string[] {
+  const flags: [boolean, string][] = [
+    [ctx.monitoring.hasPrometheus, "Prometheus"],
+    [ctx.monitoring.hasNginx, "Nginx"],
+    [ctx.monitoring.hasSystemd, "systemd"],
+  ];
+  return flags.filter(([flag]) => flag).map(([, name]) => name);
+}
+
+/** Collect project structure metadata items from context. */
+function collectMetaItems(ctx: RepoContext): string[] {
+  const flags: [boolean, string][] = [
+    [ctx.meta.isMonorepo, "monorepo"],
+    [ctx.meta.hasMakefile, "Makefile"],
+  ];
+  return flags.filter(([flag]) => flag).map(([, name]) => name);
+}
+
 /** Build the ## Detected Stack section from scanner data. */
 function buildDetectedSection(ctx: RepoContext): string {
   const lines: string[] = ["## Detected Stack", ""];
@@ -139,43 +190,20 @@ function buildDetectedSection(ctx: RepoContext): string {
     items.push(`**CI/CD:** ${ciParts.join(", ")}`);
   }
 
-  // Container
-  const containers: string[] = [];
-  if (ctx.container.hasDockerfile) containers.push("Dockerfile");
-  if (ctx.container.hasCompose)
-    containers.push(`Docker Compose (\`${ctx.container.composePath ?? "compose.yml"}\`)`);
+  const containers = collectContainerItems(ctx);
   if (containers.length > 0) items.push(`**Container:** ${containers.join(", ")}`);
 
-  // Infrastructure
-  const infra: string[] = [];
-  if (ctx.infra.hasTerraform)
-    infra.push(
-      `Terraform${ctx.infra.tfProviders.length > 0 ? ` (${ctx.infra.tfProviders.join(", ")})` : ""}`,
-    );
-  if (ctx.infra.hasKubernetes) infra.push("Kubernetes");
-  if (ctx.infra.hasHelm) infra.push("Helm");
-  if (ctx.infra.hasAnsible) infra.push("Ansible");
-  if (ctx.infra.hasKustomize) infra.push("Kustomize");
-  if (ctx.infra.hasPulumi) infra.push("Pulumi");
-  if (ctx.infra.hasCloudFormation) infra.push("CloudFormation");
+  const infra = collectInfraItems(ctx);
   if (infra.length > 0) items.push(`**Infrastructure:** ${infra.join(", ")}`);
 
-  // Monitoring
-  const mon: string[] = [];
-  if (ctx.monitoring.hasPrometheus) mon.push("Prometheus");
-  if (ctx.monitoring.hasNginx) mon.push("Nginx");
-  if (ctx.monitoring.hasSystemd) mon.push("systemd");
+  const mon = collectMonitoringItems(ctx);
   if (mon.length > 0) items.push(`**Monitoring:** ${mon.join(", ")}`);
 
-  // Meta
-  const meta: string[] = [];
-  if (ctx.meta.isMonorepo) meta.push("monorepo");
-  if (ctx.meta.hasMakefile) meta.push("Makefile");
+  const meta = collectMetaItems(ctx);
   if (meta.length > 0) items.push(`**Structure:** ${meta.join(", ")}`);
 
   for (const item of items) lines.push(`- ${item}`);
 
-  // DevOps files
   if (ctx.devopsFiles.length > 0) {
     lines.push("", "**DevOps Files:**");
     for (const f of ctx.devopsFiles) lines.push(`- \`${f}\``);

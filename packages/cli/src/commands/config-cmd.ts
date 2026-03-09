@@ -22,23 +22,63 @@ import { ExitCode, CLIError } from "../exit-codes";
 import { createProvider } from "@dojops/api";
 import { isCopilotAuthenticated, copilotLogin } from "@dojops/core";
 
-function showConfig(config: DojOpsConfig, scopePath?: string): void {
-  // When scopePath is provided, display only what's in that specific config file
-  const isProjectScope = scopePath !== undefined && scopePath !== getGlobalConfigPath();
+function formatProviderDisplay(config: DojOpsConfig, isProjectScope: boolean): string {
+  const hasEnvOverride =
+    !isProjectScope &&
+    process.env.DOJOPS_PROVIDER &&
+    process.env.DOJOPS_PROVIDER !== config.defaultProvider;
 
-  // UX #10: Show effective provider (including env var override) if it differs from config
+  if (!hasEnvOverride) {
+    return config.defaultProvider ?? pc.dim("(not set)");
+  }
+
   const effectiveProvider = resolveProvider(undefined, config);
   const envOverrideLabel = pc.yellow(
     `(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER} → ${effectiveProvider})`,
   );
-  const providerDisplay =
-    !isProjectScope &&
-    process.env.DOJOPS_PROVIDER &&
-    process.env.DOJOPS_PROVIDER !== config.defaultProvider
-      ? `${config.defaultProvider ?? pc.dim("(not set)")} ${envOverrideLabel}`
-      : (config.defaultProvider ?? pc.dim("(not set)"));
+  return `${config.defaultProvider ?? pc.dim("(not set)")} ${envOverrideLabel}`;
+}
+
+function formatCopilotStatus(isProjectScope: boolean): string {
+  const isAuthenticated = !isProjectScope && isCopilotAuthenticated();
+  return isAuthenticated
+    ? pc.green("authenticated") + " " + pc.dim("(OAuth)")
+    : pc.dim("(not set)");
+}
+
+function collectEnvTokenLines(): string[] {
+  const envVars: Record<string, string> = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    deepseek: "DEEPSEEK_API_KEY",
+    gemini: "GEMINI_API_KEY",
+  };
+  const envLines: string[] = [];
+  for (const [provider, envKey] of Object.entries(envVars)) {
+    if (process.env[envKey]) {
+      envLines.push(`  ${provider}: ${maskToken(process.env[envKey])} ${pc.dim("(env)")}`);
+    }
+  }
+  return envLines;
+}
+
+function buildConfigTitle(scopePath: string | undefined, isProjectScope: boolean): string {
+  const activePath = scopePath ?? getConfigPath();
+  const isLocal = activePath !== getGlobalConfigPath();
+  const scopeBadge = isLocal ? pc.green("[project]") : "";
+  const activeProfile = getActiveProfile();
+  const configPathDim = pc.dim(`(${activePath})`);
+  const profileBadge =
+    !isProjectScope && activeProfile ? pc.yellow(`[profile: ${activeProfile}]`) : "";
+  const badges = [scopeBadge, profileBadge].filter(Boolean).join(" ");
+  return `Configuration ${configPathDim}${badges ? " " + badges : ""}`;
+}
+
+function showConfig(config: DojOpsConfig, scopePath?: string): void {
+  const isProjectScope = scopePath !== undefined && scopePath !== getGlobalConfigPath();
+
   const lines = [
-    `${pc.bold("Provider:")}  ${providerDisplay}`,
+    `${pc.bold("Provider:")}  ${formatProviderDisplay(config, isProjectScope)}`,
     `${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`,
     `${pc.bold("Temperature:")} ${config.defaultTemperature == null ? pc.dim("(not set)") : String(config.defaultTemperature)}`,
     `${pc.bold("Ollama host:")} ${config.ollamaHost ?? pc.dim("(default)")}`,
@@ -48,37 +88,17 @@ function showConfig(config: DojOpsConfig, scopePath?: string): void {
     `  deepseek:        ${maskToken(config.tokens?.deepseek)}`,
     `  gemini:          ${maskToken(config.tokens?.gemini)}`,
     `  ollama:          ${pc.dim("(no token needed)")}`,
-    `  github-copilot:  ${!isProjectScope && isCopilotAuthenticated() ? pc.green("authenticated") + " " + pc.dim("(OAuth)") : pc.dim("(not set)")}`,
+    `  github-copilot:  ${formatCopilotStatus(isProjectScope)}`,
   ];
 
-  // Show environment variable tokens only for global scope (not project-specific display)
   if (!isProjectScope) {
-    const envVars: Record<string, string> = {
-      openai: "OPENAI_API_KEY",
-      anthropic: "ANTHROPIC_API_KEY",
-      deepseek: "DEEPSEEK_API_KEY",
-      gemini: "GEMINI_API_KEY",
-    };
-    const envLines: string[] = [];
-    for (const [provider, envKey] of Object.entries(envVars)) {
-      if (process.env[envKey]) {
-        envLines.push(`  ${provider}: ${maskToken(process.env[envKey])} ${pc.dim("(env)")}`);
-      }
-    }
+    const envLines = collectEnvTokenLines();
     if (envLines.length > 0) {
       lines.push(`${pc.bold("Env tokens:")}`, ...envLines);
     }
   }
 
-  const activePath = scopePath ?? getConfigPath();
-  const isLocal = activePath !== getGlobalConfigPath();
-  const scopeBadge = isLocal ? pc.green("[project]") : "";
-  const activeProfile = getActiveProfile();
-  const configPathDim = pc.dim(`(${activePath})`);
-  const profileBadge =
-    !isProjectScope && activeProfile ? pc.yellow(`[profile: ${activeProfile}]`) : "";
-  const badges = [scopeBadge, profileBadge].filter(Boolean).join(" ");
-  const title = `Configuration ${configPathDim}${badges ? " " + badges : ""}`;
+  const title = buildConfigTitle(scopePath, isProjectScope);
   p.note(lines.join("\n"), truncateNoteTitle(title));
 }
 
@@ -486,40 +506,86 @@ function setNestedValue(obj: DojOpsConfig, dotPath: string, raw: string): void {
   current[key] = raw;
 }
 
+async function dispatchSubcommand(args: string[], ctx: CLIContext): Promise<boolean> {
+  switch (args[0]) {
+    case "show":
+      handleShowSubcommand(ctx);
+      return true;
+    case "get":
+      handleGetSubcommand(args);
+      return true;
+    case "set":
+      handleSetSubcommand(args);
+      return true;
+    case "delete":
+    case "unset":
+      handleDeleteSubcommand(args);
+      return true;
+    case "validate":
+      handleValidateSubcommand();
+      return true;
+    case "reset":
+      await handleResetSubcommand(ctx);
+      return true;
+    case "profile": {
+      const { configProfileCommand } = await import("./config-profile");
+      await configProfileCommand(args.slice(1), ctx);
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+async function promptConfigScope(
+  ctx: CLIContext,
+  globalPath: string,
+  effectiveLocalPath: string,
+): Promise<"global" | "local"> {
+  if (ctx.globalOpts.nonInteractive) return "global";
+
+  const globalLabel = pc.dim(`(${globalPath})`);
+  const localLabel = pc.dim(`(${effectiveLocalPath})`);
+  const scopeChoice = await p.select({
+    message: "Where should configuration be saved?",
+    options: [
+      {
+        value: "global",
+        label: `Global ${globalLabel}`,
+        hint: "applies to all projects",
+      },
+      {
+        value: "local",
+        label: `Project ${localLabel}`,
+        hint: "applies to this project only",
+      },
+    ],
+    initialValue: "global" as string,
+  });
+  if (p.isCancel(scopeChoice)) {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+  return scopeChoice as "global" | "local";
+}
+
+function applyInteractiveAnswers(config: DojOpsConfig, answers: Record<string, unknown>): void {
+  const chosenProvider = answers.provider as string;
+  if (answers.token) {
+    config.tokens = config.tokens ?? {};
+    config.tokens[chosenProvider] = answers.token as string;
+  }
+  if (answers.model) {
+    config.defaultModel = answers.model as string;
+  }
+  if (chosenProvider === "ollama") {
+    applyOllamaSettings(config, answers);
+  }
+}
+
 export async function configCommand(args: string[], ctx: CLIContext): Promise<void> {
-  if (args[0] === "show") {
-    handleShowSubcommand(ctx);
-    return;
-  }
-
-  if (args[0] === "get") {
-    handleGetSubcommand(args);
-    return;
-  }
-
-  if (args[0] === "set") {
-    handleSetSubcommand(args);
-    return;
-  }
-
-  if (args[0] === "delete" || args[0] === "unset") {
-    handleDeleteSubcommand(args);
-    return;
-  }
-
-  if (args[0] === "validate") {
-    handleValidateSubcommand();
-    return;
-  }
-
-  if (args[0] === "reset") {
-    return handleResetSubcommand(ctx);
-  }
-
-  if (args[0] === "profile") {
-    const { configProfileCommand } = await import("./config-profile");
-    return configProfileCommand(args.slice(1), ctx);
-  }
+  const dispatched = await dispatchSubcommand(args, ctx);
+  if (dispatched) return;
 
   const providerFlag = extractFlagValue(args, "--provider") ?? ctx.globalOpts.provider;
   const tokenFlag = extractFlagValue(args, "--token");
@@ -534,37 +600,12 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   // Interactive mode
   p.intro(pc.bgCyan(pc.black(" dojops config ")));
 
-  // Ask whether to save locally or globally
   const localPath = getLocalConfigPath();
   const globalPath = getGlobalConfigPath();
-  // Default local path: use existing .dojops/ if found, otherwise cwd/.dojops/config.json
   const effectiveLocalPath = localPath ?? path.join(process.cwd(), ".dojops", "config.json");
-  let configScope: "global" | "local" = "global";
-  if (!ctx.globalOpts.nonInteractive) {
-    const scopeChoice = await p.select({
-      message: "Where should configuration be saved?",
-      options: [
-        {
-          value: "global",
-          label: `Global ${pc.dim(`(${globalPath})`)}`,
-          hint: "applies to all projects",
-        },
-        {
-          value: "local",
-          label: `Project ${pc.dim(`(${effectiveLocalPath})`)}`,
-          hint: "applies to this project only",
-        },
-      ],
-      initialValue: "global" as string,
-    });
-    if (p.isCancel(scopeChoice)) {
-      p.cancel("Cancelled.");
-      process.exit(0);
-    }
-    configScope = scopeChoice as "global" | "local";
-  }
 
-  // Load config for the chosen scope only (don't leak global config into project scope)
+  const configScope = await promptConfigScope(ctx, globalPath, effectiveLocalPath);
+
   const savePath = configScope === "local" ? effectiveLocalPath : undefined;
   const config: DojOpsConfig =
     configScope === "local" ? readConfigFile(effectiveLocalPath) : loadConfig();
@@ -664,18 +705,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   );
 
   const chosenProvider = answers.provider as string;
-
-  if (answers.token) {
-    config.tokens = config.tokens ?? {};
-    config.tokens[chosenProvider] = answers.token as string;
-  }
-  if (answers.model) {
-    config.defaultModel = answers.model as string;
-  }
-
-  if (chosenProvider === "ollama") {
-    applyOllamaSettings(config, answers);
-  }
+  applyInteractiveAnswers(config, answers);
 
   await updateDefaultProvider(config, chosenProvider, !!ctx.globalOpts.nonInteractive);
 

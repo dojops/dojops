@@ -35,17 +35,19 @@ async function selectModuleScope(
     return { scope: "global", baseDir: globalDir };
   }
 
+  const globalLabel = pc.dim(`(${globalDir})`);
+  const projectLabel = pc.dim(`(${projectDir})`);
   const scopeChoice = await p.select({
     message: "Where should the module be saved?",
     options: [
       {
         value: "global",
-        label: `Global ${pc.dim(`(${globalDir})`)}`,
+        label: `Global ${globalLabel}`,
         hint: "shared across all projects",
       },
       {
         value: "project",
-        label: `Project ${pc.dim(`(${projectDir})`)}`,
+        label: `Project ${projectLabel}`,
         hint: "scoped to this project only",
       },
     ],

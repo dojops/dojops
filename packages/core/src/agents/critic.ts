@@ -46,10 +46,11 @@ export class CriticAgent {
   ): Promise<CritiqueResult> {
     const verificationErrors = verificationResult.issues
       .filter((i) => i.severity === "error" || i.severity === "warning")
-      .map(
-        (i) =>
-          `[${i.severity.toUpperCase()}] ${i.message}${i.line ? ` (line ${i.line})` : ""}${i.rule ? ` [${i.rule}]` : ""}`,
-      )
+      .map((i) => {
+        const lineInfo = i.line ? ` (line ${i.line})` : "";
+        const ruleInfo = i.rule ? ` [${i.rule}]` : "";
+        return `[${i.severity.toUpperCase()}] ${i.message}${lineInfo}${ruleInfo}`;
+      })
       .join("\n");
 
     const contentPreview =

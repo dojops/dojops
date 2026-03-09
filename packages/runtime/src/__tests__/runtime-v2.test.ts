@@ -806,7 +806,7 @@ describe("parseMultiFileOutput", () => {
 
   it("repairs invalid JSON escape sequences from LLM output", () => {
     // LLMs sometimes produce invalid escapes like \: or \- in YAML content
-    const input = '{"files": {".github/workflows/ci.yml": "name\\: CI\\non\\: push"}}';
+    const input = String.raw`{"files": {".github/workflows/ci.yml": "name\: CI\non\: push"}}`;
     // \: is invalid escape → repaired by removing backslash → "name: CI\non: push"
     const result = parseMultiFileOutput(input);
     expect(result[".github/workflows/ci.yml"]).toBe("name: CI\non: push");

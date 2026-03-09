@@ -404,7 +404,8 @@ export async function installAnsible(
   let binaryPath: string;
 
   // Strategy 1: sandbox venv (preferred — fully sandboxed)
-  const python = commandExists("python3") ? "python3" : commandExists("python") ? "python" : null;
+  const pythonFallback = commandExists("python") ? "python" : null;
+  const python = commandExists("python3") ? "python3" : pythonFallback;
   if (python) {
     // Clean up broken venv (stale shebangs from directory migration)
     if (fs.existsSync(venvDir)) {
@@ -522,6 +523,38 @@ function resolveAnsibleBinDir(ansibleBinaryPath: string, ctx?: ToolchainContext)
 }
 
 /**
+ * Find the first working companion binary across search directories.
+ * A "working" binary exists on disk and has a valid shebang (interpreter exists).
+ */
+function findWorkingCompanion(name: string, searchDirs: string[]): string | undefined {
+  for (const dir of searchDirs) {
+    const candidate = path.join(dir, name);
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      if (!isVenvScriptWorking(candidate)) continue;
+      return candidate;
+    } catch {
+      /* ignore */
+    }
+  }
+  return undefined;
+}
+
+/** Create a symlink, removing any existing file at destPath first. Best-effort (silent on failure). */
+function forceSymlink(sourcePath: string, destPath: string): void {
+  try {
+    try {
+      fs.unlinkSync(destPath);
+    } catch {
+      /* may not exist */
+    }
+    fs.symlinkSync(sourcePath, destPath);
+  } catch {
+    /* best-effort — skip on failure */
+  }
+}
+
+/**
  * Symlink ansible companion binaries (ansible-playbook, ansible-galaxy, etc.)
  * from their source location into the toolchain bin directory.
  * Searches multiple possible source directories, validating that Python scripts
@@ -532,33 +565,9 @@ function symlinkAnsibleCompanions(ansibleBinaryPath: string, ctx?: ToolchainCont
   const searchDirs = resolveAnsibleBinDir(ansibleBinaryPath, ctx);
 
   for (const companion of ANSIBLE_COMPANIONS) {
-    // Find the companion in any of the search directories, preferring working ones
-    let sourcePath: string | undefined;
-    for (const dir of searchDirs) {
-      const candidate = path.join(dir, companion);
-      try {
-        if (!fs.existsSync(candidate)) continue;
-        // Validate shebang — skip scripts with broken interpreters
-        if (!isVenvScriptWorking(candidate)) continue;
-        sourcePath = candidate;
-        break;
-      } catch {
-        /* ignore */
-      }
-    }
+    const sourcePath = findWorkingCompanion(companion, searchDirs);
     if (!sourcePath) continue;
-
-    const destPath = path.join(tc.binDir, companion);
-    try {
-      try {
-        fs.unlinkSync(destPath);
-      } catch {
-        /* may not exist */
-      }
-      fs.symlinkSync(sourcePath, destPath);
-    } catch {
-      /* best-effort — skip on failure */
-    }
+    forceSymlink(sourcePath, path.join(tc.binDir, companion));
   }
 }
 

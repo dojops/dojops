@@ -82,23 +82,23 @@ describe("recordTask", () => {
   });
 });
 
-describe("queryMemory", () => {
-  function insertTasks(tasks: Array<Partial<Omit<TaskRecord, "id">>>): void {
-    for (const t of tasks) {
-      recordTask(tmpDir, {
-        timestamp: t.timestamp ?? new Date().toISOString(),
-        task_type: (t.task_type ?? "generate") as TaskRecord["task_type"],
-        prompt: t.prompt ?? "",
-        result_summary: t.result_summary ?? "",
-        status: (t.status ?? "success") as TaskRecord["status"],
-        duration_ms: t.duration_ms ?? 0,
-        related_files: t.related_files ?? "[]",
-        agent_or_module: t.agent_or_module ?? "",
-        metadata: t.metadata ?? "{}",
-      });
-    }
+function insertTasks(tasks: Array<Partial<Omit<TaskRecord, "id">>>): void {
+  for (const t of tasks) {
+    recordTask(tmpDir, {
+      timestamp: t.timestamp ?? new Date().toISOString(),
+      task_type: (t.task_type ?? "generate") as TaskRecord["task_type"],
+      prompt: t.prompt ?? "",
+      result_summary: t.result_summary ?? "",
+      status: (t.status ?? "success") as TaskRecord["status"],
+      duration_ms: t.duration_ms ?? 0,
+      related_files: t.related_files ?? "[]",
+      agent_or_module: t.agent_or_module ?? "",
+      metadata: t.metadata ?? "{}",
+    });
   }
+}
 
+describe("queryMemory", () => {
   it("returns empty context when no tasks exist", () => {
     const ctx = queryMemory(tmpDir, "generate", "something");
     expect(ctx.recentTasks).toHaveLength(0);

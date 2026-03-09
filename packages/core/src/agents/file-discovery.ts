@@ -71,6 +71,46 @@ const DISCOVERY_PATTERNS: { dir?: string; names?: string[]; extensions?: string[
   { dir: "nginx", extensions: [".conf"] },
 ];
 
+/** Collect named files from root for all patterns. */
+function collectNamedFiles(projectRoot: string, files: DiscoveredFile[], seen: Set<string>): void {
+  for (const pattern of DISCOVERY_PATTERNS) {
+    if (files.length >= MAX_FILES) break;
+    if (!pattern.names) continue;
+    for (const name of pattern.names) {
+      if (files.length >= MAX_FILES) break;
+      tryAddFile(path.join(projectRoot, name), name, files, seen);
+    }
+  }
+}
+
+/** Scan all pattern-defined directories. */
+function collectDirectoryFiles(
+  projectRoot: string,
+  files: DiscoveredFile[],
+  seen: Set<string>,
+): void {
+  for (const pattern of DISCOVERY_PATTERNS) {
+    if (files.length >= MAX_FILES) break;
+    if (!pattern.dir) continue;
+    const dirPath = path.join(projectRoot, pattern.dir);
+    scanDirectory(dirPath, pattern.dir, pattern.extensions, pattern.names, files, seen);
+  }
+}
+
+/** Scan root for extension-only patterns (no dir specified). */
+function collectRootExtensionFiles(
+  projectRoot: string,
+  files: DiscoveredFile[],
+  seen: Set<string>,
+): void {
+  for (const pattern of DISCOVERY_PATTERNS) {
+    if (files.length >= MAX_FILES) break;
+    if (pattern.extensions && !pattern.dir) {
+      scanRootForExtensions(projectRoot, pattern.extensions, files, seen);
+    }
+  }
+}
+
 /**
  * Discover DevOps configuration files in a project.
  *
@@ -81,38 +121,9 @@ export function discoverDevOpsFiles(projectRoot: string): DiscoveredFile[] {
   const files: DiscoveredFile[] = [];
   const seen = new Set<string>();
 
-  // First, check specific named files at root level
-  for (const pattern of DISCOVERY_PATTERNS) {
-    if (files.length >= MAX_FILES) break;
-
-    if (pattern.names) {
-      for (const name of pattern.names) {
-        if (files.length >= MAX_FILES) break;
-        const filePath = path.join(projectRoot, name);
-        tryAddFile(filePath, name, files, seen);
-      }
-    }
-  }
-
-  // Then, scan directories and extensions
-  for (const pattern of DISCOVERY_PATTERNS) {
-    if (files.length >= MAX_FILES) break;
-
-    if (pattern.dir) {
-      const dirPath = path.join(projectRoot, pattern.dir);
-      scanDirectory(dirPath, pattern.dir, pattern.extensions, pattern.names, files, seen);
-    }
-  }
-
-  // Scan root for extension matches (Dockerfile.*, *.tf, *.sh, etc.)
-  for (const pattern of DISCOVERY_PATTERNS) {
-    if (files.length >= MAX_FILES) break;
-    if (pattern.extensions && !pattern.dir) {
-      scanRootForExtensions(projectRoot, pattern.extensions, files, seen);
-    }
-  }
-
-  // Scan root for Dockerfile.* variants
+  collectNamedFiles(projectRoot, files, seen);
+  collectDirectoryFiles(projectRoot, files, seen);
+  collectRootExtensionFiles(projectRoot, files, seen);
   scanDockerfileVariants(projectRoot, files, seen);
 
   return files;
@@ -136,6 +147,46 @@ function tryAddFile(
   }
 }
 
+/** Handle a subdirectory entry during directory scanning. */
+function handleSubdirectory(
+  entryAbsPath: string,
+  entryRelPath: string,
+  extensions: string[] | undefined,
+  names: string[] | undefined,
+  files: DiscoveredFile[],
+  seen: Set<string>,
+): void {
+  if (names) {
+    for (const name of names) {
+      tryAddFile(path.join(entryAbsPath, name), `${entryRelPath}/${name}`, files, seen);
+    }
+  }
+  if (extensions) {
+    scanDirectory(entryAbsPath, entryRelPath, extensions, undefined, files, seen);
+  }
+}
+
+/** Handle a file entry during directory scanning. */
+function handleFileEntry(
+  entryAbsPath: string,
+  entryRelPath: string,
+  entryName: string,
+  extensions: string[] | undefined,
+  names: string[] | undefined,
+  files: DiscoveredFile[],
+  seen: Set<string>,
+): void {
+  if (extensions) {
+    const ext = path.extname(entryName).toLowerCase();
+    if (extensions.includes(ext)) {
+      tryAddFile(entryAbsPath, entryRelPath, files, seen);
+    }
+  }
+  if (names?.includes(entryName)) {
+    tryAddFile(entryAbsPath, entryRelPath, files, seen);
+  }
+}
+
 function scanDirectory(
   dirAbsPath: string,
   dirRelPath: string,
@@ -154,32 +205,12 @@ function scanDirectory(
 
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue;
-        // Recurse one level for action subdirs (.github/actions/*/action.yml)
-        if (names) {
-          for (const name of names) {
-            tryAddFile(path.join(entryAbsPath, name), `${entryRelPath}/${name}`, files, seen);
-          }
-        }
-        if (extensions) {
-          scanDirectory(entryAbsPath, entryRelPath, extensions, undefined, files, seen);
-        }
+        handleSubdirectory(entryAbsPath, entryRelPath, extensions, names, files, seen);
         continue;
       }
 
       if (!entry.isFile()) continue;
-
-      // Check extension match
-      if (extensions) {
-        const ext = path.extname(entry.name).toLowerCase();
-        if (extensions.includes(ext)) {
-          tryAddFile(entryAbsPath, entryRelPath, files, seen);
-        }
-      }
-
-      // Check name match
-      if (names && names.includes(entry.name)) {
-        tryAddFile(entryAbsPath, entryRelPath, files, seen);
-      }
+      handleFileEntry(entryAbsPath, entryRelPath, entry.name, extensions, names, files, seen);
     }
   } catch {
     // Directory doesn't exist — skip

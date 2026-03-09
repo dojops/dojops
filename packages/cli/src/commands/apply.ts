@@ -832,6 +832,49 @@ async function processExecutableTask(
   };
 }
 
+function shouldSkipDocTask(
+  taskResult: { taskId: string },
+  plan: PlanState,
+  jsonOutput: boolean,
+): boolean {
+  const taskDef = plan.tasks.find((t) => t.id === taskResult.taskId);
+  if (!taskDef) return false;
+
+  const taskPrompt = taskDef.input?.prompt as string | undefined;
+  if (!isDocumentationTask(taskDef.description, taskPrompt)) return false;
+
+  if (!jsonOutput) {
+    p.log.info(
+      `${pc.dim("○")} ${pc.bold(taskResult.taskId)} ${pc.dim("skipped (documentation task — not a tool-generated file)")}`,
+    );
+  }
+  return true;
+}
+
+async function classifyAndProcessTask(
+  taskResult: { taskId: string; status: string; output?: unknown; error?: string },
+  graph: ReturnType<typeof buildTaskGraph>,
+  toolMap: Map<string, ToolEntry>,
+  ctx: ApplyContext,
+): Promise<TaskResultEntry> {
+  const taskNode = graph.tasks.find((t) => t.id === taskResult.taskId);
+
+  if (taskResult.status !== "completed" || !taskNode) {
+    return processFailedOrMissingTask(taskResult);
+  }
+
+  const tool = toolMap.get(taskNode.tool);
+  if (!tool?.execute) {
+    return processNonExecutableTask(taskResult);
+  }
+
+  if (shouldSkipDocTask(taskResult, ctx.plan, ctx.jsonOutput)) {
+    return { taskId: taskResult.taskId, status: "completed", output: taskResult.output };
+  }
+
+  return processExecutableTask(taskResult, taskNode, tool, ctx);
+}
+
 async function processTaskResults(
   planResult: {
     results: Array<{ taskId: string; status: string; output?: unknown; error?: string }>;
@@ -862,38 +905,7 @@ async function processTaskResults(
       continue;
     }
 
-    const taskNode = graph.tasks.find((t) => t.id === taskResult.taskId);
-
-    if (taskResult.status !== "completed" || !taskNode) {
-      newResults.push(processFailedOrMissingTask(taskResult));
-      continue;
-    }
-
-    const tool = toolMap.get(taskNode.tool);
-    if (!tool?.execute) {
-      newResults.push(processNonExecutableTask(taskResult));
-      continue;
-    }
-
-    // Skip documentation tasks entirely — DevOps tools can only generate
-    // their own file types (e.g., terraform → .tf, github-actions → .yml)
-    const taskDef = ctx.plan.tasks.find((t) => t.id === taskResult.taskId);
-    const taskPrompt = taskDef?.input?.prompt as string | undefined;
-    if (taskDef && isDocumentationTask(taskDef.description, taskPrompt)) {
-      if (!ctx.jsonOutput) {
-        p.log.info(
-          `${pc.dim("○")} ${pc.bold(taskResult.taskId)} ${pc.dim("skipped (documentation task — not a tool-generated file)")}`,
-        );
-      }
-      newResults.push({
-        taskId: taskResult.taskId,
-        status: "completed",
-        output: taskResult.output,
-      });
-      continue;
-    }
-
-    const result = await processExecutableTask(taskResult, taskNode, tool, {
+    const result = await classifyAndProcessTask(taskResult, graph, toolMap, {
       ...ctx,
       allFilesCreated,
       allFilesModified,
@@ -948,7 +960,8 @@ function saveApplyResults(
 
   // Track activity in DOJOPS.md
   const allFiles = [...results.allFilesCreated, ...results.allFilesModified];
-  const fileList = allFiles.length > 0 ? ` (${allFiles.map((f) => `\`${f}\``).join(", ")})` : "";
+  const fileNames = allFiles.map((f) => `\`${f}\``).join(", ");
+  const fileList = allFiles.length > 0 ? ` (${fileNames})` : "";
   appendActivity(ctx.root, `Plan applied: ${results.status}${fileList}`);
   recordTask(ctx.root, {
     timestamp: new Date().toISOString(),
@@ -1018,9 +1031,8 @@ function outputHumanResult(
     if (filesCreated.length > 0) parts.push(pc.green(`${filesCreated.length} created`));
     if (filesModified.length > 0) parts.push(pc.yellow(`${filesModified.length} modified`));
     const fileSummary = total > 0 ? ` (${parts.join(", ")})` : "";
-    p.log.success(
-      `${pc.bold("Plan applied successfully.")}${fileSummary} ${pc.dim(`in ${formatDuration(durationMs)}`)}`,
-    );
+    const durationLabel = pc.dim(`in ${formatDuration(durationMs)}`);
+    p.log.success(`${pc.bold("Plan applied successfully.")}${fileSummary} ${durationLabel}`);
   } else if (status === "PARTIAL") {
     p.log.warn(pc.bold("Plan partially applied. Use `dojops apply --resume` to continue."));
   } else {

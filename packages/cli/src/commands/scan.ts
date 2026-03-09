@@ -79,8 +79,10 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
 
   // Track activity in DOJOPS.md
   const { total, critical, high } = report.summary;
-  const severity = critical > 0 ? `${critical} critical` : high > 0 ? `${high} high` : "";
-  const scanSummary = `Security scan: ${total} finding(s)${severity ? ` (${severity})` : ""}`;
+  const highSeverity = high > 0 ? `${high} high` : "";
+  const severity = critical > 0 ? `${critical} critical` : highSeverity;
+  const severitySuffix = severity ? ` (${severity})` : "";
+  const scanSummary = `Security scan: ${total} finding(s)${severitySuffix}`;
   appendActivity(root, scanSummary);
   recordTask(root, {
     timestamp: new Date().toISOString(),

@@ -969,9 +969,21 @@ describe("SafeExecutor", () => {
   });
 
   describe("critic-powered repair", () => {
+    /** Shared generate logic for repairable tool tests. */
+    function repairableGenerate(
+      input: MockInput & { _verificationFeedback?: string },
+      state: { generateCount: number; lastFeedback: string | undefined },
+    ): ToolOutput {
+      state.generateCount++;
+      state.lastFeedback = input._verificationFeedback;
+      if (state.generateCount >= 2) {
+        return { success: true, data: { result: "fixed" } };
+      }
+      return { success: true, data: { result: input.value } };
+    }
+
     it("uses critic feedback in repair loop", async () => {
-      let generateCount = 0;
-      let lastFeedback: string | undefined;
+      const state = { generateCount: 0, lastFeedback: undefined as string | undefined };
 
       class RepairableTool extends BaseTool<MockInput> {
         name = "repairable";
@@ -979,17 +991,11 @@ describe("SafeExecutor", () => {
         inputSchema = MockInputSchema;
 
         async generate(input: MockInput & { _verificationFeedback?: string }): Promise<ToolOutput> {
-          generateCount++;
-          lastFeedback = input._verificationFeedback;
-          // Second attempt passes verification
-          if (generateCount >= 2) {
-            return { success: true, data: { result: "fixed" } };
-          }
-          return { success: true, data: { result: input.value } };
+          return repairableGenerate(input, state);
         }
 
         async verify(): Promise<VerificationResult> {
-          if (generateCount >= 2) {
+          if (state.generateCount >= 2) {
             return { passed: true, tool: "test", issues: [] };
           }
           return {
@@ -1022,14 +1028,13 @@ describe("SafeExecutor", () => {
         value: "test",
       });
       expect(result.status).toBe("completed");
-      expect(generateCount).toBe(2);
-      expect(lastFeedback).toContain("Critic Analysis");
-      expect(lastFeedback).toContain("Add field X");
+      expect(state.generateCount).toBe(2);
+      expect(state.lastFeedback).toContain("Critic Analysis");
+      expect(state.lastFeedback).toContain("Add field X");
     });
 
     it("falls back to raw feedback when critic throws", async () => {
-      let generateCount = 0;
-      let lastFeedback: string | undefined;
+      const state = { generateCount: 0, lastFeedback: undefined as string | undefined };
 
       class RepairableTool2 extends BaseTool<MockInput> {
         name = "repairable2";
@@ -1037,16 +1042,11 @@ describe("SafeExecutor", () => {
         inputSchema = MockInputSchema;
 
         async generate(input: MockInput & { _verificationFeedback?: string }): Promise<ToolOutput> {
-          generateCount++;
-          lastFeedback = input._verificationFeedback;
-          if (generateCount >= 2) {
-            return { success: true, data: { result: "fixed" } };
-          }
-          return { success: true, data: { result: input.value } };
+          return repairableGenerate(input, state);
         }
 
         async verify(): Promise<VerificationResult> {
-          if (generateCount >= 2) {
+          if (state.generateCount >= 2) {
             return { passed: true, tool: "test", issues: [] };
           }
           return {
@@ -1077,8 +1077,8 @@ describe("SafeExecutor", () => {
         value: "test",
       });
       expect(result.status).toBe("completed");
-      expect(lastFeedback).toContain("[error] Parse error");
-      expect(lastFeedback).not.toContain("Critic Analysis");
+      expect(state.lastFeedback).toContain("[error] Parse error");
+      expect(state.lastFeedback).not.toContain("Critic Analysis");
     });
   });
 });

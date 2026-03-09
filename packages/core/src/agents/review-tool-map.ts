@@ -146,8 +146,8 @@ export const REVIEW_TOOL_MAP: ReviewToolSpec[] = [
  * Supports simple glob matching: `*` matches any non-separator chars.
  */
 function matchPattern(filePath: string, pattern: string): boolean {
-  const normalizedPath = filePath.replace(/\\/g, "/");
-  const normalizedPattern = pattern.replace(/\\/g, "/");
+  const normalizedPath = filePath.replaceAll("\\", "/");
+  const normalizedPattern = pattern.replaceAll("\\", "/");
 
   // Split both into segments
   const pathParts = normalizedPath.split("/");
@@ -164,10 +164,12 @@ function matchPattern(filePath: string, pattern: string): boolean {
     if (pp === "*") continue;
     if (pp.includes("*")) {
       // Simple wildcard: "*.sh" or "Dockerfile.*"
-      const regex = new RegExp("^" + pp.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
+      const regex = new RegExp(
+        "^" + pp.replaceAll(".", String.raw`\.`).replaceAll("*", ".*") + "$",
+      );
       if (!regex.test(fp)) return false;
-    } else {
-      if (pp !== fp) return false;
+    } else if (pp !== fp) {
+      return false;
     }
   }
   return true;

@@ -255,8 +255,8 @@ function truncate(str: string, max: number): string {
 
 /** Summarize a task into a human-readable one-liner for the LLM. */
 function summarizeTask(t: TaskRecord): string {
-  const verb =
-    t.status === "success" ? "Completed" : t.status === "failure" ? "Failed" : "Cancelled";
+  const failureVerb = t.status === "failure" ? "Failed" : "Cancelled";
+  const verb = t.status === "success" ? "Completed" : failureVerb;
   const module = t.agent_or_module ? ` via ${t.agent_or_module}` : "";
   const prompt = t.prompt ? truncate(t.prompt, 80) : t.task_type;
 
@@ -277,6 +277,34 @@ function extractFiles(t: TaskRecord): string[] {
   }
 }
 
+/** Format a single successful task entry with optional file list, respecting char budget. */
+function formatSuccessEntry(
+  task: TaskRecord,
+  index: number,
+  charCount: number,
+): { lines: string[]; charCount: number; overBudget: boolean } {
+  const lines: string[] = [];
+  const summary = `${index + 1}. ${summarizeTask(task)}`;
+  if (charCount + summary.length + 1 > MAX_CONTEXT_CHARS) {
+    return { lines, charCount, overBudget: true };
+  }
+  lines.push(summary);
+  charCount += summary.length + 1;
+
+  const files = extractFiles(task);
+  const hasCompactFileList = files.length > 0 && files.length <= 3;
+  if (hasCompactFileList) {
+    const fileLine = `   Files: ${files.join(", ")}`;
+    const fitsInBudget = charCount + fileLine.length + 1 <= MAX_CONTEXT_CHARS;
+    if (fitsInBudget) {
+      lines.push(fileLine);
+      charCount += fileLine.length + 1;
+    }
+  }
+
+  return { lines, charCount, overBudget: false };
+}
+
 /**
  * Build a summarized operational memory string for LLM prompt injection.
  * Produces concise, actionable summaries instead of raw log lines.
@@ -292,7 +320,6 @@ export function buildMemoryContextString(ctx: MemoryContext): string | null {
     lines.push("");
   }
 
-  // Separate successful and failed tasks
   const successful = ctx.recentTasks.filter((t) => t.status === "success").slice(0, 5);
   const failed = ctx.recentTasks.filter((t) => t.status === "failure").slice(0, 3);
 
@@ -300,20 +327,10 @@ export function buildMemoryContextString(ctx: MemoryContext): string | null {
     lines.push("Recent successful operations:");
     let charCount = lines.join("\n").length;
     for (let i = 0; i < successful.length; i++) {
-      const summary = `${i + 1}. ${summarizeTask(successful[i])}`;
-      if (charCount + summary.length + 1 > MAX_CONTEXT_CHARS) break;
-      lines.push(summary);
-      charCount += summary.length + 1;
-
-      // Include files touched if available
-      const files = extractFiles(successful[i]);
-      if (files.length > 0 && files.length <= 3) {
-        const fileLine = `   Files: ${files.join(", ")}`;
-        if (charCount + fileLine.length + 1 <= MAX_CONTEXT_CHARS) {
-          lines.push(fileLine);
-          charCount += fileLine.length + 1;
-        }
-      }
+      const entry = formatSuccessEntry(successful[i], i, charCount);
+      if (entry.overBudget) break;
+      lines.push(...entry.lines);
+      charCount = entry.charCount;
     }
   }
 

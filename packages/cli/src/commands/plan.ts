@@ -234,6 +234,39 @@ async function delegateToApply(
   return applyCommand(applyArgs, ctx);
 }
 
+function runPrePlanHook(projectRoot: string | null, prompt: string, verbose: boolean): void {
+  if (!projectRoot) return;
+  const hookOk = runHooks(projectRoot, "pre-plan", { prompt }, { verbose });
+  if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-plan hook failed.");
+}
+
+function loadRepoContext(projectRoot: string | null): ReturnType<typeof loadContext> {
+  if (!projectRoot) return null;
+  // Fresh repo scan gives the planner real-time knowledge of existing infrastructure
+  // (CI, Dockerfiles, Terraform, K8s, etc.) so it plans "update" instead of "create"
+  try {
+    return scanRepo(projectRoot);
+  } catch {
+    // Fresh scan failed — fall back to static .dojops/context.json
+    return loadContext(projectRoot);
+  }
+}
+
+async function loadExecutionMemory(
+  projectRoot: string | null,
+  prompt: string,
+): Promise<string | undefined> {
+  if (!projectRoot) return undefined;
+  try {
+    const { queryMemory, buildMemoryContextString } = await import("../memory");
+    const memCtx = queryMemory(projectRoot, "plan", prompt);
+    return buildMemoryContextString(memCtx) ?? undefined;
+  } catch {
+    // Memory is non-critical — proceed without it
+    return undefined;
+  }
+}
+
 export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
   const { prompt, executeMode, autoApprove, skipVerify } = parsePlanArgs(args, ctx);
 
@@ -243,46 +276,15 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   const projectRoot = findProjectRoot();
-
-  // Pre-plan hook
-  if (projectRoot) {
-    const hookOk = runHooks(
-      projectRoot,
-      "pre-plan",
-      { prompt },
-      { verbose: ctx.globalOpts.verbose },
-    );
-    if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-plan hook failed.");
-  }
+  runPrePlanHook(projectRoot, prompt, ctx.globalOpts.verbose);
 
   const provider = ctx.getProvider();
   const registry = createToolRegistry(provider, projectRoot ?? undefined);
-  // Fresh repo scan gives the planner real-time knowledge of existing infrastructure
-  // (CI, Dockerfiles, Terraform, K8s, etc.) so it plans "update" instead of "create"
-  let repoContext: ReturnType<typeof loadContext> = null;
-  if (projectRoot) {
-    try {
-      repoContext = scanRepo(projectRoot);
-    } catch {
-      // Fresh scan failed — fall back to static .dojops/context.json
-      repoContext = loadContext(projectRoot);
-    }
-  }
+  const repoContext = loadRepoContext(projectRoot);
   const isJson = ctx.globalOpts.output === "json";
 
   const tools = applyToolFilter(registry.getAll(), ctx.globalOpts.tool, isJson);
-
-  // Load execution memory for context-aware planning
-  let executionMemory: string | undefined;
-  if (projectRoot) {
-    try {
-      const { queryMemory, buildMemoryContextString } = await import("../memory");
-      const memCtx = queryMemory(projectRoot, "plan", prompt);
-      executionMemory = buildMemoryContextString(memCtx) ?? undefined;
-    } catch {
-      // Memory is non-critical — proceed without it
-    }
-  }
+  const executionMemory = await loadExecutionMemory(projectRoot, prompt);
 
   const graph = await runDecomposition(
     prompt,
@@ -322,7 +324,6 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     durationMs: Date.now() - startTime,
   });
 
-  // Post-plan hook
   if (root) {
     runHooks(root, "post-plan", { prompt }, { verbose: ctx.globalOpts.verbose });
   }

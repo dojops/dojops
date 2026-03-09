@@ -80,6 +80,54 @@ function skipResult(
   return { passed, tool: parser, issues: [{ severity, message }] };
 }
 
+/** Apply network safety restrictions to terraform init args. */
+function applyNetworkSafety(
+  binary: string,
+  args: string[],
+  networkPermission: string | undefined,
+): string[] {
+  const needsTerraformRestriction =
+    networkPermission !== "required" &&
+    binary === "terraform" &&
+    args[0] === "init" &&
+    !args.includes("-get=false");
+
+  return needsTerraformRestriction ? [...args, "-get=false"] : args;
+}
+
+/** Handle ENOENT errors: attempt auto-install, or return skip result. */
+async function handleBinaryNotFound(
+  binary: string,
+  args: string[],
+  config: BinaryVerificationConfig,
+  tmpDir: string,
+  networkPermission: string | undefined,
+  onBinaryMissing?: OnBinaryMissing,
+): Promise<{ rawOutput: string; earlyReturn?: VerificationResult; shouldBreak?: boolean }> {
+  if (onBinaryMissing) {
+    const installed = await onBinaryMissing(binary);
+    if (installed) {
+      // Retry the command after successful install (no callback to prevent infinite loop)
+      return executeVerificationCommand(binary, args, config, tmpDir, networkPermission);
+    }
+  }
+  return {
+    rawOutput: "",
+    earlyReturn: skipResult(
+      config.parser,
+      "warning",
+      `${binary} not found — verification skipped`,
+      true,
+    ),
+  };
+}
+
+/** Extract raw output from an exec error. */
+function extractErrorOutput(err: unknown): string {
+  const execErr = err as { stdout?: string; stderr?: string };
+  return execErr.stdout || execErr.stderr || (err instanceof Error ? err.message : String(err));
+}
+
 /** Execute a single command in a chained verification pipeline. */
 async function executeVerificationCommand(
   binary: string,
@@ -89,14 +137,7 @@ async function executeVerificationCommand(
   networkPermission: string | undefined,
   onBinaryMissing?: OnBinaryMissing,
 ): Promise<{ rawOutput: string; earlyReturn?: VerificationResult; shouldBreak?: boolean }> {
-  let finalArgs = args;
-
-  // E-8: Network safety
-  if (networkPermission !== "required") {
-    if (binary === "terraform" && finalArgs[0] === "init" && !finalArgs.includes("-get=false")) {
-      finalArgs = [...finalArgs, "-get=false"];
-    }
-  }
+  const finalArgs = applyNetworkSafety(binary, args, networkPermission);
 
   if (!ALLOWED_VERIFICATION_BINARIES.has(binary)) {
     return {
@@ -119,39 +160,36 @@ async function executeVerificationCommand(
     return { rawOutput };
   } catch (err: unknown) {
     if (isENOENT(err)) {
-      // Attempt auto-install if callback is provided
-      if (onBinaryMissing) {
-        const installed = await onBinaryMissing(binary);
-        if (installed) {
-          // Retry the command after successful install (no callback to prevent infinite loop)
-          return executeVerificationCommand(binary, args, config, tmpDir, networkPermission);
-        }
-      }
-      return {
-        rawOutput: "",
-        earlyReturn: skipResult(
-          config.parser,
-          "warning",
-          `${binary} not found — verification skipped`,
-          true,
-        ),
-      };
+      return handleBinaryNotFound(binary, args, config, tmpDir, networkPermission, onBinaryMissing);
     }
-    const execErr = err as { stdout?: string; stderr?: string };
-    const rawOutput =
-      execErr.stdout || execErr.stderr || (err instanceof Error ? err.message : String(err));
-    return { rawOutput, shouldBreak: true };
+    return { rawOutput: extractErrorOutput(err), shouldBreak: true };
   }
 }
 
-/**
- * Run binary verification in a temp directory.
- * Returns VerificationResult with rich parsed issues.
- */
-export async function verifyWithBinary(input: BinaryVerifierInput): Promise<VerificationResult> {
-  const { content, filename, config, severityMapping, childProcessPermission, networkPermission } =
-    input;
+/** Write input files (multi or single) into a temp directory. */
+function writeFilesToTmpDir(
+  tmpDir: string,
+  files: Record<string, string> | undefined,
+  filename: string,
+  content: string,
+): void {
+  if (files && Object.keys(files).length > 0) {
+    for (const [fname, fcontent] of Object.entries(files)) {
+      const filePath = path.join(tmpDir, fname);
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(filePath, fcontent, "utf-8");
+    }
+  } else {
+    fs.writeFileSync(path.join(tmpDir, filename), content, "utf-8");
+  }
+}
 
+/** Validate pre-conditions for binary verification. Returns a skip result or null. */
+function checkVerificationPreConditions(
+  config: BinaryVerificationConfig,
+  childProcessPermission: string | undefined,
+): VerificationResult | null {
   if (childProcessPermission !== "required") {
     return skipResult(
       config.parser,
@@ -167,24 +205,28 @@ export async function verifyWithBinary(input: BinaryVerifierInput): Promise<Veri
       `Verification command not allowed: ${config.command.split(/\s+/)[0]}`,
     ); // NOSONAR
   }
-
   const parser = getParser(config.parser);
   if (!parser) {
     return skipResult(config.parser, "error", `Unknown verification parser: ${config.parser}`);
   }
+  return null;
+}
 
+/**
+ * Run binary verification in a temp directory.
+ * Returns VerificationResult with rich parsed issues.
+ */
+export async function verifyWithBinary(input: BinaryVerifierInput): Promise<VerificationResult> {
+  const { content, filename, config, severityMapping, childProcessPermission, networkPermission } =
+    input;
+
+  const preCheck = checkVerificationPreConditions(config, childProcessPermission);
+  if (preCheck) return preCheck;
+
+  const parser = getParser(config.parser)!;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-verify-"));
   try {
-    if (input.files && Object.keys(input.files).length > 0) {
-      for (const [fname, fcontent] of Object.entries(input.files)) {
-        const filePath = path.join(tmpDir, fname);
-        const dir = path.dirname(filePath);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(filePath, fcontent, "utf-8");
-      }
-    } else {
-      fs.writeFileSync(path.join(tmpDir, filename), content, "utf-8");
-    }
+    writeFilesToTmpDir(tmpDir, input.files, filename, content);
 
     // Resolve {entryFile} placeholder in the verification command.
     // This allows .dops modules to reference the actual generated filename
@@ -256,7 +298,7 @@ function resolveCommandPlaceholders(
     }
   }
 
-  return command.replace(/\{entryFile\}/g, entryFile);
+  return command.replaceAll("{entryFile}", entryFile);
 }
 
 /**

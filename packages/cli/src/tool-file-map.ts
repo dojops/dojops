@@ -75,7 +75,8 @@ function readMultiFileToolContent(
   for (const dir of scanConfig.dirs) {
     const absDir = path.resolve(cwd, dir);
     const files = collectFiles(absDir, scanConfig.extensions);
-    for (const absPath of files.sort()) {
+    files.sort((a, b) => a.localeCompare(b));
+    for (const absPath of files) {
       try {
         const stat = fs.statSync(absPath);
         if (stat.size > MAX_FILE_SIZE) continue;

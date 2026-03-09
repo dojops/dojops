@@ -401,6 +401,55 @@ export function stripCodeFences(content: string): string {
  * Also accepts flat format: `{ "path": "content", ... }` as a fallback.
  * Returns a map of file paths to their string contents.
  */
+/** Map of control character codes to their JSON escape sequences. */
+const CONTROL_CHAR_ESCAPES: Record<number, string> = {
+  0x08: String.raw`\b`,
+  0x09: String.raw`\t`,
+  0x0a: String.raw`\n`,
+  0x0c: String.raw`\f`,
+  0x0d: String.raw`\r`,
+};
+
+/** Escape a single raw control character (U+0000–U+001F) as a JSON escape sequence. */
+function escapeControlChar(code: number): string {
+  return CONTROL_CHAR_ESCAPES[code] ?? String.raw`\u` + code.toString(16).padStart(4, "0");
+}
+
+/**
+ * Process a single character inside a JSON string value.
+ * Returns the escaped output and the number of extra characters consumed (for escape pairs).
+ */
+function processStringChar(
+  json: string,
+  i: number,
+  out: string[],
+): { endString: boolean; advance: number } {
+  const ch = json[i];
+
+  // Escaped pair — copy both characters verbatim
+  if (ch === "\\") {
+    out.push(ch);
+    if (i + 1 < json.length) out.push(json[i + 1]);
+    return { endString: false, advance: 1 };
+  }
+
+  // End of string
+  if (ch === '"') {
+    out.push(ch);
+    return { endString: true, advance: 0 };
+  }
+
+  // Raw control character — escape it
+  const code = ch.charCodeAt(0);
+  if (code < 0x20) {
+    out.push(escapeControlChar(code));
+    return { endString: false, advance: 0 };
+  }
+
+  out.push(ch);
+  return { endString: false, advance: 0 };
+}
+
 /**
  * Escape raw control characters (U+0000–U+001F) inside JSON string values.
  * Uses a state machine to distinguish string interiors from structural JSON.
@@ -409,49 +458,13 @@ function escapeControlCharsInStrings(json: string): string {
   const out: string[] = [];
   let inString = false;
   for (let i = 0; i < json.length; i++) {
-    const ch = json[i];
     if (inString) {
-      if (ch === "\\") {
-        // Escaped pair — copy both characters verbatim
-        out.push(ch);
-        i++;
-        if (i < json.length) out.push(json[i]);
-        continue;
-      }
-      if (ch === '"') {
-        inString = false;
-        out.push(ch);
-        continue;
-      }
-      const code = ch.charCodeAt(0);
-      if (code < 0x20) {
-        // Raw control character inside a string — escape it
-        switch (code) {
-          case 0x08:
-            out.push("\\b");
-            break;
-          case 0x09:
-            out.push("\\t");
-            break;
-          case 0x0a:
-            out.push("\\n");
-            break;
-          case 0x0c:
-            out.push("\\f");
-            break;
-          case 0x0d:
-            out.push("\\r");
-            break;
-          default:
-            out.push(`\\u${code.toString(16).padStart(4, "0")}`);
-            break;
-        }
-        continue;
-      }
-      out.push(ch);
+      const result = processStringChar(json, i, out);
+      i += result.advance;
+      if (result.endString) inString = false;
     } else {
-      if (ch === '"') inString = true;
-      out.push(ch);
+      if (json[i] === '"') inString = true;
+      out.push(json[i]);
     }
   }
   return out.join("");
@@ -468,9 +481,9 @@ function escapeControlCharsInStrings(json: string): string {
  */
 function repairJsonEscapes(raw: string): string {
   // 1. Remove line continuations: backslash + literal newline + optional whitespace
-  let repaired = raw.replace(/\\\n\s*/g, "");
+  let repaired = raw.replaceAll(/\\\n\s*/g, "");
   // 2. Remove invalid escape sequences (backslash NOT followed by valid escape char)
-  repaired = repaired.replace(/\\(?!["\\/bfnrtu])/g, "");
+  repaired = repaired.replaceAll(/\\(?!["\\/bfnrtu])/g, "");
   // 3. Escape raw control characters inside JSON string values
   repaired = escapeControlCharsInStrings(repaired);
   return repaired;
@@ -608,6 +621,140 @@ export function parseRawContent(raw: string, format: string): unknown {
   return null;
 }
 
+// ── Helpers for writeFileSpecs decomposition ──
+
+/** Tracks files written, modified, or unchanged during a write operation. */
+interface FileWriteTracker {
+  filesWritten: string[];
+  filesModified: string[];
+  filesUnchanged: string[];
+}
+
+/**
+ * Match a normalized file spec path against normalized LLM output keys.
+ * Uses exact match first, then basename/suffix fallback (only if unambiguous).
+ */
+function matchNormalizedKey(
+  normalizedSpec: string,
+  normalizedContents: Record<string, string>,
+): { key: string; content: string } | null {
+  // Direct match
+  const direct = normalizedContents[normalizedSpec];
+  if (direct !== undefined) {
+    return { key: normalizedSpec, content: direct };
+  }
+
+  // Basename/suffix fallback — only if exactly one candidate matches
+  const candidates = findBasenameCandidates(normalizedSpec, Object.keys(normalizedContents));
+  if (candidates.length === 1) {
+    return { key: candidates[0], content: normalizedContents[candidates[0]] };
+  }
+
+  return null;
+}
+
+/**
+ * Find LLM keys that match a file spec by basename or suffix.
+ * E.g., spec ".github/actions/setup-node/action.yml" matches LLM key "action.yml".
+ */
+function findBasenameCandidates(normalizedSpec: string, llmKeys: string[]): string[] {
+  const candidates: string[] = [];
+  for (const llmKey of llmKeys) {
+    const isBasenameMatch = path.basename(normalizedSpec) === llmKey;
+    const isSuffixMatch = normalizedSpec.endsWith("/" + llmKey);
+    if (isBasenameMatch || isSuffixMatch) {
+      candidates.push(llmKey);
+    }
+  }
+  return candidates;
+}
+
+/** Resolve a dynamic file path by prepending outputPath if present. */
+function resolveDynamicFilePath(outputPath: string, llmKey: string): string {
+  const hasOutputPath = outputPath && outputPath !== ".";
+  return hasOutputPath ? path.join(outputPath, llmKey) : llmKey;
+}
+
+/**
+ * Classify a file as written/modified/unchanged and write it to disk.
+ * Handles directory creation and identical-content detection.
+ */
+function classifyAndWriteFile(
+  resolvedPath: string,
+  content: string,
+  isUpdate: boolean,
+  basePath: string,
+  tracker: FileWriteTracker,
+): void {
+  const fullPath = path.isAbsolute(resolvedPath) ? resolvedPath : path.join(basePath, resolvedPath);
+
+  const isExistingFile = isUpdate && fs.existsSync(fullPath);
+  if (isExistingFile) {
+    const existing = fs.readFileSync(fullPath, "utf-8");
+    if (existing === content) {
+      tracker.filesUnchanged.push(resolvedPath);
+      return;
+    }
+    tracker.filesModified.push(resolvedPath);
+  } else {
+    tracker.filesWritten.push(resolvedPath);
+  }
+
+  const dir = path.dirname(fullPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(fullPath, content, "utf-8");
+}
+
+// ── Helpers for verify decomposition ──
+
+/**
+ * Extract raw content string from verify data.
+ * Data may be a raw string, or a { generated, isUpdate } object from generate().
+ */
+function extractRawContent(data: unknown): string {
+  if (typeof data === "string") return data;
+
+  const isDataObject = data && typeof data === "object" && "generated" in data;
+  if (isDataObject) {
+    return String((data as Record<string, unknown>).generated);
+  }
+
+  return String(data);
+}
+
+/** Extract peer files from verify data (used by planner for multi-task verification). */
+function extractPeerFiles(data: unknown): Record<string, string> {
+  const hasData = data && typeof data === "object" && "_peerFiles" in data;
+  if (!hasData) return {};
+  return (data as Record<string, unknown>)._peerFiles as Record<string, string>;
+}
+
+/** Derive a verification filename from the primary file spec. */
+function derivePrimaryFilename(fileSpecs: FileSpecV2[]): string {
+  if (fileSpecs.length === 0) return "output";
+
+  const primaryFile = fileSpecs[0];
+  const pathParts = primaryFile.path.split("/");
+  return pathParts[pathParts.length - 1].replace(/\{[^}]+\}/g, "output"); // NOSONAR
+}
+
+/**
+ * Merge peer files with verify files.
+ * Peer files go first — current task's files override if names collide.
+ */
+function mergePeerFiles(
+  verifyFiles: Record<string, string> | undefined,
+  peerFiles: Record<string, string>,
+): Record<string, string> | undefined {
+  const hasPeerFiles = Object.keys(peerFiles).length > 0;
+  if (!hasPeerFiles) return verifyFiles;
+
+  if (verifyFiles) {
+    return { ...peerFiles, ...verifyFiles };
+  }
+  return { ...peerFiles };
+}
+
 /**
  * DopsRuntimeV2: The v2 tool runtime engine.
  * LLM generates raw file content instead of JSON objects.
@@ -739,157 +886,194 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
     isUpdate: boolean,
     basePath: string,
   ): { filesWritten: string[]; filesModified: string[]; filesUnchanged: string[] } {
-    const filesWritten: string[] = [];
-    const filesModified: string[] = [];
-    const filesUnchanged: string[] = [];
+    const tracker: FileWriteTracker = {
+      filesWritten: [],
+      filesModified: [],
+      filesUnchanged: [],
+    };
 
-    // Multi-file mode: parse JSON wrapper to route content per file
-    let fileContents: Record<string, string> | null = null;
-    if (this.isMultiFileOutput()) {
-      try {
-        fileContents = parseMultiFileOutput(generated);
-      } catch (parseErr) {
-        // If the LLM returned non-JSON content (e.g. raw YAML for an analysis task)
-        // and all file specs are conditional, gracefully skip file writing.
-        const allConditional = this.module.frontmatter.files.every((f) => f.conditional);
-        if (allConditional && !generated.trimStart().startsWith("{")) {
-          return { filesWritten: [], filesModified: [], filesUnchanged: [] };
-        }
-        throw parseErr;
-      }
-    }
+    const normalizedContents = this.parseAndNormalizeMultiFileOutput(generated, input);
 
-    // Build normalized lookup for LLM-generated keys.
-    // LLMs generate keys like "playbook.yml" or "templates/deployment.yaml"
-    // while file specs use "{outputPath}/playbook.yml" or "{outputPath}/templates/deployment.yaml".
-    // Normalize both sides by stripping {outputPath}/ or its resolved value.
-    const outputPath = typeof input.outputPath === "string" ? input.outputPath : "";
-    let normalizedContents: Record<string, string> | null = null;
-    if (fileContents) {
-      normalizedContents = {};
-      for (const [key, val] of Object.entries(fileContents)) {
-        const nKey = stripOutputPrefix(key, outputPath);
-        normalizedContents[nKey] = val;
-      }
-    }
+    // Multi-file mode expected JSON but parse was gracefully skipped (all-conditional + non-JSON)
+    if (this.isMultiFileOutput() && !normalizedContents) return tracker;
 
-    // Track which LLM keys were consumed so we can write unmatched dynamic files afterwards
     const consumedLlmKeys = new Set<string>();
+    const outputPath = typeof input.outputPath === "string" ? input.outputPath : "";
 
+    this.writeDeclaredFileSpecs(
+      input,
+      generated,
+      isUpdate,
+      basePath,
+      outputPath,
+      normalizedContents,
+      consumedLlmKeys,
+      tracker,
+    );
+
+    this.writeDynamicFiles(
+      input,
+      isUpdate,
+      basePath,
+      outputPath,
+      normalizedContents,
+      consumedLlmKeys,
+      tracker,
+    );
+
+    this.guardMultiFileMustProduceOutput(normalizedContents, tracker);
+
+    return tracker;
+  }
+
+  /**
+   * Parse multi-file output and normalize keys by stripping outputPath prefix.
+   * Returns null for single-file modules.
+   */
+  private parseAndNormalizeMultiFileOutput(
+    generated: string,
+    input: Record<string, unknown>,
+  ): Record<string, string> | null {
+    if (!this.isMultiFileOutput()) return null;
+
+    const fileContents = this.tryParseMultiFileOutput(generated);
+    if (!fileContents) return null;
+
+    const outputPath = typeof input.outputPath === "string" ? input.outputPath : "";
+    const normalized: Record<string, string> = {};
+    for (const [key, val] of Object.entries(fileContents)) {
+      normalized[stripOutputPrefix(key, outputPath)] = val;
+    }
+    return normalized;
+  }
+
+  /**
+   * Attempt to parse multi-file JSON output. Returns null if all file specs are
+   * conditional and the content is non-JSON (graceful skip).
+   */
+  private tryParseMultiFileOutput(generated: string): Record<string, string> | null {
+    try {
+      return parseMultiFileOutput(generated);
+    } catch (parseErr) {
+      const allConditional = this.module.frontmatter.files.every((f) => f.conditional);
+      if (allConditional && !generated.trimStart().startsWith("{")) {
+        return null;
+      }
+      throw parseErr;
+    }
+  }
+
+  /** Process all declared file specs and write their content. */
+  private writeDeclaredFileSpecs(
+    input: Record<string, unknown>,
+    generated: string,
+    isUpdate: boolean,
+    basePath: string,
+    outputPath: string,
+    normalizedContents: Record<string, string> | null,
+    consumedLlmKeys: Set<string>,
+    tracker: FileWriteTracker,
+  ): void {
     for (const fileSpec of this.module.frontmatter.files) {
       const resolvedPath = resolveFilePath(fileSpec.path, input);
-      let content: string;
-      if (normalizedContents) {
-        const normalizedSpec = stripOutputPrefix(fileSpec.path, outputPath);
-        let match = normalizedContents[normalizedSpec];
-        let matchedKey = normalizedSpec;
-        // Basename fallback: if LLM outputs a shortened key (e.g. "action.yml" instead of
-        // ".github/actions/setup-node/action.yml"), match by basename or suffix.
-        // Only applies when there's exactly one LLM key matching — avoids ambiguity.
-        if (match === undefined) {
-          const candidates: string[] = [];
-          for (const llmKey of Object.keys(normalizedContents)) {
-            if (
-              normalizedSpec.endsWith("/" + llmKey) ||
-              normalizedSpec === llmKey ||
-              path.basename(normalizedSpec) === llmKey
-            ) {
-              candidates.push(llmKey);
-            }
-          }
-          if (candidates.length === 1) {
-            match = normalizedContents[candidates[0]];
-            matchedKey = candidates[0];
-          }
-        }
-        if (match === undefined) {
-          if (fileSpec.conditional) continue; // skip optional files not generated
-          throw new Error(`Multi-file output missing required file: ${fileSpec.path}`);
-        }
-        consumedLlmKeys.add(matchedKey);
-        content = match;
-      } else {
-        content = generated;
-      }
-      const fullPath = path.isAbsolute(resolvedPath)
-        ? resolvedPath
-        : path.join(basePath, resolvedPath);
-
-      if (this.module.frontmatter.scope) {
-        if (!matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input)) {
-          throw new Error(`Write to '${resolvedPath}' blocked by scope policy`);
-        }
-      }
-
-      if (isUpdate && fs.existsSync(fullPath)) {
-        // Skip write if content is identical — no-op update
-        const existing = fs.readFileSync(fullPath, "utf-8");
-        if (existing === content) {
-          filesUnchanged.push(resolvedPath);
-          continue;
-        }
-        filesModified.push(resolvedPath);
-      } else {
-        filesWritten.push(resolvedPath);
-      }
-
-      const dir = path.dirname(fullPath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(fullPath, content, "utf-8");
-    }
-
-    // Write dynamically-named LLM output files not matched by any declared file spec.
-    // This handles cases where the LLM generates files with names determined by the prompt
-    // (e.g. ".github/actions/docker-build/action.yml" not pre-declared in the .dops file).
-    if (normalizedContents) {
-      for (const [llmKey, content] of Object.entries(normalizedContents)) {
-        if (consumedLlmKeys.has(llmKey)) continue;
-
-        const resolvedPath =
-          outputPath && outputPath !== "." ? path.join(outputPath, llmKey) : llmKey;
-
-        // Scope check: only write if within declared scope
-        if (this.module.frontmatter.scope) {
-          if (!matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input)) {
-            continue; // silently skip files outside scope
-          }
-        }
-
-        const fullPath = path.isAbsolute(resolvedPath)
-          ? resolvedPath
-          : path.join(basePath, resolvedPath);
-
-        if (isUpdate && fs.existsSync(fullPath)) {
-          const existing = fs.readFileSync(fullPath, "utf-8");
-          if (existing === content) {
-            filesUnchanged.push(resolvedPath);
-            continue;
-          }
-          filesModified.push(resolvedPath);
-        } else {
-          filesWritten.push(resolvedPath);
-        }
-
-        const dir = path.dirname(fullPath);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(fullPath, content, "utf-8");
-      }
-    }
-
-    // Guard: multi-file mode must produce at least one file action
-    if (
-      normalizedContents &&
-      filesWritten.length === 0 &&
-      filesModified.length === 0 &&
-      filesUnchanged.length === 0
-    ) {
-      const llmKeys = Object.keys(normalizedContents).join(", ");
-      throw new Error(
-        `No files matched between LLM output keys [${llmKeys}] and declared file specs`,
+      const content = this.resolveFileSpecContent(
+        fileSpec,
+        generated,
+        outputPath,
+        normalizedContents,
+        consumedLlmKeys,
       );
+      if (content === null) continue; // conditional file not generated
+
+      this.enforceScopePolicy(resolvedPath, input);
+      classifyAndWriteFile(resolvedPath, content, isUpdate, basePath, tracker);
+    }
+  }
+
+  /**
+   * Resolve the content for a single file spec. For multi-file modules, looks up
+   * the matching key in normalizedContents. For single-file, returns the raw generated string.
+   * Returns null if the file spec is conditional and no matching content was found.
+   */
+  private resolveFileSpecContent(
+    fileSpec: FileSpecV2,
+    generated: string,
+    outputPath: string,
+    normalizedContents: Record<string, string> | null,
+    consumedLlmKeys: Set<string>,
+  ): string | null {
+    if (!normalizedContents) return generated;
+
+    const normalizedSpec = stripOutputPrefix(fileSpec.path, outputPath);
+    const matched = matchNormalizedKey(normalizedSpec, normalizedContents);
+
+    if (!matched) {
+      if (fileSpec.conditional) return null;
+      throw new Error(`Multi-file output missing required file: ${fileSpec.path}`);
     }
 
-    return { filesWritten, filesModified, filesUnchanged };
+    consumedLlmKeys.add(matched.key);
+    return matched.content;
+  }
+
+  /** Throw if the resolved path violates the module's scope policy. */
+  private enforceScopePolicy(resolvedPath: string, input: Record<string, unknown>): void {
+    if (!this.module.frontmatter.scope) return;
+
+    if (!matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input)) {
+      throw new Error(`Write to '${resolvedPath}' blocked by scope policy`);
+    }
+  }
+
+  /**
+   * Write LLM output files that didn't match any declared file spec.
+   * Handles dynamically-named files whose paths are determined by the prompt.
+   */
+  private writeDynamicFiles(
+    input: Record<string, unknown>,
+    isUpdate: boolean,
+    basePath: string,
+    outputPath: string,
+    normalizedContents: Record<string, string> | null,
+    consumedLlmKeys: Set<string>,
+    tracker: FileWriteTracker,
+  ): void {
+    if (!normalizedContents) return;
+
+    for (const [llmKey, content] of Object.entries(normalizedContents)) {
+      if (consumedLlmKeys.has(llmKey)) continue;
+
+      const resolvedPath = resolveDynamicFilePath(outputPath, llmKey);
+      const isOutsideScope = this.isOutsideScope(resolvedPath, input);
+      if (isOutsideScope) continue;
+
+      classifyAndWriteFile(resolvedPath, content, isUpdate, basePath, tracker);
+    }
+  }
+
+  /** Check if a path falls outside the module's declared write scope. */
+  private isOutsideScope(resolvedPath: string, input: Record<string, unknown>): boolean {
+    if (!this.module.frontmatter.scope) return false;
+    return !matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input);
+  }
+
+  /** Guard: multi-file mode must produce at least one file action. */
+  private guardMultiFileMustProduceOutput(
+    normalizedContents: Record<string, string> | null,
+    tracker: FileWriteTracker,
+  ): void {
+    if (!normalizedContents) return;
+
+    const hasOutput =
+      tracker.filesWritten.length > 0 ||
+      tracker.filesModified.length > 0 ||
+      tracker.filesUnchanged.length > 0;
+    if (hasOutput) return;
+
+    const llmKeys = Object.keys(normalizedContents).join(", ");
+    throw new Error(
+      `No files matched between LLM output keys [${llmKeys}] and declared file specs`,
+    );
   }
 
   async execute(input: Record<string, unknown>): Promise<ToolOutput> {
@@ -905,38 +1089,8 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
     const { generated, isUpdate } = genResult.data as { generated: string; isUpdate: boolean };
 
     // Post-generation validation: check paths and content format before writing
-    try {
-      const fileFormat = this.module.frontmatter.context.fileFormat;
-      if (this.isMultiFileOutput()) {
-        // Multi-file: wrapper is JSON, individual files are raw content
-        // Validate paths only — individual file content format varies
-        const fileContents = parseMultiFileOutput(generated);
-        const pathErrors = validateGeneratedPaths(Object.keys(fileContents));
-        if (pathErrors.length > 0) {
-          return failedOutput(new Error(`Path validation failed: ${pathErrors.join("; ")}`));
-        }
-        // Check non-empty content
-        for (const [fp, content] of Object.entries(fileContents)) {
-          if (!content || content.trim().length === 0) {
-            return failedOutput(new Error(`Content validation failed: Empty content for ${fp}`));
-          }
-        }
-      } else {
-        // Single-file: validate content against declared format
-        const contentErrors = validateGeneratedContent(generated, fileFormat, this.name);
-        if (contentErrors.length > 0) {
-          return failedOutput(new Error(`Content validation failed: ${contentErrors.join("; ")}`));
-        }
-      }
-    } catch (validationErr) {
-      // Don't block on validation errors for non-parseable formats (raw, hcl)
-      // — those are caught later by binary verification
-      const msg = validationErr instanceof Error ? validationErr.message : String(validationErr);
-      if (msg.includes("Path validation") || msg.includes("Content validation")) {
-        return failedOutput(validationErr);
-      }
-      // Parse failure for multi-file is handled by writeFileSpecs
-    }
+    const validationError = this.validateGeneratedOutput(generated);
+    if (validationError) return validationError;
 
     try {
       const basePath = this.options.basePath ?? process.cwd();
@@ -960,57 +1114,80 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
     }
   }
 
+  /**
+   * Validate generated output before writing files.
+   * Returns a ToolOutput error if validation fails, or null if validation passes.
+   */
+  private validateGeneratedOutput(generated: string): ToolOutput | null {
+    try {
+      if (this.isMultiFileOutput()) {
+        return this.validateMultiFileOutput(generated);
+      }
+      return this.validateSingleFileOutput(generated);
+    } catch (validationErr) {
+      return this.handleValidationError(validationErr);
+    }
+  }
+
+  /** Validate multi-file JSON output: check paths and non-empty content. */
+  private validateMultiFileOutput(generated: string): ToolOutput | null {
+    const fileContents = parseMultiFileOutput(generated);
+
+    const pathErrors = validateGeneratedPaths(Object.keys(fileContents));
+    if (pathErrors.length > 0) {
+      return failedOutput(new Error(`Path validation failed: ${pathErrors.join("; ")}`));
+    }
+
+    for (const [fp, content] of Object.entries(fileContents)) {
+      const isEmpty = !content || content.trim().length === 0;
+      if (isEmpty) {
+        return failedOutput(new Error(`Content validation failed: Empty content for ${fp}`));
+      }
+    }
+
+    return null;
+  }
+
+  /** Validate single-file output against declared format. */
+  private validateSingleFileOutput(generated: string): ToolOutput | null {
+    const fileFormat = this.module.frontmatter.context.fileFormat;
+    const contentErrors = validateGeneratedContent(generated, fileFormat, this.name);
+    if (contentErrors.length > 0) {
+      return failedOutput(new Error(`Content validation failed: ${contentErrors.join("; ")}`));
+    }
+    return null;
+  }
+
+  /**
+   * Handle validation errors: propagate path/content validation failures,
+   * silently ignore parse failures (handled later by writeFileSpecs).
+   */
+  private handleValidationError(validationErr: unknown): ToolOutput | null {
+    const msg = validationErr instanceof Error ? validationErr.message : String(validationErr);
+    const isValidationFailure =
+      msg.includes("Path validation") || msg.includes("Content validation");
+    if (isValidationFailure) {
+      return failedOutput(validationErr);
+    }
+    // Parse failure for multi-file is handled by writeFileSpecs
+    return null;
+  }
+
   async verify(data: unknown): Promise<VerificationResult> {
     const verificationConfig = this.module.frontmatter.verification;
     const permissions = this.module.frontmatter.permissions ?? {};
 
-    // For v2, data may be a raw string or a { generated, isUpdate } object from generate().
-    // Extract the generated content string for verification.
-    const rawContentFallback =
-      data && typeof data === "object" && "generated" in data
-        ? String((data as Record<string, unknown>).generated)
-        : String(data);
-    const rawContent = typeof data === "string" ? data : rawContentFallback;
+    const rawContent = extractRawContent(data);
     const fileFormat = this.module.frontmatter.context.fileFormat;
     const parsed = parseRawContent(rawContent, fileFormat);
+    const peerFiles = extractPeerFiles(data);
 
-    // Extract peer files from prior plan tasks (e.g., other .tf files for terraform validate)
-    const peerFiles: Record<string, string> =
-      data && typeof data === "object" && "_peerFiles" in data
-        ? ((data as Record<string, unknown>)._peerFiles as Record<string, string>)
-        : {};
-
-    // Run structural validation against parsed content (if parseable)
     const structuralIssues: VerificationIssue[] =
       verificationConfig?.structural && parsed
         ? validateStructure(parsed, verificationConfig.structural)
         : [];
 
-    // For multi-file modules, parse the JSON wrapper and pass individual files
-    // so verification tools receive the actual file contents (e.g. HCL not JSON).
-    let verifyFiles: Record<string, string> | undefined;
-    let filename = "output";
-    if (this.isMultiFileOutput()) {
-      try {
-        verifyFiles = parseMultiFileOutput(rawContent);
-      } catch {
-        // If parsing fails, fall back to single-file verification
-      }
-    }
-    if (!verifyFiles && this.module.frontmatter.files.length > 0) {
-      const primaryFile = this.module.frontmatter.files[0];
-      const pathParts = primaryFile.path.split("/");
-      filename = pathParts[pathParts.length - 1].replace(/\{[^}]+\}/g, "output"); // NOSONAR
-    }
-
-    // Merge peer files from prior tasks so verification tools see the full context
-    // (e.g., terraform validate needs all .tf files, not just the current task's output)
-    if (verifyFiles && Object.keys(peerFiles).length > 0) {
-      // Peer files go first — current task's files override if names collide
-      verifyFiles = { ...peerFiles, ...verifyFiles };
-    } else if (!verifyFiles && Object.keys(peerFiles).length > 0) {
-      verifyFiles = { ...peerFiles };
-    }
+    const { verifyFiles, filename } = this.resolveVerifyFilesAndFilename(rawContent, peerFiles);
 
     const verificationResult = await runVerification(
       parsed ?? data,
@@ -1024,19 +1201,48 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
       this.options?.onBinaryMissing,
     );
 
-    // Post-generation audit: check generated content against Context7 docs
-    if (this._lastDocsCache) {
-      const auditResult = auditAgainstDocs(
-        rawContent,
-        this._lastDocsCache,
-        this.module.frontmatter.context.technology,
-      );
-      if (auditResult.issues.length > 0) {
-        verificationResult.issues.push(...auditResult.issues);
-      }
-    }
+    this.appendDocAuditIssues(rawContent, verificationResult);
 
     return verificationResult;
+  }
+
+  /**
+   * Resolve verification files and filename for binary verification.
+   * For multi-file modules, parses the JSON wrapper. For single-file, derives filename
+   * from the primary file spec.
+   */
+  private resolveVerifyFilesAndFilename(
+    rawContent: string,
+    peerFiles: Record<string, string>,
+  ): { verifyFiles: Record<string, string> | undefined; filename: string } {
+    let verifyFiles = this.tryParseVerifyFiles(rawContent);
+    const filename = verifyFiles ? "output" : derivePrimaryFilename(this.module.frontmatter.files);
+    verifyFiles = mergePeerFiles(verifyFiles, peerFiles);
+    return { verifyFiles, filename };
+  }
+
+  /** Attempt to parse multi-file output for verification. Returns undefined on failure. */
+  private tryParseVerifyFiles(rawContent: string): Record<string, string> | undefined {
+    if (!this.isMultiFileOutput()) return undefined;
+    try {
+      return parseMultiFileOutput(rawContent);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Append Context7 doc audit issues to verification result if docs are cached. */
+  private appendDocAuditIssues(rawContent: string, verificationResult: VerificationResult): void {
+    if (!this._lastDocsCache) return;
+
+    const auditResult = auditAgainstDocs(
+      rawContent,
+      this._lastDocsCache,
+      this.module.frontmatter.context.technology,
+    );
+    if (auditResult.issues.length > 0) {
+      verificationResult.issues.push(...auditResult.issues);
+    }
   }
 
   get systemPromptHash(): string {

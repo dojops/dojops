@@ -116,10 +116,10 @@ function extractDeprecatedTerms(docs: string): string[] {
  */
 function findLatestVersionInDocs(docs: string, searchKey: string): string | null {
   // Escape the searchKey for regex
-  const escaped = searchKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = searchKey.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 
   // Look for patterns like "actions/checkout@v4", "searchKey@v5", "searchKey v5"
-  const versionRegex = new RegExp(`${escaped}[@\\s]v(?<ver>\\d+)`, "gi");
+  const versionRegex = new RegExp(String.raw`${escaped}[@\s]v(?<ver>\d+)`, "gi");
   const versions: number[] = [];
 
   let match: RegExpExecArray | null;
@@ -184,8 +184,8 @@ export function auditAgainstDocs(
   for (const term of deprecatedTerms) {
     // Only flag if the exact deprecated term appears in generated content
     // Use case-insensitive matching but require word-like boundaries
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const termRegex = new RegExp(`\\b${escaped}\\b`, "i");
+    const escaped = term.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+    const termRegex = new RegExp(String.raw`\b${escaped}\b`, "i");
     if (termRegex.test(generatedContent)) {
       issues.push({
         severity: "warning",

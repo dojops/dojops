@@ -27,17 +27,19 @@ async function selectToolchainScope(nonInteractive: boolean): Promise<ToolchainC
   const globalDir = path.join(os.homedir(), ".dojops", "toolchain");
   const projectDir = path.join(process.cwd(), ".dojops", "toolchain");
 
+  const globalLabel = pc.dim(`(${globalDir})`);
+  const projectLabel = pc.dim(`(${projectDir})`);
   const scopeChoice = await p.select({
     message: "Toolchain scope:",
     options: [
       {
         value: "global",
-        label: `Global ${pc.dim(`(${globalDir})`)}`,
+        label: `Global ${globalLabel}`,
         hint: "shared across all projects",
       },
       {
         value: "project",
-        label: `Project ${pc.dim(`(${projectDir})`)}`,
+        label: `Project ${projectLabel}`,
         hint: "scoped to this project only",
       },
     ],

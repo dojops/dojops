@@ -76,6 +76,59 @@ export async function reviewCommand(args: string[], ctx: CLIContext): Promise<vo
   p.note(wrapForNote(output), "DevSecOps Review");
 }
 
+/** Format a single finding as terminal display lines. */
+function formatFinding(finding: {
+  severity: string;
+  category: string;
+  file: string;
+  line?: number;
+  toolSource?: string;
+  message: string;
+  recommendation: string;
+}): string[] {
+  const sev = severityBadge(finding.severity);
+  const cat = pc.dim(`[${finding.category}]`);
+  const tool = finding.toolSource ? pc.dim(` (${finding.toolSource})`) : "";
+  const lineInfo = finding.line ? pc.dim(`:${finding.line}`) : "";
+
+  return [
+    `  ${sev} ${cat} ${pc.underline(finding.file)}${lineInfo}${tool}`,
+    `    ${finding.message}`,
+    `    ${pc.cyan("Fix:")} ${finding.recommendation}`,
+    "",
+  ];
+}
+
+/** Format findings section sorted by severity. */
+function formatFindingsSection(
+  findings: Array<{
+    severity: string;
+    category: string;
+    file: string;
+    line?: number;
+    toolSource?: string;
+    message: string;
+    recommendation: string;
+  }>,
+): string[] {
+  if (findings.length === 0) {
+    return [pc.green("No issues found."), ""];
+  }
+
+  const severityOrder: Record<string, number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3,
+    info: 4,
+  };
+  const sorted = [...findings].sort(
+    (a, b) => (severityOrder[a.severity] ?? 5) - (severityOrder[b.severity] ?? 5),
+  );
+
+  return [pc.bold(`Findings (${findings.length}):`), "", ...sorted.flatMap(formatFinding)];
+}
+
 /** Format the full review report for terminal display. */
 function formatReviewReport(result: ReviewPipelineResult): string {
   const { report, toolResults, filesReviewed } = result;
@@ -104,37 +157,14 @@ function formatReviewReport(result: ReviewPipelineResult): string {
   }
 
   // Findings by severity
-  if (report.findings.length > 0) {
-    lines.push(pc.bold(`Findings (${report.findings.length}):`));
-    lines.push("");
-
-    // Sort by severity: critical > high > medium > low > info
-    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-    const sorted = [...report.findings].sort(
-      (a, b) => (severityOrder[a.severity] ?? 5) - (severityOrder[b.severity] ?? 5),
-    );
-
-    for (const finding of sorted) {
-      const sev = severityBadge(finding.severity);
-      const cat = pc.dim(`[${finding.category}]`);
-      const tool = finding.toolSource ? pc.dim(` (${finding.toolSource})`) : "";
-      const lineInfo = finding.line ? pc.dim(`:${finding.line}`) : "";
-
-      lines.push(`  ${sev} ${cat} ${pc.underline(finding.file)}${lineInfo}${tool}`);
-      lines.push(`    ${finding.message}`);
-      lines.push(`    ${pc.cyan("Fix:")} ${finding.recommendation}`);
-      lines.push("");
-    }
-  } else {
-    lines.push(pc.green("No issues found."));
-    lines.push("");
-  }
+  lines.push(...formatFindingsSection(report.findings));
 
   // Recommended actions
   if (report.recommendedActions.length > 0) {
     lines.push(pc.bold("Recommended Actions:"));
     for (let i = 0; i < report.recommendedActions.length; i++) {
-      lines.push(`  ${pc.cyan(`${i + 1}.`)} ${report.recommendedActions[i]}`);
+      const num = pc.cyan(`${i + 1}.`);
+      lines.push(`  ${num} ${report.recommendedActions[i]}`);
     }
   }
 

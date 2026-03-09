@@ -348,12 +348,12 @@ export class SafeExecutor {
 
     try {
       const dataObj = generateOutput.data as Record<string, unknown> | undefined;
+      const nonStringContent =
+        typeof dataObj?.generated === "string"
+          ? dataObj.generated
+          : JSON.stringify(generateOutput.data);
       const generatedContent =
-        typeof generateOutput.data === "string"
-          ? generateOutput.data
-          : typeof dataObj?.generated === "string"
-            ? dataObj.generated
-            : JSON.stringify(generateOutput.data);
+        typeof generateOutput.data === "string" ? generateOutput.data : nonStringContent;
 
       const originalPrompt =
         typeof input === "object" && input !== null
@@ -382,6 +382,79 @@ export class SafeExecutor {
     return this.checkFilePaths(declaredPaths);
   }
 
+  /** Extract error messages from a failed verification result. */
+  private extractVerificationErrors(verifyResult: { verification: VerificationResult }): string[] {
+    return verifyResult.verification.issues
+      .filter((i) => i.severity === "error")
+      .map((i) => i.message);
+  }
+
+  /** Notify progress callbacks about a verification failure. */
+  private notifyVerificationFailed(
+    taskId: string,
+    verifyResult: { verification: VerificationResult },
+  ): void {
+    if (!this.progress?.onVerificationFailed) return;
+    this.progress.onVerificationFailed(taskId, this.extractVerificationErrors(verifyResult));
+  }
+
+  /**
+   * Self-repair loop: verify → critique → re-generate → verify (up to maxRepairAttempts).
+   * Returns the final generateOutput and verifyResult after all repair attempts.
+   */
+  private async runRepairLoop(
+    taskId: string,
+    tool: DevOpsTool,
+    input: unknown,
+    initialOutput: ToolOutput,
+    initialVerify: Awaited<ReturnType<SafeExecutor["runVerification"]>>,
+    startTime: number,
+    meta?: Record<string, unknown>,
+  ): Promise<
+    | {
+        repaired: true;
+        generateOutput: ToolOutput;
+        verifyResult: Awaited<ReturnType<SafeExecutor["runVerification"]>>;
+      }
+    | { repaired: false; earlyResult: ExecutionResult }
+  > {
+    const maxRetries = this.policy.maxRepairAttempts ?? this.policy.maxVerifyRetries ?? 1;
+    let generateOutput = initialOutput;
+    let verifyResult = initialVerify;
+    let retries = 0;
+
+    while (!verifyResult.ok && retries < maxRetries) {
+      if (this.progress?.onRepairAttempt) {
+        this.progress.onRepairAttempt(
+          taskId,
+          retries + 1,
+          maxRetries,
+          this.extractVerificationErrors(verifyResult),
+        );
+      }
+      const feedback = await this.buildRepairFeedback(verifyResult, generateOutput, tool, input);
+      const enrichedInput = {
+        ...(typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {}),
+        _verificationFeedback: feedback,
+        _repairAttempt: retries + 1,
+        _maxRepairAttempts: maxRetries,
+      };
+      const regenResult = await this.runGeneratePhase(taskId, tool, enrichedInput, startTime, meta);
+      if ("result" in regenResult) {
+        return { repaired: false, earlyResult: regenResult.result };
+      }
+      generateOutput = regenResult.output;
+      verifyResult = await this.runVerification(tool, generateOutput, meta);
+      retries++;
+    }
+
+    if (verifyResult.ok && retries > 0 && this.progress?.onVerificationPassed) {
+      this.progress.onVerificationPassed(taskId);
+    }
+
+    return { repaired: true, generateOutput, verifyResult };
+  }
+
   async executeTask(
     taskId: string,
     tool: DevOpsTool,
@@ -404,7 +477,6 @@ export class SafeExecutor {
 
     let generateOutput: ToolOutput;
     if (preGeneratedOutput) {
-      // Skip generate phase — output was already produced by the planner
       generateOutput = preGeneratedOutput;
       this.accumulateTokenUsage(generateOutput.usage);
     } else {
@@ -415,39 +487,21 @@ export class SafeExecutor {
 
     let verifyResult = await this.runVerification(tool, generateOutput, meta);
 
-    // Self-repair loop: verify → critique → re-generate → verify (up to maxRepairAttempts)
-    const maxRetries = this.policy.maxRepairAttempts ?? this.policy.maxVerifyRetries ?? 1;
-    let retries = 0;
-    if (!verifyResult.ok && this.progress?.onVerificationFailed) {
-      const errors = verifyResult.verification.issues
-        .filter((i) => i.severity === "error")
-        .map((i) => i.message);
-      this.progress.onVerificationFailed(taskId, errors);
-    }
-    while (!verifyResult.ok && retries < maxRetries) {
-      if (this.progress?.onRepairAttempt) {
-        const errors = verifyResult.verification.issues
-          .filter((i) => i.severity === "error")
-          .map((i) => i.message);
-        this.progress.onRepairAttempt(taskId, retries + 1, maxRetries, errors);
-      }
-      const feedback = await this.buildRepairFeedback(verifyResult, generateOutput, tool, input);
-      const enrichedInput = {
-        ...(typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {}),
-        _verificationFeedback: feedback,
-        _repairAttempt: retries + 1,
-        _maxRepairAttempts: maxRetries,
-      };
-      const regenResult = await this.runGeneratePhase(taskId, tool, enrichedInput, startTime, meta);
-      if ("result" in regenResult) {
-        return regenResult.result;
-      }
-      generateOutput = regenResult.output;
-      verifyResult = await this.runVerification(tool, generateOutput, meta);
-      retries++;
-    }
-    if (verifyResult.ok && retries > 0 && this.progress?.onVerificationPassed) {
-      this.progress.onVerificationPassed(taskId);
+    if (!verifyResult.ok) {
+      this.notifyVerificationFailed(taskId, verifyResult);
+
+      const repairOutcome = await this.runRepairLoop(
+        taskId,
+        tool,
+        input,
+        generateOutput,
+        verifyResult,
+        startTime,
+        meta,
+      );
+      if (!repairOutcome.repaired) return repairOutcome.earlyResult;
+      generateOutput = repairOutcome.generateOutput;
+      verifyResult = repairOutcome.verifyResult;
     }
 
     if (!verifyResult.ok) {

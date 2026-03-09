@@ -39,7 +39,7 @@ export function runReviewTool(
   const absPath = path.resolve(projectRoot, filePath);
   const dirPath = path.dirname(absPath);
   const args = spec.args.map((arg) =>
-    arg.replace(/\{file\}/g, absPath).replace(/\{dir\}/g, dirPath),
+    arg.replaceAll("{file}", absPath).replaceAll("{dir}", dirPath),
   );
 
   const timeout = spec.timeout ?? 30000;

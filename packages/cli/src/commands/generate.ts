@@ -197,66 +197,51 @@ interface ToolDirectContext {
   projectContextStr?: string;
 }
 
-async function handleToolDirect(
-  ctx: CLIContext,
-  args: string[],
-  prompt: string,
-  writePath: string | undefined,
-  allowAllPaths: boolean,
+function resolveToolOrThrow(
+  registry: ReturnType<typeof createToolRegistry>,
   toolName: string,
-  toolCtx: ToolDirectContext,
-): Promise<void> {
-  const registry = createToolRegistry(toolCtx.provider, toolCtx.projectRoot, {
-    docAugmenter: toolCtx.docAugmenter,
-    context7Provider: toolCtx.context7Provider,
-    projectContext: toolCtx.projectContextStr,
-    onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
-  });
+): NonNullable<ReturnType<ReturnType<typeof createToolRegistry>["get"]>> {
   const tool = registry.get(toolName);
-  if (!tool) {
-    const available = registry
-      .getAll()
-      .map((t) => t.name)
-      .join(", ");
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Module "${toolName}" not found. Available: ${available}`,
-    );
-  }
+  if (tool) return tool;
 
-  if (ctx.globalOpts.output !== "json") {
-    const reason = ctx.globalOpts.tool ? "forced via --module" : "auto-detected";
-    p.log.info(`Using module: ${pc.bold(toolName)} (${reason})`);
-  }
+  const available = registry
+    .getAll()
+    .map((t) => t.name)
+    .join(", ");
+  throw new CLIError(
+    ExitCode.VALIDATION_ERROR,
+    `Module "${toolName}" not found. Available: ${available}`,
+  );
+}
 
-  const structured = isStructuredOutput(ctx);
-  const autoApprove = ctx.globalOpts.nonInteractive || ctx.globalOpts.dryRun;
-  const taskRisk = classifyTaskRisk({ tool: toolName, description: prompt });
-  const repairAttempts = extractFlagValue(args, "--repair-attempts");
-  const maxRepairAttempts = repairAttempts ? Number.parseInt(repairAttempts, 10) : 3;
-
-  // Build critic for self-repair loop
-  let critic: import("@dojops/executor").CriticCallback | undefined;
+async function buildCritic(
+  provider: ReturnType<CLIContext["getProvider"]>,
+): Promise<import("@dojops/executor").CriticCallback | undefined> {
   try {
     const { CriticAgent } = await import("@dojops/core");
-    critic = new CriticAgent(toolCtx.provider);
+    return new CriticAgent(provider);
   } catch {
-    // CriticAgent not available
+    return undefined;
   }
+}
 
-  // Inject memory context so the LLM avoids repeating already-completed work
-  let memoryPrompt = prompt;
-  if (toolCtx.projectRoot) {
-    const memCtx = queryMemory(toolCtx.projectRoot, "generate", prompt);
-    const memoryStr = buildMemoryContextString(memCtx);
-    if (memoryStr) {
-      memoryPrompt = `${prompt}\n\n${memoryStr}`;
-    }
-  }
+function injectMemoryContext(prompt: string, projectRoot: string | undefined): string {
+  if (!projectRoot) return prompt;
+  const memCtx = queryMemory(projectRoot, "generate", prompt);
+  const memoryStr = buildMemoryContextString(memCtx);
+  return memoryStr ? `${prompt}\n\n${memoryStr}` : prompt;
+}
 
-  // Route through SafeExecutor for unified safety pipeline:
-  // validate → generate → verify → repair → approve → execute → audit
-  const safeExecutor = new SafeExecutor({
+function buildSafeExecutorForTool(
+  ctx: CLIContext,
+  writePath: string | undefined,
+  allowAllPaths: boolean,
+  maxRepairAttempts: number,
+  critic: import("@dojops/executor").CriticCallback | undefined,
+  structured: boolean,
+): SafeExecutor {
+  const autoApprove = ctx.globalOpts.nonInteractive || ctx.globalOpts.dryRun;
+  return new SafeExecutor({
     policy: {
       allowWrite: !!writePath,
       requireApproval: !autoApprove,
@@ -285,6 +270,102 @@ async function handleToolDirect(
           },
         },
   });
+}
+
+function extractContentFromResult(execResult: { output?: unknown }): string {
+  const outputData = execResult.output as Record<string, unknown> | string | undefined;
+  if (typeof outputData === "string") return outputData;
+  if (typeof outputData?.generated === "string") return outputData.generated;
+  return JSON.stringify(outputData, null, 2);
+}
+
+function trackToolActivity(
+  projectRoot: string,
+  prompt: string,
+  toolName: string,
+  writePath: string | undefined,
+  durationMs: number | undefined,
+): void {
+  const files = writePath ? ` \`${writePath}\`` : "";
+  const filesWritten = writePath ? [writePath] : [];
+  appendActivity(projectRoot, `Generated${files} (${toolName})`);
+  recordTask(projectRoot, {
+    timestamp: new Date().toISOString(),
+    task_type: "generate",
+    prompt,
+    result_summary: `Generated${files} (${toolName})`,
+    status: "success",
+    duration_ms: durationMs ?? 0,
+    related_files: JSON.stringify(filesWritten),
+    agent_or_module: toolName,
+    metadata: "{}",
+  });
+}
+
+function outputWriteResult(
+  ctx: CLIContext,
+  writePath: string,
+  allowAllPaths: boolean,
+  toolName: string,
+  content: string,
+): void {
+  validateWritePath(writePath, allowAllPaths);
+  if (ctx.globalOpts.dryRun) {
+    p.log.info(`${pc.yellow("[dry-run]")} Would write to ${pc.underline(writePath)}`);
+    outputFormatted(ctx.globalOpts.output, "module", toolName, content);
+    return;
+  }
+  const action = writeFileContent(writePath, content);
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify({ module: toolName, content, written: writePath, action }));
+    return;
+  }
+  if (action === "unchanged") {
+    p.log.info(`${pc.dim("○")} ${pc.underline(writePath)} ${pc.dim("(unchanged)")}`);
+    return;
+  }
+  const label = action === "created" ? pc.green("+ created") : pc.yellow("~ modified");
+  p.log.success(`${label} ${pc.underline(writePath)}`);
+}
+
+async function handleToolDirect(
+  ctx: CLIContext,
+  args: string[],
+  prompt: string,
+  writePath: string | undefined,
+  allowAllPaths: boolean,
+  toolName: string,
+  toolCtx: ToolDirectContext,
+): Promise<void> {
+  const registry = createToolRegistry(toolCtx.provider, toolCtx.projectRoot, {
+    docAugmenter: toolCtx.docAugmenter,
+    context7Provider: toolCtx.context7Provider,
+    projectContext: toolCtx.projectContextStr,
+    onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
+  });
+  const tool = resolveToolOrThrow(registry, toolName);
+
+  if (ctx.globalOpts.output !== "json") {
+    const reason = ctx.globalOpts.tool ? "forced via --module" : "auto-detected";
+    p.log.info(`Using module: ${pc.bold(toolName)} (${reason})`);
+  }
+
+  const structured = isStructuredOutput(ctx);
+  const taskRisk = classifyTaskRisk({ tool: toolName, description: prompt });
+  const repairAttempts = extractFlagValue(args, "--repair-attempts");
+  const maxRepairAttempts = repairAttempts ? Number.parseInt(repairAttempts, 10) : 3;
+
+  const critic = await buildCritic(toolCtx.provider);
+  const memoryPrompt = injectMemoryContext(prompt, toolCtx.projectRoot);
+
+  const safeExecutor = buildSafeExecutorForTool(
+    ctx,
+    writePath,
+    allowAllPaths,
+    maxRepairAttempts,
+    critic,
+    structured,
+  );
 
   const s = p.spinner();
   if (!structured) s.start("Generating...");
@@ -311,37 +392,14 @@ async function handleToolDirect(
     );
   }
 
-  // Extract content from executor result
-  const outputData = execResult.output as Record<string, unknown> | string | undefined;
-  const content =
-    typeof outputData === "string"
-      ? outputData
-      : typeof outputData?.generated === "string"
-        ? outputData.generated
-        : JSON.stringify(outputData, null, 2);
+  const content = extractContentFromResult(execResult);
 
   // Persist generation for cross-command memory
   const filesWritten = writePath ? [writePath] : [];
-  persistGeneration(toolCtx.projectRoot, prompt, content, {
-    toolName,
-    filesWritten,
-  });
+  persistGeneration(toolCtx.projectRoot, prompt, content, { toolName, filesWritten });
 
-  // Track activity in DOJOPS.md + memory DB
   if (toolCtx.projectRoot) {
-    const files = writePath ? ` \`${writePath}\`` : "";
-    appendActivity(toolCtx.projectRoot, `Generated${files} (${toolName})`);
-    recordTask(toolCtx.projectRoot, {
-      timestamp: new Date().toISOString(),
-      task_type: "generate",
-      prompt,
-      result_summary: `Generated${files} (${toolName})`,
-      status: "success",
-      duration_ms: execResult.durationMs,
-      related_files: JSON.stringify(filesWritten),
-      agent_or_module: toolName,
-      metadata: "{}",
-    });
+    trackToolActivity(toolCtx.projectRoot, prompt, toolName, writePath, execResult.durationMs);
   }
 
   if (ctx.globalOpts.raw) {
@@ -350,21 +408,7 @@ async function handleToolDirect(
   }
 
   if (writePath) {
-    validateWritePath(writePath, allowAllPaths);
-    if (ctx.globalOpts.dryRun) {
-      p.log.info(`${pc.yellow("[dry-run]")} Would write to ${pc.underline(writePath)}`);
-      outputFormatted(ctx.globalOpts.output, "module", toolName, content);
-      return;
-    }
-    const action = writeFileContent(writePath, content);
-    if (ctx.globalOpts.output === "json") {
-      console.log(JSON.stringify({ module: toolName, content, written: writePath, action }));
-    } else if (action === "unchanged") {
-      p.log.info(`${pc.dim("○")} ${pc.underline(writePath)} ${pc.dim("(unchanged)")}`);
-    } else {
-      const label = action === "created" ? pc.green("+ created") : pc.yellow("~ modified");
-      p.log.success(`${label} ${pc.underline(writePath)}`);
-    }
+    outputWriteResult(ctx, writePath, allowAllPaths, toolName, content);
     return;
   }
 
@@ -590,8 +634,9 @@ async function handleWriteOutput(
   const { classifyPathRisk, isRiskAtOrBelow } = await import("@dojops/executor");
   const pathRisk = classifyPathRisk(writePath);
   if (!isRiskAtOrBelow(pathRisk, "MEDIUM") && !ctx.globalOpts.nonInteractive) {
+    const riskLabel = pc.yellow(`\u26A0 ${pathRisk} risk path:`);
     const confirmed = await p.confirm({
-      message: `${pc.yellow(`⚠ ${pathRisk} risk path:`)} Write to ${pc.underline(writePath)}?`,
+      message: `${riskLabel} Write to ${pc.underline(writePath)}?`,
     });
     if (p.isCancel(confirmed) || !confirmed) {
       p.log.warn("Write cancelled due to path risk.");
@@ -615,6 +660,73 @@ async function handleWriteOutput(
   }
 }
 
+function runPreGenerateHook(
+  projectRoot: string | undefined,
+  prompt: string,
+  verbose: boolean,
+): void {
+  if (!projectRoot) return;
+  const hookOk = runHooks(projectRoot, "pre-generate", { prompt }, { verbose });
+  if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-generate hook failed.");
+}
+
+function tryToolDirectPath(
+  ctx: CLIContext,
+  prompt: string,
+  projectRoot: string | undefined,
+  provider: ReturnType<CLIContext["getProvider"]>,
+  docAugmenter: DocAugmenter | undefined,
+  context7Provider: Context7Provider | undefined,
+  projectContextStr: string | undefined,
+): { toolName: string; toolCtx: ToolDirectContext; registryHasTool: boolean } | null {
+  const toolName =
+    ctx.globalOpts.tool ??
+    autoDetectModule(prompt) ??
+    autoDetectInstalledModule(prompt, projectRoot);
+  if (!toolName) return null;
+
+  const toolCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
+  const registry = createToolRegistry(provider, projectRoot, {
+    docAugmenter,
+    context7Provider,
+    projectContext: projectContextStr,
+    onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
+  });
+  return { toolName, toolCtx, registryHasTool: !!registry.get(toolName) };
+}
+
+function buildAugmentedPrompt(
+  prompt: string,
+  projectRoot: string | undefined,
+  verbose: boolean,
+): string {
+  let augmented = augmentPromptWithContext(prompt, projectRoot);
+  augmented = augmentPromptWithExistingFiles(augmented, prompt, verbose);
+  augmented = augmentPromptWithLastGeneration(augmented, projectRoot, verbose);
+  return injectMemoryContext(augmented, projectRoot);
+}
+
+function trackAgentActivity(
+  projectRoot: string,
+  prompt: string,
+  agentName: string,
+  writePath: string | undefined,
+  genDuration: number,
+): void {
+  appendActivity(projectRoot, `Agent "${agentName}" generation`);
+  recordTask(projectRoot, {
+    timestamp: new Date().toISOString(),
+    task_type: "generate",
+    prompt,
+    result_summary: `Agent "${agentName}" generation`,
+    status: "success",
+    duration_ms: genDuration,
+    related_files: JSON.stringify(writePath ? [writePath] : []),
+    agent_or_module: agentName,
+    metadata: "{}",
+  });
+}
+
 export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const writePath = extractFlagValue(args, "--write");
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
@@ -627,43 +739,35 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   const projectRoot = findProjectRoot() ?? undefined;
-
-  // Run pre-generate hooks
-  if (projectRoot) {
-    const hookOk = runHooks(
-      projectRoot,
-      "pre-generate",
-      { prompt },
-      { verbose: ctx.globalOpts.verbose },
-    );
-    if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-generate hook failed.");
-  }
+  runPreGenerateHook(projectRoot, prompt, ctx.globalOpts.verbose);
 
   const provider = ctx.getProvider();
-
   const { docAugmenter, context7Provider } = await initContext7();
   const projectContextStr = buildProjectContextString(projectRoot);
 
-  const toolName =
-    ctx.globalOpts.tool ??
-    autoDetectModule(prompt) ??
-    autoDetectInstalledModule(prompt, projectRoot);
-  if (toolName) {
-    const toolCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
-    const registry = createToolRegistry(provider, projectRoot, {
-      docAugmenter: toolCtx.docAugmenter,
-      context7Provider: toolCtx.context7Provider,
-      projectContext: toolCtx.projectContextStr,
-      onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
-    });
-    if (registry.get(toolName)) {
-      await handleToolDirect(ctx, args, prompt, writePath, allowAllPaths, toolName, toolCtx);
-      return;
-    }
+  const toolDirect = tryToolDirectPath(
+    ctx,
+    prompt,
+    projectRoot,
+    provider,
+    docAugmenter,
+    context7Provider,
+    projectContextStr,
+  );
+  if (toolDirect?.registryHasTool) {
+    await handleToolDirect(
+      ctx,
+      args,
+      prompt,
+      writePath,
+      allowAllPaths,
+      toolDirect.toolName,
+      toolDirect.toolCtx,
+    );
+    return;
   }
 
   const { router } = createRouter(provider, projectRoot, docAugmenter);
-
   const projectDomains: string[] = projectRoot
     ? (freshContext(projectRoot)?.relevantDomains ?? [])
     : [];
@@ -677,22 +781,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     throw new CLIError(ExitCode.VALIDATION_ERROR);
   }
 
-  let augmentedPrompt = augmentPromptWithContext(prompt, projectRoot);
-  augmentedPrompt = augmentPromptWithExistingFiles(augmentedPrompt, prompt, ctx.globalOpts.verbose);
-  augmentedPrompt = augmentPromptWithLastGeneration(
-    augmentedPrompt,
-    projectRoot,
-    ctx.globalOpts.verbose,
-  );
-
-  // Inject memory context (recent task history)
-  if (projectRoot) {
-    const memCtx = queryMemory(projectRoot, "generate", prompt);
-    const memoryStr = buildMemoryContextString(memCtx);
-    if (memoryStr) {
-      augmentedPrompt = `${augmentedPrompt}\n\n${memoryStr}`;
-    }
-  }
+  const augmentedPrompt = buildAugmentedPrompt(prompt, projectRoot, ctx.globalOpts.verbose);
 
   const structured = isStructuredOutput(ctx);
   const s2 = p.spinner();
@@ -706,26 +795,13 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     p.log.info(`Generation completed in ${genDuration}ms (${result.content.length} chars)`);
   }
 
-  // Persist generation for cross-command memory
   persistGeneration(projectRoot, prompt, result.content, {
     agentName: route.agent.name,
     filesWritten: writePath ? [writePath] : [],
   });
 
-  // Track activity in DOJOPS.md + memory DB
   if (projectRoot) {
-    appendActivity(projectRoot, `Agent "${route.agent.name}" generation`);
-    recordTask(projectRoot, {
-      timestamp: new Date().toISOString(),
-      task_type: "generate",
-      prompt,
-      result_summary: `Agent "${route.agent.name}" generation`,
-      status: "success",
-      duration_ms: genDuration,
-      related_files: JSON.stringify(writePath ? [writePath] : []),
-      agent_or_module: route.agent.name,
-      metadata: "{}",
-    });
+    trackAgentActivity(projectRoot, prompt, route.agent.name, writePath, genDuration);
   }
 
   if (ctx.globalOpts.raw) {
@@ -740,16 +816,11 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   outputFormatted(ctx.globalOpts.output, "agent", route.agent.name, result.content);
 
-  // Run post-generate hooks
   if (projectRoot) {
     runHooks(
       projectRoot,
       "post-generate",
-      {
-        prompt,
-        agent: route.agent.name,
-        outputPath: writePath,
-      },
+      { prompt, agent: route.agent.name, outputPath: writePath },
       { verbose: ctx.globalOpts.verbose },
     );
   }

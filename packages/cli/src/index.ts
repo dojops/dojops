@@ -379,10 +379,9 @@ async function main() {
 }
 
 // Top-level async entry — CJS module, top-level await not supported
-main()
+main() // NOSONAR — S7785: CJS module cannot use top-level await
   .then(() => process.exit(ExitCode.SUCCESS))
   .catch((err) => {
-    // NOSONAR
     if (err instanceof CLIError) {
       if (err.message) console.error(err.message);
       process.exit(err.exitCode);

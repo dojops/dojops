@@ -114,6 +114,77 @@ You MUST respond with valid JSON matching this schema:
 
 IMPORTANT: Do NOT ask follow-up questions. This is a single-shot interaction. Provide a complete, self-contained response.`;
 
+// ── Prompt builders ─────────────────────────────────
+
+/** Format file contents as data-wrapped prompt sections. */
+function buildFileSection(files: ReviewInput["files"]): string[] {
+  const parts: string[] = ["## Configuration Files\n"];
+  for (const file of files) {
+    parts.push(wrapAsData(sanitizeUserInput(file.content), file.path));
+    parts.push("");
+  }
+  return parts;
+}
+
+/** Format a single issue line from a tool result. */
+function formatIssueLine(issue: ToolValidationResult["issues"][number]): string {
+  const lineInfo = issue.line ? ` (line ${issue.line})` : "";
+  const ruleInfo = issue.rule ? ` [${issue.rule}]` : "";
+  return `- ${issue.severity}: ${issue.message}${lineInfo}${ruleInfo}`;
+}
+
+/** Format a single tool validation result into prompt lines. */
+function formatToolResult(result: ToolValidationResult): string[] {
+  const parts: string[] = [];
+  const status = result.passed ? "PASSED" : "FAILED";
+  parts.push(`### ${result.tool} → ${result.file} [${status}]`);
+
+  if (result.issues.length > 0) {
+    for (const issue of result.issues) {
+      parts.push(formatIssueLine(issue));
+    }
+  } else if (result.passed) {
+    parts.push("No issues found.");
+  }
+
+  if (result.rawOutput && !result.passed) {
+    parts.push(`\nRaw output:\n\`\`\`\n${result.rawOutput.slice(0, 2000)}\n\`\`\``);
+  }
+  parts.push("");
+  return parts;
+}
+
+/** Build the tool validation results section of the prompt. */
+function buildToolResultsSection(toolResults: ToolValidationResult[]): string[] {
+  if (toolResults.length === 0) {
+    return [
+      "## Tool Validation Results\n\nNo validation tools were available to run. " +
+        "Rely on your expertise and Context7 documentation for the review.\n",
+    ];
+  }
+
+  const parts: string[] = [
+    "## Tool Validation Results\n",
+    "The following tools were run against the configuration files. " +
+      "Include ALL issues they found in your review.\n",
+  ];
+  for (const result of toolResults) {
+    parts.push(...formatToolResult(result));
+  }
+  return parts;
+}
+
+/** Build the Context7 documentation section of the prompt (if available). */
+function buildContext7Section(context7Docs: string | undefined): string[] {
+  if (!context7Docs) return [];
+  return [
+    "## Reference Documentation (from Context7)\n",
+    "Use this documentation to verify versions, syntax, and identify deprecated features.\n",
+    context7Docs,
+    "",
+  ];
+}
+
 // ── Reviewer class ───────────────────────────────────
 
 export class DevSecOpsReviewer {
@@ -127,63 +198,13 @@ export class DevSecOpsReviewer {
    * @returns Structured review report with severity-ranked findings
    */
   async review(input: ReviewInput): Promise<ReviewReport> {
-    const promptParts: string[] = [];
-
-    // 1. File contents
-    promptParts.push("## Configuration Files\n");
-    for (const file of input.files) {
-      promptParts.push(wrapAsData(sanitizeUserInput(file.content), file.path));
-      promptParts.push("");
-    }
-
-    // 2. Tool validation results
-    if (input.toolResults.length > 0) {
-      promptParts.push("## Tool Validation Results\n");
-      promptParts.push(
-        "The following tools were run against the configuration files. " +
-          "Include ALL issues they found in your review.\n",
-      );
-
-      for (const result of input.toolResults) {
-        const status = result.passed ? "PASSED" : "FAILED";
-        promptParts.push(`### ${result.tool} → ${result.file} [${status}]`);
-
-        if (result.issues.length > 0) {
-          for (const issue of result.issues) {
-            const lineInfo = issue.line ? ` (line ${issue.line})` : "";
-            const ruleInfo = issue.rule ? ` [${issue.rule}]` : "";
-            promptParts.push(`- ${issue.severity}: ${issue.message}${lineInfo}${ruleInfo}`);
-          }
-        } else if (result.passed) {
-          promptParts.push("No issues found.");
-        }
-
-        if (result.rawOutput && !result.passed) {
-          promptParts.push(`\nRaw output:\n\`\`\`\n${result.rawOutput.slice(0, 2000)}\n\`\`\``);
-        }
-        promptParts.push("");
-      }
-    } else {
-      promptParts.push(
-        "## Tool Validation Results\n\nNo validation tools were available to run. " +
-          "Rely on your expertise and Context7 documentation for the review.\n",
-      );
-    }
-
-    // 3. Context7 documentation
-    if (input.context7Docs) {
-      promptParts.push("## Reference Documentation (from Context7)\n");
-      promptParts.push(
-        "Use this documentation to verify versions, syntax, and identify deprecated features.\n",
-      );
-      promptParts.push(input.context7Docs);
-      promptParts.push("");
-    }
-
-    promptParts.push(
+    const promptParts: string[] = [
+      ...buildFileSection(input.files),
+      ...buildToolResultsSection(input.toolResults),
+      ...buildContext7Section(input.context7Docs),
       "Review ALL files above. Cross-reference tool results with documentation. " +
         "Report every finding with specific file, line, and fix.",
-    );
+    ];
 
     const response = await this.provider.generate({
       system: SYSTEM_PROMPT,

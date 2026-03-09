@@ -91,6 +91,55 @@ export function serializeForFile(data: unknown, fileSpec: FileSpec): string {
  *   ".github/actions/{star}/action.yml"  — glob in directory segment
  */
 
+/** Try to read a file and return it as a result entry, or empty array if unreadable. */
+function tryReadGlobFile(
+  filePath: string,
+  basePath: string,
+): { relPath: string; content: string }[] {
+  const content = readExistingConfig(filePath);
+  if (content) return [{ relPath: path.relative(basePath, filePath), content }];
+  return [];
+}
+
+/** Handle a literal (non-glob) segment: descend into dir or read file. */
+function handleLiteralSegment(
+  segments: string[],
+  index: number,
+  currentDir: string,
+  basePath: string,
+): { relPath: string; content: string }[] {
+  const next = path.join(currentDir, segments[index]);
+  const isLast = index === segments.length - 1;
+  if (isLast) return tryReadGlobFile(next, basePath);
+  return walkGlobSegments(segments, index + 1, next, basePath);
+}
+
+/** Handle a glob file match — read the file at entryPath. */
+function handleGlobFileMatch(
+  entryPath: string,
+  basePath: string,
+): { relPath: string; content: string }[] {
+  return tryReadGlobFile(entryPath, basePath);
+}
+
+/** Handle a glob directory match — recurse into matching subdirectory. */
+function handleGlobDirMatch(
+  segments: string[],
+  index: number,
+  entryPath: string,
+  basePath: string,
+): { relPath: string; content: string }[] {
+  try {
+    const stat = fs.statSync(entryPath);
+    if (stat.isDirectory()) {
+      return walkGlobSegments(segments, index + 1, entryPath, basePath);
+    }
+  } catch {
+    // Skip inaccessible entries
+  }
+  return [];
+}
+
 /** Walk a glob pattern split into path segments, collecting matching files. */
 function walkGlobSegments(
   segments: string[],
@@ -104,14 +153,7 @@ function walkGlobSegments(
   const isLast = index === segments.length - 1;
 
   if (!segment.includes("*")) {
-    // Literal segment — descend or read
-    const next = path.join(currentDir, segment);
-    if (isLast) {
-      const content = readExistingConfig(next);
-      if (content) return [{ relPath: path.relative(basePath, next), content }];
-      return [];
-    }
-    return walkGlobSegments(segments, index + 1, next, basePath);
+    return handleLiteralSegment(segments, index, currentDir, basePath);
   }
 
   // Glob segment — enumerate entries in currentDir
@@ -122,21 +164,9 @@ function walkGlobSegments(
       if (!matchGlob(entry, segment)) continue;
       const entryPath = path.join(currentDir, entry);
       if (isLast) {
-        // File glob — read the file
-        const content = readExistingConfig(entryPath);
-        if (content) {
-          results.push({ relPath: path.relative(basePath, entryPath), content });
-        }
+        results.push(...handleGlobFileMatch(entryPath, basePath));
       } else {
-        // Directory glob — recurse into matching subdirectory
-        try {
-          const stat = fs.statSync(entryPath);
-          if (stat.isDirectory()) {
-            results.push(...walkGlobSegments(segments, index + 1, entryPath, basePath));
-          }
-        } catch {
-          // Skip inaccessible entries
-        }
+        results.push(...handleGlobDirMatch(segments, index, entryPath, basePath));
       }
     }
   } catch {
