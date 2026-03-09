@@ -1,6 +1,6 @@
 {
   "name": "@dojops/context",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Context7 documentation augmentation for DojOps — injects up-to-date docs into LLM prompts",
   "license": "MIT",
   "repository": {

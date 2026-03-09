@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-03-09
+
 ### Added
 
 - **`config delete` Subcommand**: New `dojops config delete <key>` (alias: `unset`) to remove configuration keys. Previously there was no way to remove a key once set. Also guards `config set` against flag-like values (e.g., `--delete`)
@@ -18,11 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Sandboxed-First Ansible Install**: `installAnsible()` now uses a sandboxed Python venv (`~/.dojops/toolchain/venvs/ansible/`) as the primary strategy, with pipx as fallback only when python3 is unavailable. Broken venvs (stale shebangs from directory migration) are auto-detected and recreated
 - **`BINARY_TO_SYSTEM_TOOL` Mapping**: New lookup table maps verification binary names (e.g., `ansible-playbook`) to their parent system tool (e.g., `ansible`) for auto-install resolution
+- **Default Generation Timeout Increased**: Default timeout for `generate` and `apply` commands increased from 60s to 120s. Complex modules with slower providers (DeepSeek, Ollama) frequently exceeded the previous limit
+- **All 9 Verification Commands Use `{entryFile}`**: Updated Kubernetes, Dockerfile, Docker Compose, Nginx, Prometheus, GitLab CI, Systemd, Makefile, and Jenkinsfile `.dops` modules to use the `{entryFile}` placeholder instead of hardcoded filenames. All 13 built-in modules now use dynamic file references
+- **`verify` Command Uses Dynamic Filenames**: The `dojops verify` CLI command no longer hardcodes filenames (`main.tf`, `manifest.yaml`, `playbook.yml`, `docker-compose.yml`, `prometheus.yml`, `Dockerfile`) — it now uses the actual basename of the file being verified
+- **Review Tool Map Narrowed for kubectl**: The DevSecOps review tool map no longer routes all `*.yaml`/`*.yml` files to `kubectl --dry-run`. kubectl validation is now scoped to Kubernetes-specific directories (`k8s/`, `kubernetes/`, `manifests/`, `deploy/`)
 - **Test Coverage**: 2275 → 2649 tests (+374 new tests covering auto-install, {entryFile} resolution, BINARY_TO_SYSTEM_TOOL mapping, DevSecOps review pipeline, and execution memory)
 
 ### Fixed
 
+- **`rollback --dry-run` Performing Actual Rollback**: The `--dry-run` flag was consumed by `parseGlobalOptions()` before reaching the rollback command, so `hasFlag(args, "--dry-run")` always returned false. Now uses `ctx.globalOpts.dryRun`
 - **`apply --dry-run` Not Respecting Flag**: The `--dry-run` global flag was consumed by the global parser but `apply` read it from local args, so `apply --dry-run` always wrote files. Now correctly checks `ctx.globalOpts.dryRun` as fallback
+- **Multi-Document YAML Validation Rejection**: The YAML validator in the runtime rejected valid multi-document YAML files (common in Kubernetes manifests using `---` separators). Changed `yaml.load()` to `yaml.loadAll()` to parse all documents
+- **`chat export --format=json` Treating Flag as Session ID**: `args[1]` was used unconditionally as the session ID, so `--format=json` was interpreted as a session ID instead of a flag. Now skips flag arguments when extracting the session ID
 - **`generate --output json` Double-Encoding**: JSON output wrapped content in an escaped string instead of embedding the JSON object. Content that is valid JSON is now parsed and embedded as a structured object
 - **`verify` Showing PASSED for Skipped Checks**: When a verification binary was not found (e.g., hadolint), the command displayed "PASSED" with a warning. Now correctly displays "SKIPPED" to avoid confusion
 - **Ansible Verification Fails with Dynamic Filenames**: Verification command `ansible-playbook --syntax-check playbook.yml` was hardcoded, failing when the LLM generated files with different names (e.g., `setup-ec2.yml`). Now uses `{entryFile}` placeholder resolved at runtime
