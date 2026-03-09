@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: makefile
-  version: 2.0.0
+  version: 2.1.0
   description: "Generate Makefiles for project build automation"
   author: dojops
   license: MIT
@@ -18,6 +18,14 @@ context:
     Output raw Makefile content directly — do NOT wrap in JSON or code fences.
     The output must be a valid Makefile with proper tab indentation for recipes.
     IMPORTANT: Use actual tab characters (not spaces) for recipe indentation.
+
+    Detect the project type from context and generate appropriate targets:
+    - **Go**: build (go build), test (go test ./...), lint (golangci-lint), run, clean
+    - **Node.js**: install (npm ci), build (npm run build), test (npm test), dev, lint, clean
+    - **Python**: venv (python -m venv), install (pip install -r requirements.txt), test (pytest), lint (ruff/flake8)
+    - **Rust**: build (cargo build), test (cargo test), release (cargo build --release), clean
+    - **Docker**: build (docker build), run (docker run), push (docker push), compose-up
+    - **General**: help, build, test, lint, format, clean, dev, deploy
   bestPractices:
     - Declare .PHONY targets for non-file targets
     - Include a help target that lists available targets
@@ -28,9 +36,11 @@ context:
     - Use .DEFAULT_GOAL to set the default target
     - Use tabs for recipe indentation (not spaces)
     - Variable names should be UPPER_CASE
+    - Use ?= for overridable defaults (APP_NAME ?= myapp)
+    - Use $(MAKE) for recursive make calls instead of bare make
   context7Libraries:
     - name: gnu-make
-      query: "Makefile syntax, targets, prerequisites, variables, pattern rules, .PHONY"
+      query: "Makefile syntax targets prerequisites, variables pattern rules, .PHONY .DEFAULT_GOAL, conditional assignments, automatic variables, functions"
 
 files:
   - path: "Makefile"

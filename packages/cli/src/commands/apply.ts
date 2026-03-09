@@ -1,13 +1,24 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { runBin } from "../safe-exec";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { DeterministicProvider } from "@dojops/core";
+import { appendActivity } from "../dojops-md";
+import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { createToolRegistry } from "@dojops/tool-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";
-import { statusIcon, statusText, riskColor, wrapForNote } from "../formatter";
+import {
+  statusIcon,
+  statusText,
+  riskColor,
+  wrapForNote,
+  truncateNoteTitle,
+  formatDuration,
+} from "../formatter";
 import {
   findProjectRoot,
   loadPlan,
@@ -32,7 +43,9 @@ import { getDriftWarnings } from "../drift-warning";
 import { runHooks } from "../hooks";
 import { createProgressReporter } from "../progress";
 import { validateReplayIntegrity, checkToolIntegrity } from "./replay-validator";
-import { readExistingToolFile } from "../tool-file-map";
+import { createAutoInstallHandler } from "../toolchain-sandbox";
+// readExistingToolFile is no longer used here — existingContent is detected
+// lazily at execution time by each tool's runtime (detectContent in DopsRuntimeV2).
 
 type ToolEntry = ReturnType<ReturnType<typeof createToolRegistry>["getAll"]>[number];
 
@@ -50,6 +63,7 @@ interface ApplyFlags {
   jsonOutput: boolean;
   singleTaskId: string | undefined;
   planId: string | undefined;
+  maxRepairAttempts: number;
 }
 
 interface TaskResultEntry {
@@ -73,7 +87,9 @@ function parseApplyFlags(args: string[], ctx: CLIContext): ApplyFlags {
   const force = hasFlag(args, "--force");
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
   const timeoutArg = extractFlagValue(args, "--timeout");
-  const timeoutMs = timeoutArg ? Number.parseInt(timeoutArg, 10) * 1000 : 60_000; // --timeout in seconds
+  const timeoutMs = timeoutArg
+    ? Number.parseInt(timeoutArg, 10) * 1000
+    : (ctx.globalOpts.timeout ?? 60_000); // --timeout in seconds, or globalOpts.timeout in ms
   if (timeoutArg && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
@@ -82,7 +98,17 @@ function parseApplyFlags(args: string[], ctx: CLIContext): ApplyFlags {
   }
   const jsonOutput = ctx.globalOpts.output === "json";
   const singleTaskId = extractFlagValue(args, "--task");
-  const planId = args.find((a) => !a.startsWith("-") && a !== singleTaskId);
+  const repairAttemptsArg = extractFlagValue(args, "--repair-attempts");
+  const maxRepairAttempts = repairAttemptsArg ? Number.parseInt(repairAttemptsArg, 10) : 3;
+  if (repairAttemptsArg && (!Number.isFinite(maxRepairAttempts) || maxRepairAttempts < 0)) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Invalid --repair-attempts value: "${repairAttemptsArg}". Must be a non-negative integer.`,
+    );
+  }
+  const planId = args.find(
+    (a) => !a.startsWith("-") && a !== singleTaskId && a !== repairAttemptsArg,
+  );
 
   return {
     autoApprove,
@@ -98,6 +124,7 @@ function parseApplyFlags(args: string[], ctx: CLIContext): ApplyFlags {
     jsonOutput,
     singleTaskId,
     planId,
+    maxRepairAttempts,
   };
 }
 
@@ -299,7 +326,9 @@ async function executeDryRun(
 
   try {
     const provider = ctx.getProvider();
-    const registry = createToolRegistry(provider, root);
+    const registry = createToolRegistry(provider, root, {
+      onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
+    });
     const tools = registry.getAll();
 
     for (const task of remainingTasks) {
@@ -328,7 +357,10 @@ async function generateDryRunPreview(
       preview.length > 5000
         ? preview.slice(0, 5000) + "\n... (truncated — use --output json for full content)"
         : preview;
-    p.note(wrapForNote(truncated), `${task.id} — ${task.tool}: ${task.description}`);
+    p.note(
+      wrapForNote(truncated),
+      truncateNoteTitle(`${task.id} — ${task.tool}: ${task.description}`),
+    );
   } catch (err) {
     p.log.warn(`${pc.bold(task.id)} generation failed: ${toErrorMessage(err)}`);
   }
@@ -486,25 +518,20 @@ async function handleToolIntegrityCheck(
   }
 }
 
-function buildTaskGraph(plan: PlanState, root: string) {
+function buildTaskGraph(plan: PlanState) {
+  // NOTE: existingContent is NOT pre-read here. Each tool's runtime detects
+  // existing files from disk at execution time via detectContent(). This is
+  // critical for multi-task plans where earlier tasks create files that later
+  // tasks need to see (e.g. "create composite action" → "update workflow to use it").
   return {
     goal: plan.goal,
-    tasks: plan.tasks.map((t) => {
-      const input = { ...t.input };
-      if (!input.existingContent) {
-        const existing = readExistingToolFile(t.tool, root);
-        if (existing) {
-          input.existingContent = existing.content;
-        }
-      }
-      return {
-        id: t.id,
-        tool: t.tool,
-        description: t.description,
-        dependsOn: t.dependsOn,
-        input,
-      };
-    }),
+    tasks: plan.tasks.map((t) => ({
+      id: t.id,
+      tool: t.tool,
+      description: t.description,
+      dependsOn: t.dependsOn,
+      input: { ...t.input },
+    })),
   };
 }
 
@@ -513,52 +540,106 @@ function createExecutorWithCallbacks(
   graph: ReturnType<typeof buildTaskGraph>,
   ctx: CLIContext,
   jsonOutput: boolean,
+  generateTimeoutMs?: number,
 ) {
   const taskTimers = new Map<string, number>();
   const progress = jsonOutput ? null : createProgressReporter(graph.tasks.length);
-  const executor = new PlannerExecutor(tools, {
-    taskStart(id, desc) {
-      if (progress) {
-        progress.start(id, desc);
-      } else {
-        p.log.step(`Running ${pc.blue(id)}: ${desc}`);
-      }
-      taskTimers.set(id, Date.now());
-      if (ctx.globalOpts.verbose) {
-        const task = graph.tasks.find((t) => t.id === id);
-        p.log.info(
-          `  Module: ${pc.bold(task?.tool ?? "unknown")}, deps: [${task?.dependsOn.join(", ") ?? ""}]`,
-        );
-      }
+  const executor = new PlannerExecutor(
+    tools,
+    {
+      taskStart(id, desc) {
+        if (progress) {
+          progress.start(id, desc);
+        } else {
+          p.log.step(`Running ${pc.blue(id)}: ${desc}`);
+        }
+        taskTimers.set(id, Date.now());
+        if (ctx.globalOpts.verbose) {
+          const task = graph.tasks.find((t) => t.id === id);
+          p.log.info(
+            `  Module: ${pc.bold(task?.tool ?? "unknown")}, deps: [${task?.dependsOn.join(", ") ?? ""}]`,
+          );
+        }
+      },
+      taskEnd(id, status, error) {
+        const elapsed = taskTimers.has(id) ? Date.now() - taskTimers.get(id)! : 0;
+        if (progress && error) {
+          progress.fail(id, error);
+        } else if (progress) {
+          progress.complete(id);
+        } else if (error) {
+          p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
+        } else {
+          const label = status === "completed" ? "generated" : statusText(status);
+          p.log.info(`${pc.blue(id)}: ${label}`);
+        }
+        if (ctx.globalOpts.verbose) {
+          p.log.info(`  Generated in ${elapsed}ms`);
+        }
+      },
     },
-    taskEnd(id, status, error) {
-      const elapsed = taskTimers.has(id) ? Date.now() - taskTimers.get(id)! : 0;
-      if (progress && error) {
-        progress.fail(id, error);
-      } else if (progress) {
-        progress.complete(id);
-      } else if (error) {
-        p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
-      } else {
-        const label = status === "completed" ? "generated" : statusText(status);
-        p.log.info(`${pc.blue(id)}: ${label}`);
-      }
-      if (ctx.globalOpts.verbose) {
-        p.log.info(`  Generated in ${elapsed}ms`);
-      }
-    },
-  });
+    generateTimeoutMs ? { generateTimeoutMs } : undefined,
+  );
   return { executor, progress };
 }
 
-function buildToolMetadata(
+/** Detect tasks that should skip verification (analysis-only or documentation tasks). */
+const ANALYSIS_PATTERNS = [
+  /\banalyze\b/i,
+  /\banalysis\b/i,
+  /\binspect\b/i,
+  /\breview\b/i,
+  /\bcheck\b/i,
+  /\baudit\b/i,
+  /\bdo not generate\b/i,
+  /\bdon'?t generate\b/i,
+];
+
+/** Documentation files that no DevOps tool can generate — they always fail verification. */
+const DOC_FILE_PATTERNS = [
+  /\breadme\b/i,
+  /\bchangelog\b/i,
+  /\bcontributing\b/i,
+  /\blicense\b/i,
+  /\.md\b/i,
+  /\bdocumentation\b/i,
+];
+
+function isAnalysisTask(description: string, prompt?: string): boolean {
+  const text = `${description} ${prompt ?? ""}`;
+  return (
+    ANALYSIS_PATTERNS.some((p) => p.test(text)) &&
+    /\bdo\s+not\b.*\b(generate|create|write)\b/i.test(text)
+  );
+}
+
+function isDocumentationTask(description: string, prompt?: string): boolean {
+  const text = `${description} ${prompt ?? ""}`;
+  return DOC_FILE_PATTERNS.some((p) => p.test(text));
+}
+
+async function buildToolMetadata(
   taskDef: PlanState["tasks"][number] | undefined,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const metadata: Record<string, unknown> = {};
   if (taskDef?.toolType) metadata.toolType = taskDef.toolType;
   if (taskDef?.toolVersion) metadata.toolVersion = taskDef.toolVersion;
   if (taskDef?.toolHash) metadata.toolHash = taskDef.toolHash;
   if (taskDef?.toolSource) metadata.toolSource = taskDef.toolSource;
+  // Per-task risk classification for risk-based approval
+  if (taskDef) {
+    const { classifyTaskRisk } = await import("../risk-classifier");
+    metadata.risk = classifyTaskRisk({ tool: taskDef.tool, description: taskDef.description });
+    // Skip verification for analysis-only or documentation tasks
+    // (analysis produces text, docs produce markdown — neither can pass tool-specific validators)
+    const prompt = taskDef.input?.prompt as string | undefined;
+    if (
+      isAnalysisTask(taskDef.description, prompt) ||
+      isDocumentationTask(taskDef.description, prompt)
+    ) {
+      metadata.skipVerification = true;
+    }
+  }
   return metadata;
 }
 
@@ -596,6 +677,12 @@ function renderExecutionResult(
     taskId: string;
     status: string;
     approval?: string;
+    error?: string;
+    auditLog?: {
+      filesWritten: string[];
+      filesModified: string[];
+    };
+    filesUnchanged?: string[];
     verification?: {
       passed: boolean;
       issues: Array<{ severity: string; message: string; line?: number; rule?: string }>;
@@ -611,6 +698,24 @@ function renderExecutionResult(
   p.log.message(
     `${icon} ${pc.blue(execResult.taskId)} ${statusText(execResult.status)} (approval: ${approval})`,
   );
+  if (execResult.error) {
+    p.log.error(`  ${pc.red("Error:")} ${execResult.error}`);
+  }
+  // Show file actions per task
+  const audit = execResult.auditLog;
+  if (audit) {
+    for (const f of audit.filesWritten) {
+      p.log.message(`  ${pc.green("+")} ${f}`);
+    }
+    for (const f of audit.filesModified) {
+      p.log.message(`  ${pc.yellow("~")} ${f}`);
+    }
+    if (verbose && execResult.filesUnchanged) {
+      for (const f of execResult.filesUnchanged) {
+        p.log.message(`  ${pc.dim("○")} ${pc.dim(f)} ${pc.dim("(unchanged)")}`);
+      }
+    }
+  }
   renderVerificationIssues(execResult, verbose);
 }
 
@@ -657,6 +762,21 @@ interface ApplyContext {
   verbose: boolean;
 }
 
+/** Collect files written by completed same-tool tasks for cross-task verification context. */
+function collectPeerFiles(taskId: string, ctx: ApplyContext): Record<string, string> {
+  const peers: Record<string, string> = {};
+  // Read files already written to disk by prior tasks (e.g., other .tf files)
+  for (const filePath of ctx.allFilesCreated) {
+    try {
+      const basename = path.basename(filePath);
+      peers[basename] = fs.readFileSync(filePath, "utf-8");
+    } catch {
+      // File may have been cleaned up or moved — skip
+    }
+  }
+  return peers;
+}
+
 async function processExecutableTask(
   taskResult: { taskId: string; status: string; output?: unknown; error?: string },
   taskNode: { input: Record<string, unknown> },
@@ -665,13 +785,32 @@ async function processExecutableTask(
   ctx: ApplyContext,
 ): Promise<TaskResultEntry> {
   const taskDef = ctx.plan.tasks.find((t) => t.id === taskResult.taskId);
-  const metadata = buildToolMetadata(taskDef);
+  const metadata = await buildToolMetadata(taskDef);
+
+  // Collect files from completed prior tasks for cross-task verification context
+  // (e.g., terraform validate needs all .tf files, not just the current task's output)
+  const peerFiles = collectPeerFiles(taskResult.taskId, ctx);
+
+  // Pass pre-generated output from planner to avoid re-running the LLM generate phase
+  let preGenerated = taskResult.output
+    ? { success: true as const, data: taskResult.output }
+    : undefined;
+
+  // Inject peer files into the pre-generated data so verify() can include them
+  if (preGenerated && Object.keys(peerFiles).length > 0) {
+    const data =
+      preGenerated.data && typeof preGenerated.data === "object"
+        ? { ...(preGenerated.data as Record<string, unknown>), _peerFiles: peerFiles }
+        : { generated: preGenerated.data, _peerFiles: peerFiles };
+    preGenerated = { success: true as const, data };
+  }
 
   const execResult = await ctx.safeExecutor.executeTask(
     taskResult.taskId,
     tool,
     taskNode.input,
     Object.keys(metadata).length > 0 ? metadata : undefined,
+    preGenerated,
   );
   const taskFiles = execResult.auditLog?.filesWritten ?? [];
   const taskModified = execResult.auditLog?.filesModified ?? [];
@@ -736,6 +875,24 @@ async function processTaskResults(
       continue;
     }
 
+    // Skip documentation tasks entirely — DevOps tools can only generate
+    // their own file types (e.g., terraform → .tf, github-actions → .yml)
+    const taskDef = ctx.plan.tasks.find((t) => t.id === taskResult.taskId);
+    const taskPrompt = taskDef?.input?.prompt as string | undefined;
+    if (taskDef && isDocumentationTask(taskDef.description, taskPrompt)) {
+      if (!ctx.jsonOutput) {
+        p.log.info(
+          `${pc.dim("○")} ${pc.bold(taskResult.taskId)} ${pc.dim("skipped (documentation task — not a tool-generated file)")}`,
+        );
+      }
+      newResults.push({
+        taskId: taskResult.taskId,
+        status: "completed",
+        output: taskResult.output,
+      });
+      continue;
+    }
+
     const result = await processExecutableTask(taskResult, taskNode, tool, {
       ...ctx,
       allFilesCreated,
@@ -789,6 +946,22 @@ function saveApplyResults(
   ctx.plan.approvalStatus = results.status === "SUCCESS" ? "APPLIED" : "PARTIAL";
   savePlan(ctx.root, ctx.plan);
 
+  // Track activity in DOJOPS.md
+  const allFiles = [...results.allFilesCreated, ...results.allFilesModified];
+  const fileList = allFiles.length > 0 ? ` (${allFiles.map((f) => `\`${f}\``).join(", ")})` : "";
+  appendActivity(ctx.root, `Plan applied: ${results.status}${fileList}`);
+  recordTask(ctx.root, {
+    timestamp: new Date().toISOString(),
+    task_type: "apply",
+    prompt: ctx.plan.goal ?? "",
+    result_summary: `Plan applied: ${results.status}${fileList}`,
+    status: results.status === "SUCCESS" ? "success" : "failure",
+    duration_ms: 0,
+    related_files: JSON.stringify(allFiles),
+    agent_or_module: "",
+    metadata: JSON.stringify({ planId: ctx.plan.id }),
+  });
+
   const session = loadSession(ctx.root);
   session.mode = "IDLE";
   saveSession(ctx.root, session);
@@ -833,9 +1006,21 @@ function outputJsonResult(
   );
 }
 
-function outputHumanResult(status: string): void {
+function outputHumanResult(
+  status: string,
+  filesCreated: string[],
+  filesModified: string[],
+  durationMs: number,
+): void {
   if (status === "SUCCESS") {
-    p.log.success(pc.bold("Plan applied successfully."));
+    const total = filesCreated.length + filesModified.length;
+    const parts: string[] = [];
+    if (filesCreated.length > 0) parts.push(pc.green(`${filesCreated.length} created`));
+    if (filesModified.length > 0) parts.push(pc.yellow(`${filesModified.length} modified`));
+    const fileSummary = total > 0 ? ` (${parts.join(", ")})` : "";
+    p.log.success(
+      `${pc.bold("Plan applied successfully.")}${fileSummary} ${pc.dim(`in ${formatDuration(durationMs)}`)}`,
+    );
   } else if (status === "PARTIAL") {
     p.log.warn(pc.bold("Plan partially applied. Use `dojops apply --resume` to continue."));
   } else {
@@ -894,7 +1079,9 @@ async function executeApplyPlan(
   if (flags.replay) {
     provider = new DeterministicProvider(provider);
   }
-  const registry = createToolRegistry(provider, root);
+  const registry = createToolRegistry(provider, root, {
+    onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
+  });
   const tools = registry.getAll();
 
   if (flags.replay) {
@@ -905,20 +1092,58 @@ async function executeApplyPlan(
     await handleToolIntegrityCheck(plan, tools, flags.autoApprove, root);
   }
 
+  // Build critic for self-repair loop (uses same LLM provider)
+  let critic: import("@dojops/executor").CriticCallback | undefined;
+  try {
+    const { CriticAgent } = await import("@dojops/core");
+    critic = new CriticAgent(provider);
+  } catch {
+    // CriticAgent not available — self-repair will use raw verification feedback
+  }
+
   const safeExecutor = new SafeExecutor({
     policy: {
       allowWrite: true,
       requireApproval: !flags.autoApprove,
+      approvalMode: flags.autoApprove ? "never" : "risk-based",
+      autoApproveRiskLevel: "MEDIUM",
       timeoutMs: flags.timeoutMs,
+      // tool.execute() includes LLM generation internally, needs a longer timeout
+      executeTimeoutMs: 10 * 60_000, // 10 minutes
       skipVerification: flags.skipVerify,
       enforceDevOpsAllowlist: !flags.allowAllPaths,
+      maxRepairAttempts: flags.maxRepairAttempts,
     },
     approvalHandler: flags.autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
+    critic,
+    progress: flags.jsonOutput
+      ? undefined
+      : {
+          onVerificationFailed(taskId, errors) {
+            p.log.warn(
+              `Verification failed for ${pc.bold(taskId)} (${errors.length} error${errors.length === 1 ? "" : "s"}). Starting self-repair...`,
+            );
+          },
+          onRepairAttempt(taskId, attempt, maxAttempts, errors) {
+            p.log.info(
+              `${pc.yellow("↻")} Repairing ${pc.bold(taskId)} (attempt ${attempt}/${maxAttempts}): ${errors[0] ?? "verification errors"}`,
+            );
+          },
+          onVerificationPassed(taskId) {
+            p.log.success(`Self-repair succeeded for ${pc.bold(taskId)}`);
+          },
+        },
   });
 
   const toolMap = new Map(tools.map((t) => [t.name, t]));
-  const graph = buildTaskGraph(plan, root);
-  const { executor, progress } = createExecutorWithCallbacks(tools, graph, ctx, flags.jsonOutput);
+  const graph = buildTaskGraph(plan);
+  const { executor, progress } = createExecutorWithCallbacks(
+    tools,
+    graph,
+    ctx,
+    flags.jsonOutput,
+    flags.timeoutMs,
+  );
   const planResult = await executor.execute(graph, { completedTaskIds });
   progress?.done();
 
@@ -951,7 +1176,7 @@ async function executeApplyPlan(
   if (flags.jsonOutput) {
     outputJsonResult(plan, status, newResults, allFilesCreated, allFilesModified, durationMs);
   } else {
-    outputHumanResult(status);
+    outputHumanResult(status, allFilesCreated, allFilesModified, durationMs);
   }
 
   if (status === "FAILURE") {

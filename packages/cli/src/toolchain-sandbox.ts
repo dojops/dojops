@@ -18,6 +18,8 @@ import {
   ToolRegistry,
   buildDownloadUrl,
   buildBinaryPathInArchive,
+  BINARY_TO_SYSTEM_TOOL,
+  findSystemTool,
 } from "@dojops/core";
 
 export const TOOLCHAIN_DIR = path.join(os.homedir(), ".dojops", "toolchain");
@@ -25,6 +27,38 @@ export const TOOLCHAIN_BIN_DIR = path.join(TOOLCHAIN_DIR, "bin");
 export const TOOLCHAIN_NODE_MODULES = path.join(TOOLCHAIN_DIR, "node_modules");
 export const TOOLCHAIN_NPM_BIN = path.join(TOOLCHAIN_NODE_MODULES, ".bin");
 export const REGISTRY_FILE = path.join(TOOLCHAIN_DIR, "registry.json");
+
+/** Resolved paths for a toolchain scope (global or project). */
+export interface ToolchainContext {
+  dir: string;
+  binDir: string;
+  nodeModules: string;
+  npmBin: string;
+  registryFile: string;
+}
+
+/** Build toolchain paths for the global scope. */
+export function globalToolchainCtx(): ToolchainContext {
+  return {
+    dir: TOOLCHAIN_DIR,
+    binDir: TOOLCHAIN_BIN_DIR,
+    nodeModules: TOOLCHAIN_NODE_MODULES,
+    npmBin: TOOLCHAIN_NPM_BIN,
+    registryFile: REGISTRY_FILE,
+  };
+}
+
+/** Build toolchain paths for a project scope. */
+export function projectToolchainCtx(projectRoot: string): ToolchainContext {
+  const dir = path.join(projectRoot, ".dojops", "toolchain");
+  return {
+    dir,
+    binDir: path.join(dir, "bin"),
+    nodeModules: path.join(dir, "node_modules"),
+    npmBin: path.join(dir, "node_modules", ".bin"),
+    registryFile: path.join(dir, "registry.json"),
+  };
+}
 
 // Legacy paths for auto-migration
 const LEGACY_TOOLS_DIR = path.join(os.homedir(), ".dojops", "tools");
@@ -54,21 +88,22 @@ function migrateToolchainDir(): void {
 }
 
 /**
- * Ensure ~/.dojops/toolchain/bin/ exists.
+ * Ensure toolchain bin directory exists.
  */
-export function ensureToolchainDir(): void {
-  migrateToolchainDir();
-  mkdirExecutable(TOOLCHAIN_BIN_DIR);
+export function ensureToolchainDir(ctx?: ToolchainContext): void {
+  if (!ctx || ctx.dir === TOOLCHAIN_DIR) migrateToolchainDir();
+  mkdirExecutable((ctx ?? globalToolchainCtx()).binDir);
 }
 
 /**
  * Load the toolchain registry from disk.
  * Returns empty registry if file doesn't exist.
  */
-export function loadToolchainRegistry(): ToolRegistry {
-  migrateToolchainDir();
+export function loadToolchainRegistry(ctx?: ToolchainContext): ToolRegistry {
+  const tc = ctx ?? globalToolchainCtx();
+  if (tc.dir === TOOLCHAIN_DIR) migrateToolchainDir();
   try {
-    const data = fs.readFileSync(REGISTRY_FILE, "utf-8");
+    const data = fs.readFileSync(tc.registryFile, "utf-8");
     return JSON.parse(data) as ToolRegistry;
   } catch {
     return { tools: [], updatedAt: "" };
@@ -78,18 +113,26 @@ export function loadToolchainRegistry(): ToolRegistry {
 /**
  * Save the toolchain registry to disk.
  */
-export function saveToolchainRegistry(registry: ToolRegistry): void {
-  ensureToolchainDir();
+export function saveToolchainRegistry(registry: ToolRegistry, ctx?: ToolchainContext): void {
+  ensureToolchainDir(ctx);
+  const tc = ctx ?? globalToolchainCtx();
   registry.updatedAt = new Date().toISOString();
-  fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2), "utf-8");
+  fs.writeFileSync(tc.registryFile, JSON.stringify(registry, null, 2), "utf-8");
 }
 
 /**
- * Prepend ~/.dojops/toolchain/bin to PATH (idempotent).
+ * Prepend toolchain bin dirs to PATH (idempotent).
+ * When a project context is given, both project and global dirs are prepended
+ * (project first so project-scoped binaries take precedence).
  */
-export function prependToolchainBinToPath(): void {
+export function prependToolchainBinToPath(projectCtx?: ToolchainContext): void {
   const currentPath = process.env.PATH ?? "";
-  const dirs = [TOOLCHAIN_BIN_DIR, TOOLCHAIN_NPM_BIN];
+  const globalCtx = globalToolchainCtx();
+  const dirs: string[] = [];
+  if (projectCtx) {
+    dirs.push(projectCtx.binDir, projectCtx.npmBin);
+  }
+  dirs.push(globalCtx.binDir, globalCtx.npmBin);
   const toAdd = dirs.filter((d) => !currentPath.includes(d));
   if (toAdd.length > 0) {
     process.env.PATH = `${toAdd.join(path.delimiter)}${path.delimiter}${currentPath}`;
@@ -217,23 +260,25 @@ export function extractTarXz(archivePath: string, destDir: string): void {
 }
 
 /**
- * Install a system tool into ~/.dojops/toolchain/bin/.
+ * Install a system tool into the toolchain bin directory.
  */
 export async function installSystemTool(
   tool: SystemTool,
   version?: string,
+  ctx?: ToolchainContext,
 ): Promise<InstalledTool> {
   if (tool.archiveType === "pipx") {
-    return installAnsible(tool);
+    return installAnsible(tool, ctx);
   }
 
+  const tc = ctx ?? globalToolchainCtx();
   const ver = version ?? tool.latestVersion;
   const url = buildDownloadUrl(tool, ver);
   if (!url) {
     throw new Error(`Cannot build download URL for ${tool.name}`);
   }
 
-  ensureToolchainDir();
+  ensureToolchainDir(ctx);
 
   // Download
   const tmpFile = await downloadToTemp(url);
@@ -270,7 +315,7 @@ export async function installSystemTool(
     verifyBinaryHash(binarySource, tool, ver);
 
     // Copy to bin directory
-    const destPath = path.join(TOOLCHAIN_BIN_DIR, tool.binaryName);
+    const destPath = path.join(tc.binDir, tool.binaryName);
     fs.copyFileSync(binarySource, destPath);
     chmodExecutable(destPath);
 
@@ -284,10 +329,10 @@ export async function installSystemTool(
       binaryPath: destPath,
     };
 
-    const registry = loadToolchainRegistry();
+    const registry = loadToolchainRegistry(ctx);
     registry.tools = registry.tools.filter((t) => t.name !== tool.name);
     registry.tools.push(installed);
-    saveToolchainRegistry(registry);
+    saveToolchainRegistry(registry, ctx);
 
     return installed;
   } finally {
@@ -340,58 +385,193 @@ function commandExists(name: string): boolean {
 }
 
 /**
- * Install ansible via pipx, python3 -m pipx, or a sandbox venv.
+ * Install ansible via a sandboxed venv or pipx fallback.
  *
- * Strategy order:
- * 1. `pipx install ansible` — if pipx binary is on PATH
- * 2. `python3 -m pipx install ansible` — if pipx is available as a Python module
- * 3. Sandbox venv at ~/.dojops/toolchain/venvs/ansible/ — always works on PEP 668 systems
+ * Strategy order (sandboxed-first):
+ * 1. Sandbox venv at ~/.dojops/toolchain/venvs/ansible/ — fully sandboxed, always works with python3
+ * 2. `pipx install ansible` — fallback if python3 is unavailable
+ *
+ * If an existing venv has broken shebangs (e.g., after directory migration),
+ * the venv is deleted and recreated.
  */
-export async function installAnsible(tool: SystemTool): Promise<InstalledTool> {
-  const venvDir = path.join(TOOLCHAIN_DIR, "venvs", "ansible");
+export async function installAnsible(
+  tool: SystemTool,
+  ctx?: ToolchainContext,
+): Promise<InstalledTool> {
+  const tc = ctx ?? globalToolchainCtx();
+  ensureToolchainDir(ctx);
+  const venvDir = path.join(tc.dir, "venvs", "ansible");
   let binaryPath: string;
 
-  // Strategy 1: pipx binary
-  if (commandExists("pipx")) {
-    runBin("pipx", ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
-    binaryPath = findInstalledBinary("ansible");
-    return registerAnsible(tool, binaryPath);
+  // Strategy 1: sandbox venv (preferred — fully sandboxed)
+  const python = commandExists("python3") ? "python3" : commandExists("python") ? "python" : null;
+  if (python) {
+    // Clean up broken venv (stale shebangs from directory migration)
+    if (fs.existsSync(venvDir)) {
+      const venvPython = path.join(venvDir, "bin", "python3");
+      if (!fs.existsSync(venvPython) || !isVenvScriptWorking(path.join(venvDir, "bin", "pip"))) {
+        fs.rmSync(venvDir, { recursive: true, force: true });
+      }
+    }
+
+    if (!fs.existsSync(venvDir)) {
+      fs.mkdirSync(venvDir, { recursive: true });
+      runBin(python, ["-m", "venv", venvDir], { timeout: 60_000, stdio: "pipe" });
+    }
+
+    const venvPip = path.join(venvDir, "bin", "pip");
+    runBin(venvPip, ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
+
+    // Symlink venv ansible binary into toolchain bin
+    const venvBinary = path.join(venvDir, "bin", "ansible");
+    const destPath = path.join(tc.binDir, "ansible");
+    try {
+      fs.unlinkSync(destPath);
+    } catch {
+      /* may not exist */
+    }
+    fs.symlinkSync(venvBinary, destPath);
+    binaryPath = destPath;
+
+    // Symlink companion binaries (ansible-playbook, etc.) from venv
+    symlinkAnsibleCompanions(venvBinary, ctx);
+
+    return registerAnsible(tool, binaryPath, ctx);
   }
 
-  // Strategy 2: python3 -m pipx
-  if (commandExists("python3")) {
+  // Strategy 2: pipx fallback (when python3 is not available)
+  if (commandExists("pipx")) {
+    runBin("pipx", ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
+    ensurePipxBinOnPath();
+    binaryPath = findInstalledBinary("ansible");
+    symlinkAnsibleCompanions(binaryPath, ctx);
+    return registerAnsible(tool, binaryPath, ctx);
+  }
+
+  throw new Error(
+    "Cannot install ansible: neither python3 nor pipx found. " +
+      "Install python3 (recommended) or pipx first.",
+  );
+}
+
+/**
+ * Ansible companion binaries that should be symlinked alongside the main binary.
+ */
+const ANSIBLE_COMPANIONS = [
+  "ansible-playbook",
+  "ansible-galaxy",
+  "ansible-vault",
+  "ansible-lint",
+  "ansible-doc",
+  "ansible-config",
+  "ansible-console",
+  "ansible-inventory",
+  "ansible-pull",
+];
+
+/**
+ * Check if a Python venv script has a working shebang (the interpreter exists).
+ */
+function isVenvScriptWorking(scriptPath: string): boolean {
+  try {
+    const content = fs.readFileSync(scriptPath, "utf-8");
+    const shebang = content.split("\n")[0];
+    if (!shebang.startsWith("#!")) return false;
+    const interpreter = shebang.slice(2).trim();
+    return fs.existsSync(interpreter);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the directory containing ansible companion binaries.
+ * Tries multiple strategies since pipx/venv paths vary by platform.
+ * Directories are ordered by preference — sandboxed toolchain venv first,
+ * then pipx venvs as fallback.
+ */
+function resolveAnsibleBinDir(ansibleBinaryPath: string, ctx?: ToolchainContext): string[] {
+  const dirs: string[] = [];
+  const home = os.homedir();
+
+  // 1. Toolchain sandbox venv (preferred — fully controlled by DojOps)
+  const tc = ctx ?? globalToolchainCtx();
+  dirs.push(path.join(tc.dir, "venvs", "ansible", "bin"));
+
+  // 2. Directory of the resolved ansible binary (follows symlinks)
+  if (ansibleBinaryPath && ansibleBinaryPath !== "ansible") {
+    dirs.push(path.dirname(ansibleBinaryPath));
     try {
-      runBin("python3", ["-m", "pipx", "install", "ansible"], {
-        timeout: 300_000,
-        stdio: "pipe",
-      });
-      binaryPath = findInstalledBinary("ansible");
-      return registerAnsible(tool, binaryPath);
+      const realPath = fs.realpathSync(ansibleBinaryPath);
+      if (realPath !== ansibleBinaryPath) {
+        dirs.push(path.dirname(realPath));
+      }
     } catch {
-      // pipx module not available — fall through to venv
+      /* ignore */
     }
   }
 
-  // Strategy 3: sandbox venv
-  const python = commandExists("python3") ? "python3" : "python";
-  fs.mkdirSync(venvDir, { recursive: true });
-  runBin(python, ["-m", "venv", venvDir], { timeout: 60_000, stdio: "pipe" });
+  // 3. pipx venv internals (fallback)
+  dirs.push(path.join(home, ".local", "share", "pipx", "venvs", "ansible", "bin"));
+  dirs.push(path.join(home, ".local", "pipx", "venvs", "ansible", "bin"));
 
-  const venvPip = path.join(venvDir, "bin", "pip");
-  runBin(venvPip, ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
+  // 4. pipx exposed scripts
+  dirs.push(path.join(home, ".local", "bin"));
 
-  // Symlink venv ansible binary into toolchain bin
-  const venvBinary = path.join(venvDir, "bin", "ansible");
-  const destPath = path.join(TOOLCHAIN_BIN_DIR, "ansible");
-  try {
-    fs.unlinkSync(destPath);
-  } catch {
-    /* may not exist */
+  return dirs;
+}
+
+/**
+ * Symlink ansible companion binaries (ansible-playbook, ansible-galaxy, etc.)
+ * from their source location into the toolchain bin directory.
+ * Searches multiple possible source directories, validating that Python scripts
+ * have working shebangs (not broken by directory migrations).
+ */
+function symlinkAnsibleCompanions(ansibleBinaryPath: string, ctx?: ToolchainContext): void {
+  const tc = ctx ?? globalToolchainCtx();
+  const searchDirs = resolveAnsibleBinDir(ansibleBinaryPath, ctx);
+
+  for (const companion of ANSIBLE_COMPANIONS) {
+    // Find the companion in any of the search directories, preferring working ones
+    let sourcePath: string | undefined;
+    for (const dir of searchDirs) {
+      const candidate = path.join(dir, companion);
+      try {
+        if (!fs.existsSync(candidate)) continue;
+        // Validate shebang — skip scripts with broken interpreters
+        if (!isVenvScriptWorking(candidate)) continue;
+        sourcePath = candidate;
+        break;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!sourcePath) continue;
+
+    const destPath = path.join(tc.binDir, companion);
+    try {
+      try {
+        fs.unlinkSync(destPath);
+      } catch {
+        /* may not exist */
+      }
+      fs.symlinkSync(sourcePath, destPath);
+    } catch {
+      /* best-effort — skip on failure */
+    }
   }
-  fs.symlinkSync(venvBinary, destPath);
-  binaryPath = destPath;
+}
 
-  return registerAnsible(tool, binaryPath);
+/**
+ * Ensure ~/.local/bin/ (pipx's default script directory) is on process.env.PATH.
+ * After pipx install, binaries are placed there but the Node process may not
+ * have it in PATH (e.g., added via .bashrc which isn't sourced by child processes).
+ */
+function ensurePipxBinOnPath(): void {
+  const pipxBinDir = path.join(os.homedir(), ".local", "bin");
+  if (process.env.PATH && !process.env.PATH.includes(pipxBinDir)) {
+    process.env.PATH = `${pipxBinDir}${path.delimiter}${process.env.PATH}`;
+  }
 }
 
 function findInstalledBinary(name: string): string {
@@ -407,7 +587,11 @@ function findInstalledBinary(name: string): string {
   }
 }
 
-function registerAnsible(tool: SystemTool, binaryPath: string): InstalledTool {
+function registerAnsible(
+  tool: SystemTool,
+  binaryPath: string,
+  ctx?: ToolchainContext,
+): InstalledTool {
   const installed: InstalledTool = {
     name: tool.name,
     version: tool.latestVersion,
@@ -416,10 +600,10 @@ function registerAnsible(tool: SystemTool, binaryPath: string): InstalledTool {
     binaryPath,
   };
 
-  const registry = loadToolchainRegistry();
+  const registry = loadToolchainRegistry(ctx);
   registry.tools = registry.tools.filter((t) => t.name !== tool.name);
   registry.tools.push(installed);
-  saveToolchainRegistry(registry);
+  saveToolchainRegistry(registry, ctx);
 
   return installed;
 }
@@ -427,13 +611,14 @@ function registerAnsible(tool: SystemTool, binaryPath: string): InstalledTool {
 /**
  * Remove a system tool from the toolchain.
  */
-export function removeSystemTool(name: string): boolean {
-  const registry = loadToolchainRegistry();
+export function removeSystemTool(name: string, ctx?: ToolchainContext): boolean {
+  const tc = ctx ?? globalToolchainCtx();
+  const registry = loadToolchainRegistry(ctx);
   const entry = registry.tools.find((t) => t.name === name);
   if (!entry) return false;
 
   // Delete binary (or symlink)
-  const binPath = path.join(TOOLCHAIN_BIN_DIR, path.basename(entry.binaryPath));
+  const binPath = path.join(tc.binDir, path.basename(entry.binaryPath));
   try {
     fs.unlinkSync(binPath);
   } catch {
@@ -441,7 +626,7 @@ export function removeSystemTool(name: string): boolean {
   }
 
   // Clean up venv if this was a venv-installed tool (e.g. ansible)
-  const venvDir = path.join(TOOLCHAIN_DIR, "venvs", name);
+  const venvDir = path.join(tc.dir, "venvs", name);
   try {
     fs.rmSync(venvDir, { recursive: true, force: true });
   } catch {
@@ -450,7 +635,7 @@ export function removeSystemTool(name: string): boolean {
 
   // Update registry
   registry.tools = registry.tools.filter((t) => t.name !== name);
-  saveToolchainRegistry(registry);
+  saveToolchainRegistry(registry, ctx);
 
   return true;
 }
@@ -458,16 +643,17 @@ export function removeSystemTool(name: string): boolean {
 /**
  * Remove all toolchain tools and clear the registry.
  */
-export function cleanAllToolchain(): { removed: string[] } {
-  const registry = loadToolchainRegistry();
+export function cleanAllToolchain(ctx?: ToolchainContext): { removed: string[] } {
+  const tc = ctx ?? globalToolchainCtx();
+  const registry = loadToolchainRegistry(ctx);
   const removed = registry.tools.map((t) => t.name);
 
   // Delete all binaries
-  if (fs.existsSync(TOOLCHAIN_BIN_DIR)) {
-    const entries = fs.readdirSync(TOOLCHAIN_BIN_DIR);
+  if (fs.existsSync(tc.binDir)) {
+    const entries = fs.readdirSync(tc.binDir);
     for (const entry of entries) {
       try {
-        fs.unlinkSync(path.join(TOOLCHAIN_BIN_DIR, entry));
+        fs.unlinkSync(path.join(tc.binDir, entry));
       } catch {
         /* ignore */
       }
@@ -475,7 +661,7 @@ export function cleanAllToolchain(): { removed: string[] } {
   }
 
   // Remove venvs directory
-  const venvsDir = path.join(TOOLCHAIN_DIR, "venvs");
+  const venvsDir = path.join(tc.dir, "venvs");
   try {
     fs.rmSync(venvsDir, { recursive: true, force: true });
   } catch {
@@ -484,13 +670,13 @@ export function cleanAllToolchain(): { removed: string[] } {
 
   // Remove sandboxed npm node_modules
   try {
-    fs.rmSync(TOOLCHAIN_NODE_MODULES, { recursive: true, force: true });
+    fs.rmSync(tc.nodeModules, { recursive: true, force: true });
   } catch {
     /* ignore */
   }
 
   // Clear registry
-  saveToolchainRegistry({ tools: [], updatedAt: "" });
+  saveToolchainRegistry({ tools: [], updatedAt: "" }, ctx);
 
   return { removed };
 }
@@ -499,7 +685,8 @@ export function cleanAllToolchain(): { removed: string[] } {
  * Run a tool's verify command and return the version output.
  * Returns undefined if verification fails.
  */
-export function verifyTool(tool: SystemTool): string | undefined {
+export function verifyTool(tool: SystemTool, ctx?: ToolchainContext): string | undefined {
+  const tc = ctx ?? globalToolchainCtx();
   try {
     const [cmd, ...args] = tool.verifyCommand;
     const result = runBin(cmd, args, {
@@ -508,13 +695,50 @@ export function verifyTool(tool: SystemTool): string | undefined {
       encoding: "utf-8",
       env: {
         ...process.env,
-        PATH: `${TOOLCHAIN_BIN_DIR}${path.delimiter}${process.env.PATH ?? ""}`,
+        PATH: `${tc.binDir}${path.delimiter}${process.env.PATH ?? ""}`,
       },
     }) as string;
     return result.trim().split("\n")[0];
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Create an OnBinaryMissing handler that auto-installs tools via the toolchain.
+ * Returns a callback suitable for passing to DopsRuntimeV2 / tool-registry options.
+ */
+export function createAutoInstallHandler(
+  log?: (message: string) => void,
+): (binaryName: string) => Promise<boolean> {
+  return async (binaryName: string): Promise<boolean> => {
+    const toolName = BINARY_TO_SYSTEM_TOOL[binaryName];
+    if (!toolName) return false;
+
+    const tool = findSystemTool(toolName);
+    if (!tool) return false;
+
+    try {
+      log?.(`Auto-installing ${toolName} for verification...`);
+      const installed = await installSystemTool(tool);
+      prependToolchainBinToPath();
+
+      // For pipx/venv tools, also add the binary's parent dir to PATH
+      // (e.g., ~/.local/bin/ for pipx installs)
+      if (installed.binaryPath && installed.binaryPath !== tool.binaryName) {
+        const binDir = path.dirname(installed.binaryPath);
+        if (binDir && binDir !== "." && !process.env.PATH?.includes(binDir)) {
+          process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ""}`;
+        }
+      }
+
+      log?.(`${toolName} installed successfully`);
+      return true;
+    } catch {
+      log?.(`Failed to auto-install ${toolName}`);
+      return false;
+    }
+  };
 }
 
 // Backward compatibility re-exports

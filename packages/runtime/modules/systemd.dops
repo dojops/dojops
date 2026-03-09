@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: systemd
-  version: 2.0.0
+  version: 2.1.0
   description: "Generate systemd service unit files"
   author: dojops
   license: MIT
@@ -18,6 +18,13 @@ context:
     Output raw unit file content directly — do NOT wrap in JSON or code fences.
     The output must be a valid .service file that systemd can parse.
     Include [Unit], [Service], and [Install] sections.
+
+    Detect the service type from context:
+    - **Web application** (Node.js, Python, Go, Java): Type=simple or notify, ExecStart with runtime
+    - **Database** (PostgreSQL, MySQL, Redis): Type=notify, data directory, pre/post start scripts
+    - **Worker/daemon**: Type=simple, Restart=always, watchdog support
+    - **Timer-based**: Generate both .service and .timer unit files
+    - **Socket-activated**: Type=simple with socket activation, generate .socket file
   bestPractices:
     - Set appropriate restart policies (on-failure, always)
     - Run services as dedicated non-root users
@@ -27,10 +34,12 @@ context:
     - Set appropriate TimeoutStartSec and TimeoutStopSec
     - Use ProtectSystem and ProtectHome for security hardening
     - Include [Unit], [Service], and [Install] sections
-    - Include security hardening directives
+    - Include security hardening directives (PrivateTmp, NoNewPrivileges, CapabilityBoundingSet)
+    - Use StandardOutput/StandardError=journal for logging integration
+    - Set WorkingDirectory for applications that need a specific directory context
   context7Libraries:
     - name: systemd
-      query: "systemd unit file syntax, service directives, security hardening, resource limits"
+      query: "systemd unit file syntax, service directives Type simple notify, security hardening ProtectSystem PrivateTmp, resource limits LimitNOFILE MemoryMax, timer units, socket activation"
 
 files:
   - path: "service.service"

@@ -94,6 +94,12 @@ export {
   WriteResult,
 } from "./file-writer";
 
+// Context7 Doc Auditor
+export { auditAgainstDocs, DocAuditResult } from "./context7-doc-auditor";
+
+// Review tool runner
+export { runReviewTool, runReviewTools } from "./review-tool-runner";
+
 // Parsers
 export { getParser, getAvailableParsers, SeverityMapping } from "./parsers/index";
 
@@ -107,4 +113,5 @@ export {
   DocProvider,
   stripCodeFences,
   parseRawContent,
+  parseMultiFileOutput,
 } from "./runtime";

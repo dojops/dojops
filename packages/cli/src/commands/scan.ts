@@ -8,6 +8,8 @@ import type { ScanType, ScanReport, ScanFinding, RemediationPlan } from "@dojops
 import type { RepoContext } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { CLIContext } from "../types";
+import { appendActivity } from "../dojops-md";
+import { recordTask } from "../memory";
 import { wrapForNote } from "../formatter";
 import { hasFlag, extractFlagValue } from "../parser";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
@@ -73,6 +75,23 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     action: "scan",
     status: "success",
     durationMs: Date.now() - startTime,
+  });
+
+  // Track activity in DOJOPS.md
+  const { total, critical, high } = report.summary;
+  const severity = critical > 0 ? `${critical} critical` : high > 0 ? `${high} high` : "";
+  const scanSummary = `Security scan: ${total} finding(s)${severity ? ` (${severity})` : ""}`;
+  appendActivity(root, scanSummary);
+  recordTask(root, {
+    timestamp: new Date().toISOString(),
+    task_type: "scan",
+    prompt: "",
+    result_summary: scanSummary,
+    status: "success",
+    duration_ms: Date.now() - startTime,
+    related_files: "[]",
+    agent_or_module: flags.scanType ?? "all",
+    metadata: JSON.stringify({ total, critical, high }),
   });
 
   let rescanReport: ScanReport | null = null;
@@ -451,12 +470,7 @@ async function getApproval(autoApprove: boolean, fixCount: number): Promise<bool
 
 async function applyFixesAndRescan(plan: RemediationPlan, fixCtx: FixContext): Promise<ScanReport> {
   const { report, scanRoot, scanType, context, root } = fixCtx;
-  for (const fix of plan.fixes) {
-    const fixPath = path.resolve(root, fix.file);
-    if (fs.existsSync(fixPath)) {
-      fs.copyFileSync(fixPath, fixPath + ".bak");
-    }
-  }
+  // Fixes applied in-place — rollback via git (no .bak files)
   const patchResult = applyFixes(plan, root);
   if (patchResult.filesModified.length > 0) {
     p.log.success(`Modified: ${patchResult.filesModified.join(", ")}`);

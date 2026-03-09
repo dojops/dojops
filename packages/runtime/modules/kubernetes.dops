@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: kubernetes
-  version: 2.0.0
+  version: 2.1.0
   description: "Generate Kubernetes deployment manifests"
   author: dojops
   license: MIT
@@ -16,25 +16,44 @@ context:
   outputGuidance: |
     Generate valid Kubernetes YAML manifests.
     Output raw YAML content directly — do NOT wrap in JSON or code fences.
-    Use multi-document YAML (--- separator) when generating multiple resources (Deployment, Service, etc.).
+    Use multi-document YAML (--- separator) when generating multiple resources.
+    Order resources logically: Namespace → ConfigMap/Secret → Service → Deployment → Ingress → HPA.
     The output must be valid kubectl-compatible YAML.
+
+    Detect the application type from context and generate appropriate resources:
+    - **Web application**: Deployment + Service (ClusterIP or LoadBalancer) + Ingress
+    - **API/microservice**: Deployment + Service + optionally Ingress, ConfigMap for config
+    - **Worker/background job**: Deployment (no Service needed) or Job/CronJob
+    - **Stateful application** (databases, queues): StatefulSet + headless Service + PersistentVolumeClaim
+    - **Batch processing**: Job or CronJob
+    - **DaemonSet** (logging, monitoring agents): DaemonSet + ServiceAccount
+
+    Always include in every Deployment/StatefulSet:
+    - Resource requests and limits
+    - Readiness and liveness probes
+    - Security context (non-root, read-only filesystem when possible)
+    - Standard labels (app.kubernetes.io/name, instance, version, component)
   bestPractices:
-    - Set resource requests and limits for all containers
-    - Use readiness and liveness probes for health checking
+    - Set resource requests and limits for all containers (prevents noisy-neighbor issues)
+    - Use readiness and liveness probes for health checking (httpGet, tcpSocket, or exec)
     - Run containers as non-root with read-only root filesystem when possible
-    - Use labels and annotations consistently for resource management
+    - Use labels consistently (app.kubernetes.io/name, instance, version, component, managed-by)
     - Define PodDisruptionBudgets for high-availability workloads
-    - Use ConfigMaps and Secrets for configuration (never hardcode)
-    - Set appropriate security contexts and network policies
+    - Use ConfigMaps for configuration and Secrets for sensitive data (never hardcode)
+    - Set appropriate security contexts (runAsNonRoot, readOnlyRootFilesystem, capabilities drop ALL)
     - Use specific image tags, not :latest in production
-    - Labels must be consistent between Deployment and Service selectors
-    - Use namespaces to isolate workloads
+    - Labels must be consistent between Deployment selector, Pod template, and Service selector
+    - Use namespaces to isolate workloads by environment or team
+    - Set terminationGracePeriodSeconds appropriate to the application's shutdown behavior
+    - Use topologySpreadConstraints or podAntiAffinity for high availability
+    - Use ServiceAccount with minimal RBAC permissions instead of default
+    - Define NetworkPolicy to restrict pod-to-pod communication
   context7Libraries:
     - name: kubernetes
-      query: "Kubernetes Deployment, Service, Pod spec, resource limits, probes, security context"
+      query: "Kubernetes Deployment Service Ingress ConfigMap Secret, Pod spec resource limits probes, security context runAsNonRoot, StatefulSet PersistentVolumeClaim, Job CronJob, namespace labels"
 
 files:
-  - path: "k8s/manifests.yaml"
+  - path: "{outputPath}/manifests.yaml"
     format: raw
 
 detection:
@@ -61,7 +80,7 @@ permissions:
   network: none
 
 scope:
-  write: ["k8s/*.yaml", "k8s/*.yml"]
+  write: ["**/*.yaml", "**/*.yml"]
 
 risk:
   level: MEDIUM
@@ -95,4 +114,5 @@ Project context: {projectContext}
 ## Keywords
 
 kubernetes, k8s, deployment, service, pod, container, manifest,
-kubectl, namespace, ingress, configmap, secret, replica, statefulset
+kubectl, namespace, ingress, configmap, secret, replica, statefulset,
+job, cronjob, daemonset, pvc, hpa, networkpolicy

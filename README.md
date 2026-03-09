@@ -133,7 +133,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Intelligence
 
-- **16 built-in specialist agents + custom agents** — ops-cortex, terraform, kubernetes, CI/CD, security, Docker, cloud architecture, networking, database, GitOps, compliance, CI debugger, appsec, shell scripting, Python, and observability — with weighted keyword confidence scoring. Create your own custom agents via `dojops agents create` (LLM-generated or manual)
+- **17 built-in specialist agents + custom agents** — ops-cortex, terraform, kubernetes, CI/CD, security, Docker, cloud architecture, networking, database, GitOps, compliance, CI debugger, appsec, shell scripting, Python, observability, and DevSecOps reviewer — with weighted keyword confidence scoring. Create your own custom agents via `dojops agents create` (LLM-generated or manual)
 - **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, affected files, and suggested fixes with confidence scores
 - **Infra diff analysis** — Risk level, cost impact, security implications, rollback complexity, and actionable recommendations for infrastructure changes
 - **DevOps config checker** — LLM-powered quality analysis of detected DevOps files with maturity scoring (0-100), severity-ranked findings, and missing file recommendations
@@ -196,7 +196,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
                        shellcheck, trivy-sbom, trivy-license, semgrep) + remediation
 @dojops/context        Context7 documentation augmentation for v2 tools
 @dojops/session        Chat session management + memory + context injection
-@dojops/core           LLM abstraction + 6 providers + 16 built-in specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/core           LLM abstraction + 6 providers + 17 built-in specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
                        + atomicWriteFileSync + restoreBackup
 ```
@@ -492,26 +492,27 @@ All 13 built-in tools are `.dops v2` modules in `packages/runtime/modules/`, pro
 
 ## Specialist Agents
 
-DojOps includes 16 built-in agents plus support for user-defined custom agents. Custom agents are created via `dojops agents create` and stored as markdown README files — no source code changes needed.
+DojOps includes 17 built-in agents plus support for user-defined custom agents. Custom agents are created via `dojops agents create` and stored as markdown README files — no source code changes needed.
 
-| Agent                    | Domain                  | Key Capabilities                                                    |
-| ------------------------ | ----------------------- | ------------------------------------------------------------------- |
-| ops-cortex               | Orchestration           | Task decomposition, cross-domain routing, dependency ordering       |
-| terraform-specialist     | Infrastructure          | HCL, modules, state management, workspaces, cost optimization       |
-| kubernetes-specialist    | Container orchestration | Deployments, Helm, RBAC, autoscaling, service mesh                  |
-| cicd-specialist          | CI/CD                   | GitHub Actions, GitLab CI, Jenkins, build optimization, pipelines   |
-| security-auditor         | Security                | Vulnerability scanning, secret management, IAM, threat modeling     |
-| observability-specialist | Observability           | Prometheus, Grafana, Datadog, tracing, SLOs, alerting               |
-| docker-specialist        | Containerization        | Multi-stage builds, image optimization, registries, BuildKit        |
-| cloud-architect          | Cloud architecture      | AWS/GCP/Azure design, cost optimization, migration strategies       |
-| network-specialist       | Networking              | DNS, load balancers, VPN, CDN, service mesh, firewall rules         |
-| database-specialist      | Data storage            | PostgreSQL, MySQL, Redis, DynamoDB, replication, backup             |
-| gitops-specialist        | GitOps                  | ArgoCD, Flux, drift detection, sealed secrets, progressive delivery |
-| compliance-auditor       | Compliance              | SOC2, HIPAA, PCI-DSS, GDPR, policy-as-code (OPA/Rego)               |
-| ci-debugger              | CI debugging            | Log analysis, root cause diagnosis, flaky test detection            |
-| appsec-specialist        | Application security    | OWASP Top 10, SAST/DAST, code review, pentest methodology           |
-| shell-specialist         | Shell scripting         | Bash/POSIX, ShellCheck, error handling, automation                  |
-| python-specialist        | Python scripting        | Type hints, pytest, poetry, async, CLI tools                        |
+| Agent                    | Domain                  | Key Capabilities                                                     |
+| ------------------------ | ----------------------- | -------------------------------------------------------------------- |
+| ops-cortex               | Orchestration           | Task decomposition, cross-domain routing, dependency ordering        |
+| terraform-specialist     | Infrastructure          | HCL, modules, state management, workspaces, cost optimization        |
+| kubernetes-specialist    | Container orchestration | Deployments, Helm, RBAC, autoscaling, service mesh                   |
+| cicd-specialist          | CI/CD                   | GitHub Actions, GitLab CI, Jenkins, build optimization, pipelines    |
+| security-auditor         | Security                | Vulnerability scanning, secret management, IAM, threat modeling      |
+| observability-specialist | Observability           | Prometheus, Grafana, Datadog, tracing, SLOs, alerting                |
+| docker-specialist        | Containerization        | Multi-stage builds, image optimization, registries, BuildKit         |
+| cloud-architect          | Cloud architecture      | AWS/GCP/Azure design, cost optimization, migration strategies        |
+| network-specialist       | Networking              | DNS, load balancers, VPN, CDN, service mesh, firewall rules          |
+| database-specialist      | Data storage            | PostgreSQL, MySQL, Redis, DynamoDB, replication, backup              |
+| gitops-specialist        | GitOps                  | ArgoCD, Flux, drift detection, sealed secrets, progressive delivery  |
+| compliance-auditor       | Compliance              | SOC2, HIPAA, PCI-DSS, GDPR, policy-as-code (OPA/Rego)                |
+| ci-debugger              | CI debugging            | Log analysis, root cause diagnosis, flaky test detection             |
+| appsec-specialist        | Application security    | OWASP Top 10, SAST/DAST, code review, pentest methodology            |
+| shell-specialist         | Shell scripting         | Bash/POSIX, ShellCheck, error handling, automation                   |
+| python-specialist        | Python scripting        | Type hints, pytest, poetry, async, CLI tools                         |
+| devsecops-reviewer       | DevOps review           | Config review, version validation, deprecated syntax, security audit |
 
 ---
 
@@ -655,7 +656,7 @@ packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
   tool-registry/    Tool registry + custom tool system + custom agent discovery
-  core/             LLM providers (6) + specialist agents (16 built-in) + CI debugger + infra diff + DevOps checker
+  core/             LLM providers (6) + specialist agents (17 built-in) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
   runtime/          13 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)

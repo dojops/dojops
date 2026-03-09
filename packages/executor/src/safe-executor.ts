@@ -1,12 +1,43 @@
 import { DevOpsTool, ToolOutput, VerificationResult } from "@dojops/sdk";
-import { ExecutionPolicy, ExecutionResult, ExecutionAuditEntry, ApprovalDecision } from "./types";
+import {
+  ExecutionPolicy,
+  ExecutionResult,
+  ExecutionAuditEntry,
+  ApprovalDecision,
+  RiskLevel,
+  RISK_ORDER,
+  isRiskAtOrBelow,
+  classifyPathRisk,
+} from "./types";
 import { ApprovalHandler, AutoApproveHandler, buildPreview } from "./approval";
 import { DEFAULT_POLICY, PolicyViolationError, checkWriteAllowed } from "./policy";
 import { withTimeout } from "./sandbox";
 
+/** Critique callback for the self-repair loop (injected from @dojops/core). */
+export interface CriticCallback {
+  critique(
+    generatedContent: string,
+    verificationResult: VerificationResult,
+    toolName: string,
+    originalPrompt?: string,
+  ): Promise<{ repairInstructions: string }>;
+}
+
+/** Progress callback for repair loop UX feedback. */
+export interface ExecutorProgressCallback {
+  onRepairAttempt?(taskId: string, attempt: number, maxAttempts: number, errors: string[]): void;
+  onVerificationFailed?(taskId: string, errors: string[]): void;
+  onVerificationPassed?(taskId: string): void;
+}
+
 export interface SafeExecutorOptions {
   policy?: Partial<ExecutionPolicy>;
   approvalHandler?: ApprovalHandler;
+  /** Optional critic for the self-repair loop. When provided, verification failures trigger
+   *  a critique LLM call before re-generation for more targeted repairs. */
+  critic?: CriticCallback;
+  /** Optional progress callback for UI feedback during repair loops. */
+  progress?: ExecutorProgressCallback;
 }
 
 /** Options for the internal runExecution method. */
@@ -24,12 +55,16 @@ interface RunExecutionContext {
 export class SafeExecutor {
   private readonly policy: ExecutionPolicy;
   private readonly approvalHandler: ApprovalHandler;
+  private readonly critic: CriticCallback | undefined;
+  private readonly progress: ExecutorProgressCallback | undefined;
   private readonly auditLog: ExecutionAuditEntry[] = [];
   private readonly tokenUsage = { prompt: 0, completion: 0, total: 0 };
 
   constructor(options: SafeExecutorOptions = {}) {
     this.policy = { ...DEFAULT_POLICY, ...options.policy };
     this.approvalHandler = options.approvalHandler ?? new AutoApproveHandler();
+    this.progress = options.progress;
+    this.critic = options.critic;
   }
 
   private handleTimeoutError(
@@ -59,11 +94,13 @@ export class SafeExecutor {
   private async runVerification(
     tool: DevOpsTool,
     generateOutput: ToolOutput,
+    meta?: Record<string, unknown>,
   ): Promise<
     | { ok: true; verification: VerificationResult | undefined }
     | { ok: false; verification: VerificationResult; error: string }
   > {
-    if (!tool.verify || this.policy.skipVerification) {
+    const perTaskSkip = meta?.skipVerification === true;
+    if (!tool.verify || this.policy.skipVerification || perTaskSkip) {
       return { ok: true, verification: undefined };
     }
 
@@ -121,20 +158,62 @@ export class SafeExecutor {
     return undefined;
   }
 
-  /** Request approval or return "approved" if not required. */
+  /**
+   * Resolve approval based on policy mode and task risk level.
+   *
+   * - "never": always auto-approve
+   * - "always": always ask the approval handler (legacy behavior)
+   * - "risk-based": auto-approve if task risk <= autoApproveRiskLevel, otherwise ask
+   *
+   * Risk is elevated if generated output declares paths that carry higher risk
+   * (e.g., .env files, SSH keys, Terraform state).
+   */
   private async resolveApproval(
     taskId: string,
     tool: DevOpsTool,
     generateOutput: ToolOutput,
+    taskRisk?: RiskLevel,
   ): Promise<ApprovalDecision> {
-    if (!this.policy.requireApproval) return "approved";
+    const mode = this.policy.approvalMode ?? "always";
+
+    if (mode === "never") return "approved";
+
+    // Legacy behavior: requireApproval=false means auto-approve regardless of mode
+    if (!this.policy.requireApproval && mode === "always") return "approved";
+
+    if (mode === "risk-based" && taskRisk) {
+      // Elevate risk based on output file paths (e.g., .env → HIGH, ~/.ssh → CRITICAL)
+      const effectiveRisk = this.elevateRiskByPaths(taskRisk, generateOutput);
+      const threshold = this.policy.autoApproveRiskLevel ?? "MEDIUM";
+      if (isRiskAtOrBelow(effectiveRisk, threshold)) {
+        return "approved";
+      }
+    }
+
+    // Fall through to interactive approval
     const preview = buildPreview(generateOutput, tool.name);
     return this.approvalHandler.requestApproval({
       taskId,
       toolName: tool.name,
-      description: `Execute ${tool.name} tool`,
+      description: `Write LLM-generated output using ${tool.name}`,
       preview,
     });
+  }
+
+  /** Elevate task risk if generated output targets sensitive paths. */
+  private elevateRiskByPaths(taskRisk: RiskLevel, generateOutput: ToolOutput): RiskLevel {
+    if (!generateOutput.data) return taskRisk;
+    const paths = this.extractDeclaredPaths(generateOutput.data);
+    if (paths.length === 0) return taskRisk;
+
+    let maxRisk = taskRisk;
+    for (const p of paths) {
+      const pathRisk = classifyPathRisk(p);
+      if (RISK_ORDER[pathRisk] > RISK_ORDER[maxRisk]) {
+        maxRisk = pathRisk;
+      }
+    }
+    return maxRisk;
   }
 
   /** Run tool.execute and check file path policies. */
@@ -142,15 +221,22 @@ export class SafeExecutor {
     const { taskId, tool, input, generateOutput, approval, verification, startTime, meta } = ctx;
     const filesWritten: string[] = [];
     const filesModified: string[] = [];
+    const filesUnchanged: string[] = [];
     try {
+      // Pass pre-generated output to execute so tools can skip redundant LLM calls
+      const execInput =
+        generateOutput.data !== undefined && typeof input === "object" && input !== null
+          ? { ...(input as Record<string, unknown>), _generatedOutput: generateOutput }
+          : input;
       const executeOutput = await withTimeout(
-        tool.execute!(input as never),
+        tool.execute!(execInput as never),
         this.policy.executeTimeoutMs ?? this.policy.timeoutMs,
         "Execute phase timed out",
       );
 
       if (executeOutput.filesWritten) filesWritten.push(...executeOutput.filesWritten);
       if (executeOutput.filesModified) filesModified.push(...executeOutput.filesModified);
+      if (executeOutput.filesUnchanged) filesUnchanged.push(...executeOutput.filesUnchanged);
 
       if (this.policy.allowWrite) {
         const violation = this.checkFilePaths([...filesWritten, ...filesModified]);
@@ -176,6 +262,7 @@ export class SafeExecutor {
           verification,
           filesWritten,
           filesModified,
+          filesUnchanged,
           usage: generateOutput.usage,
           metadata: meta,
         });
@@ -187,6 +274,7 @@ export class SafeExecutor {
         verification,
         filesWritten,
         filesModified,
+        filesUnchanged,
         usage: generateOutput.usage,
         metadata: meta,
       });
@@ -241,6 +329,52 @@ export class SafeExecutor {
     }
   }
 
+  /**
+   * Build repair feedback by combining verification errors with critic analysis.
+   * If a critic is available, it produces targeted repair instructions.
+   * Otherwise, falls back to raw verification error messages.
+   */
+  private async buildRepairFeedback(
+    verifyResult: { verification: VerificationResult; error: string },
+    generateOutput: ToolOutput,
+    tool: DevOpsTool,
+    input: unknown,
+  ): Promise<string> {
+    const rawFeedback = verifyResult.verification.issues
+      .map((i) => `[${i.severity}] ${i.message}`)
+      .join("\n");
+
+    if (!this.critic) return rawFeedback;
+
+    try {
+      const dataObj = generateOutput.data as Record<string, unknown> | undefined;
+      const generatedContent =
+        typeof generateOutput.data === "string"
+          ? generateOutput.data
+          : typeof dataObj?.generated === "string"
+            ? dataObj.generated
+            : JSON.stringify(generateOutput.data);
+
+      const originalPrompt =
+        typeof input === "object" && input !== null
+          ? ((input as Record<string, unknown>).prompt as string | undefined)
+          : undefined;
+
+      const critique = await this.critic.critique(
+        generatedContent,
+        verifyResult.verification,
+        tool.name,
+        originalPrompt,
+      );
+
+      // Combine critic's structured instructions with raw verification errors
+      return `## Critic Analysis\n${critique.repairInstructions}\n\n## Verification Errors\n${rawFeedback}`;
+    } catch {
+      // Critic failed — use raw verification feedback
+      return rawFeedback;
+    }
+  }
+
   /** Check pre-execution policy on declared output paths. Returns violation message or undefined. */
   private checkDeclaredPathPolicy(generateOutput: ToolOutput): string | undefined {
     if (!this.policy.allowWrite || !generateOutput.data) return undefined;
@@ -253,9 +387,11 @@ export class SafeExecutor {
     tool: DevOpsTool,
     input: unknown,
     metadata?: Record<string, unknown>,
+    preGeneratedOutput?: ToolOutput,
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
     const meta = metadata;
+    const taskRisk = meta?.risk as RiskLevel | undefined;
 
     const validation = tool.validate(input);
     if (!validation.valid) {
@@ -266,11 +402,54 @@ export class SafeExecutor {
       });
     }
 
-    const genResult = await this.runGeneratePhase(taskId, tool, input, startTime, meta);
-    if ("result" in genResult) return genResult.result;
-    const generateOutput = genResult.output;
+    let generateOutput: ToolOutput;
+    if (preGeneratedOutput) {
+      // Skip generate phase — output was already produced by the planner
+      generateOutput = preGeneratedOutput;
+      this.accumulateTokenUsage(generateOutput.usage);
+    } else {
+      const genResult = await this.runGeneratePhase(taskId, tool, input, startTime, meta);
+      if ("result" in genResult) return genResult.result;
+      generateOutput = genResult.output;
+    }
 
-    const verifyResult = await this.runVerification(tool, generateOutput);
+    let verifyResult = await this.runVerification(tool, generateOutput, meta);
+
+    // Self-repair loop: verify → critique → re-generate → verify (up to maxRepairAttempts)
+    const maxRetries = this.policy.maxRepairAttempts ?? this.policy.maxVerifyRetries ?? 1;
+    let retries = 0;
+    if (!verifyResult.ok && this.progress?.onVerificationFailed) {
+      const errors = verifyResult.verification.issues
+        .filter((i) => i.severity === "error")
+        .map((i) => i.message);
+      this.progress.onVerificationFailed(taskId, errors);
+    }
+    while (!verifyResult.ok && retries < maxRetries) {
+      if (this.progress?.onRepairAttempt) {
+        const errors = verifyResult.verification.issues
+          .filter((i) => i.severity === "error")
+          .map((i) => i.message);
+        this.progress.onRepairAttempt(taskId, retries + 1, maxRetries, errors);
+      }
+      const feedback = await this.buildRepairFeedback(verifyResult, generateOutput, tool, input);
+      const enrichedInput = {
+        ...(typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {}),
+        _verificationFeedback: feedback,
+        _repairAttempt: retries + 1,
+        _maxRepairAttempts: maxRetries,
+      };
+      const regenResult = await this.runGeneratePhase(taskId, tool, enrichedInput, startTime, meta);
+      if ("result" in regenResult) {
+        return regenResult.result;
+      }
+      generateOutput = regenResult.output;
+      verifyResult = await this.runVerification(tool, generateOutput, meta);
+      retries++;
+    }
+    if (verifyResult.ok && retries > 0 && this.progress?.onVerificationPassed) {
+      this.progress.onVerificationPassed(taskId);
+    }
+
     if (!verifyResult.ok) {
       return this.buildResult(taskId, tool.name, "failed", startTime, {
         error: verifyResult.error,
@@ -294,7 +473,7 @@ export class SafeExecutor {
       });
     }
 
-    const approval = await this.resolveApproval(taskId, tool, generateOutput);
+    const approval = await this.resolveApproval(taskId, tool, generateOutput, taskRisk);
     if (approval === "denied") {
       return this.buildResult(taskId, tool.name, "denied", startTime, {
         output: generateOutput.data,
@@ -351,6 +530,7 @@ export class SafeExecutor {
       verification?: VerificationResult;
       filesWritten: string[];
       filesModified?: string[];
+      filesUnchanged?: string[];
       usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
       metadata?: Record<string, unknown>;
     },
@@ -369,6 +549,7 @@ export class SafeExecutor {
       verification: details.verification,
       filesWritten: details.filesWritten,
       filesModified: details.filesModified ?? [],
+      filesUnchanged: details.filesUnchanged,
       durationMs,
     };
 

@@ -15,9 +15,9 @@ export function cliApprovalHandler(): CallbackApprovalHandler {
         ? [`${pc.bold("Modifies:")} ${request.preview.filesModified.join(", ")}`]
         : []),
     ];
-    p.note(body.join("\n"), pc.yellow("Approval Required"));
+    p.note(body.join("\n"), pc.yellow("Approval Required — Review LLM Output"));
 
-    const approved = await p.confirm({ message: "Approve this execution?" });
+    const approved = await p.confirm({ message: "Approve writing these files?" });
     if (p.isCancel(approved)) {
       p.cancel("Cancelled.");
       process.exit(0);

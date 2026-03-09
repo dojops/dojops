@@ -83,36 +83,89 @@ export function serializeForFile(data: unknown, fileSpec: FileSpec): string {
 
 /**
  * Detect existing content from detection paths.
+ * Returns ALL matching files concatenated with path headers so the LLM
+ * sees the full project context (e.g. all workflows + composite actions).
+ *
+ * Supports globs in both directory and filename segments:
+ *   ".github/workflows/{star}.yml"       — glob in filename
+ *   ".github/actions/{star}/action.yml"  — glob in directory segment
  */
-/** Try to find existing content via a glob pattern in a directory. */
-function detectGlobContent(dir: string, globPattern: string): string | null {
+
+/** Walk a glob pattern split into path segments, collecting matching files. */
+function walkGlobSegments(
+  segments: string[],
+  index: number,
+  currentDir: string,
+  basePath: string,
+): { relPath: string; content: string }[] {
+  if (index >= segments.length) return [];
+
+  const segment = segments[index];
+  const isLast = index === segments.length - 1;
+
+  if (!segment.includes("*")) {
+    // Literal segment — descend or read
+    const next = path.join(currentDir, segment);
+    if (isLast) {
+      const content = readExistingConfig(next);
+      if (content) return [{ relPath: path.relative(basePath, next), content }];
+      return [];
+    }
+    return walkGlobSegments(segments, index + 1, next, basePath);
+  }
+
+  // Glob segment — enumerate entries in currentDir
+  const results: { relPath: string; content: string }[] = [];
   try {
-    if (!fs.existsSync(dir)) return null;
-    for (const file of fs.readdirSync(dir)) {
-      if (!matchGlob(file, globPattern)) continue;
-      const content = readExistingConfig(path.join(dir, file));
-      if (content) return content;
+    if (!fs.existsSync(currentDir)) return results;
+    for (const entry of fs.readdirSync(currentDir)) {
+      if (!matchGlob(entry, segment)) continue;
+      const entryPath = path.join(currentDir, entry);
+      if (isLast) {
+        // File glob — read the file
+        const content = readExistingConfig(entryPath);
+        if (content) {
+          results.push({ relPath: path.relative(basePath, entryPath), content });
+        }
+      } else {
+        // Directory glob — recurse into matching subdirectory
+        try {
+          const stat = fs.statSync(entryPath);
+          if (stat.isDirectory()) {
+            results.push(...walkGlobSegments(segments, index + 1, entryPath, basePath));
+          }
+        } catch {
+          // Skip inaccessible entries
+        }
+      }
     }
   } catch {
     // Unreadable directory
   }
-  return null;
+  return results;
 }
 
 export function detectExistingContent(detectionPaths: string[], basePath: string): string | null {
+  const allMatches: { relPath: string; content: string }[] = [];
+
   for (const pattern of detectionPaths) {
     if (pattern.includes("*")) {
-      const result = detectGlobContent(
-        path.dirname(path.join(basePath, pattern)),
-        path.basename(pattern),
-      );
-      if (result) return result;
+      const segments = pattern.split("/");
+      allMatches.push(...walkGlobSegments(segments, 0, basePath, basePath));
     } else {
-      const content = readExistingConfig(path.join(basePath, pattern));
-      if (content) return content;
+      const fullPath = path.join(basePath, pattern);
+      const content = readExistingConfig(fullPath);
+      if (content) {
+        allMatches.push({ relPath: pattern, content });
+      }
     }
   }
-  return null;
+
+  if (allMatches.length === 0) return null;
+  // Single file: return content directly for backward compatibility
+  if (allMatches.length === 1) return allMatches[0].content;
+  // Multiple files: concatenate with path headers so the LLM sees all existing configs
+  return allMatches.map((m) => `--- ${m.relPath} ---\n${m.content}`).join("\n\n");
 }
 
 /**

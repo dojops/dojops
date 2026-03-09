@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { BaseTool, ToolOutput, VerificationResult, z } from "@dojops/sdk";
 import { SafeExecutor } from "../safe-executor";
+import type { CriticCallback } from "../safe-executor";
 import { AutoApproveHandler, AutoDenyHandler, CallbackApprovalHandler } from "../approval";
 import type { ExecutionPolicy } from "../types";
 
@@ -605,5 +606,479 @@ describe("SafeExecutor", () => {
         }
       },
     );
+  });
+
+  describe("verification retry loop", () => {
+    it("retries generation when verification fails and succeeds on second attempt", async () => {
+      let callCount = 0;
+      class RetryableTool extends VerifiableBase {
+        name = "retryable-tool";
+        description = "Fails verify first, passes second";
+
+        async generate(input: MockInput): Promise<ToolOutput> {
+          callCount++;
+          return { success: true, data: { result: input.value, attempt: callCount } };
+        }
+
+        async verify(): Promise<VerificationResult> {
+          if (callCount <= 1) {
+            return {
+              passed: false,
+              tool: "test",
+              issues: [{ severity: "error", message: "Missing icon field" }],
+            };
+          }
+          return { passed: true, tool: "test", issues: [] };
+        }
+      }
+
+      const executor = new SafeExecutor({
+        policy: {
+          maxRepairAttempts: 1,
+          maxVerifyRetries: 1,
+          timeoutMs: 10_000,
+          generateTimeoutMs: 10_000,
+          verifyTimeoutMs: 10_000,
+        },
+      });
+      const result = await executor.executeTask("retry-1", new RetryableTool(), { value: "test" });
+      expect(result.status).toBe("completed");
+      expect(callCount).toBe(2);
+    });
+
+    it("fails after exhausting retries", async () => {
+      class AlwaysFailVerifyTool extends VerifiableBase {
+        name = "always-fail-verify";
+        description = "Verify always fails";
+
+        async verify(): Promise<VerificationResult> {
+          return {
+            passed: false,
+            tool: "test",
+            issues: [{ severity: "error", message: "Critical error" }],
+          };
+        }
+      }
+
+      const executor = new SafeExecutor({
+        policy: {
+          maxRepairAttempts: 1,
+          maxVerifyRetries: 1,
+          timeoutMs: 10_000,
+          generateTimeoutMs: 10_000,
+          verifyTimeoutMs: 10_000,
+        },
+      });
+      const result = await executor.executeTask("retry-2", new AlwaysFailVerifyTool(), {
+        value: "test",
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Verification failed");
+    });
+
+    it("does not retry when maxRepairAttempts is 0", async () => {
+      let generateCount = 0;
+      class CountingTool extends VerifiableBase {
+        name = "counting-tool";
+        description = "Counts generates";
+
+        async generate(input: MockInput): Promise<ToolOutput> {
+          generateCount++;
+          return { success: true, data: { result: input.value } };
+        }
+
+        async verify(): Promise<VerificationResult> {
+          return {
+            passed: false,
+            tool: "test",
+            issues: [{ severity: "error", message: "Bad output" }],
+          };
+        }
+      }
+
+      const executor = new SafeExecutor({
+        policy: {
+          maxRepairAttempts: 0,
+          maxVerifyRetries: 0,
+          timeoutMs: 10_000,
+          generateTimeoutMs: 10_000,
+          verifyTimeoutMs: 10_000,
+        },
+      });
+      const result = await executor.executeTask("retry-3", new CountingTool(), { value: "test" });
+      expect(result.status).toBe("failed");
+      expect(generateCount).toBe(1);
+    });
+  });
+
+  describe("risk-based approval", () => {
+    it("auto-approves LOW risk tasks when approvalMode is risk-based", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "risk-based",
+          autoApproveRiskLevel: "MEDIUM",
+        },
+        approvalHandler: handler,
+      });
+
+      const result = await executor.executeTask(
+        "low-risk",
+        new MockTool(),
+        { value: "test" },
+        { risk: "LOW" },
+      );
+      // Should be approved despite handler returning "denied"
+      expect(result.approval).toBe("approved");
+      expect(result.status).toBe("completed");
+    });
+
+    it("requires approval for HIGH risk tasks when threshold is MEDIUM", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "risk-based",
+          autoApproveRiskLevel: "MEDIUM",
+        },
+        approvalHandler: handler,
+      });
+
+      const result = await executor.executeTask(
+        "high-risk",
+        new MockTool(),
+        { value: "test" },
+        { risk: "HIGH" },
+      );
+      expect(result.approval).toBe("denied");
+      expect(result.status).toBe("denied");
+    });
+
+    it("auto-approves MEDIUM risk tasks when threshold is MEDIUM", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "risk-based",
+          autoApproveRiskLevel: "MEDIUM",
+        },
+        approvalHandler: handler,
+      });
+
+      const result = await executor.executeTask(
+        "medium-risk",
+        new MockTool(),
+        { value: "test" },
+        { risk: "MEDIUM" },
+      );
+      expect(result.approval).toBe("approved");
+      expect(result.status).toBe("completed");
+    });
+
+    it("approvalMode 'never' skips all approval", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "never",
+        },
+        approvalHandler: handler,
+      });
+
+      const result = await executor.executeTask(
+        "no-approval",
+        new MockTool(),
+        { value: "test" },
+        { risk: "CRITICAL" },
+      );
+      expect(result.approval).toBe("approved");
+    });
+  });
+
+  describe("path risk elevation in approval", () => {
+    it("elevates LOW task risk to HIGH when output targets .env, requiring approval", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "risk-based",
+          autoApproveRiskLevel: "MEDIUM",
+        },
+        approvalHandler: handler,
+      });
+
+      // Tool that declares .env as output path (needs execute to trigger approval)
+      class EnvOutputTool extends BaseTool<MockInput> {
+        name = "env-output-tool";
+        description = "Writes .env file";
+        inputSchema = MockInputSchema;
+        async generate(): Promise<ToolOutput> {
+          return { success: true, data: { filePath: ".env.production" } };
+        }
+        async execute(): Promise<ToolOutput> {
+          return { success: true, data: {} };
+        }
+      }
+
+      // LOW task risk, but .env path elevates to HIGH → exceeds MEDIUM threshold → denied
+      const result = await executor.executeTask(
+        "env-risk",
+        new EnvOutputTool(),
+        { value: "test" },
+        { risk: "LOW" },
+      );
+      expect(result.approval).toBe("denied");
+      expect(result.status).toBe("denied");
+    });
+
+    it("elevates LOW task risk to CRITICAL when output targets SSH keys", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "risk-based",
+          autoApproveRiskLevel: "HIGH",
+        },
+        approvalHandler: handler,
+      });
+
+      class SshOutputTool extends BaseTool<MockInput> {
+        name = "ssh-output-tool";
+        description = "Writes SSH key";
+        inputSchema = MockInputSchema;
+        async generate(): Promise<ToolOutput> {
+          return { success: true, data: { filePath: ".ssh/id_rsa" } };
+        }
+        async execute(): Promise<ToolOutput> {
+          return { success: true, data: {} };
+        }
+      }
+
+      // LOW task risk, but .ssh path elevates to CRITICAL → exceeds HIGH threshold → denied
+      const result = await executor.executeTask(
+        "ssh-risk",
+        new SshOutputTool(),
+        { value: "test" },
+        { risk: "LOW" },
+      );
+      expect(result.approval).toBe("denied");
+      expect(result.status).toBe("denied");
+    });
+
+    it("does not elevate when output paths are safe", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "risk-based",
+          autoApproveRiskLevel: "MEDIUM",
+        },
+        approvalHandler: handler,
+      });
+
+      class SafeOutputTool extends BaseTool<MockInput> {
+        name = "safe-output-tool";
+        description = "Writes safe file";
+        inputSchema = MockInputSchema;
+        async generate(): Promise<ToolOutput> {
+          return {
+            success: true,
+            data: { filePath: "Dockerfile", outputPath: "docker-compose.yml" },
+          };
+        }
+        async execute(): Promise<ToolOutput> {
+          return { success: true, data: {} };
+        }
+      }
+
+      // LOW task risk + LOW path risk → auto-approved despite handler returning "denied"
+      const result = await executor.executeTask(
+        "safe-risk",
+        new SafeOutputTool(),
+        { value: "test" },
+        { risk: "LOW" },
+      );
+      expect(result.approval).toBe("approved");
+    });
+
+    it("elevates based on files array with path objects", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "risk-based",
+          autoApproveRiskLevel: "MEDIUM",
+        },
+        approvalHandler: handler,
+      });
+
+      class MultiFileOutputTool extends BaseTool<MockInput> {
+        name = "multi-file-output-tool";
+        description = "Writes multiple files";
+        inputSchema = MockInputSchema;
+        async generate(): Promise<ToolOutput> {
+          return {
+            success: true,
+            data: {
+              files: [
+                { path: "Dockerfile", content: "FROM node:20" },
+                { path: "terraform.tfstate", content: "{}" },
+              ],
+            },
+          };
+        }
+        async execute(): Promise<ToolOutput> {
+          return { success: true, data: {} };
+        }
+      }
+
+      // LOW task risk, but terraform.tfstate → HIGH → exceeds MEDIUM threshold → denied
+      const result = await executor.executeTask(
+        "multi-file-risk",
+        new MultiFileOutputTool(),
+        { value: "test" },
+        { risk: "LOW" },
+      );
+      expect(result.approval).toBe("denied");
+      expect(result.status).toBe("denied");
+    });
+
+    it("does not elevate when generate output has no path fields", async () => {
+      const handler = new CallbackApprovalHandler(async () => "denied");
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: true,
+          approvalMode: "risk-based",
+          autoApproveRiskLevel: "MEDIUM",
+        },
+        approvalHandler: handler,
+      });
+
+      // MockTool generates { result: "test" } — no filePath/outputPath/files fields
+      // LOW task risk + no path fields → stays LOW → auto-approved
+      const result = await executor.executeTask(
+        "no-path-risk",
+        new MockTool(),
+        { value: "test" },
+        { risk: "LOW" },
+      );
+      expect(result.approval).toBe("approved");
+      expect(result.status).toBe("completed");
+    });
+  });
+
+  describe("critic-powered repair", () => {
+    it("uses critic feedback in repair loop", async () => {
+      let generateCount = 0;
+      let lastFeedback: string | undefined;
+
+      class RepairableTool extends BaseTool<MockInput> {
+        name = "repairable";
+        description = "Tool that repairs via critic";
+        inputSchema = MockInputSchema;
+
+        async generate(input: MockInput & { _verificationFeedback?: string }): Promise<ToolOutput> {
+          generateCount++;
+          lastFeedback = input._verificationFeedback;
+          // Second attempt passes verification
+          if (generateCount >= 2) {
+            return { success: true, data: { result: "fixed" } };
+          }
+          return { success: true, data: { result: input.value } };
+        }
+
+        async verify(): Promise<VerificationResult> {
+          if (generateCount >= 2) {
+            return { passed: true, tool: "test", issues: [] };
+          }
+          return {
+            passed: false,
+            tool: "test",
+            issues: [{ severity: "error", message: "Missing field X" }],
+          };
+        }
+      }
+
+      const critic: CriticCallback = {
+        async critique() {
+          return {
+            repairInstructions: "Add field X to the output. It is required by the schema.",
+          };
+        },
+      };
+
+      const executor = new SafeExecutor({
+        policy: {
+          maxRepairAttempts: 3,
+          maxVerifyRetries: 3,
+          timeoutMs: 10_000,
+          generateTimeoutMs: 10_000,
+        },
+        critic,
+      });
+
+      const result = await executor.executeTask("critic-test", new RepairableTool(), {
+        value: "test",
+      });
+      expect(result.status).toBe("completed");
+      expect(generateCount).toBe(2);
+      expect(lastFeedback).toContain("Critic Analysis");
+      expect(lastFeedback).toContain("Add field X");
+    });
+
+    it("falls back to raw feedback when critic throws", async () => {
+      let generateCount = 0;
+      let lastFeedback: string | undefined;
+
+      class RepairableTool2 extends BaseTool<MockInput> {
+        name = "repairable2";
+        description = "Tool with failing critic";
+        inputSchema = MockInputSchema;
+
+        async generate(input: MockInput & { _verificationFeedback?: string }): Promise<ToolOutput> {
+          generateCount++;
+          lastFeedback = input._verificationFeedback;
+          if (generateCount >= 2) {
+            return { success: true, data: { result: "fixed" } };
+          }
+          return { success: true, data: { result: input.value } };
+        }
+
+        async verify(): Promise<VerificationResult> {
+          if (generateCount >= 2) {
+            return { passed: true, tool: "test", issues: [] };
+          }
+          return {
+            passed: false,
+            tool: "test",
+            issues: [{ severity: "error", message: "Parse error" }],
+          };
+        }
+      }
+
+      const critic: CriticCallback = {
+        async critique() {
+          throw new Error("Critic LLM unavailable");
+        },
+      };
+
+      const executor = new SafeExecutor({
+        policy: {
+          maxRepairAttempts: 3,
+          maxVerifyRetries: 3,
+          timeoutMs: 10_000,
+          generateTimeoutMs: 10_000,
+        },
+        critic,
+      });
+
+      const result = await executor.executeTask("critic-fallback", new RepairableTool2(), {
+        value: "test",
+      });
+      expect(result.status).toBe("completed");
+      expect(lastFeedback).toContain("[error] Parse error");
+      expect(lastFeedback).not.toContain("Critic Analysis");
+    });
   });
 });

@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { VerificationResult, VerificationIssue } from "@dojops/sdk";
+import type { OnBinaryMissing } from "@dojops/core";
 import { BinaryVerificationConfig, VerificationConfig } from "./spec";
 import { getParser, SeverityMapping } from "./parsers/index";
 
@@ -63,6 +64,10 @@ export interface BinaryVerifierInput {
   childProcessPermission?: "required" | "none";
   /** Whether network permission is required (default: "none") */
   networkPermission?: "required" | "none";
+  /** Multiple files to write (overrides content/filename when present) */
+  files?: Record<string, string>;
+  /** Optional callback to auto-install a missing binary. Returns true if installed. */
+  onBinaryMissing?: OnBinaryMissing;
 }
 
 /** Build a skip/error result for pre-execution checks. */
@@ -76,13 +81,14 @@ function skipResult(
 }
 
 /** Execute a single command in a chained verification pipeline. */
-function executeVerificationCommand(
+async function executeVerificationCommand(
   binary: string,
   args: string[],
   config: BinaryVerificationConfig,
   tmpDir: string,
   networkPermission: string | undefined,
-): { rawOutput: string; earlyReturn?: VerificationResult; shouldBreak?: boolean } {
+  onBinaryMissing?: OnBinaryMissing,
+): Promise<{ rawOutput: string; earlyReturn?: VerificationResult; shouldBreak?: boolean }> {
   let finalArgs = args;
 
   // E-8: Network safety
@@ -113,6 +119,14 @@ function executeVerificationCommand(
     return { rawOutput };
   } catch (err: unknown) {
     if (isENOENT(err)) {
+      // Attempt auto-install if callback is provided
+      if (onBinaryMissing) {
+        const installed = await onBinaryMissing(binary);
+        if (installed) {
+          // Retry the command after successful install (no callback to prevent infinite loop)
+          return executeVerificationCommand(binary, args, config, tmpDir, networkPermission);
+        }
+      }
       return {
         rawOutput: "",
         earlyReturn: skipResult(
@@ -124,14 +138,8 @@ function executeVerificationCommand(
       };
     }
     const execErr = err as { stdout?: string; stderr?: string };
-    const rawOutput = execErr.stdout || execErr.stderr || "";
-    if (!rawOutput) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return {
-        rawOutput: "",
-        earlyReturn: skipResult(config.parser, "error", `Verification failed: ${msg}`),
-      };
-    }
+    const rawOutput =
+      execErr.stdout || execErr.stderr || (err instanceof Error ? err.message : String(err));
     return { rawOutput, shouldBreak: true };
   }
 }
@@ -167,18 +175,33 @@ export async function verifyWithBinary(input: BinaryVerifierInput): Promise<Veri
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-verify-"));
   try {
-    fs.writeFileSync(path.join(tmpDir, filename), content, "utf-8");
+    if (input.files && Object.keys(input.files).length > 0) {
+      for (const [fname, fcontent] of Object.entries(input.files)) {
+        const filePath = path.join(tmpDir, fname);
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(filePath, fcontent, "utf-8");
+      }
+    } else {
+      fs.writeFileSync(path.join(tmpDir, filename), content, "utf-8");
+    }
 
-    const commands = config.command.split(/\s*&&\s*/); // NOSONAR
+    // Resolve {entryFile} placeholder in the verification command.
+    // This allows .dops modules to reference the actual generated filename
+    // instead of hardcoding (e.g., ansible playbooks may be named dynamically).
+    const resolvedCommand = resolveCommandPlaceholders(config.command, input.files, filename);
+
+    const commands = resolvedCommand.split(/\s*&&\s*/); // NOSONAR
     let rawOutput = "";
     for (let i = 0; i < commands.length; i++) {
       const parts = commands[i].split(/\s+/).filter(Boolean);
-      const result = executeVerificationCommand(
+      const result = await executeVerificationCommand(
         parts[0],
         parts.slice(1),
         config,
         tmpDir,
         networkPermission,
+        input.onBinaryMissing,
       );
       if (result.earlyReturn) return result.earlyReturn;
       rawOutput = result.rawOutput;
@@ -198,6 +221,45 @@ function isENOENT(err: unknown): boolean {
 }
 
 /**
+ * Resolve template placeholders in a verification command.
+ *
+ * Supported placeholders:
+ * - `{entryFile}` — resolves to the main entry file from the files map.
+ *   For multi-file outputs, picks the top-level .yml/.yaml file (prefers site.yml/playbook.yml).
+ *   Falls back to the single-file filename.
+ */
+function resolveCommandPlaceholders(
+  command: string,
+  files: Record<string, string> | undefined,
+  fallbackFilename: string,
+): string {
+  if (!command.includes("{entryFile}")) return command;
+
+  let entryFile = fallbackFilename;
+
+  if (files && Object.keys(files).length > 0) {
+    const fileNames = Object.keys(files);
+    // Top-level files only (no path separators)
+    const topLevel = fileNames.filter((f) => !f.includes("/"));
+    // Prefer well-known entry points
+    const preferred = ["site.yml", "playbook.yml", "site.yaml", "playbook.yaml"];
+    const match = preferred.find((p) => topLevel.includes(p));
+    if (match) {
+      entryFile = match;
+    } else if (topLevel.length > 0) {
+      // Pick the first top-level .yml/.yaml file
+      const yamlFile = topLevel.find((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
+      entryFile = yamlFile ?? topLevel[0];
+    } else {
+      // No top-level files — use the first file
+      entryFile = fileNames[0];
+    }
+  }
+
+  return command.replace(/\{entryFile\}/g, entryFile);
+}
+
+/**
  * Run full verification: structural rules + optional binary verification.
  */
 export async function runVerification(
@@ -208,6 +270,8 @@ export async function runVerification(
   permissions: { child_process?: "required" | "none"; network?: "required" | "none" },
   structuralIssues: VerificationIssue[],
   toolName: string,
+  files?: Record<string, string>,
+  onBinaryMissing?: OnBinaryMissing,
 ): Promise<VerificationResult> {
   const allIssues: VerificationIssue[] = [...structuralIssues];
 
@@ -220,6 +284,8 @@ export async function runVerification(
       severityMapping: verificationConfig.severity as SeverityMapping | undefined,
       childProcessPermission: permissions.child_process,
       networkPermission: permissions.network,
+      files,
+      onBinaryMissing,
     });
     allIssues.push(...binaryResult.issues);
   }

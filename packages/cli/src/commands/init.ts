@@ -10,6 +10,9 @@ import { toErrorMessage } from "../exit-codes";
 import { initProject, findProjectRoot } from "../state";
 import { offerToolInstall, offerSystemToolInstall } from "../preflight";
 import { hasFlag } from "../parser";
+import { truncateNoteTitle, wrapForNote } from "../formatter";
+import { writeDojopsMd, dojopsMdPath, migrateLegacyContext } from "../dojops-md";
+import { recordTask } from "../memory";
 
 function collectInfraParts(ctx: RepoContext): string[] {
   const parts: string[] = [];
@@ -349,8 +352,7 @@ function ensureInsightDescription(insights: LLMInsights, ctx: RepoContext): void
 async function runLLMEnrichment(
   provider: Parameters<typeof enrichWithLLM>[1] | undefined,
   ctx: RepoContext,
-  contextPath: string,
-  contextMdPath: string,
+  rootDir: string,
   isStructured: boolean,
 ): Promise<void> {
   if (!provider) {
@@ -370,13 +372,12 @@ async function runLLMEnrichment(
     ensureInsightDescription(insights, ctx);
 
     ctx.llmInsights = insights;
-    fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
-    fs.writeFileSync(contextMdPath, formatContextMarkdown(ctx));
+    writeDojopsMd(rootDir, ctx);
 
     if (!isStructured) enrichSpinner.stop("LLM analysis complete.");
 
     const insightLines = formatLLMInsights(insights);
-    p.note(insightLines.join("\n"), "LLM project insights");
+    p.note(wrapForNote(insightLines.join("\n")), "LLM project insights");
   } catch (err) {
     if (!isStructured) enrichSpinner.stop("LLM analysis failed.");
     p.log.warn(`LLM enrichment skipped: ${toErrorMessage(err)}`);
@@ -433,22 +434,20 @@ async function offerContextReview(contextMdPath: string): Promise<void> {
   }
 }
 
-function reportInitAlreadyExists(contextPath: string): void {
+function reportInitAlreadyExists(rootDir: string): void {
   p.log.info("Project already initialized — context updated.");
-  p.log.info(`  ${pc.dim(contextPath)}`);
+  p.log.info(`  ${pc.dim(dojopsMdPath(rootDir))}`);
 }
 
 function reportInitCreated(created: string[], ctx: RepoContext | undefined, root: string): void {
   const lines = created.map((f) => `  ${pc.green("+")} ${f}`);
-  if (ctx) lines.push(`  ${pc.green("+")} .dojops/context.json`);
-  p.note(lines.join("\n"), `Initialized .dojops/ in ${pc.dim(root)}`);
+  if (ctx) lines.push(`  ${pc.green("+")} DOJOPS.md`);
+  p.note(lines.join("\n"), truncateNoteTitle(`Initialized .dojops/ in ${pc.dim(root)}`));
   p.log.success("Project initialized.");
 }
 
 async function handleRepoScan(
   root: string,
-  contextPath: string,
-  contextMdPath: string,
   cliCtx: CLIContext,
   skipReview: boolean,
   isStructured: boolean,
@@ -456,11 +455,10 @@ async function handleRepoScan(
   const s = p.spinner();
   if (!isStructured) s.start("Scanning repository...");
   const ctx = scanRepo(root);
-  fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
+  writeDojopsMd(root, ctx);
   if (!isStructured) s.stop("Repository scanned.");
 
-  p.note(formatScanSummary(ctx).join("\n"), "Repo scan results");
-  fs.writeFileSync(contextMdPath, formatContextMarkdown(ctx));
+  p.note(wrapForNote(formatScanSummary(ctx).join("\n")), "Repo scan results");
 
   let provider;
   try {
@@ -468,12 +466,13 @@ async function handleRepoScan(
   } catch {
     // No provider configured — that's fine
   }
-  await runLLMEnrichment(provider, ctx, contextPath, contextMdPath, isStructured);
+  await runLLMEnrichment(provider, ctx, root, isStructured);
 
+  const mdFile = dojopsMdPath(root);
   if (!skipReview && !cliCtx.globalOpts.nonInteractive) {
-    await offerContextReview(contextMdPath);
+    await offerContextReview(mdFile);
   }
-  p.log.info(`Context: ${pc.dim(contextMdPath)}`);
+  p.log.info(`Context: ${pc.dim(mdFile)}`);
   return ctx;
 }
 
@@ -486,19 +485,22 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
   const alreadyExists = fs.existsSync(path.join(root, ".dojops"));
   const created = initProject(root);
 
+  // Migrate legacy context.json → DOJOPS.md if needed
+  if (migrateLegacyContext(root)) {
+    p.log.info(`Migrated ${pc.dim(".dojops/context.json")} → ${pc.cyan("DOJOPS.md")}`);
+  }
+
   const isStructured = cliCtx.globalOpts.output !== "table";
-  const contextPath = path.join(root, ".dojops", "context.json");
-  const contextMdPath = path.join(root, ".dojops", "context.md");
 
   let ctx: RepoContext | undefined;
   if (skipScan) {
     p.log.info(pc.dim("Skipped repository scan (--skip-scan)."));
   } else {
-    ctx = await handleRepoScan(root, contextPath, contextMdPath, cliCtx, skipReview, isStructured);
+    ctx = await handleRepoScan(root, cliCtx, skipReview, isStructured);
   }
 
   if (alreadyExists && created.length === 0) {
-    reportInitAlreadyExists(contextPath);
+    reportInitAlreadyExists(root);
   } else {
     reportInitCreated(created, ctx, root);
   }
@@ -516,4 +518,19 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
       domains,
     });
   }
+
+  // Record init in memory DB
+  recordTask(root, {
+    timestamp: new Date().toISOString(),
+    task_type: "init",
+    prompt: "",
+    result_summary: ctx
+      ? `Initialized project (${ctx.primaryLanguage ?? "unknown"} / ${ctx.ci.length} CI)`
+      : "Initialized project",
+    status: "success",
+    duration_ms: 0,
+    related_files: '["DOJOPS.md"]',
+    agent_or_module: "",
+    metadata: "{}",
+  });
 };

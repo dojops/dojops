@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, getRequestTimeoutMs } from "./provider";
 import { openaiCompatGenerate, openaiCompatListModels } from "./openai-compat";
 
 export class OpenAIProvider implements LLMProvider {
@@ -8,7 +8,7 @@ export class OpenAIProvider implements LLMProvider {
   private readonly model: string;
 
   constructor(apiKey: string, model = "gpt-4o-mini") {
-    this.client = new OpenAI({ apiKey });
+    this.client = new OpenAI({ apiKey, timeout: getRequestTimeoutMs() });
     this.model = model;
   }
 

@@ -256,7 +256,7 @@ The dashboard provides 5 tabs for monitoring and operations:
 - **Overview** — Plan/execution/scan aggregates with activity timeline
 - **Security** — Scan findings, severity trends, category breakdown
 - **Audit** — Hash chain integrity, command distribution, timeline
-- **Agents** — Browse and search all 16 specialist agents
+- **Agents** — Browse and search all 17 specialist agents
 - **History** — Execution history with type filtering
 
 See [Web Dashboard](dashboard.md) for the full guide.

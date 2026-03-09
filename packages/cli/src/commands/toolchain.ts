@@ -1,5 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
+import os from "node:os";
+import path from "node:path";
 import { SYSTEM_TOOLS, findSystemTool, isToolSupportedOnCurrentPlatform } from "@dojops/core";
 import { CommandHandler } from "../types";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
@@ -9,8 +11,46 @@ import {
   removeSystemTool,
   cleanAllToolchain,
   verifyTool,
+  globalToolchainCtx,
+  projectToolchainCtx,
+  type ToolchainContext,
 } from "../toolchain-sandbox";
 import { resolveBinary } from "../preflight";
+
+/**
+ * Prompt the user to select global or project scope for toolchain operations.
+ * In non-interactive mode, defaults to global.
+ */
+async function selectToolchainScope(nonInteractive: boolean): Promise<ToolchainContext> {
+  if (nonInteractive) return globalToolchainCtx();
+
+  const globalDir = path.join(os.homedir(), ".dojops", "toolchain");
+  const projectDir = path.join(process.cwd(), ".dojops", "toolchain");
+
+  const scopeChoice = await p.select({
+    message: "Toolchain scope:",
+    options: [
+      {
+        value: "global",
+        label: `Global ${pc.dim(`(${globalDir})`)}`,
+        hint: "shared across all projects",
+      },
+      {
+        value: "project",
+        label: `Project ${pc.dim(`(${projectDir})`)}`,
+        hint: "scoped to this project only",
+      },
+    ],
+    initialValue: "global" as string,
+  });
+
+  if (p.isCancel(scopeChoice)) {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+
+  return scopeChoice === "project" ? projectToolchainCtx(process.cwd()) : globalToolchainCtx();
+}
 
 interface ToolStatus {
   installed: ReturnType<typeof loadToolchainRegistry>["tools"][number] | undefined;
@@ -37,7 +77,8 @@ function getStatusString(s: ToolStatus): string {
 }
 
 export const toolchainListCommand: CommandHandler = async (_args, ctx) => {
-  const registry = loadToolchainRegistry();
+  const tcCtx = await selectToolchainScope(ctx.globalOpts.nonInteractive);
+  const registry = loadToolchainRegistry(tcCtx);
 
   if (ctx.globalOpts.output === "json") {
     const data = SYSTEM_TOOLS.map((tool) => {
@@ -55,6 +96,7 @@ export const toolchainListCommand: CommandHandler = async (_args, ctx) => {
     return;
   }
 
+  const scopeLabel = tcCtx.dir.includes(process.cwd()) ? "Project Toolchain" : "Global Toolchain";
   const lines = SYSTEM_TOOLS.map((tool) => {
     const s = getToolStatus(tool, registry);
 
@@ -78,15 +120,16 @@ export const toolchainListCommand: CommandHandler = async (_args, ctx) => {
     return `  ${pc.cyan(tool.name.padEnd(14))} ${statusLabel}  ${pc.dim(desc)}`;
   });
 
-  p.note(lines.join("\n"), "Toolchain");
+  p.note(lines.join("\n"), scopeLabel);
 };
 
-export const toolchainLoadCommand: CommandHandler = async () => {
+export const toolchainLoadCommand: CommandHandler = async (_args, ctx) => {
+  const tcCtx = await selectToolchainScope(ctx.globalOpts.nonInteractive);
   const isStructured = !process.stdout.isTTY;
   const s = p.spinner();
   if (!isStructured) s.start("Scanning for system tools...");
 
-  const registry = loadToolchainRegistry();
+  const registry = loadToolchainRegistry(tcCtx);
 
   // Touch each tool to populate PATH cache
   for (const tool of SYSTEM_TOOLS) {
@@ -104,13 +147,14 @@ export const toolchainLoadCommand: CommandHandler = async () => {
   ).length;
   const missing = SYSTEM_TOOLS.length - installed - system;
 
+  const scopeLabel = tcCtx.dir.includes(process.cwd()) ? "Project" : "Global";
   const lines = [
     `${pc.bold("Toolchain tools:")}  ${installed}`,
     `${pc.bold("System tools:")}     ${system}`,
     `${pc.bold("Not found:")}        ${missing}`,
   ];
 
-  p.note(lines.join("\n"), "Toolchain Scan Results");
+  p.note(lines.join("\n"), `${scopeLabel} Toolchain Scan Results`);
 
   if (missing > 0) {
     const missingNames = SYSTEM_TOOLS.filter(
@@ -122,6 +166,7 @@ export const toolchainLoadCommand: CommandHandler = async () => {
 };
 
 export const toolchainInstallCommand: CommandHandler = async (args, ctx) => {
+  const tcCtx = await selectToolchainScope(ctx.globalOpts.nonInteractive);
   const toolName = args[0];
 
   if (!toolName) {
@@ -129,7 +174,7 @@ export const toolchainInstallCommand: CommandHandler = async (args, ctx) => {
     const available = SYSTEM_TOOLS.filter(
       (t) =>
         isToolSupportedOnCurrentPlatform(t) &&
-        !loadToolchainRegistry().tools.some((r) => r.name === t.name),
+        !loadToolchainRegistry(tcCtx).tools.some((r) => r.name === t.name),
     );
 
     if (available.length === 0) {
@@ -157,15 +202,15 @@ export const toolchainInstallCommand: CommandHandler = async (args, ctx) => {
     }
 
     for (const name of selected) {
-      await doInstall(name);
+      await doInstall(name, tcCtx);
     }
     return;
   }
 
-  await doInstall(toolName);
+  await doInstall(toolName, tcCtx);
 };
 
-async function doInstall(name: string): Promise<void> {
+async function doInstall(name: string, ctx?: ToolchainContext): Promise<void> {
   const tool = findSystemTool(name);
   if (!tool) {
     p.log.error(`Unknown tool: ${name}`);
@@ -183,12 +228,12 @@ async function doInstall(name: string): Promise<void> {
   if (!isStructured) s.start(`Installing ${tool.name}...`);
 
   try {
-    const installed = await installSystemTool(tool);
+    const installed = await installSystemTool(tool, undefined, ctx);
     if (!isStructured)
       s.stop(`${pc.green("\u2713")} ${tool.name} v${installed.version} installed.`);
 
     // Verify
-    const versionOutput = verifyTool(tool);
+    const versionOutput = verifyTool(tool, ctx);
     if (versionOutput) {
       p.log.info(pc.dim(versionOutput));
     }
@@ -200,14 +245,15 @@ async function doInstall(name: string): Promise<void> {
   }
 }
 
-export const toolchainRemoveCommand: CommandHandler = async (args) => {
+export const toolchainRemoveCommand: CommandHandler = async (args, ctx) => {
+  const tcCtx = await selectToolchainScope(ctx.globalOpts.nonInteractive);
   const name = args[0];
   if (!name) {
     p.log.info(`  ${pc.dim("$")} dojops toolchain remove <name>`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Tool name required.");
   }
 
-  const removed = removeSystemTool(name);
+  const removed = removeSystemTool(name, tcCtx);
   if (removed) {
     p.log.success(`${name} removed from toolchain.`);
   } else {
@@ -216,7 +262,8 @@ export const toolchainRemoveCommand: CommandHandler = async (args) => {
 };
 
 export const toolchainCleanCommand: CommandHandler = async (args, ctx) => {
-  const registry = loadToolchainRegistry();
+  const tcCtx = await selectToolchainScope(ctx.globalOpts.nonInteractive);
+  const registry = loadToolchainRegistry(tcCtx);
   if (registry.tools.length === 0) {
     p.log.info("No tools installed in toolchain.");
     return;
@@ -225,15 +272,16 @@ export const toolchainCleanCommand: CommandHandler = async (args, ctx) => {
   const hasYes = args.includes("--yes");
 
   if (!hasYes && !ctx.globalOpts.nonInteractive) {
+    const scopeLabel = tcCtx.dir.includes(process.cwd()) ? "project" : "global";
     const confirm = await p.confirm({
-      message: `Remove ${registry.tools.length} tool(s) from toolchain?`,
+      message: `Remove ${registry.tools.length} tool(s) from ${scopeLabel} toolchain?`,
     });
     if (p.isCancel(confirm) || !confirm) {
       return;
     }
   }
 
-  const result = cleanAllToolchain();
+  const result = cleanAllToolchain(tcCtx);
   if (result.removed.length > 0) {
     p.log.success(`Removed: ${result.removed.join(", ")}`);
   }

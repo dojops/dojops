@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { z } from "zod";
 import type { LLMProvider } from "../llm/provider";
 import { parseAndValidate } from "../llm/json-validator";
-import { LLMInsightsSchema } from "./types";
 import type {
   LanguageDetection,
   PackageManager,
@@ -990,50 +990,168 @@ export function generateDirectoryTree(root: string, maxDepth = 2): string {
   return lines.join("\n");
 }
 
+// ── Key file reading for LLM analysis ────────────────────────────────
+
+/** Files to read and feed to the LLM for deeper project understanding. */
+const KEY_FILES = [
+  "package.json",
+  "Makefile",
+  "Dockerfile",
+  "docker-compose.yml",
+  "compose.yml",
+  ".github/workflows/ci.yml",
+  ".gitlab-ci.yml",
+  "Jenkinsfile",
+  "tsconfig.json",
+  "pyproject.toml",
+  "Cargo.toml",
+  "go.mod",
+  "pom.xml",
+  "build.gradle",
+  "README.md",
+];
+
+const MAX_FILE_SIZE = 4096;
+
+/** Read key project files for LLM analysis, truncating large files. */
+function readKeyFiles(root: string): string {
+  const parts: string[] = [];
+  for (const rel of KEY_FILES) {
+    const full = path.join(root, rel);
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) continue;
+    try {
+      let content = fs.readFileSync(full, "utf-8");
+      if (content.length > MAX_FILE_SIZE) {
+        content = content.slice(0, MAX_FILE_SIZE) + "\n... (truncated)";
+      }
+      parts.push(`### ${rel}\n\`\`\`\n${content}\n\`\`\``);
+    } catch {
+      // Skip unreadable
+    }
+  }
+  return parts.join("\n\n");
+}
+
 // ── LLM enrichment ──────────────────────────────────────────────────
 
 /**
- * Send scan results + directory tree to an LLM provider for richer
- * project insights. Returns structured `LLMInsights`.
+ * Schema for the structured metadata call (simple fields only).
+ * Kept separate from LLMInsightsSchema to avoid asking the LLM to embed
+ * large markdown inside JSON — which breaks JSON formatting on many models.
  */
-export async function enrichWithLLM(
-  repoContext: RepoContext,
-  provider: LLMProvider,
-): Promise<LLMInsights> {
+const LLMMetadataSchema = z.object({
+  projectDescription: z.string().optional().default(""),
+  techStack: z.array(z.string()).optional().default([]),
+  suggestedWorkflows: z
+    .array(z.object({ command: z.string(), description: z.string() }))
+    .optional()
+    .default([]),
+  recommendedAgents: z.array(z.string()).optional().default([]),
+  notes: z.string().optional(),
+});
+
+/** Build the shared project context prompt (scan results + tree + files). */
+function buildProjectPrompt(repoContext: RepoContext): string {
   const tree = generateDirectoryTree(repoContext.rootPath);
+  const keyFiles = readKeyFiles(repoContext.rootPath);
 
   // Strip rootPath for privacy
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { rootPath: _rootPath, ...contextForLLM } = repoContext;
 
-  const system = [
-    "You are a DevOps project analyzer.",
-    "Given a repository scan result and directory tree, produce structured insights about the project.",
-    "Focus on actionable DojOps CLI commands the user can run next.",
-    "For recommendedAgents, use DojOps specialist agent names: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python.",
-  ].join(" ");
-
-  const prompt = [
-    "Analyze this repository and provide insights.\n",
+  return [
     "## Scan Results\n```json",
     JSON.stringify(contextForLLM, null, 2),
     "```\n",
     "## Directory Tree\n```",
     tree,
-    "```",
+    "```\n",
+    keyFiles ? `## Key Project Files\n\n${keyFiles}` : "",
+  ].join("\n");
+}
+
+/**
+ * Step 1: Get structured metadata (JSON) — simple fields that models handle well.
+ */
+async function fetchMetadata(
+  projectPrompt: string,
+  provider: LLMProvider,
+): Promise<z.infer<typeof LLMMetadataSchema>> {
+  const system = [
+    "You are a DevOps project analyzer. Analyze the repository data and produce structured JSON insights.",
+    "",
+    "Return a JSON object with these fields:",
+    "- `projectDescription`: One-sentence project summary",
+    "- `techStack`: Array of technology names (languages, frameworks, tools)",
+    '- `suggestedWorkflows`: Array of {command, description} for DojOps CLI commands in `dojops "<prompt>"` format',
+    "- `recommendedAgents`: Array of DojOps specialist agent names from: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python",
+    "- `notes`: Optional additional observations",
   ].join("\n");
 
   const response = await provider.generate({
     system,
-    prompt,
-    schema: LLMInsightsSchema,
+    prompt: projectPrompt,
+    schema: LLMMetadataSchema,
   });
 
   if (response.parsed) {
-    return response.parsed as LLMInsights;
+    return response.parsed as z.infer<typeof LLMMetadataSchema>;
   }
+  return parseAndValidate(response.content, LLMMetadataSchema);
+}
 
-  return parseAndValidate(response.content, LLMInsightsSchema);
+/**
+ * Step 2: Get project analysis as plain markdown (no JSON wrapping).
+ * This avoids the problem of embedding complex markdown inside JSON strings.
+ */
+async function fetchProjectAnalysis(projectPrompt: string, provider: LLMProvider): Promise<string> {
+  const system = [
+    "You are a DevOps project analyzer. Analyze the repository and write a comprehensive project analysis in markdown.",
+    "",
+    "Cover these sections with ## headers:",
+    "## Commands — Build, test, lint, format, deploy commands discovered from package.json, Makefile, CI configs, etc. Use fenced code blocks.",
+    "## Code Conventions — Language version, framework patterns, linting/formatting setup, import conventions, naming patterns.",
+    "## Architecture — Project structure, key directories, entry points, dependency flow, monorepo layout if applicable.",
+    "## DevOps & Infrastructure — CI/CD pipeline summary, container setup, deployment strategy, infrastructure-as-code.",
+    "## Key Files — Important configuration files and their roles.",
+    "",
+    "Be specific and actionable based on actual file contents. Do NOT wrap output in JSON — write plain markdown only.",
+  ].join("\n");
+
+  const response = await provider.generate({
+    system,
+    prompt: `Analyze this repository and write a detailed project analysis.\n\n${projectPrompt}`,
+  });
+
+  return response.content.trim();
+}
+
+/**
+ * Send scan results + directory tree + key project files to an LLM provider
+ * for comprehensive project analysis. Like Claude Code's /init — generates
+ * a rich understanding of the project including commands, conventions, and
+ * architecture, not just metadata.
+ *
+ * Uses two separate LLM calls:
+ * 1. Structured metadata (JSON) — simple fields only
+ * 2. Project analysis (plain markdown) — avoids JSON-in-JSON issues
+ */
+export async function enrichWithLLM(
+  repoContext: RepoContext,
+  provider: LLMProvider,
+): Promise<LLMInsights> {
+  const projectPrompt = buildProjectPrompt(repoContext);
+
+  // Run both calls in parallel for speed
+  const [metadata, analysis] = await Promise.all([
+    fetchMetadata(projectPrompt, provider),
+    fetchProjectAnalysis(projectPrompt, provider),
+  ]);
+
+  return {
+    ...metadata,
+    projectAnalysis: analysis || undefined,
+  };
 }
 
 // ── Main scan orchestrator ───────────────────────────────────────────

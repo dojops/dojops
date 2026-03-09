@@ -10,6 +10,7 @@ export {
   ScanRequestSchema,
   ChatRequestSchema,
   ChatSessionRequestSchema,
+  ReviewRequestSchema,
 } from "./schemas";
 export type {
   GenerateRequest,
@@ -19,6 +20,7 @@ export type {
   ScanRequest,
   ChatRequest,
   ChatSessionRequest,
+  ReviewRequest,
 } from "./schemas";
 export {
   createProvider,
@@ -27,7 +29,10 @@ export {
   createRouter,
   createDebugger,
   createDiffAnalyzer,
+  createReviewer,
 } from "./factory";
+export { runReviewPipeline } from "./routes/review";
+export type { ReviewPipelineResult } from "./routes/review";
 export { NoopProvider } from "./noop-provider";
 export type { ProviderOptions, CreateRouterResult } from "./factory";
 export type { ToolRegistry } from "./factory";

@@ -164,6 +164,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "explain",
     "debug",
     "analyze",
+    "review",
     "inspect",
     "agents",
     "history",
@@ -187,6 +188,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "upgrade",
     "help",
     "cron",
+    "auto",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([

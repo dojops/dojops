@@ -18,6 +18,7 @@ import {
   createScanRouter,
   createChatRouter,
   createMetricsRouter,
+  createReviewRouter,
 } from "./routes";
 import { MetricsAggregator } from "./metrics";
 import { TokenTracker } from "./token-tracker";
@@ -239,7 +240,13 @@ export function createApp(deps: AppDependencies): Express {
   const scanLimiter = createRateLimiter(FIFTEEN_MIN, 5); // scanner invocations
 
   // Create route handler instances once (shared between /api/ and /api/v1/)
-  const generateRouter = createGenerateRouter(deps.router, deps.store);
+  const generateRouter = createGenerateRouter(
+    deps.router,
+    deps.store,
+    deps.provider,
+    deps.rootDir,
+    deps.context7Provider,
+  );
   const planRouter = createPlanRouter(deps.provider, deps.tools, deps.store);
   const debugCIRouter = createDebugCIRouter(deps.debugger, deps.store);
   const diffRouter = createDiffRouter(deps.diffAnalyzer, deps.store);
@@ -247,6 +254,12 @@ export function createApp(deps: AppDependencies): Express {
   const historyRouter = createHistoryRouter(deps.store);
   const scanRouter = createScanRouter(deps.store, deps.rootDir);
   const chatRouter = createChatRouter(deps.provider, deps.router, deps.store, deps.rootDir);
+  const reviewRouter = createReviewRouter(
+    deps.provider,
+    deps.store,
+    deps.rootDir,
+    deps.context7Provider,
+  );
 
   // Mount routes at both /api/ (backward compat) and /api/v1/ (versioned)
   const mountRoutes = (prefix: string) => {
@@ -258,6 +271,7 @@ export function createApp(deps: AppDependencies): Express {
     app.use(`${prefix}/history`, historyRouter);
     app.use(`${prefix}/scan`, scanLimiter, scanRouter);
     app.use(`${prefix}/chat`, llmLimiter, chatRouter);
+    app.use(`${prefix}/review`, llmLimiter, reviewRouter);
   };
 
   // #27: API versioning — /api/v1/ is the canonical prefix (middleware registered above health routes)

@@ -31,36 +31,105 @@ const TOKEN_ENV_MAP: Record<string, string> = {
   "github-copilot": "GITHUB_COPILOT_TOKEN",
 };
 
-function configDir(): string {
+function globalConfigDir(): string {
   return path.join(os.homedir(), ".dojops");
 }
 
-function configFile(): string {
-  return path.join(configDir(), "config.json");
+function globalConfigFile(): string {
+  return path.join(globalConfigDir(), "config.json");
 }
 
-/** Returns the path to the config file (for display purposes). */
+/**
+ * Find the local project config path by walking up from cwd to find .dojops/config.json.
+ * Skips the global config directory (~/.dojops) to avoid self-merge.
+ * Returns the path only if the file actually exists, or null.
+ */
+function findLocalConfigFile(): string | null {
+  const globalDir = globalConfigDir();
+  let dir = process.cwd();
+  const root = path.parse(dir).root;
+  while (dir !== root) {
+    const dojopsDir = path.join(dir, ".dojops");
+    // Skip the global config directory (~/.dojops)
+    if (dojopsDir !== globalDir) {
+      const candidate = path.join(dojopsDir, "config.json");
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
+/** @deprecated Use globalConfigDir instead */
+function configDir(): string {
+  return globalConfigDir();
+}
+
+/** Returns the path to the active config file (local if exists, else global). */
 export function getConfigPath(): string {
-  return configFile();
+  const local = findLocalConfigFile();
+  if (local && fs.existsSync(local)) return local;
+  return globalConfigFile();
 }
 
-/** Loads config from ~/.dojops/config.json. Returns empty config if missing or invalid. */
-export function loadConfig(): DojOpsConfig {
-  const filePath = configFile();
+/**
+ * Returns the path to the local project config, or null if no .dojops/ directory.
+ * Unlike findLocalConfigFile, this returns a path even if config.json doesn't exist yet,
+ * as long as a .dojops/ directory is found (for saving new local configs).
+ */
+export function getLocalConfigPath(): string | null {
+  const globalDir = globalConfigDir();
+  let dir = process.cwd();
+  const root = path.parse(dir).root;
+  while (dir !== root) {
+    const dojopsDir = path.join(dir, ".dojops");
+    if (dojopsDir !== globalDir && fs.existsSync(dojopsDir)) {
+      return path.join(dojopsDir, "config.json");
+    }
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
+/** Returns the path to the global config file. */
+export function getGlobalConfigPath(): string {
+  return globalConfigFile();
+}
+
+/** Reads and parses a single config file. Returns empty config if missing or invalid. */
+export function readConfigFile(filePath: string): DojOpsConfig {
   try {
     const raw = fs.readFileSync(filePath, "utf-8");
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return {};
     }
-
-    // H-13: Warn if config file (which may contain API tokens) is readable by group/other
     checkConfigPermissions(filePath);
-
     return parsed as DojOpsConfig;
   } catch {
     return {};
   }
+}
+
+/**
+ * Loads config with local > global merge.
+ * Local project config (.dojops/config.json) overrides global (~/.dojops/config.json).
+ * Tokens from both sources are merged (local takes precedence per-provider).
+ */
+export function loadConfig(): DojOpsConfig {
+  const global = readConfigFile(globalConfigFile());
+  const localPath = findLocalConfigFile();
+  if (!localPath) return global;
+
+  const local = readConfigFile(localPath);
+  // Only merge if the local config has any keys (readConfigFile returns {} on error/missing)
+  if (Object.keys(local).length === 0) return global;
+
+  return {
+    ...global,
+    ...Object.fromEntries(Object.entries(local).filter(([, v]) => v !== undefined)),
+    tokens: { ...global.tokens, ...local.tokens },
+  };
 }
 
 /**
@@ -87,13 +156,17 @@ function checkConfigPermissions(filePath: string): void {
   }
 }
 
-/** Writes config to ~/.dojops/config.json. Creates directory with 0o700 and file with 0o600. */
-export function saveConfig(config: DojOpsConfig): void {
-  const dir = configDir();
+/**
+ * Writes config to the specified path, or defaults to ~/.dojops/config.json.
+ * Creates directory with 0o700 and file with 0o600.
+ */
+export function saveConfig(config: DojOpsConfig, targetPath?: string): void {
+  const filePath = targetPath ?? globalConfigFile();
+  const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     mkdirOwnerOnly(dir);
   }
-  writeFileOwnerOnly(configFile(), JSON.stringify(config, null, 2) + "\n");
+  writeFileOwnerOnly(filePath, JSON.stringify(config, null, 2) + "\n");
 }
 
 /** Validates that a provider name is supported. Throws with a clear message if not. */

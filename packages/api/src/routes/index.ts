@@ -7,3 +7,4 @@ export { createHistoryRouter } from "./history";
 export { createScanRouter } from "./scan";
 export { createChatRouter } from "./chat";
 export { createMetricsRouter } from "./metrics";
+export { createReviewRouter } from "./review";

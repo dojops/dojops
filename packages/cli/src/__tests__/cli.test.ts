@@ -166,7 +166,7 @@ describe("CLI", () => {
     });
 
     it("init creates .dojops directory or reports already initialized", () => {
-      const output = run("init");
+      const output = run("init", "--skip-scan", "--skip-tools");
       expect(output.includes("initialized") || output.includes("Initialized")).toBe(true);
     });
 

@@ -12,6 +12,20 @@
 export function remapLegacyArgs(args: string[]): string[] {
   const result = [...args];
 
+  // --auto → auto
+  const autoIdx = result.indexOf("--auto");
+  if (autoIdx !== -1) {
+    result.splice(autoIdx, 1);
+    return ["auto", ...result];
+  }
+
+  // --review → review
+  const reviewIdx = result.indexOf("--review");
+  if (reviewIdx !== -1) {
+    result.splice(reviewIdx, 1);
+    return ["review", ...result];
+  }
+
   // --debug-ci → debug ci (must check before generic flag stripping)
   const debugIdx = result.indexOf("--debug-ci");
   if (debugIdx !== -1) {

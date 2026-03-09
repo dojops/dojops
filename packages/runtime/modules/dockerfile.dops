@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: dockerfile
-  version: 2.0.0
+  version: 2.1.0
   description: "Generate multi-stage Dockerfiles and .dockerignore files"
   author: dojops
   license: MIT
@@ -12,27 +12,56 @@ meta:
 
 context:
   technology: Docker
-  fileFormat: raw
+  fileFormat: json
   outputGuidance: |
-    Generate a production-ready Dockerfile.
-    Output raw Dockerfile content directly — do NOT wrap in JSON or code fences.
-    The output must be a valid Dockerfile that docker can build.
+    Generate production-ready Docker build files as a JSON object.
+    Format: { "files": { "Dockerfile": "FROM ...", ".dockerignore": "node_modules\n.git\n..." } }
+    Always include both Dockerfile and .dockerignore.
+    Do NOT output raw Dockerfile — use the JSON wrapper for multi-file output.
+
+    Detect the project type from context and generate the appropriate Dockerfile:
+    - **Node.js**: node:20-slim base, COPY package*.json first, npm ci --omit=dev, multi-stage
+    - **Python**: python:3.12-slim base, COPY requirements.txt first, pip install, gunicorn/uvicorn
+    - **Java/Maven**: maven:3-eclipse-temurin base for build, eclipse-temurin:21-jre-alpine for runtime
+    - **Java/Gradle**: gradle:8-jdk21 for build, eclipse-temurin:21-jre-alpine for runtime
+    - **Go**: golang:1.22-alpine for build, scratch or distroless for runtime (static binary)
+    - **Rust**: rust:1-slim for build, debian:bookworm-slim or scratch for runtime
+    - **.NET**: mcr.microsoft.com/dotnet/sdk for build, mcr.microsoft.com/dotnet/aspnet for runtime
+    - **Ruby**: ruby:3.3-slim base, bundle install, puma
+    - **PHP**: php:8.3-fpm or php:8.3-apache, composer install
+    - **Static site**: node for build, nginx:alpine for serving
+
+    Generate .dockerignore with project-appropriate patterns:
+    - Always: .git, .gitignore, .env*, *.md, LICENSE, .dockerignore, Dockerfile
+    - Node.js: node_modules, dist, coverage, .next
+    - Python: __pycache__, *.pyc, .venv, .mypy_cache
+    - Java: target/, build/, .gradle, *.class
+    - Go: vendor/ (if not vendored), *_test.go
   bestPractices:
-    - Use multi-stage builds to minimize final image size
-    - Run as non-root user in the final stage
-    - Pin base image versions (never use :latest)
-    - Order instructions for optimal layer caching (deps before source)
-    - Minimize number of layers by combining RUN commands
-    - Include HEALTHCHECK for production images
-    - Never embed secrets or credentials in the image
-    - Copy dependency files before source for layer caching
+    - Use multi-stage builds to minimize final image size (builder stage + runtime stage)
+    - Run as non-root user in the final stage (adduser/addgroup + USER directive)
+    - Pin base image versions with specific tags (never use :latest in production)
+    - Order instructions for optimal layer caching — copy dependency files before source code
+    - Minimize number of layers by combining related RUN commands with &&
+    - Include HEALTHCHECK for production images with appropriate interval and timeout
+    - Never embed secrets, credentials, or API keys in the image (use build args or runtime env)
+    - Copy dependency manifest first (package.json, requirements.txt, go.mod) for layer caching
+    - Use .dockerignore to exclude unnecessary files from build context
+    - Set WORKDIR before COPY/RUN commands
+    - Use COPY instead of ADD unless extracting archives
+    - Set appropriate EXPOSE for documented ports
+    - Use ENTRYPOINT for the main process, CMD for default arguments
+    - For compiled languages, use scratch or distroless as final base for minimal attack surface
   context7Libraries:
     - name: docker
-      query: "Dockerfile syntax, multi-stage builds, best practices, HEALTHCHECK, USER directive"
+      query: "Dockerfile syntax multi-stage builds, best practices layer caching, HEALTHCHECK USER directive, .dockerignore patterns, non-root containers, distroless images"
 
 files:
   - path: "Dockerfile"
     format: raw
+  - path: ".dockerignore"
+    format: raw
+    conditional: true
 
 detection:
   paths: ["Dockerfile", "dockerfile", "Containerfile"]
@@ -71,7 +100,7 @@ update:
 
 ## Prompt
 
-You are a Docker expert. Generate a production-ready Dockerfile.
+You are a Docker expert specializing in production-ready, secure container images.
 
 {outputGuidance}
 
@@ -85,4 +114,5 @@ Project context: {projectContext}
 ## Keywords
 
 docker, dockerfile, container, image, build, multi-stage,
-containerize, containerfile, docker-build, registry, push
+containerize, containerfile, docker-build, registry, push,
+dockerignore, distroless, scratch, non-root

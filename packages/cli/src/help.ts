@@ -20,6 +20,10 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("explain")}            LLM explains a plan`);
   console.log(`  ${pc.cyan("debug ci")}           Diagnose CI/CD log failures`);
   console.log(`  ${pc.cyan("analyze diff")}       Analyze infrastructure diff for risk`);
+  console.log(`  ${pc.cyan("review")}             DevSecOps review with tool validation`);
+  console.log(
+    `  ${pc.cyan("auto")}               Autonomous mode: plan + execute with self-repair`,
+  );
   console.log(`  ${pc.cyan("inspect")}            Inspect config and session state`);
   console.log(`  ${pc.cyan("agents")}             Manage specialist agents (built-in + custom)`);
   console.log(`  ${pc.cyan("verify")}             Verify a configuration file`);
@@ -87,6 +91,13 @@ export function printHelp(): void {
   console.log(
     `  ${pc.cyan("--timeout <sec>")}        Execution timeout per task in seconds (default: 60)`,
   );
+  console.log(`  ${pc.cyan("--repair-attempts=N")}    Max self-repair attempts (default: 3)`);
+  console.log();
+  console.log(pc.bold("AUTO OPTIONS"));
+  console.log(`  ${pc.cyan("--skip-verify")}          Skip external config validation`);
+  console.log(`  ${pc.cyan("--force")}                Skip git dirty working tree check`);
+  console.log(`  ${pc.cyan("--allow-all-paths")}      Bypass DevOps file write allowlist`);
+  console.log(`  ${pc.cyan("--repair-attempts=N")}    Max self-repair attempts (default: 4)`);
   console.log();
   console.log(pc.bold("SCAN OPTIONS"));
   console.log(
@@ -134,6 +145,8 @@ export function printHelp(): void {
     `  ${pc.dim("$")} dojops login ...                ${pc.dim("→ dojops auth login ...")}`,
   );
   console.log(`  ${pc.dim("$")} dojops config --show            ${pc.dim("→ dojops config show")}`);
+  console.log(`  ${pc.dim("$")} dojops --review                 ${pc.dim("→ dojops review")}`);
+  console.log(`  ${pc.dim("$")} dojops --auto "..."             ${pc.dim('→ dojops auto "..."')}`);
   console.log(`  ${pc.dim("$")} dojops doctor                   ${pc.dim("→ dojops status")}`);
   console.log();
   console.log(pc.bold("EXAMPLES"));
@@ -227,6 +240,7 @@ export function printCommandHelp(command: string): void {
       );
       console.log(`  ${pc.cyan("--write=PATH")}         Write generated output to a file`);
       console.log(`  ${pc.cyan("--allow-all-paths")}    Bypass DevOps file allowlist for --write`);
+      console.log(`  ${pc.cyan("--repair-attempts=N")}  Max self-repair attempts (default: 3)`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Routes your prompt to the best-matching specialist agent and generates`);
       console.log(`  a response. This is the default command when no subcommand is given.`);
@@ -366,6 +380,36 @@ export function printCommandHelp(command: string): void {
       console.log(
         `  ${pc.dim("$")} terraform plan > plan.txt && dojops analyze diff --file plan.txt`,
       );
+      console.log();
+      break;
+
+    case "review":
+      console.log(`\n${pc.bold("dojops review")} — DevSecOps review with tool validation`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(
+        `  ${pc.dim("$")} dojops review                                      ${pc.dim("(auto-discover)")}`,
+      );
+      console.log(
+        `  ${pc.dim("$")} dojops review .github/workflows/ci.yml Dockerfile  ${pc.dim("(explicit files)")}`,
+      );
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(
+        `  ${pc.cyan("--no-auto-discover")}    Skip auto-discovery, review only specified files`,
+      );
+      console.log(
+        `  ${pc.cyan("--context7")}            Enable Context7 doc augmentation for version checking`,
+      );
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Runs the full DevSecOps review pipeline against project config files:`);
+      console.log(`  1. Discover DevOps configs (workflows, Dockerfiles, Terraform, Helm, etc.)`);
+      console.log(`  2. Run validation tools (actionlint, hadolint, shellcheck, yamllint, etc.)`);
+      console.log(`  3. Feed tool results + file contents to LLM for structured analysis`);
+      console.log(`  4. Return severity-ranked findings with maturity score (0-100)`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops review`);
+      console.log(`  ${pc.dim("$")} dojops review --output json`);
+      console.log(`  ${pc.dim("$")} dojops review .github/workflows/ci.yml --context7`);
+      console.log(`  ${pc.dim("$")} dojops --review   ${pc.dim("(legacy flag)")}`);
       console.log();
       break;
 
@@ -630,14 +674,14 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--skip-tools")}    Skip tool dependency installation`);
       console.log(`  ${pc.cyan("--skip-review")}   Skip interactive review prompt`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Creates the .dojops/ directory structure and scans the repository to`);
-      console.log(`  build a structured context file (.dojops/context.json).`);
+      console.log(`  Creates the .dojops/ directory structure, scans the repository, and`);
+      console.log(`  writes project context to DOJOPS.md at the project root.`);
       console.log();
-      console.log(`  ${pc.bold("Directory structure:")}`);
+      console.log(`  ${pc.bold("Project files:")}`);
+      console.log(`  - DOJOPS.md              Project context (YAML frontmatter + notes)`);
       console.log(`  - .dojops/plans/         Saved plan files`);
       console.log(`  - .dojops/history/       Hash-chained audit trail`);
       console.log(`  - .dojops/session.json   Current session state`);
-      console.log(`  - .dojops/context.json   Detected repo context`);
       console.log();
       console.log(`  ${pc.bold("Repo scanning detects:")}`);
       console.log(`  - Languages (Node, Python, Go, Rust, Java, Ruby)`);
@@ -649,9 +693,9 @@ export function printCommandHelp(command: string): void {
       console.log(`  - Repo metadata (git, monorepo, Makefile, .env)`);
       console.log();
       console.log(
-        `  Re-running ${pc.cyan("dojops init")} on an existing project updates context.json`,
+        `  Re-running ${pc.cyan("dojops init")} on an existing project updates DOJOPS.md`,
       );
-      console.log(`  without recreating existing directories.`);
+      console.log(`  frontmatter without touching your Notes section.`);
       console.log();
       console.log(`  ${pc.bold("LLM enrichment:")}`);
       console.log(
@@ -668,7 +712,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  offers to install any that are missing.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops init`);
-      console.log(`  ${pc.dim("$")} dojops init && cat .dojops/context.json`);
+      console.log(`  ${pc.dim("$")} dojops init && cat DOJOPS.md`);
       console.log();
       break;
 
@@ -822,9 +866,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
       console.log(`  ${pc.cyan("--changelog")}     Changelog message for publish`);
       console.log(`  ${pc.cyan("--version")}       Specific version to install`);
-      console.log(
-        `  ${pc.cyan("--global")}        Install to ~/.dojops/modules/ instead of project`,
-      );
+      console.log(`  ${pc.cyan("--global")}        Install to ~/.dojops/ (skips scope prompt)`);
       console.log(`  ${pc.cyan("--legacy")}        Generate legacy v1 .dops format (init only)`);
       console.log(
         `  ${pc.cyan("--watch")}         Watch mode: re-validate on file changes (dev only)`,

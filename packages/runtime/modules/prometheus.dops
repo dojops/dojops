@@ -4,8 +4,8 @@ kind: tool
 
 meta:
   name: prometheus
-  version: 2.0.0
-  description: "Generate Prometheus monitoring configurations"
+  version: 2.1.0
+  description: "Generate Prometheus monitoring configurations with alerting and recording rules"
   author: dojops
   license: MIT
   tags: [prometheus, monitoring, metrics, alerting, observability]
@@ -15,34 +15,50 @@ context:
   fileFormat: json
   outputGuidance: |
     Generate Prometheus configuration files as a JSON object with file paths as keys and file contents as string values.
-    Format: { "files": { "prometheus.yml": "content...", "alert-rules.yml": "content..." } }
-    The "prometheus.yml" key is always required. "alert-rules.yml" and "alertmanager.yml" are optional.
+    Format: { "files": { "prometheus.yml": "content...", "alert-rules.yml": "content...", "recording-rules.yml": "content..." } }
+    The "prometheus.yml" key is always required. Other files are optional based on the request:
+      - prometheus.yml — Main config with global settings, scrape_configs, rule_files references, alerting config
+      - alert-rules.yml — Alerting rules grouped by service/severity (when alerts are requested)
+      - recording-rules.yml — Recording rules for precomputed expensive queries (when performance matters)
+      - alertmanager.yml — Alertmanager routing, receivers, inhibition rules (when alerting is requested)
     Each file content must be valid YAML that Prometheus/Alertmanager can parse.
     Do NOT output raw YAML — use the JSON wrapper to enable multi-file output.
+
+    Detect monitoring target from context:
+    - **Application monitoring**: HTTP request rate/duration/errors, custom app metrics endpoints
+    - **Infrastructure monitoring**: Node Exporter (CPU, memory, disk, network), cAdvisor for containers
+    - **Kubernetes monitoring**: kube-state-metrics, kubelet, API server, etcd, pod resource usage
+    - **Database monitoring**: MySQL/PostgreSQL/Redis/MongoDB exporters, query latency, connections
+    - **Service discovery**: Kubernetes SD, Consul SD, EC2 SD, file_sd_configs, DNS SD
   bestPractices:
-    - Set appropriate scrape intervals based on metric cardinality
-    - Use relabeling for dynamic service discovery
-    - Define recording rules for frequently computed expressions
-    - Group related alert rules by service or severity
-    - Set meaningful alert labels and annotations
-    - Use honor_labels and honor_timestamps appropriately
-    - Configure appropriate retention and storage settings
-    - Scrape interval should be between 5s and 60s
-    - Alert rules must have severity labels
-    - Alert annotations should include summary and description
-    - Use job_name to identify each scrape target
-    - Recording rule names should follow naming conventions
+    - Set appropriate scrape intervals based on metric cardinality (15s default, 5s-60s range)
+    - Use relabeling for dynamic service discovery and target filtering
+    - Define recording rules to precompute expensive PromQL expressions (rate, histogram_quantile)
+    - Group related alert rules by service or severity in named groups
+    - "Set meaningful alert labels (severity: critical/warning/info) and annotations (summary, description)"
+    - Use honor_labels and honor_timestamps appropriately for federated/push metrics
+    - Configure appropriate retention and storage settings in prometheus.yml
+    - Alert rules must have severity labels (critical, warning, info)
+    - Alert annotations should include summary and description with template variables ({{ $labels.instance }})
+    - Use job_name to clearly identify each scrape target
+    - Recording rule names must follow level:metric:operations convention
+    - Use for duration in alerts to avoid flapping (5m minimum for non-critical)
+    - Separate alert rules from recording rules into distinct files
+    - Configure Alertmanager with proper routing tree, group_by, group_wait, repeat_interval
   context7Libraries:
     - name: prometheus
-      query: "Prometheus configuration, scrape_configs, alerting rules, relabeling, recording rules"
+      query: "Prometheus configuration scrape_configs, alerting rules groups severity annotations, recording rules precompute, relabeling, Alertmanager routing receivers inhibit_rules"
 
 files:
-  - path: "prometheus.yml"
+  - path: "{outputPath}/prometheus.yml"
     format: raw
-  - path: "alert-rules.yml"
+  - path: "{outputPath}/alert-rules.yml"
     format: raw
     conditional: true
-  - path: "alertmanager.yml"
+  - path: "{outputPath}/recording-rules.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/alertmanager.yml"
     format: raw
     conditional: true
 
@@ -63,7 +79,7 @@ permissions:
   network: none
 
 scope:
-  write: ["prometheus.yml", "alert-rules.yml", "alertmanager.yml"]
+  write: ["**/*.yml", "**/*.yaml"]
 
 risk:
   level: LOW
@@ -83,7 +99,7 @@ update:
 
 ## Prompt
 
-You are a monitoring expert specializing in Prometheus. Generate production-ready Prometheus configuration.
+You are a monitoring expert specializing in Prometheus, Alertmanager, and observability best practices.
 
 {outputGuidance}
 
@@ -97,4 +113,5 @@ Project context: {projectContext}
 ## Keywords
 
 prometheus, monitoring, metrics, alert, scrape, grafana,
-observability, target, rule, recording, alertmanager, promql
+observability, target, rule, recording, alertmanager, promql,
+exporter, service-discovery, federation

@@ -482,7 +482,7 @@ describe("OllamaProvider", () => {
   describe("request timeout", () => {
     it("passes timeout config to axios.post for generate", async () => {
       const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
-      expect(call[2]).toEqual({ timeout: 120_000 });
+      expect(call[2]).toEqual({ timeout: 300_000 });
     });
 
     it("passes timeout config to axios.post for chat", async () => {
@@ -495,7 +495,7 @@ describe("OllamaProvider", () => {
       });
 
       const axiosConfig = mockAxiosPost.mock.calls[0][2];
-      expect(axiosConfig).toEqual({ timeout: 120_000 });
+      expect(axiosConfig).toEqual({ timeout: 300_000 });
     });
 
     it("passes timeout config to axios.get for listModels", async () => {
@@ -505,11 +505,34 @@ describe("OllamaProvider", () => {
       await provider.listModels();
 
       const axiosConfig = mockAxiosGet.mock.calls[0][1];
-      expect(axiosConfig).toEqual({ timeout: 120_000 });
+      expect(axiosConfig).toEqual({ timeout: 300_000 });
+    });
+
+    it("respects OLLAMA_TIMEOUT env var", async () => {
+      process.env.OLLAMA_TIMEOUT = "600";
+      const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
+      expect(call[2]).toEqual({ timeout: 600_000 });
+      delete process.env.OLLAMA_TIMEOUT;
+    });
+
+    it("respects DOJOPS_REQUEST_TIMEOUT env var as fallback", async () => {
+      process.env.DOJOPS_REQUEST_TIMEOUT = "900";
+      const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
+      expect(call[2]).toEqual({ timeout: 900_000 });
+      delete process.env.DOJOPS_REQUEST_TIMEOUT;
+    });
+
+    it("OLLAMA_TIMEOUT takes precedence over DOJOPS_REQUEST_TIMEOUT", async () => {
+      process.env.OLLAMA_TIMEOUT = "600";
+      process.env.DOJOPS_REQUEST_TIMEOUT = "900";
+      const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
+      expect(call[2]).toEqual({ timeout: 600_000 });
+      delete process.env.OLLAMA_TIMEOUT;
+      delete process.env.DOJOPS_REQUEST_TIMEOUT;
     });
 
     it("throws timeout error with helpful message on ECONNABORTED", async () => {
-      const err = new Error("timeout of 120000ms exceeded") as Error & {
+      const err = new Error("timeout of 300000ms exceeded") as Error & {
         isAxiosError: boolean;
         code: string;
       };
@@ -518,7 +541,7 @@ describe("OllamaProvider", () => {
       mockAxiosPost.mockRejectedValue(err);
 
       const provider = new OllamaProvider();
-      await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/timed out after 120s/);
+      await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/timed out after 300s/);
     });
   });
 

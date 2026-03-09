@@ -97,6 +97,28 @@ export function maskToken(token: string | undefined): string {
   return token.slice(0, 3) + "***" + token.slice(-3);
 }
 
+// ── File action formatting ────────────────────────────────────────
+
+export function fileActionLine(
+  filePath: string,
+  action: "created" | "modified" | "unchanged",
+): string {
+  switch (action) {
+    case "created":
+      return `  ${pc.green("+")} ${filePath}`;
+    case "modified":
+      return `  ${pc.yellow("~")} ${filePath}`;
+    case "unchanged":
+      return `  ${pc.dim("○")} ${pc.dim(filePath)} ${pc.dim("(unchanged)")}`;
+  }
+}
+
+export function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = (ms / 1000).toFixed(1);
+  return `${s}s`;
+}
+
 // ── ANSI-safe text wrapping for p.note() ─────────────────────────
 
 /** Strip ANSI escape codes for accurate width measurement. */
@@ -140,6 +162,22 @@ function wrapLine(line: string, maxWidth: number): string[] {
  *
  * Safe for strings containing ANSI color codes — measures visible width only.
  */
+/**
+ * Truncate a `p.note()` title so it fits within the terminal width.
+ *
+ * Titles are rendered on the top border: `╭  Title ───╮`
+ * Overhead: 3 left (`╭  `) + 1 space + at least 3 dashes + 1 (`╮`) = 8.
+ */
+export function truncateNoteTitle(title: string): string {
+  const cols = Math.min(process.stdout.columns || 80, 200);
+  const maxVisible = Math.max(20, cols - 8);
+  const visible = stripAnsi(title);
+  if (visible.length <= maxVisible) return title;
+  // Truncate the visible text, then rebuild with original ANSI prefix if any
+  // Simple approach: strip and truncate since titles are short formatted strings
+  return visible.slice(0, maxVisible - 1) + "…";
+}
+
 export function wrapForNote(text: string): string {
   // p.note() overhead: "│  " (3) on the left + "  │" (3) on the right + 1 safety
   const cols = Math.min(process.stdout.columns || 80, 200);

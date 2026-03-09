@@ -10,7 +10,7 @@ describe("TOOL_FILE_MAP", () => {
   it("contains expected tool entries", () => {
     expect(TOOL_FILE_MAP).toHaveProperty("dockerfile");
     expect(TOOL_FILE_MAP).toHaveProperty("docker-compose");
-    expect(TOOL_FILE_MAP).toHaveProperty("github-actions");
+    // github-actions is handled via TOOL_SCAN_DIRS (multi-file scanning)
     expect(TOOL_FILE_MAP).toHaveProperty("gitlab-ci");
     expect(TOOL_FILE_MAP).toHaveProperty("jenkinsfile");
     expect(TOOL_FILE_MAP).toHaveProperty("terraform");
@@ -96,12 +96,52 @@ describe("readExistingToolFile", () => {
     expect(fs.statSync).toHaveBeenCalledTimes(4);
   });
 
-  it("returns undefined when all candidates exceed size limit", () => {
-    vi.mocked(fs.statSync).mockReturnValue({ size: 100 * 1024 } as fs.Stats);
+  it("returns undefined when no github-actions files exist", () => {
+    vi.mocked(fs.readdirSync).mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
 
     const result = readExistingToolFile("github-actions", CWD);
     expect(result).toBeUndefined();
-    expect(fs.readFileSync).not.toHaveBeenCalled();
+  });
+
+  it("reads all github-actions files via directory scanning", () => {
+    const makeDirent = (name: string, isDir: boolean) =>
+      ({ name, isFile: () => !isDir, isDirectory: () => isDir }) as fs.Dirent;
+
+    vi.mocked(fs.readdirSync).mockImplementation((dir) => {
+      const d = String(dir);
+      if (d.endsWith(".github/workflows")) {
+        return [
+          makeDirent("ci.yml", false),
+          makeDirent("reusable-build.yml", false),
+        ] as unknown as fs.Dirent[];
+      }
+      if (d.endsWith(".github/actions")) {
+        return [makeDirent("setup-node", true)] as unknown as fs.Dirent[];
+      }
+      if (d.endsWith("setup-node")) {
+        return [makeDirent("action.yml", false)] as unknown as fs.Dirent[];
+      }
+      throw new Error("ENOENT");
+    });
+    vi.mocked(fs.statSync).mockReturnValue({ size: 100 } as fs.Stats);
+    vi.mocked(fs.readFileSync).mockImplementation((filePath) => {
+      const p = String(filePath);
+      if (p.includes("ci.yml")) return "name: CI\n";
+      if (p.includes("reusable-build")) return "name: Reusable Build\n";
+      if (p.includes("action.yml")) return "name: Setup Node\n";
+      return "";
+    });
+
+    const result = readExistingToolFile("github-actions", CWD);
+    expect(result).toBeDefined();
+    expect(result!.content).toContain("ci.yml");
+    expect(result!.content).toContain("reusable-build.yml");
+    expect(result!.content).toContain("action.yml");
+    expect(result!.content).toContain("name: CI");
+    expect(result!.content).toContain("name: Reusable Build");
+    expect(result!.content).toContain("name: Setup Node");
   });
 
   it("skips oversized file and finds next valid candidate", () => {

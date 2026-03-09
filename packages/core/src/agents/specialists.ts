@@ -61,6 +61,30 @@ const HCL2JSON_DEP: ToolDependency = {
   required: false,
 };
 
+const ACTIONLINT_DEP: ToolDependency = {
+  name: "actionlint",
+  npmPackage: "actionlint",
+  binary: "actionlint",
+  description: "GitHub Actions workflow linting",
+  required: false,
+};
+
+const HADOLINT_DEP: ToolDependency = {
+  name: "Hadolint",
+  npmPackage: "hadolint",
+  binary: "hadolint",
+  description: "Dockerfile linting",
+  required: false,
+};
+
+const CHECKOV_DEP: ToolDependency = {
+  name: "Checkov",
+  npmPackage: "checkov",
+  binary: "checkov",
+  description: "IaC security scanning",
+  required: false,
+};
+
 const OPA_WASM_DEP: ToolDependency = {
   name: "OPA WASM",
   npmPackage: "@open-policy-agent/opa-wasm",
@@ -94,6 +118,7 @@ You have access to the following specialist domains:
   - application-security (code review, OWASP, SAST/DAST, ethical pentesting)
   - shell-scripting (Bash/POSIX scripts, ShellCheck, automation)
   - python-scripting (Python automation, CLI tools, best practices)
+  - devops-review (config review, version validation, deprecated syntax detection)
 
 When planning:
 - Identify dependencies between tasks and produce a topological ordering.
@@ -731,6 +756,72 @@ Always produce well-typed, well-tested, and production-ready Python code.${NO_FO
 };
 
 // ---------------------------------------------------------------------------
+// 17. DevSecOps reviewer — config review & version validation
+// ---------------------------------------------------------------------------
+export const DEVSECOPS_REVIEWER_CONFIG: SpecialistConfig = {
+  name: "devsecops-reviewer",
+  domain: "devops-review",
+  description: "DevOps and DevSecOps configuration reviewer with version and syntax validation",
+  toolDependencies: [
+    YAMLLINT_DEP,
+    ACTIONLINT_DEP,
+    HADOLINT_DEP,
+    SHELLCHECK_DEP,
+    HCL2JSON_DEP,
+    CHECKOV_DEP,
+  ],
+  systemPrompt: `You are a DevOps and DevSecOps configuration reviewer. Your role is to review existing infrastructure, CI/CD, and container configuration files for correctness, security, and best practices.
+
+You specialize in:
+- Reviewing GitHub Actions workflows, composite actions, and reusable workflows for correctness
+- Validating marketplace action versions are current (not outdated or deprecated)
+- Reviewing Dockerfiles for security (non-root, minimal base images, no secrets in layers)
+- Reviewing Terraform configs for security, state management, and provider version pinning
+- Reviewing Kubernetes manifests for security contexts, resource limits, and RBAC
+- Reviewing Docker Compose files for production readiness
+- Reviewing Helm charts for template correctness and values structure
+- Reviewing Nginx, Makefile, and other DevOps configs for best practices
+- Identifying deprecated syntax, removed features, and breaking changes
+- Checking for hardcoded secrets, credentials, and sensitive data in configs
+- Validating YAML/HCL/JSON syntax correctness
+- Recommending security hardening (least privilege, network policies, pod security)
+
+When reviewing, use the documentation provided (from Context7) to:
+1. Cross-reference action/tool/image versions against latest documentation
+2. Identify deprecated syntax or removed features
+3. Validate configuration structure against current specifications
+4. Recommend upgrades with specific version numbers from the docs
+
+Output format for reviews:
+- Start with a brief summary (1-2 sentences)
+- List findings organized by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO
+- Each finding must include: the file/line, what's wrong, why it matters, and the fix
+- End with a "Recommended Actions" section ordered by priority
+
+Related agents: security-auditor (deep security analysis), cicd-specialist (pipeline design), compliance-auditor (regulatory controls), appsec-specialist (application code).
+Always be specific — cite exact versions, line references, and concrete fixes.${NO_FOLLOWUP_INSTRUCTION}`,
+  keywords: [
+    "review",
+    "check",
+    "validate",
+    "verify",
+    "audit",
+    "outdated",
+    "deprecated",
+    "version",
+    "lint",
+    "best practices",
+    "config review",
+    "devsecops",
+    "devops review",
+    "security review",
+    "upgrade",
+    "update versions",
+  ],
+  primaryKeywords: ["review", "validate", "outdated", "deprecated", "devsecops"],
+};
+
+// ---------------------------------------------------------------------------
 // Exported collection
 // ---------------------------------------------------------------------------
 export const ALL_SPECIALIST_CONFIGS: SpecialistConfig[] = [
@@ -750,4 +841,5 @@ export const ALL_SPECIALIST_CONFIGS: SpecialistConfig[] = [
   APPSEC_SPECIALIST_CONFIG,
   SHELL_SPECIALIST_CONFIG,
   PYTHON_SPECIALIST_CONFIG,
+  DEVSECOPS_REVIEWER_CONFIG,
 ];

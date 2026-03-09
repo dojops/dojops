@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, LLMUsage, getRequestTimeoutMs } from "./provider";
 import { buildLLMResponse, extractApiError } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
 
@@ -9,7 +9,7 @@ export class AnthropicProvider implements LLMProvider {
   private readonly model: string;
 
   constructor(apiKey: string, model = "claude-sonnet-4-5-20250929") {
-    this.client = new Anthropic({ apiKey });
+    this.client = new Anthropic({ apiKey, timeout: getRequestTimeoutMs() });
     this.model = model;
   }
 

@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: terraform
-  version: 2.0.0
+  version: 2.1.0
   description: "Generate Terraform infrastructure-as-code configurations"
   author: dojops
   license: MIT
@@ -12,12 +12,22 @@ meta:
 
 context:
   technology: Terraform
-  fileFormat: hcl
+  fileFormat: json
   outputGuidance: |
-    Generate valid Terraform HCL configuration.
-    Output raw HCL content directly — do NOT wrap in JSON or code fences.
-    The output must be a valid .tf file that terraform can parse.
-    Include terraform block with required_providers, provider block, resource blocks, and any variables/outputs.
+    Generate Terraform HCL configuration split into standard files.
+    Output a JSON object with file paths as keys and HCL content as string values.
+    Format: { "files": { "main.tf": "...", "variables.tf": "...", "outputs.tf": "...", "providers.tf": "...", "terraform.tf": "..." } }
+    Each file content must be valid HCL that terraform can parse independently.
+    Always include these files:
+      - main.tf — resource and data source blocks
+      - variables.tf — all variable blocks in alphabetical order
+      - outputs.tf — all output blocks in alphabetical order
+      - providers.tf — all provider blocks and configuration
+      - terraform.tf — terraform block with required_version and required_providers
+    Optionally include when needed:
+      - locals.tf — local values and computed expressions
+      - backend.tf — backend configuration (S3, GCS, etc.)
+    Do NOT output raw HCL — use the JSON wrapper format for multi-file output.
   bestPractices:
     - Pin provider versions using pessimistic constraint (~>) to prevent breaking changes
     - Use variables for all environment-specific values
@@ -29,13 +39,33 @@ context:
     - Variable and resource names must use snake_case
     - No hardcoded credentials (AWS keys, passwords, tokens)
     - Maximum 50 resources per generation
+    - Separate concerns into standard files (main.tf, variables.tf, outputs.tf, providers.tf, terraform.tf)
   context7Libraries:
     - name: terraform
       query: "Terraform HCL syntax, resource blocks, provider configuration, state management"
 
 files:
-  - path: "main.tf"
+  - path: "{outputPath}/main.tf"
     format: raw
+    conditional: true
+  - path: "{outputPath}/variables.tf"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/outputs.tf"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/providers.tf"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/terraform.tf"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/locals.tf"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/backend.tf"
+    format: raw
+    conditional: true
 
 detection:
   paths: ["main.tf", "*.tf", "terraform.tfstate"]
@@ -54,7 +84,7 @@ permissions:
   network: none
 
 scope:
-  write: ["*.tf"]
+  write: ["*.tf", "**/*.tf"]
 
 risk:
   level: MEDIUM

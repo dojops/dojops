@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, getRequestTimeoutMs } from "./provider";
 import { getValidCopilotToken } from "./copilot-auth";
 import { openaiCompatGenerate, openaiCompatListModels } from "./openai-compat";
 
@@ -35,6 +35,7 @@ export class GitHubCopilotProvider implements LLMProvider {
       apiKey: token,
       baseURL: apiBaseUrl,
       defaultHeaders: COPILOT_HEADERS,
+      timeout: getRequestTimeoutMs(),
     });
   }
 

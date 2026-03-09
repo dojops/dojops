@@ -133,6 +133,54 @@ describe("detectExistingContent", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("detects files with glob in directory segment (e.g. actions/*/action.yml)", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-test-"));
+    try {
+      const actionsDir = path.join(tmpDir, ".github", "actions");
+      fs.mkdirSync(path.join(actionsDir, "setup-node"), { recursive: true });
+      fs.mkdirSync(path.join(actionsDir, "docker-build"), { recursive: true });
+      fs.writeFileSync(
+        path.join(actionsDir, "setup-node", "action.yml"),
+        "name: Setup Node",
+        "utf-8",
+      );
+      fs.writeFileSync(
+        path.join(actionsDir, "docker-build", "action.yml"),
+        "name: Docker Build",
+        "utf-8",
+      );
+
+      const content = detectExistingContent([".github/actions/*/action.yml"], tmpDir);
+      expect(content).not.toBeNull();
+      expect(content).toContain("name: Setup Node");
+      expect(content).toContain("name: Docker Build");
+      expect(content).toContain("docker-build");
+      expect(content).toContain("setup-node");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns all matching files concatenated with path headers", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-test-"));
+    try {
+      const wfDir = path.join(tmpDir, ".github", "workflows");
+      fs.mkdirSync(wfDir, { recursive: true });
+      fs.writeFileSync(path.join(wfDir, "ci.yml"), "name: CI", "utf-8");
+      fs.writeFileSync(path.join(wfDir, "deploy.yml"), "name: Deploy", "utf-8");
+
+      const content = detectExistingContent([".github/workflows/*.yml"], tmpDir);
+      expect(content).not.toBeNull();
+      // Multiple files → path headers
+      expect(content).toContain("--- .github/workflows/ci.yml ---");
+      expect(content).toContain("--- .github/workflows/deploy.yml ---");
+      expect(content).toContain("name: CI");
+      expect(content).toContain("name: Deploy");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("matchesScopePattern", () => {

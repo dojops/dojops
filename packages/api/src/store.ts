@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 export interface HistoryEntry {
   id: string;
-  type: "generate" | "plan" | "debug-ci" | "diff" | "scan" | "chat";
+  type: "generate" | "plan" | "debug-ci" | "diff" | "scan" | "chat" | "review";
   request: unknown;
   response: unknown;
   timestamp: string;

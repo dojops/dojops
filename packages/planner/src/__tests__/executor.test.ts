@@ -264,16 +264,38 @@ describe("PlannerExecutor", () => {
   });
 
   describe("$ref resolution edge cases", () => {
-    it("fails task when $ref references a task that does not exist", async () => {
+    it("drops $ref to non-existent task and continues execution", async () => {
       const graph = makeGraph("bad ref", [
-        { id: "t1", description: "uses bad ref", input: { data: "$ref:nonexistent" } },
+        {
+          id: "t1",
+          description: "uses bad ref",
+          input: { data: "$ref:nonexistent", prompt: "test" },
+        },
       ]);
 
       const result = await makeExecutor().execute(graph);
 
-      expect(result.success).toBe(false);
-      expect(result.results[0].status).toBe("failed");
-      expect(result.results[0].error).toContain("references unknown task");
+      // Task should succeed — the hallucinated $ref is silently dropped
+      expect(result.success).toBe(true);
+      expect(result.results[0].status).toBe("completed");
+    });
+
+    it("drops $ref for existingContent so it can be filled from disk", async () => {
+      const graph = makeGraph("existingContent ref", [
+        { id: "t1", description: "generates output" },
+        {
+          id: "t2",
+          description: "references t1 for existingContent",
+          dependsOn: ["t1"],
+          input: { existingContent: "$ref:t1", prompt: "update config" },
+        },
+      ]);
+
+      const result = await makeExecutor().execute(graph);
+
+      // t2 should succeed — existingContent $ref is dropped, prompt is kept
+      expect(result.success).toBe(true);
+      expect(result.results[1].status).toBe("completed");
     });
 
     it("resolves $ref to undefined when referenced task has output: undefined", async () => {

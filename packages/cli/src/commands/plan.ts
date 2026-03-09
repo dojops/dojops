@@ -2,12 +2,13 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { decompose, TaskGraph } from "@dojops/planner";
 import { createToolRegistry, ToolRegistry } from "@dojops/tool-registry";
+import { scanRepo } from "@dojops/core";
 import { CLIContext } from "../types";
-import { hasFlag, stripFlags } from "../parser";
+import { hasFlag, stripFlags, extractFlagValue } from "../parser";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { runHooks } from "../hooks";
 import { classifyPlanRisk } from "../risk-classifier";
-import { wrapForNote } from "../formatter";
+import { wrapForNote, truncateNoteTitle } from "../formatter";
 import * as yaml from "js-yaml";
 import crypto from "node:crypto";
 import {
@@ -46,7 +47,7 @@ function displayTaskGraph(graph: TaskGraph): void {
     return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
   });
   const taskCountLabel = pc.dim(`(${graph.tasks.length} tasks)`);
-  p.note(wrapForNote(taskLines.join("\n")), `${graph.goal} ${taskCountLabel}`);
+  p.note(wrapForNote(taskLines.join("\n")), truncateNoteTitle(`${graph.goal} ${taskCountLabel}`));
 }
 
 /** Build the PlanState object for persistence. */
@@ -125,7 +126,7 @@ function parsePlanArgs(
   const prompt = stripFlags(
     args,
     new Set(["--execute", "--yes", "--skip-verify", "--force", "--allow-all-paths"]),
-    new Set<string>(),
+    new Set(["--timeout", "--repair-attempts"]),
   ).join(" ");
   return { prompt, executeMode, autoApprove, skipVerify };
 }
@@ -157,6 +158,7 @@ async function runDecomposition(
   repoContext: ReturnType<typeof loadContext> | null,
   ctx: CLIContext,
   isJson: boolean,
+  executionMemory?: string,
 ): Promise<TaskGraph> {
   const s = p.spinner();
   if (!isJson) s.start("Decomposing goal into tasks...");
@@ -167,6 +169,7 @@ async function runDecomposition(
   try {
     graph = await decompose(prompt, provider, tools, {
       repoContext: repoContext ?? undefined,
+      executionMemory,
     });
   } catch (err) {
     if (!isJson) s.stop("Decomposition failed.");
@@ -226,6 +229,8 @@ async function delegateToApply(
   if (skipVerify) applyArgs.push("--skip-verify");
   if (hasFlag(args, "--force")) applyArgs.push("--force");
   if (hasFlag(args, "--allow-all-paths")) applyArgs.push("--allow-all-paths");
+  const repairAttempts = extractFlagValue(args, "--repair-attempts");
+  if (repairAttempts) applyArgs.push("--repair-attempts", repairAttempts);
   return applyCommand(applyArgs, ctx);
 }
 
@@ -252,11 +257,42 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
   const provider = ctx.getProvider();
   const registry = createToolRegistry(provider, projectRoot ?? undefined);
-  const repoContext = projectRoot ? loadContext(projectRoot) : null;
+  // Fresh repo scan gives the planner real-time knowledge of existing infrastructure
+  // (CI, Dockerfiles, Terraform, K8s, etc.) so it plans "update" instead of "create"
+  let repoContext: ReturnType<typeof loadContext> = null;
+  if (projectRoot) {
+    try {
+      repoContext = scanRepo(projectRoot);
+    } catch {
+      // Fresh scan failed — fall back to static .dojops/context.json
+      repoContext = loadContext(projectRoot);
+    }
+  }
   const isJson = ctx.globalOpts.output === "json";
 
   const tools = applyToolFilter(registry.getAll(), ctx.globalOpts.tool, isJson);
-  const graph = await runDecomposition(prompt, provider, tools, repoContext, ctx, isJson);
+
+  // Load execution memory for context-aware planning
+  let executionMemory: string | undefined;
+  if (projectRoot) {
+    try {
+      const { queryMemory, buildMemoryContextString } = await import("../memory");
+      const memCtx = queryMemory(projectRoot, "plan", prompt);
+      executionMemory = buildMemoryContextString(memCtx) ?? undefined;
+    } catch {
+      // Memory is non-critical — proceed without it
+    }
+  }
+
+  const graph = await runDecomposition(
+    prompt,
+    provider,
+    tools,
+    repoContext,
+    ctx,
+    isJson,
+    executionMemory,
+  );
 
   enrichTasksWithMetadata(graph, registry);
   if (!isJson) displayTaskGraph(graph);

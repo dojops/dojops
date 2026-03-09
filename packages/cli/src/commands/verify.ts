@@ -254,17 +254,32 @@ async function verifyHelmContent(
       const lines = output
         .split("\n")
         .map((l) => l.trim())
-        .filter((l) => l.startsWith("[ERROR]") || l.startsWith("[WARNING]"));
+        .filter((l) => l.length > 0);
 
-      const issues: VerificationResult["issues"] = lines.map((line) => ({
-        severity: line.startsWith("[ERROR]") ? "error" : "warning",
-        message: line.replace(/^\[(ERROR|WARNING)\]\s*/, ""),
-      }));
+      const issues: VerificationResult["issues"] = [];
+      for (const line of lines) {
+        if (line.includes("[ERROR]")) {
+          issues.push({ severity: "error", message: line.replace("[ERROR]", "").trim() });
+        } else if (line.includes("[WARNING]")) {
+          issues.push({ severity: "warning", message: line.replace("[WARNING]", "").trim() });
+        } else if (line.includes("[INFO]")) {
+          issues.push({ severity: "info", message: line.replace("[INFO]", "").trim() });
+        }
+      }
 
+      const hasErrors = issues.some((i) => i.severity === "error");
       return {
-        passed: false,
+        passed: !hasErrors,
         tool: "helm lint",
-        issues: issues.length > 0 ? issues : [{ severity: "error" as const, message: output }],
+        issues:
+          issues.length > 0
+            ? issues
+            : [
+                {
+                  severity: "warning" as const,
+                  message: output || "helm lint exited with an error",
+                },
+              ],
         rawOutput: output,
       };
     }

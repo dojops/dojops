@@ -8,6 +8,7 @@ export interface ToolOutput {
   error?: string;
   filesWritten?: string[];
   filesModified?: string[];
+  filesUnchanged?: string[];
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 }
 

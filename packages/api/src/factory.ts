@@ -11,6 +11,7 @@ import {
   SpecialistConfig,
   CIDebugger,
   InfraDiffAnalyzer,
+  DevSecOpsReviewer,
   withRetry,
 } from "@dojops/core";
 import { NoopProvider } from "./noop-provider";
@@ -96,7 +97,7 @@ function buildKeyedProvider(
 
 export function createProvider(options?: ProviderOptions): LLMProvider {
   const providerName = options?.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
-  const model = options?.model ?? process.env.DOJOPS_MODEL;
+  const model = options?.model || process.env.DOJOPS_MODEL || undefined;
   const allowMissing = options?.allowMissing ?? false;
 
   return buildKeyedProvider(providerName, model, options, allowMissing);
@@ -172,4 +173,8 @@ export function createDebugger(provider: LLMProvider): CIDebugger {
 
 export function createDiffAnalyzer(provider: LLMProvider): InfraDiffAnalyzer {
   return new InfraDiffAnalyzer(provider);
+}
+
+export function createReviewer(provider: LLMProvider): DevSecOpsReviewer {
+  return new DevSecOpsReviewer(provider);
 }

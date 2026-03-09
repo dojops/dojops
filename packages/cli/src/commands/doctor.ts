@@ -11,6 +11,7 @@ import { CLIContext } from "../types";
 import { getConfigPath, resolveProvider, resolveOllamaHost } from "../config";
 import { ExitCode } from "../exit-codes";
 import { hasFlag } from "../parser";
+import type { RepoContext } from "@dojops/core";
 import {
   findProjectRoot,
   initProject,
@@ -199,17 +200,79 @@ function resolveSystemToolStatus(
   return { status: "warn", detail: "Unsupported on this platform" };
 }
 
-function checkSystemTools(projectDomains: string[]): Check[] {
+/**
+ * Check if a system tool is actually needed by the project based on what was
+ * detected in the scan — not just broad domain matching.
+ * For example, `circleci` is only relevant if CircleCI CI was detected.
+ */
+function isToolRelevantToProject(toolName: string, repoCtx: RepoContext): boolean {
+  const ciPlatforms = new Set(repoCtx.ci.map((c) => c.platform.toLowerCase()));
+  const hasGitHub = [...ciPlatforms].some((p) => p.includes("github"));
+
+  switch (toolName) {
+    // CI-specific: only if that CI platform is detected
+    case "actionlint":
+      return hasGitHub;
+    case "circleci":
+      return ciPlatforms.has("circleci");
+    case "gh":
+      return hasGitHub || repoCtx.meta.isGitRepo;
+
+    // Infrastructure: only if that IaC tool is detected
+    case "terraform":
+      return repoCtx.infra.hasTerraform;
+    case "ansible":
+      return repoCtx.infra.hasAnsible;
+
+    // Container orchestration: only if K8s/Helm detected
+    case "kubectl":
+      return repoCtx.infra.hasKubernetes || repoCtx.infra.hasHelm;
+    case "helm":
+      return repoCtx.infra.hasHelm;
+
+    // Container: only if Dockerfile detected
+    case "hadolint":
+      return repoCtx.container.hasDockerfile;
+
+    // Scripts: only if shell scripts detected
+    case "shellcheck":
+      return repoCtx.scripts.shellScripts.length > 0;
+
+    // Monitoring: only if Prometheus detected
+    case "promtool":
+      return repoCtx.monitoring.hasPrometheus;
+
+    // Security tools: always relevant for any project
+    case "trivy":
+    case "gitleaks":
+      return true;
+
+    default:
+      return true;
+  }
+}
+
+function checkSystemTools(projectDomains: string[], repoCtx: RepoContext | null): Check[] {
   const domainSet = new Set(projectDomains);
   const toolRegistry = loadToolchainRegistry();
   const results: Check[] = [];
 
   for (const tool of SYSTEM_TOOLS) {
-    if (projectDomains.length > 0) {
+    const { status, detail } = resolveSystemToolStatus(tool, toolRegistry);
+
+    // Always show installed tools, regardless of project relevance
+    if (status === "pass") {
+      results.push({ name: `System: ${tool.name}`, status, detail });
+      continue;
+    }
+
+    // For non-installed tools, only show if relevant to project
+    if (repoCtx) {
+      if (!isToolRelevantToProject(tool.name, repoCtx)) continue;
+    } else if (projectDomains.length > 0) {
       const toolDomains = SYSTEM_TOOL_DOMAINS[tool.name] ?? [];
       if (!toolDomains.some((d) => domainSet.has(d))) continue;
     }
-    const { status, detail } = resolveSystemToolStatus(tool, toolRegistry);
     results.push({ name: `System: ${tool.name}`, status, detail });
   }
 
@@ -347,6 +410,7 @@ async function collectAllChecks(
   ctx: CLIContext,
   projectDomains: string[],
   root: string | null,
+  repoCtx: RepoContext | null,
 ): Promise<Check[]> {
   const { check: providerCheck, provider } = checkProvider(ctx);
   const { check: initCheck } = checkInitialization();
@@ -368,7 +432,7 @@ async function collectAllChecks(
 
   checks.push(
     ...checkBuiltInTools(projectDomains),
-    ...checkSystemTools(projectDomains),
+    ...checkSystemTools(projectDomains, repoCtx),
     ...checkProjectMetrics(root),
   );
 
@@ -430,8 +494,9 @@ async function handleFixMode(
 export async function statusCommand(_args: string[], ctx: CLIContext): Promise<void> {
   const fixMode = hasFlag(_args, "--fix");
   const { root } = checkInitialization();
-  const projectDomains: string[] = root ? (loadContext(root)?.relevantDomains ?? []) : [];
-  const checks = await collectAllChecks(ctx, projectDomains, root);
+  const repoCtx = root ? loadContext(root) : null;
+  const projectDomains: string[] = repoCtx?.relevantDomains ?? [];
+  const checks = await collectAllChecks(ctx, projectDomains, root, repoCtx);
 
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify({ checks }, null, 2));

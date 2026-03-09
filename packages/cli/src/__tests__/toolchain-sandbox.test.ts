@@ -15,7 +15,13 @@ vi.mock("node:fs", async () => {
   };
 });
 
-import { extractTarXz, extractTarGz, extractZip } from "../toolchain-sandbox";
+import {
+  extractTarXz,
+  extractTarGz,
+  extractZip,
+  globalToolchainCtx,
+  projectToolchainCtx,
+} from "../toolchain-sandbox";
 
 describe("toolchain-sandbox", () => {
   beforeEach(() => {
@@ -54,6 +60,34 @@ describe("toolchain-sandbox", () => {
         ["-o", "/tmp/archive.zip", "-d", "/tmp/dest"],
         expect.objectContaining({ timeout: 60_000 }),
       );
+    });
+  });
+
+  describe("ToolchainContext", () => {
+    it("globalToolchainCtx returns paths under ~/.dojops/toolchain", () => {
+      const ctx = globalToolchainCtx();
+      expect(ctx.dir).toContain(".dojops");
+      expect(ctx.dir).toContain("toolchain");
+      expect(ctx.binDir).toBe(`${ctx.dir}/bin`);
+      expect(ctx.registryFile).toBe(`${ctx.dir}/registry.json`);
+      expect(ctx.nodeModules).toBe(`${ctx.dir}/node_modules`);
+      expect(ctx.npmBin).toBe(`${ctx.dir}/node_modules/.bin`);
+    });
+
+    it("projectToolchainCtx returns paths under project/.dojops/toolchain", () => {
+      const ctx = projectToolchainCtx("/tmp/my-project");
+      expect(ctx.dir).toBe("/tmp/my-project/.dojops/toolchain");
+      expect(ctx.binDir).toBe("/tmp/my-project/.dojops/toolchain/bin");
+      expect(ctx.registryFile).toBe("/tmp/my-project/.dojops/toolchain/registry.json");
+      expect(ctx.nodeModules).toBe("/tmp/my-project/.dojops/toolchain/node_modules");
+      expect(ctx.npmBin).toBe("/tmp/my-project/.dojops/toolchain/node_modules/.bin");
+    });
+
+    it("global and project contexts have different dirs", () => {
+      const global = globalToolchainCtx();
+      const project = projectToolchainCtx("/tmp/my-project");
+      expect(global.dir).not.toBe(project.dir);
+      expect(global.binDir).not.toBe(project.binDir);
     });
   });
 });

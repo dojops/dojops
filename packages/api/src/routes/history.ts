@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { HistoryStore } from "../store";
 
-const ALLOWED_TYPES = new Set(["generate", "plan", "debug-ci", "diff", "scan", "chat"]);
+const ALLOWED_TYPES = new Set(["generate", "plan", "debug-ci", "diff", "scan", "chat", "review"]);
 const MAX_LIMIT = 1000;
 
 export function createHistoryRouter(store: HistoryStore): Router {

@@ -15,4 +15,5 @@ export * from "./llm/redact";
 export * from "./llm/sanitizer";
 export * from "./agents";
 export * from "./scanner";
+export * from "./context";
 export * from "./llm/input-validator";

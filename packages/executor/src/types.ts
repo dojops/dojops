@@ -1,6 +1,57 @@
 import { z } from "zod";
 import type { VerificationResult } from "@dojops/sdk";
 
+/** Task risk classification levels, ordered from lowest to highest. */
+export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+/** Numeric ordering for risk comparison. */
+export const RISK_ORDER: Record<RiskLevel, number> = {
+  LOW: 0,
+  MEDIUM: 1,
+  HIGH: 2,
+  CRITICAL: 3,
+};
+
+/** Returns true if `taskRisk` is at or below the `threshold`. */
+export function isRiskAtOrBelow(taskRisk: RiskLevel, threshold: RiskLevel): boolean {
+  return RISK_ORDER[taskRisk] <= RISK_ORDER[threshold];
+}
+
+// ── File path risk classification ─────────────────────────────────
+
+const CRITICAL_PATH_PATTERNS = [
+  /^~?\/?\.ssh\//, // SSH keys
+  /^~?\/?\.gnupg\//, // GPG keys
+  /^\/etc\/shadow/, // System passwords
+  /^\/etc\/passwd/, // System users
+  /^\/etc\/sudoers/, // Sudo config
+  /private[_-]?key/i, // Private key files
+  /\.pem$/, // Certificate files
+  /id_rsa/, // SSH private keys
+];
+
+const HIGH_PATH_PATTERNS = [
+  /\.env$/, // Environment files
+  /\.env\./, // .env.local, .env.production
+  /credentials/i, // Credential files
+  /^\/etc\//, // System config
+  /kubeconfig/i, // Kubernetes config
+  /\.kube\//, // Kubernetes directory
+  /terraform\.tfstate/, // Terraform state
+  /\.tfvars$/, // Terraform variables
+];
+
+/** Classify risk based on file output path. */
+export function classifyPathRisk(filePath: string): RiskLevel {
+  if (CRITICAL_PATH_PATTERNS.some((p) => p.test(filePath))) {
+    return "CRITICAL";
+  }
+  if (HIGH_PATH_PATTERNS.some((p) => p.test(filePath))) {
+    return "HIGH";
+  }
+  return "LOW";
+}
+
 export const ExecutionPolicySchema = z.object({
   allowWrite: z.boolean().default(false),
   allowedWritePaths: z.array(z.string()).default([]),
@@ -17,6 +68,14 @@ export const ExecutionPolicySchema = z.object({
   maxFileSizeBytes: z.number().positive().default(1_048_576),
   requireApproval: z.boolean().default(false),
   skipVerification: z.boolean().default(false),
+  /** Max times to re-generate when verification finds errors (0 = no retries). */
+  maxVerifyRetries: z.number().nonnegative().default(1),
+  /** Approval mode: "always" requires human approval, "risk-based" auto-approves low-risk tasks, "never" skips approval. */
+  approvalMode: z.enum(["always", "risk-based", "never"]).default("always"),
+  /** When approvalMode is "risk-based", tasks at or below this risk level are auto-approved. */
+  autoApproveRiskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
+  /** Max repair attempts when verification fails (critic + re-generate cycle). */
+  maxRepairAttempts: z.number().nonnegative().default(3),
 });
 
 export type ExecutionPolicy = z.infer<typeof ExecutionPolicySchema>;
@@ -58,6 +117,7 @@ export interface ExecutionAuditEntry {
   verification?: VerificationResult;
   filesWritten: string[];
   filesModified: string[];
+  filesUnchanged?: string[];
   durationMs: number;
   toolType?: "built-in" | "custom";
   toolSource?: "global" | "project";

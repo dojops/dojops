@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, LLMUsage, getRequestTimeoutMs } from "./provider";
 import { buildLLMResponse, extractApiError } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
 
@@ -9,7 +9,10 @@ export class GeminiProvider implements LLMProvider {
   private readonly model: string;
 
   constructor(apiKey: string, model = "gemini-2.5-flash") {
-    this.client = new GoogleGenAI({ apiKey });
+    this.client = new GoogleGenAI({
+      apiKey,
+      httpOptions: { timeout: getRequestTimeoutMs() },
+    });
     this.model = model;
   }
 

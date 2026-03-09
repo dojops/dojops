@@ -1,11 +1,9 @@
 import https from "node:https";
 import axios from "axios";
 import { z } from "zod";
-import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, LLMUsage, getRequestTimeoutMs } from "./provider";
 import { buildLLMResponse } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
-
-const OLLAMA_TIMEOUT_MS = 120_000;
 
 function extractUsage(data: Record<string, unknown>): LLMUsage | undefined {
   const prompt = data?.prompt_eval_count;
@@ -56,7 +54,7 @@ export class OllamaProvider implements LLMProvider {
   }
 
   private getAxiosConfig(): Record<string, unknown> {
-    const config: Record<string, unknown> = { timeout: OLLAMA_TIMEOUT_MS };
+    const config: Record<string, unknown> = { timeout: getRequestTimeoutMs("OLLAMA_TIMEOUT") };
     if (this.tlsRejectUnauthorized === false) {
       config.httpsAgent = new https.Agent({ rejectUnauthorized: false });
     }
@@ -64,9 +62,17 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
-    const format = req.schema ? z.toJSONSchema(req.schema) : undefined;
-    // Ollama enforces JSON structure natively via `format` — skip system prompt
-    // augmentation when native format is active to avoid confusing local models.
+    // Ollama enforces JSON structure natively via `format` — but schemas with
+    // Zod transforms (.default(), .transform()) can't be converted to JSON Schema.
+    // Fall back to system prompt augmentation when conversion fails.
+    let format: Record<string, unknown> | undefined;
+    if (req.schema) {
+      try {
+        format = z.toJSONSchema(req.schema) as Record<string, unknown>;
+      } catch {
+        // Schema has transforms — fall back to prompt-based schema injection
+      }
+    }
     const system =
       (format ? (req.system ?? "") : augmentSystemPrompt(req.system, req.schema)) || undefined;
 
@@ -132,9 +138,11 @@ export class OllamaProvider implements LLMProvider {
       );
     }
     if (err.code === "ECONNABORTED") {
-      return new Error(`Ollama request timed out after ${OLLAMA_TIMEOUT_MS / 1000}s`, {
-        cause: err,
-      });
+      const timeoutSec = getRequestTimeoutMs("OLLAMA_TIMEOUT") / 1000;
+      return new Error(
+        `Ollama request timed out after ${timeoutSec}s. Set DOJOPS_REQUEST_TIMEOUT=${timeoutSec * 2} (seconds) to increase.`,
+        { cause: err },
+      );
     }
     return new Error(`Ollama request failed: ${err.message}`, { cause: err });
   }
@@ -144,7 +152,15 @@ export class OllamaProvider implements LLMProvider {
       const response = await axios.get(`${this.baseUrl}/api/tags`, this.getAxiosConfig());
       const models: string[] = (response.data.models ?? []).map((m: { name: string }) => m.name);
       return models.sort((a, b) => a.localeCompare(b));
-    } catch {
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.code === "ECONNREFUSED") {
+        console.error(
+          `[dojops] Cannot connect to Ollama at ${this.baseUrl}. Is the Ollama server running?`,
+        );
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[dojops] Failed to list Ollama models: ${msg}`);
+      }
       return [];
     }
   }

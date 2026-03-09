@@ -237,6 +237,17 @@ export const UpdateSchema = z.object({
   injectAs: z.string().default("existingContent"),
 });
 
+// ── Capabilities (tool metadata for planner/scheduler) ──
+
+export const CapabilitiesSchema = z.object({
+  /** What external effects this tool has when executed. */
+  sideEffects: z.enum(["none", "filesystem", "network", "process"]).default("filesystem"),
+  /** Expected execution time category for scheduling optimization. */
+  runtime: z.enum(["short", "long"]).default("short"),
+});
+
+export type DopsCapabilities = z.infer<typeof CapabilitiesSchema>;
+
 export type DopsUpdate = z.infer<typeof UpdateSchema>;
 
 // ── Frontmatter (YAML section) ───────────────────────
@@ -259,6 +270,7 @@ export const DopsFrontmatterSchema = z.object({
   risk: RiskSchema.optional(),
   execution: ExecutionSchema.optional(),
   update: UpdateSchema.optional(),
+  capabilities: CapabilitiesSchema.optional(),
 });
 
 export type DopsFrontmatter = z.infer<typeof DopsFrontmatterSchema>;
@@ -338,6 +350,7 @@ export const DopsFrontmatterV2Schema = z.object({
   risk: RiskSchema.optional(),
   execution: ExecutionSchema.optional(),
   update: UpdateSchema.optional(),
+  capabilities: CapabilitiesSchema.optional(),
 });
 
 export type DopsFrontmatterV2 = z.infer<typeof DopsFrontmatterV2Schema>;

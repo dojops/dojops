@@ -1,41 +1,57 @@
 import fs from "node:fs";
 import path from "node:path";
+import { parseDojopsMdString } from "@dojops/core";
+import type { RepoContext } from "@dojops/core";
 
-function formatLanguageName(l: unknown): string {
-  if (typeof l === "string") return l;
-  if (
-    l &&
-    typeof l === "object" &&
-    "name" in l &&
-    typeof (l as { name?: string }).name === "string"
-  ) {
-    return (l as { name: string }).name;
-  }
-  return "unknown";
-}
-
-function formatLanguages(languages: unknown): string {
-  if (!Array.isArray(languages)) return String(languages);
-  return languages.map(formatLanguageName).join(", ");
-}
-
-/** Load project context from .dojops/context.json. */
+/** Load project context from DOJOPS.md (preferred) or .dojops/context.json (legacy). */
 function loadProjectContext(rootDir: string, parts: string[]): void {
-  const contextFile = path.join(rootDir, ".dojops", "context.json");
-  if (!fs.existsSync(contextFile)) return;
+  const ctx = loadRepoContext(rootDir);
+  if (!ctx) return;
+
+  parts.push("## Project Context");
+  if (ctx.primaryLanguage) parts.push(`Primary language: ${ctx.primaryLanguage}`);
+  if (ctx.languages?.length > 1) {
+    const others = ctx.languages.filter((l) => l.name !== ctx.primaryLanguage).map((l) => l.name);
+    if (others.length > 0) parts.push(`Other languages: ${others.join(", ")}`);
+  }
+  if (ctx.packageManager) parts.push(`Package manager: ${ctx.packageManager.name}`);
+  if (ctx.ci.length > 0) {
+    const platforms = [...new Set(ctx.ci.map((c) => c.platform))].join(", ");
+    parts.push(`CI/CD: ${platforms}`);
+  }
+  if (ctx.container.hasDockerfile) parts.push("Has Dockerfile");
+  if (ctx.container.hasCompose) parts.push("Has Docker Compose");
+  if (ctx.infra.hasTerraform) parts.push("Has Terraform");
+  if (ctx.infra.hasKubernetes) parts.push("Has Kubernetes");
+  if (ctx.infra.hasHelm) parts.push("Has Helm");
+  if (ctx.infra.hasAnsible) parts.push("Has Ansible");
+  if (ctx.meta.isMonorepo) parts.push("Monorepo structure");
+  if (ctx.llmInsights?.projectDescription) {
+    parts.push(`\nSummary: ${ctx.llmInsights.projectDescription}`);
+  }
+}
+
+/** Try DOJOPS.md first, then fall back to legacy context.json. */
+function loadRepoContext(rootDir: string): RepoContext | null {
+  // Try DOJOPS.md
+  const mdPath = path.join(rootDir, "DOJOPS.md");
+  if (fs.existsSync(mdPath)) {
+    try {
+      const content = fs.readFileSync(mdPath, "utf-8");
+      const { context } = parseDojopsMdString(content, rootDir);
+      if (context) return context;
+    } catch {
+      // Fall through
+    }
+  }
+
+  // Legacy: .dojops/context.json
+  const jsonPath = path.join(rootDir, ".dojops", "context.json");
+  if (!fs.existsSync(jsonPath)) return null;
   try {
-    const ctx = JSON.parse(fs.readFileSync(contextFile, "utf-8"));
-    parts.push("## Project Context");
-    if (ctx.name) parts.push(`Project: ${ctx.name}`);
-    if (ctx.languages?.length) parts.push(`Languages: ${formatLanguages(ctx.languages)}`);
-    if (ctx.packageManagers?.length)
-      parts.push(`Package managers: ${ctx.packageManagers.join(", ")}`);
-    if (ctx.ciPlatforms?.length) parts.push(`CI/CD: ${ctx.ciPlatforms.join(", ")}`);
-    if (ctx.infrastructure?.length) parts.push(`Infrastructure: ${ctx.infrastructure.join(", ")}`);
-    if (ctx.containers?.length) parts.push(`Containers: ${ctx.containers.join(", ")}`);
-    if (ctx.llmSummary) parts.push(`\nSummary: ${ctx.llmSummary}`);
+    return JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as RepoContext;
   } catch {
-    // Skip if corrupt
+    return null;
   }
 }
 

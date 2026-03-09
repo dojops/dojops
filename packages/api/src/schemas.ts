@@ -71,3 +71,23 @@ export const ChatSessionRequestSchema = z.object({
 });
 
 export type ChatSessionRequest = z.infer<typeof ChatSessionRequestSchema>;
+
+export const ReviewRequestSchema = z.object({
+  /** Files to review. If empty/omitted AND autoDiscover is true, scans the project. */
+  files: z
+    .array(
+      z.object({
+        path: z.string().min(1, "file path is required"),
+        content: z.string().optional(),
+      }),
+    )
+    .max(100, "too many files (max 100)")
+    .optional()
+    .default([]),
+  /** Auto-discover DevOps config files in the project directory. Default: true. */
+  autoDiscover: z.boolean().optional().default(true),
+  /** Use Context7 for documentation augmentation. */
+  useContext7: z.boolean().optional().default(false),
+});
+
+export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;

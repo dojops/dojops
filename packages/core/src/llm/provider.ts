@@ -1,5 +1,28 @@
 import { z } from "zod";
 
+/**
+ * Returns the request timeout in milliseconds.
+ * Priority: provider-specific env > DOJOPS_REQUEST_TIMEOUT env > defaultMs
+ * Env values are in seconds for user convenience.
+ */
+export function getRequestTimeoutMs(providerEnvVar?: string, defaultMs = 300_000): number {
+  // Check provider-specific env first (e.g. OLLAMA_TIMEOUT)
+  if (providerEnvVar) {
+    const specific = process.env[providerEnvVar];
+    if (specific !== undefined) {
+      const parsed = Number(specific);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed * 1000;
+    }
+  }
+  // Check generic DOJOPS_REQUEST_TIMEOUT
+  const generic = process.env.DOJOPS_REQUEST_TIMEOUT;
+  if (generic !== undefined) {
+    const parsed = Number(generic);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed * 1000;
+  }
+  return defaultMs;
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;

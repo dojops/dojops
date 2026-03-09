@@ -1,6 +1,6 @@
 # Specialist Agents
 
-DojOps includes 16 built-in specialist agents for intelligent prompt routing, plus support for user-defined **custom agents**. Each agent is a domain expert with a tailored system prompt, keyword set, and optional tool dependencies.
+DojOps includes 17 built-in specialist agents for intelligent prompt routing, plus support for user-defined **custom agents**. Each agent is a domain expert with a tailored system prompt, keyword set, and optional tool dependencies.
 
 ---
 
@@ -37,6 +37,7 @@ The selected agent's system prompt is prepended to the LLM request, providing do
 | 14  | `appsec-specialist`        | application-security    | OWASP Top 10, SAST/DAST, code review, pentest methodology, Snyk, Trivy, Gitleaks                     |
 | 15  | `shell-specialist`         | shell-scripting         | Bash/POSIX, ShellCheck, error handling, cron, automation, sed, awk, pipefail                         |
 | 16  | `python-specialist`        | python-scripting        | Type hints, pytest, Poetry, async, Flask, Django, FastAPI, mypy, ruff                                |
+| 17  | `devsecops-reviewer`       | devops-review           | Config review, version validation, deprecated syntax, security audit, Context7 docs                  |
 
 ---
 
@@ -44,24 +45,25 @@ The selected agent's system prompt is prepended to the LLM request, providing do
 
 Each agent is matched by the following keyword sets:
 
-| Agent                      | Keywords                                                                                                                                           |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ops-cortex`               | plan, decompose, break down, steps, orchestrate, coordinate, multi-step, project, strategy, roadmap, migration plan, goal, end-to-end, full stack  |
-| `terraform-specialist`     | terraform, infrastructure, iac, hcl, provision, resource, module, state, backend, workspace, tf, provider, data source, output, variable           |
-| `kubernetes-specialist`    | kubernetes, k8s, pod, deployment, service, helm, ingress, namespace, kubectl, statefulset, daemonset, hpa, kustomize, operator, crd                |
-| `cicd-specialist`          | ci, cd, pipeline, github actions, build, deploy, release, continuous, jenkins, gitlab ci, artifact, workflow, cache, matrix, runner                |
-| `security-auditor`         | security, audit, vulnerability, secret, scan, firewall, iam, rbac, cve, threat, penetration, hardening, encryption, tls, certificate               |
-| `observability-specialist` | monitoring, logging, alerting, tracing, prometheus, grafana, datadog, observability, metrics, dashboard, slo, sli, opentelemetry, loki, elk        |
-| `docker-specialist`        | docker, dockerfile, container, image, compose, registry, ecr, gcr, buildkit, multi-stage, distroless, alpine, buildx, layer                        |
-| `cloud-architect`          | aws, gcp, azure, cloud, architect, serverless, lambda, s3, ec2, vpc, region, cost, well-architected, migration, landing zone, multi-cloud          |
-| `network-specialist`       | dns, load balancer, vpn, vpc, subnet, cdn, nginx, traefik, route53, peering, proxy, network, gateway, ssl, http                                    |
-| `database-specialist`      | database, postgres, mysql, redis, dynamodb, mongodb, rds, cache, backup, replication, migration, schema, sql, nosql, elasticsearch                 |
-| `gitops-specialist`        | gitops, argocd, flux, reconciliation, sync, promotion, drift, declarative, sealed secrets, sops, rollout, flagger, kustomization, image automation |
-| `compliance-auditor`       | compliance, soc2, hipaa, pci, gdpr, policy, governance, regulation, opa, rego, kyverno, sentinel, cis benchmark, audit trail                       |
-| `ci-debugger`              | debug, error, failed, failure, log, broken, fix, timeout, flaky, crash, exit code, stack trace, oom, ci error                                      |
-| `appsec-specialist`        | appsec, owasp, xss, injection, csrf, ssrf, pentest, sast, dast, code review, secure coding, exploit, snyk, trivy, gitleaks                         |
-| `shell-specialist`         | bash, shell, shellcheck, sh, zsh, posix, script, cron, sed, awk, grep, pipefail, trap, shebang                                                     |
-| `python-specialist`        | python, pip, pytest, mypy, ruff, poetry, venv, asyncio, flask, django, fastapi, pep8, pylint, typer                                                |
+| Agent                      | Keywords                                                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ops-cortex`               | plan, decompose, break down, steps, orchestrate, coordinate, multi-step, project, strategy, roadmap, migration plan, goal, end-to-end, full stack                               |
+| `terraform-specialist`     | terraform, infrastructure, iac, hcl, provision, resource, module, state, backend, workspace, tf, provider, data source, output, variable                                        |
+| `kubernetes-specialist`    | kubernetes, k8s, pod, deployment, service, helm, ingress, namespace, kubectl, statefulset, daemonset, hpa, kustomize, operator, crd                                             |
+| `cicd-specialist`          | ci, cd, pipeline, github actions, build, deploy, release, continuous, jenkins, gitlab ci, artifact, workflow, cache, matrix, runner                                             |
+| `security-auditor`         | security, audit, vulnerability, secret, scan, firewall, iam, rbac, cve, threat, penetration, hardening, encryption, tls, certificate                                            |
+| `observability-specialist` | monitoring, logging, alerting, tracing, prometheus, grafana, datadog, observability, metrics, dashboard, slo, sli, opentelemetry, loki, elk                                     |
+| `docker-specialist`        | docker, dockerfile, container, image, compose, registry, ecr, gcr, buildkit, multi-stage, distroless, alpine, buildx, layer                                                     |
+| `cloud-architect`          | aws, gcp, azure, cloud, architect, serverless, lambda, s3, ec2, vpc, region, cost, well-architected, migration, landing zone, multi-cloud                                       |
+| `network-specialist`       | dns, load balancer, vpn, vpc, subnet, cdn, nginx, traefik, route53, peering, proxy, network, gateway, ssl, http                                                                 |
+| `database-specialist`      | database, postgres, mysql, redis, dynamodb, mongodb, rds, cache, backup, replication, migration, schema, sql, nosql, elasticsearch                                              |
+| `gitops-specialist`        | gitops, argocd, flux, reconciliation, sync, promotion, drift, declarative, sealed secrets, sops, rollout, flagger, kustomization, image automation                              |
+| `compliance-auditor`       | compliance, soc2, hipaa, pci, gdpr, policy, governance, regulation, opa, rego, kyverno, sentinel, cis benchmark, audit trail                                                    |
+| `ci-debugger`              | debug, error, failed, failure, log, broken, fix, timeout, flaky, crash, exit code, stack trace, oom, ci error                                                                   |
+| `appsec-specialist`        | appsec, owasp, xss, injection, csrf, ssrf, pentest, sast, dast, code review, secure coding, exploit, snyk, trivy, gitleaks                                                      |
+| `shell-specialist`         | bash, shell, shellcheck, sh, zsh, posix, script, cron, sed, awk, grep, pipefail, trap, shebang                                                                                  |
+| `python-specialist`        | python, pip, pytest, mypy, ruff, poetry, venv, asyncio, flask, django, fastapi, pep8, pylint, typer                                                                             |
+| `devsecops-reviewer`       | review, check, validate, verify, audit, outdated, deprecated, version, lint, best practices, config review, devsecops, devops review, security review, upgrade, update versions |
 
 ---
 
@@ -131,7 +133,7 @@ dojops plan "Set up end-to-end CI/CD with Docker and Kubernetes"
 
 ## Custom Agents
 
-In addition to the 16 built-in agents, you can create your own custom agents. Custom agents participate in the same keyword-based routing as built-in agents and can even override built-in agents by name.
+In addition to the 17 built-in agents, you can create your own custom agents. Custom agents participate in the same keyword-based routing as built-in agents and can even override built-in agents by name.
 
 ### Agent Definition Format
 

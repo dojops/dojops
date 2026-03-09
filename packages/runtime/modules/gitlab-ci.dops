@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: gitlab-ci
-  version: 2.0.0
+  version: 2.1.0
   description: "Generate GitLab CI/CD pipeline configurations"
   author: dojops
   license: MIT
@@ -17,6 +17,14 @@ context:
     Generate a valid GitLab CI/CD pipeline YAML file.
     Output raw YAML content directly — do NOT wrap in JSON or code fences.
     The output must be a valid .gitlab-ci.yml that GitLab can parse.
+
+    Detect the project type from context and generate the appropriate pipeline:
+    - **Node.js**: npm ci, npm test, node:20 image, cache node_modules
+    - **Python**: pip install, pytest, python:3.12 image, cache .pip
+    - **Java/Maven**: mvn verify, maven:3-eclipse-temurin image, cache .m2
+    - **Go**: go build, go test, golang image, cache go/pkg/mod
+    - **Docker**: docker build/push with DinD or kaniko, multi-stage
+    - **Monorepo**: changes: keyword for path-based triggers, child pipelines
   bestPractices:
     - Define clear pipeline stages (build, test, deploy)
     - Use caching to speed up dependency installation
@@ -27,9 +35,12 @@ context:
     - Use environment keywords for deployment tracking
     - Pipeline must define stages
     - Jobs should have descriptive names
+    - Use extends or include for reusable job templates
+    - Use needs for DAG-based pipeline execution (faster than stage ordering)
+    - Use variables with protected/masked flags for sensitive values
   context7Libraries:
     - name: gitlab-ci
-      query: "GitLab CI YAML syntax, stages, jobs, rules, caching, artifacts, environments"
+      query: "GitLab CI YAML syntax stages jobs, rules changes, caching artifacts, environments, extends include, needs DAG, parallel matrix, services, child pipelines"
 
 files:
   - path: ".gitlab-ci.yml"

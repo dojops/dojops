@@ -5,6 +5,7 @@ import {
   buildBinaryPathInArchive,
   isToolSupportedOnCurrentPlatform,
   SYSTEM_TOOLS,
+  BINARY_TO_SYSTEM_TOOL,
   type ArchiveType,
 } from "../../agents/system-tools";
 
@@ -162,6 +163,30 @@ describe("system-tools", () => {
 
     it("builds correct circleci download URL", () => {
       expectDownloadUrl("circleci", "0.1.34770", ["CircleCI-Public/circleci-cli", "0.1.34770"]);
+    });
+  });
+
+  describe("BINARY_TO_SYSTEM_TOOL mapping", () => {
+    it("maps ansible companion binaries to ansible tool", () => {
+      expect(BINARY_TO_SYSTEM_TOOL["ansible-playbook"]).toBe("ansible");
+      expect(BINARY_TO_SYSTEM_TOOL["ansible-lint"]).toBe("ansible");
+      expect(BINARY_TO_SYSTEM_TOOL["ansible-galaxy"]).toBe("ansible");
+      expect(BINARY_TO_SYSTEM_TOOL["ansible-vault"]).toBe("ansible");
+    });
+
+    it("maps direct binaries to their tool names", () => {
+      expect(BINARY_TO_SYSTEM_TOOL["terraform"]).toBe("terraform");
+      expect(BINARY_TO_SYSTEM_TOOL["kubectl"]).toBe("kubectl");
+      expect(BINARY_TO_SYSTEM_TOOL["helm"]).toBe("helm");
+      expect(BINARY_TO_SYSTEM_TOOL["hadolint"]).toBe("hadolint");
+      expect(BINARY_TO_SYSTEM_TOOL["actionlint"]).toBe("actionlint");
+    });
+
+    it("all mapped tool names exist in SYSTEM_TOOLS", () => {
+      const toolNames = new Set(SYSTEM_TOOLS.map((t) => t.name));
+      for (const toolName of Object.values(BINARY_TO_SYSTEM_TOOL)) {
+        expect(toolNames.has(toolName)).toBe(true);
+      }
     });
   });
 

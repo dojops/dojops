@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
@@ -17,12 +18,19 @@ import {
 import { ExitCode, CLIError } from "../exit-codes";
 
 function restoreBackup(filePath: string): boolean {
+  // Try .bak file first (legacy)
   const bakPath = `${filePath}.bak`;
   if (fs.existsSync(bakPath)) {
     fs.renameSync(bakPath, filePath);
     return true;
   }
-  return false;
+  // Fallback: restore from git (current approach — no .bak files)
+  try {
+    execFileSync("git", ["checkout", "HEAD", "--", filePath], { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isWithinProject(file: string, root: string): boolean {
@@ -126,7 +134,7 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
   const lines: string[] = [];
   for (const f of filesToDelete) lines.push(`  ${pc.red("-")} ${f}`);
   for (const f of filesToRestore)
-    lines.push(`  ${pc.yellow("↩")} ${f} ${pc.dim("(restore from .bak)")}`);
+    lines.push(`  ${pc.yellow("↩")} ${f} ${pc.dim("(restore from git)")}`);
   p.note(lines.join("\n"), pc.yellow(`Rollback plan ${planId}`));
 
   if (dryRun) {

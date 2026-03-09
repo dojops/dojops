@@ -24,6 +24,8 @@ import {
   checkGitDirty,
   loadScanReport,
   isValidScanId,
+  saveLastGeneration,
+  loadLastGeneration,
   PlanState,
   SessionState,
 } from "../state";
@@ -510,5 +512,57 @@ describe("S5: isValidScanId and loadScanReport path traversal", () => {
     const report = loadScanReport(tmpDir, "scan-abc12345");
     expect(report).not.toBeNull();
     expect(report!.id).toBe("scan-abc12345");
+  });
+});
+
+describe("saveLastGeneration / loadLastGeneration", () => {
+  it("round-trips generation data", () => {
+    initProject(tmpDir);
+    const gen = {
+      timestamp: new Date().toISOString(),
+      prompt: "create terraform config",
+      toolName: "terraform",
+      content: 'resource "aws_s3_bucket" "b" {}',
+      filesWritten: ["main.tf"],
+      contentHash: "abc123",
+    };
+    saveLastGeneration(tmpDir, gen);
+    const loaded = loadLastGeneration(tmpDir);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.prompt).toBe("create terraform config");
+    expect(loaded!.toolName).toBe("terraform");
+    expect(loaded!.content).toContain("aws_s3_bucket");
+  });
+
+  it("returns null when file does not exist", () => {
+    initProject(tmpDir);
+    expect(loadLastGeneration(tmpDir)).toBeNull();
+  });
+
+  it("skips saving when content exceeds size limit", () => {
+    initProject(tmpDir);
+    const gen = {
+      timestamp: new Date().toISOString(),
+      prompt: "huge",
+      content: "x".repeat(200_000),
+      filesWritten: [],
+      contentHash: "big",
+    };
+    saveLastGeneration(tmpDir, gen);
+    expect(loadLastGeneration(tmpDir)).toBeNull();
+  });
+
+  it("adds last-generation.json to .gitignore", () => {
+    initProject(tmpDir);
+    const gen = {
+      timestamp: new Date().toISOString(),
+      prompt: "test",
+      content: "hello",
+      filesWritten: [],
+      contentHash: "h",
+    };
+    saveLastGeneration(tmpDir, gen);
+    const gitignore = fs.readFileSync(path.join(tmpDir, ".dojops", ".gitignore"), "utf-8");
+    expect(gitignore).toContain("last-generation.json");
   });
 });

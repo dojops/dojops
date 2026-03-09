@@ -4,8 +4,8 @@ kind: tool
 
 meta:
   name: helm
-  version: 2.0.0
-  description: "Generate Helm chart scaffolding with values and templates"
+  version: 2.1.0
+  description: "Generate Helm chart scaffolding with values, templates, and dependencies"
   author: dojops
   license: MIT
   tags: [helm, kubernetes, k8s, chart, package]
@@ -14,36 +14,58 @@ context:
   technology: Helm
   fileFormat: json
   outputGuidance: |
-    Generate Helm chart files as a JSON object with file paths as keys and file contents as string values.
-    Format: { "files": { "Chart.yaml": "content...", "values.yaml": "content...", "templates/deployment.yaml": "content..." } }
-    Each file content must be a valid file string (YAML for Chart.yaml and values.yaml, Go templates for templates/).
-    Do NOT output raw YAML — use the JSON wrapper to enable multi-file output.
+    Output a JSON object: { "files": { "Chart.yaml": "...", "values.yaml": "...", "templates/deployment.yaml": "..." } }
+    Core files: Chart.yaml (apiVersion: v2), values.yaml, templates/deployment.yaml, templates/service.yaml, templates/_helpers.tpl.
+    Add templates/ingress.yaml, serviceaccount.yaml, hpa.yaml, configmap.yaml, NOTES.txt, or tests/ only when relevant.
+    Do NOT output raw YAML — always use the JSON wrapper.
   bestPractices:
-    - Define sensible defaults in values.yaml that work out of the box
-    - Set resource requests and limits in values
-    - Use named templates in _helpers.tpl for DRY label management
-    - Include standard Kubernetes labels (app.kubernetes.io/*)
-    - Define health check probes in deployment template
-    - Make image tag configurable via values
-    - Include NOTES.txt with post-install instructions
-    - Image tags should be specific versions, not :latest
+    - Use apiVersion v2 in Chart.yaml with proper type (application or library)
+    - Define sensible defaults in values.yaml that work out of the box for local development
+    - Set resource requests and limits in values (resources.requests/limits)
+    - Use named templates in _helpers.tpl for DRY label management and fullname generation
+    - Include standard Kubernetes labels (app.kubernetes.io/name, instance, version, component, managed-by)
+    - Define health check probes (readinessProbe, livenessProbe) with configurable paths and ports
+    - Make image repository, tag, and pullPolicy configurable via values
+    - Include NOTES.txt with post-install instructions showing how to access the application
+    - Image tags should be specific versions, not :latest — default to chart appVersion
     - Chart name must be lowercase alphanumeric with hyphens
-    - values.yaml must include image, service, and resources sections
+    - values.yaml must include image, service, resources, and replicaCount sections
+    - Use chart dependencies in Chart.yaml for sub-charts (databases, caches)
+    - Support values.schema.json for input validation when chart has complex values
+    - Use conditional rendering (if .Values.ingress.enabled) for optional resources
   context7Libraries:
     - name: helm
-      query: "Helm chart structure, values.yaml, Go template functions, Chart.yaml"
+      query: "Helm chart structure, Chart.yaml apiVersion v2, values.yaml patterns, Go template functions, named templates _helpers.tpl, chart dependencies, NOTES.txt"
 
 files:
-  - path: "chart/Chart.yaml"
+  - path: "{outputPath}/Chart.yaml"
     format: raw
-  - path: "chart/values.yaml"
+  - path: "{outputPath}/values.yaml"
     format: raw
-  - path: "chart/templates/deployment.yaml"
+  - path: "{outputPath}/templates/deployment.yaml"
     format: raw
-  - path: "chart/templates/service.yaml"
+  - path: "{outputPath}/templates/service.yaml"
     format: raw
-  - path: "chart/templates/_helpers.tpl"
+  - path: "{outputPath}/templates/_helpers.tpl"
     format: raw
+  - path: "{outputPath}/templates/NOTES.txt"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/templates/ingress.yaml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/templates/serviceaccount.yaml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/templates/hpa.yaml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/templates/configmap.yaml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/templates/tests/test-connection.yaml"
+    format: raw
+    conditional: true
 
 detection:
   paths: ["*/values.yaml", "*/Chart.yaml", "Chart.yaml"]
@@ -62,7 +84,7 @@ permissions:
   network: none
 
 scope:
-  write: ["chart/**"]
+  write: ["**/*.yaml", "**/*.yml", "**/*.tpl", "**/*.txt"]
 
 risk:
   level: MEDIUM
@@ -82,7 +104,7 @@ update:
 
 ## Prompt
 
-You are a Helm chart expert. Generate a complete Helm chart.
+You are a Helm chart expert. Generate a complete, production-ready Helm chart.
 
 {outputGuidance}
 
@@ -96,4 +118,4 @@ Project context: {projectContext}
 ## Keywords
 
 helm, chart, values, kubernetes, k8s, package, template,
-deployment, service, ingress, values.yaml, release
+deployment, service, ingress, values.yaml, release, subchart

@@ -110,8 +110,8 @@ describe("Built-in .dops modules", () => {
 });
 
 describe("terraform.dops", () => {
-  it("has context with Terraform technology and HCL format", () => {
-    expectContext("terraform.dops", "Terraform", "hcl");
+  it("has context with Terraform technology and JSON format (multi-file)", () => {
+    expectContext("terraform.dops", "Terraform", "json");
   });
 
   it("has context7Libraries referencing terraform", () => {
@@ -128,12 +128,21 @@ describe("terraform.dops", () => {
 });
 
 describe("github-actions.dops", () => {
-  it("has context with GitHub Actions technology and YAML format", () => {
-    expectContext("github-actions.dops", "GitHub Actions", "yaml");
+  it("has context with GitHub Actions technology and JSON format (multi-file wrapper)", () => {
+    expectContext("github-actions.dops", "GitHub Actions", "json");
   });
 
-  it("has structural verification for on/jobs", () => {
-    expectStructuralPaths("github-actions.dops", ["on", "jobs"]);
+  it("has binary verification with actionlint", () => {
+    const module = parseDopsFileAny(path.join(MODULES_DIR, "github-actions.dops"));
+    expect(module.frontmatter.verification?.binary?.command).toContain("actionlint");
+  });
+
+  it("has multiple file specs including actions and reusable workflows", () => {
+    const module = parseDopsFileAny(path.join(MODULES_DIR, "github-actions.dops"));
+    const paths = module.frontmatter.files.map((f: { path: string }) => f.path);
+    expect(paths.length).toBeGreaterThanOrEqual(5);
+    expect(paths.some((p: string) => p.includes(".github/workflows/"))).toBe(true);
+    expect(paths.some((p: string) => p.includes(".github/actions/"))).toBe(true);
   });
 
   it("has context7Libraries referencing github-actions", () => {
@@ -177,8 +186,8 @@ describe("helm.dops", () => {
 });
 
 describe("ansible.dops", () => {
-  it("has context with Ansible technology and raw format", () => {
-    expectContext("ansible.dops", "Ansible", "raw");
+  it("has context with Ansible technology and JSON format (multi-file wrapper)", () => {
+    expectContext("ansible.dops", "Ansible", "json");
   });
 
   it("has binary verification with ansible-playbook", () => {
@@ -212,8 +221,8 @@ describe("docker-compose.dops", () => {
 });
 
 describe("dockerfile.dops", () => {
-  it("has context with Docker technology and raw format", () => {
-    expectContext("dockerfile.dops", "Docker", "raw");
+  it("has context with Docker technology and JSON format (multi-file wrapper)", () => {
+    expectContext("dockerfile.dops", "Docker", "json");
   });
 
   it("generates raw Dockerfile", () => {
@@ -290,15 +299,15 @@ describe("prometheus.dops", () => {
     expectContext("prometheus.dops", "Prometheus", "json");
   });
 
-  it("has three file specs", () => {
+  it("has four file specs", () => {
     const module = parseV2Module("prometheus.dops");
-    expect(module.frontmatter.files.length).toBe(3);
+    expect(module.frontmatter.files.length).toBe(4);
   });
 
-  it("has conditional alert-rules and alertmanager files", () => {
+  it("has conditional alert-rules, recording-rules, and alertmanager files", () => {
     const module = parseV2Module("prometheus.dops");
     const conditionalFiles = module.frontmatter.files.filter((f) => f.conditional === true);
-    expect(conditionalFiles.length).toBe(2);
+    expect(conditionalFiles.length).toBe(3);
   });
 
   it("has binary verification with promtool", () => {

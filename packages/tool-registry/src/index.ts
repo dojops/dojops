@@ -37,6 +37,8 @@ export interface CreateToolRegistryOptions {
   context7Provider?: DocProvider;
   /** Optional project context string for v2 .dops modules */
   projectContext?: string;
+  /** Callback to auto-install missing verification binaries via toolchain */
+  onBinaryMissing?: (binaryName: string) => Promise<boolean>;
 }
 
 /**
@@ -66,6 +68,7 @@ export function loadBuiltInDopsModules(
                 docAugmenter: options?.docAugmenter,
                 context7Provider: options?.context7Provider,
                 projectContext: options?.projectContext,
+                onBinaryMissing: options?.onBinaryMissing,
               }),
             );
           } else {

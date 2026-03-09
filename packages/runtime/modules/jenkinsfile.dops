@@ -4,56 +4,101 @@ kind: tool
 
 meta:
   name: jenkinsfile
-  version: 2.0.0
-  description: "Generate Jenkins pipeline configurations (Jenkinsfile)"
+  version: 2.1.0
+  description: "Generate Jenkins pipeline configurations, shared libraries, and Groovy pipeline code"
   author: dojops
   license: MIT
-  tags: [jenkins, ci, cd, pipeline, devops, groovy]
+  tags: [jenkins, ci, cd, pipeline, devops, groovy, shared-library]
 
 context:
   technology: Jenkins Pipeline
-  fileFormat: raw
+  fileFormat: json
   outputGuidance: |
-    Generate a valid Jenkinsfile using Declarative Pipeline syntax.
-    Output raw Groovy/Jenkinsfile content directly — do NOT wrap in JSON or code fences.
-    The output must be a valid Jenkinsfile that Jenkins can parse and execute.
-    Use Declarative Pipeline syntax (pipeline { ... }) unless the user explicitly requests Scripted Pipeline.
+    Analyze the user's request to determine what to generate:
+
+    1. **Single Jenkinsfile** (default): If the user asks for a CI/CD pipeline or Jenkinsfile, generate a single Jenkinsfile.
+       Output format: { "files": { "Jenkinsfile": "pipeline { ... }" } }
+
+    2. **Shared Library**: If the user asks for a shared library, global vars, or reusable pipeline steps,
+       generate the standard shared library directory structure:
+       - vars/<name>.groovy — Global variables / pipeline steps callable from any Jenkinsfile
+       - src/org/<package>/<Class>.groovy — Groovy classes with @NonCPS, utility methods, etc.
+       - resources/ files only when explicitly requested
+       Output format: { "files": { "vars/deploy.groovy": "def call(...) { ... }", "vars/buildApp.groovy": "...", "src/org/example/Utils.groovy": "..." } }
+
+    3. **Jenkinsfile + Library**: If the user asks for both a pipeline and shared steps,
+       generate both the Jenkinsfile and vars/ files.
+       Output format: { "files": { "Jenkinsfile": "...", "vars/deploy.groovy": "..." } }
+
+    Always output a JSON object with "files" key. Each value must be valid Groovy/Jenkinsfile content.
+    Do NOT output raw Groovy — use the JSON wrapper for all output modes.
+
+    Detect project type from context to customize the pipeline:
+    - **Java/Maven**: Use `mvn` commands, tools block with Maven/JDK, archiveArtifacts for JARs/WARs
+    - **Java/Gradle**: Use `gradle` commands, tools block with Gradle/JDK
+    - **Node.js**: Use `npm`/`yarn`/`pnpm` commands, tools block with NodeJS
+    - **Python**: Use `pip`/`poetry`/`pipenv`, virtualenv setup, pytest
+    - **Go**: Use `go build`/`go test`, Go tool installation
+    - **Docker**: Use `docker.build()`, docker.withRegistry(), Dockerfile-based builds
+    - **.NET**: Use `dotnet` commands, MSBuild
+    - **Multi-module**: Separate build stages per module, parallel execution
   bestPractices:
-    - Use Declarative Pipeline syntax with pipeline { agent ... stages { ... } }
+    - Use Declarative Pipeline syntax with pipeline { agent ... stages { ... } } unless Scripted is explicitly requested
     - Define explicit agent (e.g., agent any, agent { docker 'image' }, agent { label 'node' })
-    - Organize work into logical stages (Build, Test, Deploy)
-    - Use environment block for environment variables
-    - Use credentials() helper for secrets — never hardcode credentials
-    - Add post block with always, success, failure, cleanup sections
-    - Use when directives to conditionally run stages (branch, expression, etc.)
-    - Use parameters block for user-configurable builds
-    - Use tools block to auto-install JDK, Maven, Gradle, Node.js
-    - Add timeout and retry for flaky steps
-    - Use stash/unstash or archiveArtifacts for passing files between stages
-    - Use parallel blocks for concurrent test execution
-    - Use options block for buildDiscarder, timestamps, disableConcurrentBuilds
+    - Organize work into logical stages (Build, Test, Deploy) with clear separation of concerns
+    - Use environment block for environment variables, never hardcode values in steps
+    - Use credentials() helper for secrets — never hardcode credentials or tokens
+    - Add post block with always (cleanup), success (notifications), failure (alerts) sections
+    - Use when directives to conditionally run stages (branch, expression, changeset, tag)
+    - Use parameters block for user-configurable builds (choice, string, booleanParam)
+    - Use tools block to auto-install JDK, Maven, Gradle, Node.js from Jenkins Global Tool Configuration
+    - Add timeout and retry for flaky steps, wrap deployments in timeout { ... }
+    - Use stash/unstash or archiveArtifacts for passing files between stages and nodes
+    - Use parallel blocks for concurrent test execution across platforms or configurations
+    - Use options block (buildDiscarder, timestamps, disableConcurrentBuilds, skipStagesAfterUnstable)
+    - For shared libraries, use vars/ for global DSL steps with def call() method pattern
+    - Shared library classes in src/ must use proper package structure (org/company/ClassName.groovy)
+    - Use @Library annotation or Jenkinsfile to load shared libraries
+    - Mark CPU-intensive helper methods with @NonCPS to avoid CPS serialization overhead
   context7Libraries:
     - name: jenkins
-      query: "Jenkins Declarative Pipeline syntax, stages, agent, post, when, credentials, parameters"
+      query: "Jenkins Declarative Pipeline syntax, shared libraries vars src directory structure, Groovy scripted pipeline, stages parallel agent post credentials parameters"
 
 files:
-  - path: "Jenkinsfile"
+  - path: "{outputPath}/Jenkinsfile"
     format: raw
+    conditional: true
+  - path: "{outputPath}/vars/deploy.groovy"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/vars/buildApp.groovy"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/vars/notify.groovy"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/src/org/pipeline/Utils.groovy"
+    format: raw
+    conditional: true
 
 detection:
-  paths: ["Jenkinsfile"]
+  paths: ["Jenkinsfile", "vars/*.groovy", "src/**/*.groovy"]
   updateMode: true
 
 verification:
-  structural: []
+  binary:
+    command: "npx @jenkins-cd/js-builder lint Jenkinsfile || true"
+    parser: generic-stderr
+    timeout: 30000
+    cwd: output
 
 permissions:
   filesystem: write
-  child_process: none
+  child_process: required
   network: none
 
 scope:
-  write: ["Jenkinsfile"]
+  write: ["Jenkinsfile", "**/Jenkinsfile", "vars/*.groovy", "vars/**/*.groovy", "src/**/*.groovy", "**/*.groovy"]
 
 risk:
   level: LOW
@@ -73,7 +118,7 @@ update:
 
 ## Prompt
 
-You are a Jenkins CI/CD expert specializing in Declarative Pipeline syntax.
+You are a Jenkins CI/CD expert with deep knowledge of Declarative Pipeline, Scripted Pipeline, shared libraries, and Groovy.
 
 {outputGuidance}
 
@@ -88,4 +133,4 @@ Project context: {projectContext}
 
 jenkins, jenkinsfile, pipeline, declarative, scripted, groovy,
 stage, agent, post, build, deploy, ci, cd, continuous-integration,
-multibranch, blue-ocean, shared-library
+multibranch, blue-ocean, shared-library, vars, dsl, credentials

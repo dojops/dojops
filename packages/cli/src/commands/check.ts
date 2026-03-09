@@ -76,9 +76,6 @@ function applyFixContent(fixContent: string, root: string): number {
     const content = match[2];
     const absPath = path.join(root, filePath);
     try {
-      if (fs.existsSync(absPath)) {
-        fs.copyFileSync(absPath, absPath + ".bak");
-      }
       fs.writeFileSync(absPath, content, "utf-8");
       p.log.success(`Fixed: ${pc.cyan(filePath)}`);
       filesFixed++;
@@ -195,7 +192,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   if (!ctx) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `Could not load context.json. Run dojops init to regenerate.`,
+      `Could not load DOJOPS.md or context.json. Run dojops init to regenerate.`,
     );
   }
 

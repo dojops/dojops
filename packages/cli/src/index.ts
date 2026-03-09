@@ -203,6 +203,10 @@ function buildLazyProvider(
       ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
     });
 
+    // Display active provider and model
+    const modelLabel = model ? ` (${model})` : "";
+    p.log.info(`Using ${pc.bold(providerName)}${pc.dim(modelLabel)}`);
+
     const fallbackSpec = globalOpts.fallbackProvider ?? process.env.DOJOPS_FALLBACK_PROVIDER;
     if (fallbackSpec) {
       const fallbackNames = fallbackSpec
@@ -213,7 +217,9 @@ function buildLazyProvider(
       for (const name of fallbackNames) {
         try {
           const fbKey = resolveToken(name, config);
-          chain.push(createProvider({ provider: name, apiKey: fbKey }));
+          // Fallback providers use their own default model — not the primary's DOJOPS_MODEL.
+          // Pass empty string to prevent createProvider from reading DOJOPS_MODEL env.
+          chain.push(createProvider({ provider: name, model: "", apiKey: fbKey }));
         } catch {
           // Skip misconfigured fallback provider
         }
@@ -373,12 +379,14 @@ async function main() {
 }
 
 // Top-level async entry — CJS module, top-level await not supported
-main().catch((err) => {
-  // NOSONAR
-  if (err instanceof CLIError) {
-    if (err.message) console.error(err.message);
-    process.exit(err.exitCode);
-  }
-  console.error(toErrorMessage(err));
-  process.exit(ExitCode.GENERAL_ERROR);
-});
+main()
+  .then(() => process.exit(ExitCode.SUCCESS))
+  .catch((err) => {
+    // NOSONAR
+    if (err instanceof CLIError) {
+      if (err.message) console.error(err.message);
+      process.exit(err.exitCode);
+    }
+    console.error(toErrorMessage(err));
+    process.exit(ExitCode.GENERAL_ERROR);
+  });

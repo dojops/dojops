@@ -4,11 +4,11 @@ kind: tool
 
 meta:
   name: nginx
-  version: 2.0.0
-  description: "Generate Nginx web server configurations"
+  version: 2.1.0
+  description: "Generate Nginx web server and reverse proxy configurations"
   author: dojops
   license: MIT
-  tags: [nginx, web, server, proxy, reverse-proxy]
+  tags: [nginx, web, server, proxy, reverse-proxy, load-balancer]
 
 context:
   technology: Nginx
@@ -17,19 +17,33 @@ context:
     Generate a valid Nginx configuration file.
     Output raw Nginx config content directly — do NOT wrap in JSON or code fences.
     The output must be a valid nginx.conf that nginx can parse.
+
+    Detect the use case from context and generate appropriately:
+    - **Static site**: Root directive, try_files, gzip, cache headers, SPA fallback
+    - **Reverse proxy**: upstream block, proxy_pass, proxy headers (X-Real-IP, X-Forwarded-For/Proto/Host)
+    - **Load balancer**: Multiple upstream servers, balancing method (round-robin, least_conn, ip_hash)
+    - **SSL/TLS termination**: listen 443 ssl, certificate paths, modern TLS protocols, HSTS
+    - **API gateway**: Multiple location blocks, rate limiting, CORS headers, WebSocket upgrade
+    - **WebSocket proxy**: proxy_http_version 1.1, Upgrade/Connection headers, map directive
   bestPractices:
-    - Enable gzip compression for text-based content types
-    - Set appropriate worker_connections and worker_processes
-    - Configure proper logging with access and error logs
-    - Use upstream blocks for load balancing
-    - Set appropriate timeouts for proxy connections
-    - Include security headers (X-Frame-Options, X-Content-Type-Options, etc.)
-    - Use try_files for static file serving with fallback
-    - Server blocks must specify listen directive
-    - Proxy configurations must include appropriate headers
+    - Enable gzip compression for text-based content types (text/plain, text/css, application/json, application/javascript)
+    - Set worker_processes auto and worker_connections appropriate to expected load (1024+)
+    - Configure separate access and error logs with appropriate log levels
+    - Use upstream blocks for load balancing with health checks
+    - Set appropriate proxy timeouts (proxy_connect_timeout, proxy_send_timeout, proxy_read_timeout)
+    - Include security headers (X-Frame-Options DENY, X-Content-Type-Options nosniff, X-XSS-Protection, Referrer-Policy, Content-Security-Policy)
+    - Use try_files for static file serving with SPA fallback ($uri $uri/ /index.html)
+    - Server blocks must specify listen directive and server_name
+    - Proxy configurations must forward real client info (X-Real-IP, X-Forwarded-For, X-Forwarded-Proto, Host)
+    - Use TLS 1.2+ only (ssl_protocols TLSv1.2 TLSv1.3), disable weak ciphers
+    - Add HSTS header (Strict-Transport-Security max-age=31536000) for HTTPS sites
+    - Redirect HTTP to HTTPS with 301 redirect in separate server block
+    - Use rate limiting (limit_req_zone, limit_req) to protect against abuse
+    - For WebSocket, use map $http_upgrade $connection_upgrade pattern
+    - Set client_max_body_size appropriate to the application (default 1m is often too small)
   context7Libraries:
     - name: nginx
-      query: "Nginx configuration syntax, server blocks, location, upstream, proxy_pass, SSL/TLS"
+      query: "Nginx configuration reverse proxy upstream, SSL/TLS termination certificates, server blocks location, load balancing, rate limiting limit_req_zone, WebSocket proxy upgrade, security headers, gzip compression"
 
 files:
   - path: "nginx.conf"
@@ -72,7 +86,7 @@ update:
 
 ## Prompt
 
-You are an Nginx expert. Generate a production-ready Nginx configuration.
+You are an Nginx expert specializing in web serving, reverse proxying, load balancing, and SSL/TLS configuration.
 
 {outputGuidance}
 
@@ -86,4 +100,5 @@ Project context: {projectContext}
 ## Keywords
 
 nginx, web, server, proxy, reverse-proxy, load-balancer,
-upstream, location, ssl, tls, https, configuration, conf
+upstream, location, ssl, tls, https, configuration, conf,
+rate-limit, websocket, gzip, security-headers

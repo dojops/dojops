@@ -4,7 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { runBin } from "./safe-exec";
 import { writeFileOwnerOnly } from "./secure-fs";
-import { RepoContextSchemaV1, RepoContextSchemaV2 } from "@dojops/core";
+import { RepoContextSchemaV1, RepoContextSchemaV2, parseDojopsMdString } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 
 // ── User identity ─────────────────────────────────────────────────
@@ -212,6 +212,7 @@ export function initProject(rootDir: string): string[] {
     path.join(base, "artifacts"),
     path.join(base, "sessions"),
     path.join(base, "sbom"),
+    path.join(base, "memory"),
   ];
 
   const created: string[] = [];
@@ -241,7 +242,7 @@ export function initProject(rootDir: string): string[] {
   if (!fs.existsSync(gitignore)) {
     fs.writeFileSync(
       gitignore,
-      "# DojOps project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\naudit-key\n",
+      "# DojOps project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\nmemory/\naudit-key\n",
     );
     created.push(".dojops/.gitignore");
   }
@@ -264,6 +265,48 @@ export function saveSession(rootDir: string, session: SessionState): void {
   const file = path.join(dojopsDir(rootDir), "session.json");
   session.updatedAt = new Date().toISOString();
   fs.writeFileSync(file, JSON.stringify(session, null, 2) + "\n");
+}
+
+// ── Last Generation (cross-command memory) ─────────────────────────
+
+export interface LastGeneration {
+  timestamp: string;
+  prompt: string;
+  toolName?: string;
+  agentName?: string;
+  content: string;
+  filesWritten: string[];
+  contentHash: string;
+}
+
+const MAX_LAST_GEN_SIZE = 100 * 1024; // 100 KB cap
+
+export function saveLastGeneration(rootDir: string, gen: LastGeneration): void {
+  if (gen.content.length > MAX_LAST_GEN_SIZE) return; // skip if too large
+  const base = dojopsDir(rootDir);
+  if (!fs.existsSync(base)) return;
+  const file = path.join(base, "last-generation.json");
+  fs.writeFileSync(file, JSON.stringify(gen, null, 2) + "\n");
+
+  // Ensure .gitignore has this entry
+  const gitignore = path.join(base, ".gitignore");
+  try {
+    const content = fs.readFileSync(gitignore, "utf-8");
+    if (!content.includes("last-generation.json")) {
+      fs.writeFileSync(gitignore, content.trimEnd() + "\nlast-generation.json\n");
+    }
+  } catch {
+    // .gitignore doesn't exist yet — will be created at next init
+  }
+}
+
+export function loadLastGeneration(rootDir: string): LastGeneration | null {
+  const file = path.join(dojopsDir(rootDir), "last-generation.json");
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf-8")) as LastGeneration;
+  } catch {
+    return null;
+  }
 }
 
 // ── Plans ──────────────────────────────────────────────────────────
@@ -828,6 +871,19 @@ export function getDojopsVersion(): string {
 // ── Repo context ──────────────────────────────────────────────────
 
 export function loadContext(rootDir: string): RepoContext | null {
+  // Try DOJOPS.md first (new unified format)
+  try {
+    const mdPath = path.join(rootDir, "DOJOPS.md");
+    if (fs.existsSync(mdPath)) {
+      const content = fs.readFileSync(mdPath, "utf-8");
+      const { context } = parseDojopsMdString(content, rootDir);
+      if (context) return context;
+    }
+  } catch {
+    // Fall through to legacy JSON
+  }
+
+  // Legacy: .dojops/context.json
   const file = path.join(dojopsDir(rootDir), "context.json");
   try {
     const data = JSON.parse(fs.readFileSync(file, "utf-8"));

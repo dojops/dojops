@@ -4,46 +4,106 @@ kind: tool
 
 meta:
   name: ansible
-  version: 2.0.0
-  description: "Generate Ansible playbooks for configuration management"
+  version: 2.1.0
+  description: "Generate Ansible playbooks, roles, and inventory for configuration management"
   author: dojops
   license: MIT
-  tags: [ansible, playbook, automation, configuration, devops]
+  tags: [ansible, playbook, automation, configuration, devops, roles]
 
 context:
   technology: Ansible
-  fileFormat: raw
+  fileFormat: json
   outputGuidance: |
-    Generate a valid Ansible playbook in YAML format.
-    Output raw YAML content directly — do NOT wrap in JSON or code fences.
-    The output must be a valid Ansible playbook that ansible-playbook can execute.
+    Analyze the user's request to determine what to generate:
+
+    1. **Simple playbook** (default): Single playbook.yml with all tasks inline.
+       Output format: { "files": { "playbook.yml": "---\n- hosts: all\n  tasks: ..." } }
+
+    2. **Playbook + inventory**: When the user specifies hosts, environments, or infrastructure targets.
+       Output format: { "files": { "playbook.yml": "...", "inventory.yml": "..." } }
+
+    3. **Role-based project**: When the user asks for a role, reusable automation, or structured project.
+       Output format: { "files": {
+         "site.yml": "---\n- hosts: all\n  roles:\n    - common",
+         "roles/common/tasks/main.yml": "...",
+         "roles/common/handlers/main.yml": "...",
+         "roles/common/templates/config.j2": "...",
+         "roles/common/defaults/main.yml": "...",
+         "roles/common/meta/main.yml": "..."
+       } }
+
+    4. **Multi-playbook project**: For complex setups with separate plays for different server groups.
+       Output format: { "files": {
+         "site.yml": "---\n- import_playbook: webservers.yml\n- import_playbook: dbservers.yml",
+         "webservers.yml": "...", "dbservers.yml": "...",
+         "inventory.yml": "...", "group_vars/all.yml": "..."
+       } }
+
+    Always output a JSON object with "files" key. Each value must be valid YAML.
+    Do NOT output raw YAML — use the JSON wrapper for all output modes.
+
+    Detect the automation target from context:
+    - **Web servers**: Apache/Nginx installation, SSL/TLS setup, vhost configuration
+    - **Database servers**: MySQL/PostgreSQL install, user creation, backup scripts
+    - **Application deployment**: Git clone, dependency install, service restart
+    - **System hardening**: SSH config, firewall rules, user management, package updates
+    - **Container hosts**: Docker/Podman install, registry auth, container deployment
+    - **Cloud provisioning**: AWS/GCP/Azure resource setup via cloud modules
   bestPractices:
-    - Use handlers for service restarts triggered by configuration changes
+    - Use handlers for service restarts triggered by configuration changes (notify + handler)
     - Group related tasks with blocks and meaningful names
-    - Use variables for environment-specific values
-    - Prefer modules over raw/shell commands where possible
-    - Use become (sudo) only when necessary and specify become_user
-    - Include tags for selective task execution
-    - Use ansible-vault for sensitive data references
-    - Each task must have a descriptive name
-    - Use fully qualified collection names (e.g., ansible.builtin.apt)
-    - Tasks should be idempotent
-    - No hardcoded passwords or secrets
+    - Use variables for environment-specific values, with defaults in defaults/main.yml
+    - "Prefer modules over raw/shell commands (e.g., ansible.builtin.apt over shell: apt-get)"
+    - Use become (sudo) only when necessary and specify become_user explicitly
+    - Include tags for selective task execution (install, configure, deploy, security)
+    - Use ansible-vault for sensitive data references (passwords, keys, tokens)
+    - Each task must have a descriptive name starting with a verb (Install, Configure, Ensure)
+    - Use fully qualified collection names (e.g., ansible.builtin.apt, community.general.ufw)
+    - Tasks must be idempotent — running twice must produce the same result
+    - No hardcoded passwords, API keys, or secrets in playbooks
+    - Use Jinja2 templates (.j2) for configuration files with variables
+    - Follow standard role directory structure (tasks/, handlers/, templates/, defaults/, meta/)
+    - Use ansible.cfg or inventory groups to manage connection settings, not per-task
   context7Libraries:
     - name: ansible
-      query: "Ansible playbook syntax, modules, handlers, variables, roles, tasks"
+      query: "Ansible playbook roles directory structure, inventory groups host_vars group_vars, modules handlers templates, collections galaxy, Jinja2 templates, become privilege escalation"
 
 files:
-  - path: "playbook.yml"
+  - path: "{outputPath}/playbook.yml"
     format: raw
+    conditional: true
+  - path: "{outputPath}/site.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/inventory.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/group_vars/all.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/roles/common/tasks/main.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/roles/common/handlers/main.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/roles/common/templates/config.j2"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/roles/common/defaults/main.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/roles/common/meta/main.yml"
+    format: raw
+    conditional: true
 
 detection:
-  paths: ["playbook.yml", "*.yml", "site.yml"]
+  paths: ["playbook.yml", "site.yml", "*.yml", "roles/*/tasks/main.yml"]
   updateMode: true
 
 verification:
   binary:
-    command: "ansible-playbook --syntax-check playbook.yml"
+    command: "ansible-playbook --syntax-check {entryFile}"
     parser: ansible-syntax
     timeout: 30000
     cwd: output
@@ -54,7 +114,7 @@ permissions:
   network: none
 
 scope:
-  write: ["*.yml", "*.yaml"]
+  write: ["**/*.yml", "**/*.yaml", "**/*.j2", "**/*.cfg"]
 
 risk:
   level: MEDIUM
@@ -74,7 +134,7 @@ update:
 
 ## Prompt
 
-You are an Ansible expert. Generate a production-ready Ansible playbook.
+You are an Ansible expert specializing in playbooks, roles, and infrastructure automation.
 
 {outputGuidance}
 
@@ -88,4 +148,5 @@ Project context: {projectContext}
 ## Keywords
 
 ansible, playbook, task, handler, role, automation, configuration,
-provision, deploy, inventory, module, variable, become
+provision, deploy, inventory, module, variable, become, galaxy,
+collection, template, jinja2, vault, group_vars

@@ -1,6 +1,6 @@
 # Architecture
 
-DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 13 built-in DevOps tools, a custom tool system for extending with additional tools, 16 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
+DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 13 built-in DevOps tools, a custom tool system for extending with additional tools, 17 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 
@@ -13,7 +13,7 @@ User
 CLI (@clack/prompts TUI) / REST API (Express)
  |
  v
-Agent Router (16 specialist agents, keyword confidence scoring)
+Agent Router (17 specialist agents, keyword confidence scoring)
  |
  v
 Planner Engine (LLM -> TaskGraph -> topological execution)
@@ -46,7 +46,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/scanner        10 security scanners + remediation engine
 @dojops/session        Chat session management + memory + context injection
 @dojops/context        Context7 documentation augmentation for v2 tools
-@dojops/core           LLM abstraction + 6 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/core           LLM abstraction + 6 providers + 17 specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
 ```
 
@@ -114,7 +114,7 @@ All responses pass through `parseAndValidate()` — strips markdown fences, `JSO
 
 ### 2. Multi-Agent System (`@dojops/core`)
 
-16 built-in specialist agents with keyword-based routing and confidence scoring, plus support for custom agents. The `AgentRouter` scores prompts against each agent's keyword list and routes to the highest-confidence match. If no agent exceeds the threshold, it falls back to the general-purpose `DevOpsAgent`.
+17 built-in specialist agents with keyword-based routing and confidence scoring, plus support for custom agents. The `AgentRouter` scores prompts against each agent's keyword list and routes to the highest-confidence match. If no agent exceeds the threshold, it falls back to the general-purpose `DevOpsAgent`.
 
 Custom agents are defined as structured `README.md` files in `.dojops/agents/<name>/` (project) or `~/.dojops/agents/<name>/` (global). They can be created via LLM (`dojops agents create "description"`) or manually (`dojops agents create --manual`). Custom agents participate in the same keyword-based routing as built-in agents and can override built-in agents by name. Discovery is handled by `@dojops/tool-registry`.
 

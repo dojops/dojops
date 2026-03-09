@@ -3,6 +3,8 @@ import { planCommand } from "./plan";
 import { generateCommand } from "./generate";
 import { debugCommand } from "./debug";
 import { analyzeCommand } from "./analyze";
+import { reviewCommand } from "./review";
+import { autoCommand } from "./auto";
 import { configCommand } from "./config-cmd";
 import { authCommand } from "./auth";
 import { serveCommand } from "./serve";
@@ -19,6 +21,8 @@ const registry = new Map<string, CommandEntry>();
 // Top-level commands
 registry.set("plan", planCommand);
 registry.set("generate", generateCommand);
+registry.set("review", reviewCommand);
+registry.set("auto", autoCommand);
 registry.set("config", configCommand);
 registry.set("auth", authCommand);
 registry.set("serve", serveCommand);

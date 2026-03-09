@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: docker-compose
-  version: 2.0.0
+  version: 2.1.0
   description: "Generate Docker Compose multi-container configurations"
   author: dojops
   license: MIT
@@ -17,6 +17,14 @@ context:
     Generate a valid Docker Compose YAML file.
     Output raw YAML content directly — do NOT wrap in JSON or code fences.
     The output must be a valid docker-compose.yml that docker compose can parse.
+    No version field needed — Docker Compose V2 infers the latest schema automatically.
+
+    Detect the application stack from context and generate appropriate services:
+    - **Web + DB**: Application service + database service (PostgreSQL/MySQL/MongoDB) + volumes
+    - **Full stack**: Frontend + backend API + database + cache (Redis/Memcached)
+    - **Microservices**: Multiple application services + message broker (RabbitMQ/Kafka) + API gateway
+    - **Development**: Hot-reload volumes, debug ports, seed/migration containers
+    - **Monitoring stack**: Prometheus + Grafana + exporters
   bestPractices:
     - Use named volumes for persistent data
     - Define health checks for all services
@@ -25,10 +33,13 @@ context:
     - Define explicit networks for service isolation
     - Pin image versions (never use :latest in production)
     - Use depends_on with condition for service ordering
-    - Never hardcode production secrets in compose files
+    - Never hardcode production secrets in compose files (use .env or Docker secrets)
+    - Use profiles for optional services (debug tools, admin UIs)
+    - Set restart policy (unless-stopped or on-failure) for production services
+    - Use build context with Dockerfile for local development services
   context7Libraries:
     - name: docker-compose
-      query: "Docker Compose file syntax, services, volumes, networks, health checks"
+      query: "Docker Compose file syntax services volumes networks, health checks depends_on condition, profiles, environment files, build context, deploy resources limits"
 
 files:
   - path: "docker-compose.yml"

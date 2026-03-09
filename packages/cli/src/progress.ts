@@ -19,10 +19,11 @@ export interface ProgressReporter {
 
 /** Create a progress reporter that adapts to TTY vs non-TTY output. */
 export function createProgressReporter(totalSteps: number): ProgressReporter {
+  const safeTotal = Math.max(totalSteps, 1);
   if (process.stdout.isTTY && !process.env.CI && !process.env.NO_COLOR) {
-    return new TTYProgressReporter(totalSteps);
+    return new TTYProgressReporter(safeTotal);
   }
-  return new PlainProgressReporter(totalSteps);
+  return new PlainProgressReporter(safeTotal);
 }
 
 class PlainProgressReporter implements ProgressReporter {
@@ -51,18 +52,24 @@ class PlainProgressReporter implements ProgressReporter {
   }
 }
 
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 class TTYProgressReporter implements ProgressReporter {
   private completed = 0;
   private currentStep = "";
+  private spinnerIndex = 0;
+  private spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly total: number) {}
 
   start(stepId: string, description: string): void {
     this.currentStep = `${stepId}: ${description}`;
     this.render();
+    this.startSpinner();
   }
 
   complete(stepId: string): void {
+    this.stopSpinner();
     this.clearLine();
     this.completed++;
     const pct = Math.round((this.completed / this.total) * 100);
@@ -71,6 +78,7 @@ class TTYProgressReporter implements ProgressReporter {
   }
 
   fail(stepId: string, error?: string): void {
+    this.stopSpinner();
     this.clearLine();
     this.completed++;
     const suffix = error ? " " + pc.dim(error) : "";
@@ -78,17 +86,36 @@ class TTYProgressReporter implements ProgressReporter {
   }
 
   done(): void {
+    this.stopSpinner();
     this.clearLine();
   }
 
+  private startSpinner(): void {
+    this.stopSpinner();
+    this.spinnerTimer = setInterval(() => {
+      this.spinnerIndex = (this.spinnerIndex + 1) % SPINNER_FRAMES.length;
+      this.render();
+    }, 80);
+  }
+
+  private stopSpinner(): void {
+    if (this.spinnerTimer) {
+      clearInterval(this.spinnerTimer);
+      this.spinnerTimer = null;
+    }
+  }
+
   private render(): void {
-    const pct = Math.round((this.completed / this.total) * 100);
-    const barWidth = 20;
-    const filled = Math.round((this.completed / this.total) * barWidth);
-    const empty = barWidth - filled;
-    const bar = pc.cyan("█".repeat(filled)) + pc.dim("░".repeat(empty));
-    const line = `  ${bar} ${pct}% ${pc.dim(this.currentStep)}`;
-    process.stdout.write(`\r${line}`);
+    const spinner = pc.cyan(SPINNER_FRAMES[this.spinnerIndex]);
+    const termWidth = process.stdout.columns || 80;
+    const progress = `[${this.completed + 1}/${this.total}]`;
+    const label = this.currentStep;
+    // Reserve space for prefix: "  ⠋ [1/3] "
+    const prefixLen = progress.length + 6;
+    const maxLabel = Math.max(termWidth - prefixLen, 20);
+    const truncated = label.length > maxLabel ? label.slice(0, maxLabel - 1) + "…" : label;
+    const line = `  ${spinner} ${pc.yellow(progress)} ${pc.dim(truncated)}`;
+    process.stdout.write(`\r\x1b[K${line}`);
   }
 
   private clearLine(): void {

@@ -9,6 +9,7 @@ import {
   changeColor,
   maskToken,
   wrapForNote,
+  truncateNoteTitle,
 } from "../formatter";
 
 describe("statusIcon", () => {
@@ -289,5 +290,53 @@ describe("wrapForNote", () => {
     setColumns(80);
     const result = wrapForNote("   ");
     expect(result).toBe("   ");
+  });
+});
+
+describe("truncateNoteTitle", () => {
+  let originalColumns: number | undefined;
+
+  beforeEach(() => {
+    originalColumns = process.stdout.columns;
+  });
+
+  afterEach(() => {
+    setColumns(originalColumns);
+  });
+
+  it("returns short title unchanged", () => {
+    setColumns(80);
+    expect(truncateNoteTitle("Short title")).toBe("Short title");
+  });
+
+  it("truncates title exceeding terminal width", () => {
+    setColumns(40);
+    // maxVisible = max(20, 40 - 8) = 32
+    const longTitle = "A".repeat(50);
+    const result = truncateNoteTitle(longTitle);
+    expect(result).toHaveLength(32);
+    expect(result).toMatch(/…$/);
+  });
+
+  it("handles ANSI codes by stripping and truncating visible text", () => {
+    setColumns(40);
+    const ansiTitle = "\x1b[33m" + "B".repeat(50) + "\x1b[0m";
+    const result = truncateNoteTitle(ansiTitle);
+    expect(result).toHaveLength(32);
+    expect(result).toMatch(/…$/);
+  });
+
+  it("defaults to 80 columns when undefined", () => {
+    setColumns(undefined);
+    // maxVisible = max(20, 80 - 8) = 72
+    const title72 = "x".repeat(72);
+    expect(truncateNoteTitle(title72)).toBe(title72);
+  });
+
+  it("enforces minimum maxVisible of 20", () => {
+    setColumns(10);
+    // maxVisible = max(20, 10 - 8) = 20
+    const title20 = "y".repeat(20);
+    expect(truncateNoteTitle(title20)).toBe(title20);
   });
 });

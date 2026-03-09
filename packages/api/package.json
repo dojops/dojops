@@ -47,6 +47,7 @@
     "@dojops/core": "workspace:*",
     "@dojops/executor": "workspace:*",
     "@dojops/planner": "workspace:*",
+    "@dojops/runtime": "workspace:*",
     "@dojops/scanner": "workspace:*",
     "@dojops/sdk": "workspace:*",
     "@dojops/session": "workspace:*",

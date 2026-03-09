@@ -91,6 +91,41 @@ function defineTool(
   };
 }
 
+/**
+ * Callback invoked when a verification binary is not found.
+ * Implementations should attempt to install the tool and return true on success.
+ */
+export type OnBinaryMissing = (binaryName: string) => Promise<boolean>;
+
+/**
+ * Map verification binary names to the system tool that provides them.
+ * Used by auto-install to determine which tool to install when a binary is missing.
+ */
+export const BINARY_TO_SYSTEM_TOOL: Record<string, string> = {
+  // Ansible package provides multiple binaries
+  "ansible-playbook": "ansible",
+  "ansible-lint": "ansible",
+  "ansible-galaxy": "ansible",
+  "ansible-vault": "ansible",
+  "ansible-doc": "ansible",
+  "ansible-config": "ansible",
+  "ansible-console": "ansible",
+  "ansible-inventory": "ansible",
+  "ansible-pull": "ansible",
+  // Direct 1:1 mappings (binary name = tool name)
+  terraform: "terraform",
+  kubectl: "kubectl",
+  helm: "helm",
+  hadolint: "hadolint",
+  trivy: "trivy",
+  gitleaks: "gitleaks",
+  shellcheck: "shellcheck",
+  actionlint: "actionlint",
+  promtool: "promtool",
+  circleci: "circleci",
+  gh: "gh",
+};
+
 export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "terraform",

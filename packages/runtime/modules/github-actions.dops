@@ -4,56 +4,153 @@ kind: tool
 
 meta:
   name: github-actions
-  version: 2.0.0
-  description: "Generate GitHub Actions CI/CD workflow configurations"
+  version: 2.2.0
+  description: "Generate GitHub Actions workflows, composite actions, and reusable workflows"
   author: dojops
   license: MIT
-  tags: [ci, cd, github, workflow, actions]
+  tags: [ci, cd, github, workflow, actions, composite, reusable]
 
 context:
   technology: GitHub Actions
-  fileFormat: yaml
+  fileFormat: json
   outputGuidance: |
-    Generate a complete, valid GitHub Actions workflow YAML file.
-    Output raw YAML content directly — do NOT wrap in JSON or code fences.
-    The output must be a valid .yml file that can be placed directly in .github/workflows/.
+    CRITICAL: You MUST output a JSON object with a "files" key. Each key in "files" is the exact file path, each value is the YAML content as a string.
+
+    Determine the type from the user's request and use the EXACT format shown:
+
+    === TYPE 1: COMPOSITE ACTION ===
+    Triggered by: "composite action", "shared action", "reusable steps", "action.yml"
+    JSON key MUST be: ".github/actions/<action-name>/action.yml"
+    The YAML content MUST have: name, description, inputs, runs.using set to "composite", runs.steps with explicit shell on every run step.
+
+    EXAMPLE — composite action named "setup-node":
+    {
+      "files": {
+        ".github/actions/setup-node/action.yml": "name: Setup Node Environment\ndescription: Sets up Node.js with caching and installs dependencies\ninputs:\n  node-version:\n    description: Node.js version\n    required: false\n    default: '20'\nruns:\n  using: composite\n  steps:\n    - name: Checkout code\n      uses: actions/checkout@v4\n    - name: Setup Node.js\n      uses: actions/setup-node@v4\n      with:\n        node-version: ${{ inputs.node-version }}\n        cache: npm\n    - name: Install dependencies\n      run: npm ci\n      shell: bash\n    - name: Build\n      run: npm run build\n      shell: bash"
+      }
+    }
+
+    === TYPE 2: REUSABLE WORKFLOW ===
+    Triggered by: "reusable workflow", "workflow_call", "shared workflow", "callable workflow"
+    JSON key MUST be: ".github/workflows/reusable-<name>.yml"
+    The YAML content MUST have: on.workflow_call with inputs/secrets, jobs with runs-on.
+
+    EXAMPLE — reusable build workflow:
+    {
+      "files": {
+        ".github/workflows/reusable-build.yml": "name: Reusable Build\non:\n  workflow_call:\n    inputs:\n      node-version:\n        type: string\n        default: '20'\nperms:\n  contents: read\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/setup-node\n        with:\n          node-version: ${{ inputs.node-version }}\n      - run: npm test\n      - run: npm run build"
+      }
+    }
+
+    === TYPE 3: STANDARD WORKFLOW ===
+    Triggered by: "CI pipeline", "workflow", "CI/CD", or default
+    JSON key MUST be: ".github/workflows/<name>.yml" (e.g., ci.yml, deploy.yml)
+    The YAML content MUST have: name, on (triggers), jobs.
+
+    EXAMPLE — CI workflow:
+    {
+      "files": {
+        ".github/workflows/ci.yml": "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n          cache: npm\n      - run: npm ci\n      - run: npm test"
+      }
+    }
+
+    === TYPE 4: UPDATING EXISTING WORKFLOW ===
+    When existing content is provided via {existingContent}, modify the existing YAML.
+    Keep existing jobs/triggers, add or change only what the user requests.
+    The JSON key MUST match the existing file path.
+
+    === RULES ===
+    - The JSON key is the EXACT file path where the file will be written — choose it carefully based on the type
+    - For composite actions: key = ".github/actions/<name>/action.yml" — NOT ".github/workflows/..."
+    - For reusable workflows: key = ".github/workflows/reusable-<name>.yml"
+    - For standard workflows: key = ".github/workflows/<name>.yml"
+    - You may output multiple files in a single JSON object when the user asks for combinations
+    - Do NOT output raw YAML — always use the JSON wrapper { "files": { ... } }
+    - Do NOT copy existing content unchanged — generate what the user actually asked for
+
+    === ACTION VERSION REQUIREMENTS ===
+    Always use the LATEST major version of marketplace actions. Refer to the Context7 documentation
+    section below for current version numbers. If no documentation is available, use the highest
+    major version you are confident about.
+
+    === COMPOSITE ACTION RULES ===
+    - Composite actions MUST be self-contained. Do NOT reference other local composite actions (no ../setup-node or ./.github/actions/other). Use marketplace actions directly.
+    - Every run step MUST have explicit "shell: bash"
+    - NEVER use relative paths like "../" — always use "./.github/actions/<name>" from repo root
+    - Local composite actions are referenced WITHOUT @tag: "uses: ./.github/actions/<name>"
+
+    === UPDATING WORKFLOWS TO CALL COMPOSITE ACTIONS ===
+    When adding a step that uses a local composite action, you MUST:
+    1. Reference it as: uses: ./.github/actions/<name>
+    2. Check the action's inputs section and pass ALL required inputs in the "with:" block
+    3. Use meaningful values from workflow context (${{ github.repository }}, ${{ github.sha }}, inputs, secrets, etc.)
+
+    Detect project type from context:
+    - Node.js: npm ci, npm test, npm run build, node version matrix, caching
+    - Python: pip install, pytest, Python version matrix
+    - Java: Maven/Gradle, JDK version matrix
+    - Go: go build, go test
+    - Docker: docker build/push, buildx
   bestPractices:
     - Use matrix strategy for multi-version testing
     - Enable dependency caching for faster builds
     - Use least-privilege permissions with explicit permissions block
-    - Pin action versions to specific major versions (e.g., actions/checkout@v4)
+    - "Pin ALL marketplace action versions to their LATEST major versions — refer to Context7 documentation for current versions. Never use outdated versions."
     - Separate CI and CD into distinct jobs with appropriate dependencies
     - Use environment protection rules for deployment jobs
     - Add concurrency groups to prevent duplicate workflow runs
     - Each job must specify runs-on
     - Steps should have descriptive names
-    - Always include a name for the workflow
-    - Use pull_request trigger for PRs (not pull_request_target unless needed)
+    - Always include a name for the workflow or action
+    - Composite action run steps MUST specify shell explicitly (e.g., shell bash)
+    - Reusable workflows must define inputs/secrets via workflow_call trigger
+    - "Reference local composite actions with uses: ./.github/actions/<name> — NEVER use relative paths like ../ in composite action steps. Local actions use ./ prefix from repo root, NO @tag needed"
+    - Reference local reusable workflows with uses ./.github/workflows/reusable-<name>.yml
+    - "Composite actions should be SELF-CONTAINED — do not reference other local composite actions from within a composite action. Each action should directly use marketplace actions for its dependencies"
+    - "When adding a step that calls a composite action, ALWAYS pass ALL required inputs listed in the action's inputs section using the with: block. Check the action's action.yml to see which inputs are required"
   context7Libraries:
     - name: github-actions
-      query: "GitHub Actions workflow syntax, jobs, steps, matrix strategy, caching"
+      query: "GitHub Actions workflow syntax, jobs steps matrix strategy, caching dependencies, reusable workflows workflow_call, composite actions using composite, environment secrets, permissions security, current marketplace action versions actions/checkout actions/setup-node actions/setup-python actions/upload-artifact docker/build-push-action"
 
 files:
-  - path: ".github/workflows/ci.yml"
+  - path: "{outputPath}/.github/workflows/ci.yml"
     format: raw
+    conditional: true
+  - path: "{outputPath}/.github/workflows/cd.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/.github/workflows/reusable-build.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/.github/workflows/reusable-deploy.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/.github/workflows/reusable-test.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/.github/actions/setup/action.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/.github/actions/setup-node/action.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/.github/actions/build/action.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/.github/actions/deploy/action.yml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/.github/actions/test/action.yml"
+    format: raw
+    conditional: true
 
 detection:
-  paths: [".github/workflows/*.yml", ".github/workflows/*.yaml"]
+  paths: [".github/workflows/*.yml", ".github/workflows/*.yaml", ".github/actions/*/action.yml"]
   updateMode: true
 
 verification:
-  structural:
-    - path: "on"
-      required: true
-      message: "Missing required 'on' trigger"
-    - path: "jobs"
-      required: true
-      message: "Missing required 'jobs' section"
-    - path: "name"
-      required: true
-      message: "Workflow must have a name"
   binary:
-    command: "actionlint workflow.yml"
+    command: "actionlint .github/workflows/*.yml 2>&1 || true"
     parser: actionlint
     timeout: 30000
     cwd: output
@@ -64,7 +161,7 @@ permissions:
   network: none
 
 scope:
-  write: [".github/workflows/*.yml"]
+  write: ["**/*.yml", "**/*.yaml"]
 
 risk:
   level: LOW
@@ -84,7 +181,7 @@ update:
 
 ## Prompt
 
-You are a CI/CD expert specializing in GitHub Actions workflows.
+You are a CI/CD expert specializing in GitHub Actions workflows, composite actions, and reusable workflows.
 
 {outputGuidance}
 
@@ -98,4 +195,5 @@ Project context: {projectContext}
 ## Keywords
 
 github, actions, workflow, ci, cd, pipeline, build, test, deploy,
-continuous-integration, continuous-deployment, github-actions, gha
+continuous-integration, continuous-deployment, github-actions, gha,
+composite, action, reusable, workflow_call, shared

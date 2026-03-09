@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, getRequestTimeoutMs } from "./provider";
 import { openaiCompatGenerate, openaiCompatListModels } from "./openai-compat";
 
 export class DeepSeekProvider implements LLMProvider {
@@ -8,7 +8,11 @@ export class DeepSeekProvider implements LLMProvider {
   private readonly model: string;
 
   constructor(apiKey: string, model = "deepseek-chat") {
-    this.client = new OpenAI({ apiKey, baseURL: "https://api.deepseek.com/v1" });
+    this.client = new OpenAI({
+      apiKey,
+      baseURL: "https://api.deepseek.com/v1",
+      timeout: getRequestTimeoutMs(),
+    });
     this.model = model;
   }
 

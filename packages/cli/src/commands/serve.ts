@@ -7,6 +7,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createProvider, createRouter, createDebugger, createDiffAnalyzer } from "@dojops/api";
 import { createToolRegistry } from "@dojops/tool-registry";
+import { createAutoInstallHandler } from "../toolchain-sandbox";
 import { CLIContext } from "../types";
 import { writeFileOwnerOnly } from "../secure-fs";
 import { extractFlagValue, hasFlag } from "../parser";
@@ -209,6 +210,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   const registry = createToolRegistry(provider, projectRoot, {
     docAugmenter,
     context7Provider,
+    onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
   });
   const tools = registry.getAll();
   const { router, customAgentNames } = createRouter(provider, projectRoot, docAugmenter);

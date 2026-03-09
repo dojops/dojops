@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import pc from "picocolors";
@@ -12,6 +13,54 @@ import { CommandHandler, CLIContext } from "../types";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { extractFlagValue, hasFlag } from "../parser";
 import { findProjectRoot } from "../state";
+import { truncateNoteTitle } from "../formatter";
+
+type ModuleScope = "global" | "project";
+
+/**
+ * Prompt the user to select global or project scope for module operations.
+ * Returns the base directory for the selected scope.
+ */
+async function selectModuleScope(
+  nonInteractive: boolean,
+  subDir: "modules" | "tools" = "tools",
+): Promise<{ scope: ModuleScope; baseDir: string }> {
+  const globalDir = path.join(os.homedir(), ".dojops", subDir);
+  const projectRoot = findProjectRoot();
+  const projectDir = projectRoot
+    ? path.join(projectRoot, ".dojops", subDir)
+    : path.resolve(".dojops", subDir);
+
+  if (nonInteractive) {
+    return { scope: "global", baseDir: globalDir };
+  }
+
+  const scopeChoice = await p.select({
+    message: "Where should the module be saved?",
+    options: [
+      {
+        value: "global",
+        label: `Global ${pc.dim(`(${globalDir})`)}`,
+        hint: "shared across all projects",
+      },
+      {
+        value: "project",
+        label: `Project ${pc.dim(`(${projectDir})`)}`,
+        hint: "scoped to this project only",
+      },
+    ],
+    initialValue: "global" as string,
+  });
+
+  if (p.isCancel(scopeChoice)) {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+
+  return scopeChoice === "project"
+    ? { scope: "project", baseDir: projectDir }
+    : { scope: "global", baseDir: globalDir };
+}
 
 /**
  * Converts a hyphenated tool name to title case (e.g., "redis-config" → "Redis Config").
@@ -433,8 +482,9 @@ async function scaffoldV2Module(
   fileFormat: FileFormatType,
   outputFilePath: string,
   useLLM: boolean,
+  baseDir?: string,
 ): Promise<void> {
-  const toolsDir = path.resolve(".dojops", "modules");
+  const toolsDir = baseDir ?? path.resolve(".dojops", "modules");
   const dopsPath = path.join(toolsDir, `${toolName}.dops`);
 
   if (fs.existsSync(dopsPath)) {
@@ -505,6 +555,9 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
     );
   }
 
+  // Select scope (global or project)
+  const { baseDir } = await selectModuleScope(isNonInteractive, "modules");
+
   const defaults = applyInitDefaults({
     toolName,
     description,
@@ -525,6 +578,7 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
       fileFormat === "ini" || fileFormat === "toml" ? "raw" : fileFormat,
       legacyPrompt,
       legacyFilePath,
+      baseDir,
     );
   }
 
@@ -536,6 +590,7 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
     fileFormat,
     outputFilePath,
     useLLM,
+    baseDir,
   );
 };
 
@@ -746,8 +801,9 @@ function scaffoldLegacyTool(
   format: string,
   systemPrompt: string,
   filePath: string,
+  baseDir?: string,
 ): void {
-  const toolDir = path.resolve(".dojops", "modules", toolName);
+  const toolDir = path.join(baseDir ?? path.resolve(".dojops", "modules"), toolName);
   if (fs.existsSync(toolDir)) {
     throw new CLIError(ExitCode.VALIDATION_ERROR, `Module directory already exists: ${toolDir}`);
   }
@@ -801,7 +857,7 @@ function scaffoldLegacyTool(
 /**
  * `dojops tools load <path>` — loads a tool from a local directory into .dojops/tools/
  */
-export const toolsLoadCommand: CommandHandler = async (args) => {
+export const toolsLoadCommand: CommandHandler = async (args, ctx) => {
   const sourcePath = args[0];
   if (!sourcePath) {
     p.log.info(`  ${pc.dim("$")} dojops modules load <path>`);
@@ -842,8 +898,9 @@ export const toolsLoadCommand: CommandHandler = async (args) => {
     );
   }
 
-  // Copy to .dojops/tools/<name>/
-  const destDir = path.resolve(".dojops", "tools", toolName);
+  // Select scope (global or project)
+  const { baseDir } = await selectModuleScope(ctx.globalOpts.nonInteractive);
+  const destDir = path.join(baseDir, toolName);
   if (fs.existsSync(destDir)) {
     p.log.warn(`Module "${toolName}" already exists at ${destDir}. Overwriting.`);
     fs.rmSync(destDir, { recursive: true, force: true });
@@ -1107,6 +1164,7 @@ async function downloadAndVerify(
   return { fileBuffer, actualHash, expectedHash };
 }
 
+/** @deprecated Use selectModuleScope instead. Kept for --global flag backward compat. */
 function resolveInstallDir(isGlobal: boolean): string {
   if (isGlobal) {
     return path.join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".dojops", "tools");
@@ -1151,7 +1209,7 @@ function logUpgradeIfExists(destPath: string, version: string): void {
   }
 }
 
-export const toolsInstallCommand: CommandHandler = async (args) => {
+export const toolsInstallCommand: CommandHandler = async (args, ctx) => {
   const toolName = args[0];
   if (!toolName) {
     p.log.info(`  ${pc.dim("$")} dojops modules install <name>`);
@@ -1163,7 +1221,22 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
   if (versionIdx !== -1 && args[versionIdx + 1]) {
     version = args[versionIdx + 1];
   }
-  const isGlobal = args.includes("--global");
+
+  // Support both --global flag (backward compat) and interactive scope prompt
+  const hasGlobalFlag = args.includes("--global");
+  let destDir: string;
+  let loc: string;
+  if (hasGlobalFlag) {
+    destDir = resolveInstallDir(true);
+    loc = "global";
+  } else if (ctx.globalOpts.nonInteractive) {
+    destDir = resolveInstallDir(true);
+    loc = "global";
+  } else {
+    const { scope, baseDir } = await selectModuleScope(false);
+    destDir = baseDir;
+    loc = scope;
+  }
 
   const spinner = p.spinner();
   spinner.start(`Fetching ${pc.cyan(toolName)} from hub...`);
@@ -1185,7 +1258,6 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
     spinner.message("Validating...");
     const module = await parseDownloadedModule(fileBuffer);
 
-    const destDir = resolveInstallDir(isGlobal);
     fs.mkdirSync(destDir, { recursive: true });
     const destPath = path.join(destDir, `${module.frontmatter.meta.name}.dops`);
 
@@ -1193,7 +1265,6 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
     fs.writeFileSync(destPath, fileBuffer);
     spinner.stop("Installed successfully");
 
-    const loc = isGlobal ? "global" : "project";
     p.note(
       [
         `${pc.dim("Name:")}    ${pc.cyan(module.frontmatter.meta.name)}`,
@@ -1250,7 +1321,7 @@ function displaySearchResults(packages: SearchPackage[], query: string, isJson: 
     return `  ${pc.cyan(pkg.name.padEnd(25))} ${version.padEnd(20)} ${stars.padEnd(12)} ${downloads.padEnd(12)} ${desc}`;
   });
 
-  p.note(lines.join("\n"), `Search results for "${query}" (${packages.length})`);
+  p.note(lines.join("\n"), truncateNoteTitle(`Search results for "${query}" (${packages.length})`));
   p.log.info(pc.dim(`Install with: dojops modules install <name>`));
 }
 

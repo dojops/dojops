@@ -109,6 +109,8 @@ export const LLMInsightsSchema = z.object({
     .default([]),
   recommendedAgents: z.array(AgentEntrySchema).optional().default([]),
   notes: z.string().optional(),
+  /** LLM-generated comprehensive project analysis (markdown). */
+  projectAnalysis: z.string().optional(),
 });
 
 // ── Main schemas (V1 + V2) ──────────────────────────────────────────

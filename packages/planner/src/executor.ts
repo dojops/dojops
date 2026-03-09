@@ -38,6 +38,10 @@ function sanitizeRefOutput(value: unknown): unknown {
   return value;
 }
 
+// Keys that should always be read from disk, not from $ref task output.
+// The apply command injects these from the actual files on disk.
+const DISK_SOURCED_KEYS = new Set(["existingContent"]);
+
 function resolveInputRefs(
   input: Record<string, unknown>,
   results: Map<string, TaskResult>,
@@ -45,10 +49,15 @@ function resolveInputRefs(
   const resolved: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
     if (typeof value === "string" && value.startsWith("$ref:")) {
+      // Drop $ref for fields that should come from disk (e.g. existingContent)
+      if (DISK_SOURCED_KEYS.has(key)) continue;
+
       const refId = value.slice(5);
       const refResult = results.get(refId);
       if (refResult === undefined) {
-        throw new Error(`$ref references unknown task: ${refId}`);
+        // LLM hallucinated a $ref to a non-existent task — drop the key
+        // so the tool can fall back to defaults or prompt-based generation
+        continue;
       }
       if (refResult.status === "failed" || refResult.status === "skipped") {
         throw new Error(`$ref:${refId} references a ${refResult.status} task`);
@@ -135,14 +144,22 @@ async function executeInChunks<T>(
   }
 }
 
+export interface PlannerExecutorOptions {
+  /** Timeout in ms for each tool.generate() call (default: unlimited) */
+  generateTimeoutMs?: number;
+}
+
 export class PlannerExecutor {
   private readonly toolMap: Map<string, DevOpsTool>;
+  private readonly generateTimeoutMs: number | undefined;
 
   constructor(
     tools: DevOpsTool[],
     private readonly logger: PlannerLogger = noopLogger,
+    options?: PlannerExecutorOptions,
   ) {
     this.toolMap = new Map(tools.map((t) => [t.name, t]));
+    this.generateTimeoutMs = options?.generateTimeoutMs;
   }
 
   private recordResult(
@@ -210,7 +227,18 @@ export class PlannerExecutor {
         return;
       }
 
-      const output = await tool.generate(resolvedInput);
+      const generatePromise = tool.generate(resolvedInput);
+      const output = this.generateTimeoutMs
+        ? await Promise.race([
+            generatePromise,
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error(`Generate timed out after ${this.generateTimeoutMs}ms`)),
+                this.generateTimeoutMs,
+              ),
+            ),
+          ])
+        : await generatePromise;
       if (output.success) {
         this.recordResult(task, "completed", results, failed, undefined, output.data);
       } else {

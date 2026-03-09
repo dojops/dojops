@@ -516,9 +516,14 @@ describe("config", () => {
   });
 
   describe("loadProfileConfig", () => {
+    beforeEach(() => {
+      // Ensure no local config is discovered (findLocalConfigFile uses fs.existsSync)
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+    });
+
     it("loads named profile when profileName is given", () => {
       const profileConfig = { defaultProvider: "anthropic" };
-      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(profileConfig));
+      vi.mocked(fs.readFileSync).mockReturnValueOnce(JSON.stringify(profileConfig));
       expect(loadProfileConfig("work")).toEqual(profileConfig);
     });
 

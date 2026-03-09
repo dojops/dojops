@@ -12,7 +12,13 @@ vi.mock("fs", async (importOriginal) => {
   };
 });
 
-import { DopsRuntimeV2, DocProvider, stripCodeFences, parseRawContent } from "../runtime";
+import {
+  DopsRuntimeV2,
+  DocProvider,
+  stripCodeFences,
+  parseRawContent,
+  parseMultiFileOutput,
+} from "../runtime";
 import { DopsModuleV2 } from "../spec";
 import type { LLMProvider } from "@dojops/core";
 import * as fs from "node:fs";
@@ -308,6 +314,204 @@ describe("DopsRuntimeV2.execute", () => {
       "utf-8",
     );
   });
+
+  it("skips write and tracks filesUnchanged when content is identical", async () => {
+    const rawContent = 'resource "aws_s3_bucket" "main" {}';
+    const module = createV2Module();
+    const provider = createMockProvider(rawContent);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test" });
+
+    // Simulate existing file with identical content
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(rawContent);
+
+    const result = await runtime.execute({
+      prompt: "Create S3 bucket",
+      existingContent: rawContent,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.filesUnchanged).toEqual(["main.tf"]);
+    expect(result.filesWritten).toHaveLength(0);
+    expect(result.filesModified).toHaveLength(0);
+    // writeFileSync should NOT be called — content unchanged
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("defaults outputPath to current directory when file specs use {outputPath}", async () => {
+    const rawContent = 'resource "aws_s3_bucket" "main" {}';
+    const module = createV2Module({
+      files: [{ path: "{outputPath}/main.tf", format: "raw" as const }],
+    });
+    const provider = createMockProvider(rawContent);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test" });
+
+    const result = await runtime.execute({ prompt: "Create S3 bucket" });
+
+    expect(result.success).toBe(true);
+    // Should write to <basePath>/./main.tf (current directory)
+    expect(fs.writeFileSync).toHaveBeenCalledWith("/tmp/test/main.tf", rawContent, "utf-8");
+  });
+
+  it("uses provided outputPath when given", async () => {
+    const rawContent = 'resource "aws_s3_bucket" "main" {}';
+    const module = createV2Module({
+      files: [{ path: "{outputPath}/main.tf", format: "raw" as const }],
+    });
+    const provider = createMockProvider(rawContent);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test" });
+
+    const result = await runtime.execute({ prompt: "Create S3 bucket", outputPath: "infra" });
+
+    expect(result.success).toBe(true);
+    expect(fs.writeFileSync).toHaveBeenCalledWith("/tmp/test/infra/main.tf", rawContent, "utf-8");
+  });
+
+  it("matches LLM file keys without {outputPath} prefix in multi-file mode", async () => {
+    // LLM generates keys like "Chart.yaml", "templates/deployment.yaml"
+    // but file specs use "{outputPath}/Chart.yaml", "{outputPath}/templates/deployment.yaml"
+    const llmOutput = JSON.stringify({
+      files: {
+        "Chart.yaml": "apiVersion: v2\nname: myapp",
+        "values.yaml": "replicaCount: 1",
+        "templates/deployment.yaml": "kind: Deployment",
+      },
+    });
+    const module = createV2Module({
+      context: {
+        technology: "Helm",
+        fileFormat: "json",
+        outputGuidance: "Output JSON",
+        bestPractices: ["Use v2"],
+      },
+      files: [
+        { path: "{outputPath}/Chart.yaml", format: "raw" as const },
+        { path: "{outputPath}/values.yaml", format: "raw" as const },
+        { path: "{outputPath}/templates/deployment.yaml", format: "raw" as const },
+        { path: "{outputPath}/templates/service.yaml", format: "raw" as const, conditional: true },
+      ],
+    });
+    const provider = createMockProvider(llmOutput);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test" });
+
+    const result = await runtime.execute({ prompt: "Create Helm chart" });
+
+    expect(result.success).toBe(true);
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      "/tmp/test/Chart.yaml",
+      "apiVersion: v2\nname: myapp",
+      "utf-8",
+    );
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      "/tmp/test/templates/deployment.yaml",
+      "kind: Deployment",
+      "utf-8",
+    );
+    // conditional file not in LLM output — should be skipped, not throw
+    expect(fs.writeFileSync).not.toHaveBeenCalledWith(
+      expect.stringContaining("service.yaml"),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("does not set outputPath when file specs don't reference it", async () => {
+    const rawContent = 'resource "aws_s3_bucket" "main" {}';
+    const module = createV2Module({
+      files: [{ path: "main.tf", format: "raw" as const }],
+    });
+    const provider = createMockProvider(rawContent);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test" });
+
+    const result = await runtime.execute({ prompt: "Create S3 bucket" });
+
+    expect(result.success).toBe(true);
+    // Should write directly to basePath/main.tf, no subdirectory
+    expect(fs.writeFileSync).toHaveBeenCalledWith("/tmp/test/main.tf", rawContent, "utf-8");
+  });
+
+  it("writes dynamically-named LLM files not in declared file specs", async () => {
+    // LLM generates a composite action with a name not pre-declared in file specs
+    const llmOutput = JSON.stringify({
+      files: {
+        ".github/actions/docker-build/action.yml": "name: Docker Build\nruns:\n  using: composite",
+        ".github/workflows/ci.yml": "name: CI\non: push",
+      },
+    });
+    const module = createV2Module({
+      context: {
+        technology: "GitHub Actions",
+        fileFormat: "json",
+        outputGuidance: "Output JSON",
+        bestPractices: [],
+      },
+      files: [
+        {
+          path: "{outputPath}/.github/workflows/ci.yml",
+          format: "raw" as const,
+          conditional: true,
+        },
+        {
+          path: "{outputPath}/.github/actions/setup/action.yml",
+          format: "raw" as const,
+          conditional: true,
+        },
+      ],
+      scope: { write: ["**/*.yml", "**/*.yaml"] },
+    });
+    const provider = createMockProvider(llmOutput);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test" });
+
+    const result = await runtime.execute({ prompt: "Create Docker build action" });
+
+    expect(result.success).toBe(true);
+    // Declared file spec matched
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      "/tmp/test/.github/workflows/ci.yml",
+      "name: CI\non: push",
+      "utf-8",
+    );
+    // Dynamic file — not in declared specs but within scope
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      "/tmp/test/.github/actions/docker-build/action.yml",
+      "name: Docker Build\nruns:\n  using: composite",
+      "utf-8",
+    );
+  });
+
+  it("gracefully handles raw non-JSON output when all file specs are conditional", async () => {
+    // LLM returns raw YAML for an analysis/check task instead of JSON wrapper
+    const rawYaml = "name: Setup Node\ndescription: Sets up Node.js\nruns:\n  using: composite";
+    const module = createV2Module({
+      context: {
+        technology: "GitHub Actions",
+        fileFormat: "json",
+        outputGuidance: "Output JSON",
+        bestPractices: [],
+      },
+      files: [
+        {
+          path: "{outputPath}/.github/workflows/ci.yml",
+          format: "raw" as const,
+          conditional: true,
+        },
+        {
+          path: "{outputPath}/.github/actions/setup/action.yml",
+          format: "raw" as const,
+          conditional: true,
+        },
+      ],
+    });
+    const provider = createMockProvider(rawYaml);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test" });
+
+    const result = await runtime.execute({ prompt: "Analyse the existing composite action" });
+
+    // Should succeed without writing any files — raw output is informational
+    expect(result.success).toBe(true);
+    expect(result.filesWritten).toHaveLength(0);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
 });
 
 describe("DopsRuntimeV2.verify", () => {
@@ -401,6 +605,64 @@ describe("DopsRuntimeV2.verify", () => {
   });
 });
 
+describe("DopsRuntimeV2.verify with Context7 doc audit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("appends doc-audit warnings for outdated action versions", async () => {
+    const generated =
+      "name: CI\non:\n  push:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3";
+
+    const module = createV2Module({
+      context: {
+        technology: "GitHub Actions",
+        fileFormat: "yaml",
+        outputGuidance: "Generate YAML",
+        bestPractices: [],
+        context7Libraries: [{ name: "github-actions", query: "workflow syntax" }],
+      },
+    });
+
+    const mockDocProvider: DocProvider = {
+      resolveLibrary: vi.fn().mockResolvedValue({ id: "/github/actions", name: "GitHub Actions" }),
+      queryDocs: vi.fn().mockResolvedValue("Use actions/checkout@v4 for latest features."),
+    };
+
+    const provider = createMockProvider(generated);
+    const runtime = new DopsRuntimeV2(module, provider, {
+      context7Provider: mockDocProvider,
+    });
+
+    // generate() fetches docs and caches them
+    await runtime.generate({ prompt: "Create CI workflow" });
+
+    // verify() uses cached docs for audit
+    const result = await runtime.verify({ generated, isUpdate: false });
+
+    const versionWarnings = result.issues.filter((i) => i.rule === "context7-version-check");
+    expect(versionWarnings).toHaveLength(1);
+    expect(versionWarnings[0].severity).toBe("warning");
+    expect(versionWarnings[0].message).toContain("actions/checkout@v3");
+    expect(versionWarnings[0].message).toContain("v4");
+    // Warnings should not fail verification
+    expect(result.passed).toBe(true);
+  });
+
+  it("does not produce doc-audit issues when no Context7 docs were cached", async () => {
+    const { runtime } = createRuntime(
+      "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest",
+    );
+
+    // No generate() call → no cached docs
+    const result = await runtime.verify("name: CI\non: push");
+    const auditIssues = result.issues.filter(
+      (i) => i.rule === "context7-version-check" || i.rule === "context7-deprecated-check",
+    );
+    expect(auditIssues).toHaveLength(0);
+  });
+});
+
 describe("stripCodeFences", () => {
   it("strips ```yaml fences", () => {
     const input = "```yaml\nkey: value\nother: data\n```";
@@ -485,5 +747,93 @@ describe("parseRawContent", () => {
   it("returns null for toml format", () => {
     const result = parseRawContent('[package]\nname = "test"', "toml");
     expect(result).toBeNull();
+  });
+});
+
+describe("parseMultiFileOutput", () => {
+  it("parses JSON wrapper with files key", () => {
+    const input = JSON.stringify({
+      files: {
+        "main.tf": 'resource "aws_s3_bucket" "b" {}',
+        "variables.tf": 'variable "name" { type = string }',
+      },
+    });
+    const result = parseMultiFileOutput(input);
+    expect(result["main.tf"]).toBe('resource "aws_s3_bucket" "b" {}');
+    expect(result["variables.tf"]).toBe('variable "name" { type = string }');
+  });
+
+  it("parses flat JSON object (no files wrapper)", () => {
+    const input = JSON.stringify({
+      "main.tf": "resource block",
+      "outputs.tf": "output block",
+    });
+    const result = parseMultiFileOutput(input);
+    expect(result["main.tf"]).toBe("resource block");
+    expect(result["outputs.tf"]).toBe("output block");
+  });
+
+  it("strips code fences before parsing", () => {
+    const json = JSON.stringify({ files: { "main.tf": "content" } });
+    const input = "```json\n" + json + "\n```";
+    const result = parseMultiFileOutput(input);
+    expect(result["main.tf"]).toBe("content");
+  });
+
+  it("throws on non-JSON input", () => {
+    expect(() => parseMultiFileOutput("not json at all")).toThrow("valid JSON");
+  });
+
+  it("throws on array input", () => {
+    expect(() => parseMultiFileOutput("[]")).toThrow("JSON object");
+  });
+
+  it("throws when no string values found", () => {
+    expect(() => parseMultiFileOutput('{"files": {"a": 123}}')).toThrow("string values");
+  });
+
+  it("ignores non-string values in files object", () => {
+    const input = JSON.stringify({
+      files: {
+        "main.tf": "valid content",
+        metadata: 42,
+      },
+    });
+    const result = parseMultiFileOutput(input);
+    expect(result["main.tf"]).toBe("valid content");
+    expect(result["metadata"]).toBeUndefined();
+  });
+
+  it("repairs invalid JSON escape sequences from LLM output", () => {
+    // LLMs sometimes produce invalid escapes like \: or \- in YAML content
+    const input = '{"files": {".github/workflows/ci.yml": "name\\: CI\\non\\: push"}}';
+    // \: is invalid escape → repaired by removing backslash → "name: CI\non: push"
+    const result = parseMultiFileOutput(input);
+    expect(result[".github/workflows/ci.yml"]).toBe("name: CI\non: push");
+  });
+
+  it("repairs line continuations in JSON strings from LLM output", () => {
+    // LLMs break long JSON strings across lines using \ + newline
+    const input =
+      '{"files": {".github/actions/build/action.yml": "name: Build\\n\\\n        description: Builds the app"}}';
+    const result = parseMultiFileOutput(input);
+    expect(result[".github/actions/build/action.yml"]).toBe(
+      "name: Build\ndescription: Builds the app",
+    );
+  });
+
+  it("repairs raw control characters inside JSON string values", () => {
+    // LLMs embed literal newlines/tabs inside JSON string values instead of \n/\t
+    // Build a string with actual raw newline and tab inside a JSON string value
+    const raw =
+      '{"files": {".github/workflows/ci.yml": "name: CI' + "\n" + "on:" + "\n" + '  push:"}}';
+    const result = parseMultiFileOutput(raw);
+    expect(result[".github/workflows/ci.yml"]).toBe("name: CI\non:\n  push:");
+  });
+
+  it("repairs raw tabs inside JSON string values", () => {
+    const raw = '{"files": {"Makefile": "build:' + "\n" + "\t" + 'go build ."}}';
+    const result = parseMultiFileOutput(raw);
+    expect(result["Makefile"]).toBe("build:\n\tgo build .");
   });
 });

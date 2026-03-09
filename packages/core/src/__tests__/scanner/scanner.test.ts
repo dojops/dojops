@@ -915,11 +915,11 @@ describe("generateDirectoryTree", () => {
 // ── enrichWithLLM ───────────────────────────────────────────────────
 
 describe("enrichWithLLM", () => {
-  it("calls provider with scan data and returns structured insights", async () => {
+  it("calls provider twice (metadata + analysis) and returns combined insights", async () => {
     const dir = makeTmpDir();
     fs.writeFileSync(path.join(dir, "package.json"), "{}");
 
-    const mockInsights = {
+    const mockMetadata = {
       projectDescription: "A Node.js web application",
       techStack: ["Node.js", "TypeScript"],
       suggestedWorkflows: [
@@ -928,30 +928,45 @@ describe("enrichWithLLM", () => {
       recommendedAgents: ["cicd", "docker"],
     };
 
+    const mockAnalysis = "## Commands\n\n```bash\nnpm test\n```\n\n## Architecture\n\nNode.js app.";
+
     const mockProvider: LLMProvider = {
       name: "mock",
-      generate: vi.fn().mockResolvedValue({
-        content: JSON.stringify(mockInsights),
-        parsed: mockInsights,
-      }),
+      generate: vi
+        .fn()
+        // First call: metadata (JSON)
+        .mockResolvedValueOnce({
+          content: JSON.stringify(mockMetadata),
+          parsed: mockMetadata,
+        })
+        // Second call: analysis (plain markdown)
+        .mockResolvedValueOnce({
+          content: mockAnalysis,
+        }),
     };
 
     const ctx = scanRepo(dir);
     const result = await enrichWithLLM(ctx, mockProvider);
 
-    // Verify the provider was called
-    expect(mockProvider.generate).toHaveBeenCalledTimes(1);
+    // Verify two separate calls (metadata + analysis)
+    expect(mockProvider.generate).toHaveBeenCalledTimes(2);
 
-    // Verify the prompt contains scan data
-    const call = vi.mocked(mockProvider.generate).mock.calls[0][0];
-    expect(call.system).toContain("DevOps project analyzer");
-    expect(call.prompt).toContain("Scan Results");
-    expect(call.prompt).toContain("Directory Tree");
-    expect(call.prompt).toContain("node"); // detected language
-    // rootPath should be stripped from the payload
-    expect(call.prompt).not.toContain(dir);
-    // Schema should be passed
-    expect(call.schema).toBeDefined();
+    // First call: structured metadata with schema
+    const metadataCall = vi.mocked(mockProvider.generate).mock.calls[0][0];
+    expect(metadataCall.system).toContain("structured JSON insights");
+    expect(metadataCall.schema).toBeDefined();
+
+    // Second call: plain markdown analysis without schema
+    const analysisCall = vi.mocked(mockProvider.generate).mock.calls[1][0];
+    expect(analysisCall.system).toContain("comprehensive project analysis");
+    expect(analysisCall.schema).toBeUndefined();
+
+    // Both calls should contain scan data and not expose rootPath
+    for (const call of vi.mocked(mockProvider.generate).mock.calls) {
+      expect(call[0].prompt).toContain("Scan Results");
+      expect(call[0].prompt).toContain("Directory Tree");
+      expect(call[0].prompt).not.toContain(dir);
+    }
 
     // Verify result matches schema
     const parsed = LLMInsightsSchema.safeParse(result);
@@ -959,6 +974,7 @@ describe("enrichWithLLM", () => {
     expect(result.projectDescription).toBe("A Node.js web application");
     expect(result.techStack).toEqual(["Node.js", "TypeScript"]);
     expect(result.recommendedAgents).toContain("cicd");
+    expect(result.projectAnalysis).toBe(mockAnalysis);
   });
 });
 

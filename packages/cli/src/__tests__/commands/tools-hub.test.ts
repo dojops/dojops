@@ -26,6 +26,8 @@ vi.mock("@clack/prompts", () => ({
   note: vi.fn(),
   spinner: vi.fn(() => mockSpinner),
   isCancel: vi.fn(() => false),
+  select: vi.fn(async () => "global"),
+  cancel: vi.fn(),
 }));
 
 // Mock @dojops/runtime

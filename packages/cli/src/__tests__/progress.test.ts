@@ -109,16 +109,16 @@ describe("createProgressReporter", () => {
       }
     });
 
-    it("start() renders a progress bar via stdout.write", () => {
+    it("start() renders a spinner with task count via stdout.write", () => {
       const reporter = createProgressReporter(4);
       reporter.start("build", "Compiling");
 
       expect(writeSpy).toHaveBeenCalledTimes(1);
       const output = writeSpy.mock.calls[0][0] as string;
-      // Starts with carriage return
+      // Starts with carriage return + clear
       expect(output).toMatch(/^\r/);
-      // Contains the percentage (0% since nothing completed yet)
-      expect(output).toContain("0%");
+      // Contains task progress counter [1/4]
+      expect(output).toContain("[1/4]");
       // Contains the step description
       expect(output).toContain("build: Compiling");
     });
@@ -198,7 +198,7 @@ describe("createProgressReporter", () => {
       expect(clearCall).toBe("\r\x1b[K");
     });
 
-    it("start() updates the progress bar after completions", () => {
+    it("start() updates the task counter after completions", () => {
       const reporter = createProgressReporter(4);
 
       // Complete two steps first
@@ -213,8 +213,8 @@ describe("createProgressReporter", () => {
 
       expect(writeSpy).toHaveBeenCalledTimes(1);
       const output = writeSpy.mock.calls[0][0] as string;
-      // Should show 50% since 2 of 4 completed
-      expect(output).toContain("50%");
+      // Should show [3/4] since 2 completed, now starting the 3rd
+      expect(output).toContain("[3/4]");
       expect(output).toContain("c: Testing");
     });
   });

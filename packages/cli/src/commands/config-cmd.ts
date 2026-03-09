@@ -1,10 +1,14 @@
 import fs from "node:fs";
+import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import {
   loadConfig,
+  readConfigFile,
   saveConfig,
   getConfigPath,
+  getLocalConfigPath,
+  getGlobalConfigPath,
   validateProvider,
   resolveProvider,
   getActiveProfile,
@@ -12,20 +16,25 @@ import {
   DojOpsConfig,
 } from "../config";
 import { CLIContext } from "../types";
-import { maskToken } from "../formatter";
+import { maskToken, truncateNoteTitle } from "../formatter";
 import { extractFlagValue } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import { createProvider } from "@dojops/api";
 import { isCopilotAuthenticated, copilotLogin } from "@dojops/core";
 
-function showConfig(config: DojOpsConfig): void {
+function showConfig(config: DojOpsConfig, scopePath?: string): void {
+  // When scopePath is provided, display only what's in that specific config file
+  const isProjectScope = scopePath !== undefined && scopePath !== getGlobalConfigPath();
+
   // UX #10: Show effective provider (including env var override) if it differs from config
   const effectiveProvider = resolveProvider(undefined, config);
   const envOverrideLabel = pc.yellow(
     `(env: DOJOPS_PROVIDER=${process.env.DOJOPS_PROVIDER} → ${effectiveProvider})`,
   );
   const providerDisplay =
-    process.env.DOJOPS_PROVIDER && process.env.DOJOPS_PROVIDER !== config.defaultProvider
+    !isProjectScope &&
+    process.env.DOJOPS_PROVIDER &&
+    process.env.DOJOPS_PROVIDER !== config.defaultProvider
       ? `${config.defaultProvider ?? pc.dim("(not set)")} ${envOverrideLabel}`
       : (config.defaultProvider ?? pc.dim("(not set)"));
   const lines = [
@@ -39,33 +48,38 @@ function showConfig(config: DojOpsConfig): void {
     `  deepseek:        ${maskToken(config.tokens?.deepseek)}`,
     `  gemini:          ${maskToken(config.tokens?.gemini)}`,
     `  ollama:          ${pc.dim("(no token needed)")}`,
-    `  github-copilot:  ${isCopilotAuthenticated() ? pc.green("authenticated") + " " + pc.dim("(OAuth)") : pc.dim("(not set)")}`,
+    `  github-copilot:  ${!isProjectScope && isCopilotAuthenticated() ? pc.green("authenticated") + " " + pc.dim("(OAuth)") : pc.dim("(not set)")}`,
   ];
 
-  // Show environment variable tokens (not visible via config file)
-  const envVars: Record<string, string> = {
-    openai: "OPENAI_API_KEY",
-    anthropic: "ANTHROPIC_API_KEY",
-    deepseek: "DEEPSEEK_API_KEY",
-    gemini: "GEMINI_API_KEY",
-  };
-  const envLines: string[] = [];
-  for (const [provider, envKey] of Object.entries(envVars)) {
-    if (process.env[envKey]) {
-      envLines.push(`  ${provider}: ${maskToken(process.env[envKey])} ${pc.dim("(env)")}`);
+  // Show environment variable tokens only for global scope (not project-specific display)
+  if (!isProjectScope) {
+    const envVars: Record<string, string> = {
+      openai: "OPENAI_API_KEY",
+      anthropic: "ANTHROPIC_API_KEY",
+      deepseek: "DEEPSEEK_API_KEY",
+      gemini: "GEMINI_API_KEY",
+    };
+    const envLines: string[] = [];
+    for (const [provider, envKey] of Object.entries(envVars)) {
+      if (process.env[envKey]) {
+        envLines.push(`  ${provider}: ${maskToken(process.env[envKey])} ${pc.dim("(env)")}`);
+      }
+    }
+    if (envLines.length > 0) {
+      lines.push(`${pc.bold("Env tokens:")}`, ...envLines);
     }
   }
-  if (envLines.length > 0) {
-    lines.push(`${pc.bold("Env tokens:")}`, ...envLines);
-  }
 
+  const activePath = scopePath ?? getConfigPath();
+  const isLocal = activePath !== getGlobalConfigPath();
+  const scopeBadge = isLocal ? pc.green("[project]") : "";
   const activeProfile = getActiveProfile();
-  const configPathDim = pc.dim(`(${getConfigPath()})`);
-  const profileBadge = activeProfile ? pc.yellow(`[profile: ${activeProfile}]`) : "";
-  const title = activeProfile
-    ? `Configuration ${configPathDim} ${profileBadge}`
-    : `Configuration ${configPathDim}`;
-  p.note(lines.join("\n"), title);
+  const configPathDim = pc.dim(`(${activePath})`);
+  const profileBadge =
+    !isProjectScope && activeProfile ? pc.yellow(`[profile: ${activeProfile}]`) : "";
+  const badges = [scopeBadge, profileBadge].filter(Boolean).join(" ");
+  const title = `Configuration ${configPathDim}${badges ? " " + badges : ""}`;
+  p.note(lines.join("\n"), truncateNoteTitle(title));
 }
 
 function handleShowSubcommand(ctx: CLIContext): void {
@@ -266,6 +280,7 @@ async function updateDefaultProvider(
 async function offerAdditionalProvider(
   config: DojOpsConfig,
   chosenProvider: string,
+  savePath?: string,
 ): Promise<void> {
   const unconfigured = VALID_PROVIDERS.filter(
     (prov) =>
@@ -295,7 +310,7 @@ async function offerAdditionalProvider(
 
   config.tokens = config.tokens ?? {};
   config.tokens[nextProvider as string] = nextToken as string;
-  saveConfig(config);
+  saveConfig(config, savePath);
   p.log.success(`Token saved for ${pc.bold(nextProvider as string)}.`);
 }
 
@@ -517,12 +532,45 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   }
 
   // Interactive mode
-  const config = loadConfig();
-
   p.intro(pc.bgCyan(pc.black(" dojops config ")));
 
+  // Ask whether to save locally or globally
+  const localPath = getLocalConfigPath();
+  const globalPath = getGlobalConfigPath();
+  // Default local path: use existing .dojops/ if found, otherwise cwd/.dojops/config.json
+  const effectiveLocalPath = localPath ?? path.join(process.cwd(), ".dojops", "config.json");
+  let configScope: "global" | "local" = "global";
+  if (!ctx.globalOpts.nonInteractive) {
+    const scopeChoice = await p.select({
+      message: "Where should configuration be saved?",
+      options: [
+        {
+          value: "global",
+          label: `Global ${pc.dim(`(${globalPath})`)}`,
+          hint: "applies to all projects",
+        },
+        {
+          value: "local",
+          label: `Project ${pc.dim(`(${effectiveLocalPath})`)}`,
+          hint: "applies to this project only",
+        },
+      ],
+      initialValue: "global" as string,
+    });
+    if (p.isCancel(scopeChoice)) {
+      p.cancel("Cancelled.");
+      process.exit(0);
+    }
+    configScope = scopeChoice as "global" | "local";
+  }
+
+  // Load config for the chosen scope only (don't leak global config into project scope)
+  const savePath = configScope === "local" ? effectiveLocalPath : undefined;
+  const config: DojOpsConfig =
+    configScope === "local" ? readConfigFile(effectiveLocalPath) : loadConfig();
+
   if (config.defaultProvider || config.defaultModel || config.tokens) {
-    showConfig(config);
+    showConfig(config, savePath);
   }
 
   const modelSuggestions: Record<string, string> = {
@@ -631,11 +679,12 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
 
   await updateDefaultProvider(config, chosenProvider, !!ctx.globalOpts.nonInteractive);
 
-  saveConfig(config);
-  p.log.success("Configuration saved.");
-  showConfig(config);
+  saveConfig(config, savePath);
+  const scopeLabel = configScope === "local" ? "project" : "global";
+  p.log.success(`Configuration saved (${scopeLabel}).`);
+  showConfig(config, savePath);
 
   if (!ctx.globalOpts.nonInteractive) {
-    await offerAdditionalProvider(config, chosenProvider);
+    await offerAdditionalProvider(config, chosenProvider, savePath);
   }
 }

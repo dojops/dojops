@@ -16,12 +16,22 @@ export class FallbackProvider implements LLMProvider {
 
   async generate(request: LLMRequest): Promise<LLMResponse> {
     let lastError: unknown;
-    for (const provider of this.providers) {
+    for (let i = 0; i < this.providers.length; i++) {
+      const provider = this.providers[i];
       try {
-        return await provider.generate(request);
+        const response = await provider.generate(request);
+        if (i > 0) {
+          const failed = this.providers
+            .slice(0, i)
+            .map((p) => p.name)
+            .join(", ");
+          console.warn(
+            `[dojops] Primary provider(s) failed (${failed}). Using fallback: ${provider.name}`,
+          );
+        }
+        return response;
       } catch (err) {
         lastError = err;
-        // Continue to next provider
       }
     }
     throw lastError ?? new Error("All providers failed");
