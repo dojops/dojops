@@ -5,7 +5,7 @@ import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
 import { sanitizeUserInput, scanRepo } from "@dojops/core";
 import { isDevOpsFile, SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createToolRegistry, discoverUserDopsFiles } from "@dojops/tool-registry";
+import { createToolRegistry, discoverUserDopsFiles } from "@dojops/module-registry";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";

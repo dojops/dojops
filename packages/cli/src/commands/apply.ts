@@ -7,7 +7,7 @@ import { DeterministicProvider } from "@dojops/core";
 import { appendActivity } from "../dojops-md";
 import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createToolRegistry } from "@dojops/tool-registry";
+import { createToolRegistry } from "@dojops/module-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";

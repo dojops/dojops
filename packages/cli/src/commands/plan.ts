@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { decompose, TaskGraph } from "@dojops/planner";
-import { createToolRegistry, ToolRegistry } from "@dojops/tool-registry";
+import { createToolRegistry, ToolRegistry } from "@dojops/module-registry";
 import { scanRepo } from "@dojops/core";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags, extractFlagValue } from "../parser";

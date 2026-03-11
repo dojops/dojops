@@ -1,12 +1,12 @@
 {
-  "name": "@dojops/tool-registry",
+  "name": "@dojops/module-registry",
   "version": "1.0.9",
   "description": "Tool registry with plugin system for DojOps — discovers, loads, and manages built-in and plugin tools",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dojops/dojops.git",
-    "directory": "packages/tool-registry"
+    "directory": "packages/module-registry"
   },
   "keywords": [
     "devops",

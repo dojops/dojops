@@ -9,7 +9,7 @@ import {
   discoverCustomAgents,
   GeneratedAgentSchema,
   formatAgentReadme,
-} from "@dojops/tool-registry";
+} from "@dojops/module-registry";
 import { CLIContext } from "../types";
 import { runPreflight } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("@dojops/tool-registry", () => ({
+vi.mock("@dojops/module-registry", () => ({
   createToolRegistry: vi.fn(),
   discoverUserDopsFiles: vi.fn().mockReturnValue([]),
 }));

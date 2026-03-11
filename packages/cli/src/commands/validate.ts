@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createToolRegistry } from "@dojops/tool-registry";
+import { createToolRegistry } from "@dojops/module-registry";
 import { CLIContext } from "../types";
 import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";

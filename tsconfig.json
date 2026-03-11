@@ -18,7 +18,7 @@
       "@dojops/api/*": ["packages/api/src/*"],
       "@dojops/scanner/*": ["packages/scanner/src/*"],
       "@dojops/session/*": ["packages/session/src/*"],
-      "@dojops/tool-registry/*": ["packages/tool-registry/src/*"],
+      "@dojops/module-registry/*": ["packages/module-registry/src/*"],
       "@dojops/runtime/*": ["packages/runtime/src/*"],
       "@dojops/context/*": ["packages/context/src/*"]
     }

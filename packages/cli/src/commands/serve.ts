@@ -6,7 +6,7 @@ import os from "node:os";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createProvider, createRouter, createDebugger, createDiffAnalyzer } from "@dojops/api";
-import { createToolRegistry } from "@dojops/tool-registry";
+import { createToolRegistry } from "@dojops/module-registry";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
 import { CLIContext } from "../types";
 import { writeFileOwnerOnly } from "../secure-fs";

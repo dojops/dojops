@@ -29,7 +29,7 @@ import {
   ToolRegistry,
   loadToolPolicy,
   isToolAllowed,
-} from "@dojops/tool-registry";
+} from "@dojops/module-registry";
 import { LLMProvider, LLMResponse } from "@dojops/core";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

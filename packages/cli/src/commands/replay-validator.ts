@@ -1,4 +1,4 @@
-import { ToolRegistry, CustomTool } from "@dojops/tool-registry";
+import { ToolRegistry, CustomTool } from "@dojops/module-registry";
 import { PlanState, getDojopsVersion } from "../state";
 
 export interface ReplayMismatch {

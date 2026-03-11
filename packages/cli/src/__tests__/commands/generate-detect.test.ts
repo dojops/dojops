@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock discoverUserDopsFiles from @dojops/tool-registry
+// Mock discoverUserDopsFiles from @dojops/module-registry
 const mockDiscoverUserDopsFiles = vi.fn();
-vi.mock("@dojops/tool-registry", () => ({
+vi.mock("@dojops/module-registry", () => ({
   createToolRegistry: vi.fn(),
   discoverUserDopsFiles: (...args: unknown[]) => mockDiscoverUserDopsFiles(...args),
 }));

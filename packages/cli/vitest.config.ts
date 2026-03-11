@@ -16,7 +16,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@dojops/core": path.resolve(__dirname, "../core/src"),
-      "@dojops/tool-registry": path.resolve(__dirname, "../tool-registry/src"),
+      "@dojops/module-registry": path.resolve(__dirname, "../module-registry/src"),
       "@dojops/sdk": path.resolve(__dirname, "../sdk/src"),
     },
   },

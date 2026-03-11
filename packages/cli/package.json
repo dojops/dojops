@@ -57,7 +57,7 @@
     "@dojops/planner": "workspace:*",
     "@dojops/scanner": "workspace:*",
     "@dojops/session": "workspace:*",
-    "@dojops/tool-registry": "workspace:*",
+    "@dojops/module-registry": "workspace:*",
     "better-sqlite3": "^11.9.1",
     "dotenv": "^17.0.0",
     "js-yaml": "^4.1.0",

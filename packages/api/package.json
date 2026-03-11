@@ -51,7 +51,7 @@
     "@dojops/scanner": "workspace:*",
     "@dojops/sdk": "workspace:*",
     "@dojops/session": "workspace:*",
-    "@dojops/tool-registry": "workspace:*",
+    "@dojops/module-registry": "workspace:*",
     "cors": "^2.8.5",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",

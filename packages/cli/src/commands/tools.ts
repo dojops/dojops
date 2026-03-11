@@ -5,7 +5,7 @@ import * as crypto from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { z } from "zod";
-import { discoverTools, discoverUserDopsFiles, validateManifest } from "@dojops/tool-registry";
+import { discoverTools, discoverUserDopsFiles, validateManifest } from "@dojops/module-registry";
 import { parseDopsFileAny, validateDopsModuleAny } from "@dojops/runtime";
 import { parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";

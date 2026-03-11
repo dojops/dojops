@@ -16,8 +16,8 @@ import {
 } from "@dojops/core";
 import { NoopProvider } from "./noop-provider";
 import { DevOpsTool } from "@dojops/sdk";
-export { createToolRegistry, ToolRegistry } from "@dojops/tool-registry";
-import { createToolRegistry, discoverCustomAgents } from "@dojops/tool-registry";
+export { createToolRegistry, ToolRegistry } from "@dojops/module-registry";
+import { createToolRegistry, discoverCustomAgents } from "@dojops/module-registry";
 
 export interface ProviderOptions {
   provider?: string;

@@ -40,8 +40,8 @@ vi.mock("@dojops/runtime", () => ({
   validateDopsModuleAny: vi.fn(() => ({ valid: true })),
 }));
 
-// Mock @dojops/tool-registry
-vi.mock("@dojops/tool-registry", () => ({
+// Mock @dojops/module-registry
+vi.mock("@dojops/module-registry", () => ({
   discoverTools: vi.fn(() => []),
   discoverUserDopsFiles: vi.fn(() => []),
   validateManifest: vi.fn(),

@@ -1,4 +1,4 @@
-# @dojops/tool-registry
+# @dojops/module-registry
 
 Tool registry with plugin system for [DojOps](https://github.com/dojops/dojops) — discovers, loads, and manages built-in and custom tools.
 

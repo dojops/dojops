@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { validateReplayIntegrity, checkToolIntegrity } from "../../commands/replay-validator";
 import { PlanState } from "../../state";
-import { ToolRegistry } from "@dojops/tool-registry";
+import { ToolRegistry } from "@dojops/module-registry";
 
 function createPlanState(overrides?: Partial<PlanState>): PlanState {
   return {
