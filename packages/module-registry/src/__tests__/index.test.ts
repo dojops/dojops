@@ -24,11 +24,11 @@ vi.mock("../dops-loader", () => ({
 }));
 
 vi.mock("../policy", () => ({
-  loadToolPolicy: vi.fn().mockReturnValue(null),
-  isToolAllowed: vi.fn().mockReturnValue(true),
+  loadModulePolicy: vi.fn().mockReturnValue(null),
+  isModuleAllowed: vi.fn().mockReturnValue(true),
 }));
 
-import { loadBuiltInDopsModules, loadUserDopsModules, createToolRegistry } from "../index";
+import { loadBuiltInModules, loadUserModules, createModuleRegistry } from "../index";
 import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
 import { discoverUserDopsFiles } from "../dops-loader";
 import type { LLMProvider } from "@dojops/core";
@@ -54,7 +54,7 @@ function resetParseMock() {
   vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
 }
 
-describe("loadBuiltInDopsModules", () => {
+describe("loadBuiltInModules", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetParseMock();
@@ -62,7 +62,7 @@ describe("loadBuiltInDopsModules", () => {
 
   it("returns empty array when modules dir does not exist", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
-    const result = loadBuiltInDopsModules(mockProvider);
+    const result = loadBuiltInModules(mockProvider);
     expect(result).toEqual([]);
   });
 
@@ -74,7 +74,7 @@ describe("loadBuiltInDopsModules", () => {
       "readme.md",
     ] as unknown as ReturnType<typeof fs.readdirSync>);
 
-    const result = loadBuiltInDopsModules(mockProvider);
+    const result = loadBuiltInModules(mockProvider);
     expect(result).toHaveLength(2);
     expect(parseDopsFile).toHaveBeenCalledTimes(2);
   });
@@ -86,7 +86,7 @@ describe("loadBuiltInDopsModules", () => {
     >);
     vi.mocked(validateDopsModule).mockReturnValue({ valid: false, errors: ["bad format"] });
 
-    const result = loadBuiltInDopsModules(mockProvider);
+    const result = loadBuiltInModules(mockProvider);
     expect(result).toHaveLength(0);
   });
 
@@ -99,7 +99,7 @@ describe("loadBuiltInDopsModules", () => {
       throw new Error("parse error");
     });
 
-    const result = loadBuiltInDopsModules(mockProvider);
+    const result = loadBuiltInModules(mockProvider);
     expect(result).toHaveLength(0);
   });
 
@@ -109,18 +109,18 @@ describe("loadBuiltInDopsModules", () => {
       throw new Error("EACCES");
     });
 
-    const result = loadBuiltInDopsModules(mockProvider);
+    const result = loadBuiltInModules(mockProvider);
     expect(result).toEqual([]);
   });
 });
 
-describe("loadUserDopsModules", () => {
+describe("loadUserModules", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns empty when no user dops files found", () => {
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
-    const result = loadUserDopsModules(mockProvider);
-    expect(result.tools).toEqual([]);
+    const result = loadUserModules(mockProvider);
+    expect(result.modules).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
 
@@ -141,8 +141,8 @@ describe("loadUserDopsModules", () => {
     } as ReturnType<typeof parseDopsFile>);
     vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
 
-    const result = loadUserDopsModules(mockProvider);
-    expect(result.tools).toHaveLength(1);
+    const result = loadUserModules(mockProvider);
+    expect(result.modules).toHaveLength(1);
     expect(result.warnings).toEqual([]);
   });
 
@@ -163,8 +163,8 @@ describe("loadUserDopsModules", () => {
       errors: ["missing meta"],
     });
 
-    const result = loadUserDopsModules(mockProvider);
-    expect(result.tools).toHaveLength(0);
+    const result = loadUserModules(mockProvider);
+    expect(result.modules).toHaveLength(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("Invalid .dops file");
     expect(result.warnings[0]).toContain("missing meta");
@@ -177,22 +177,22 @@ describe("loadUserDopsModules", () => {
       throw new Error("corrupt file");
     });
 
-    const result = loadUserDopsModules(mockProvider);
-    expect(result.tools).toHaveLength(0);
+    const result = loadUserModules(mockProvider);
+    expect(result.modules).toHaveLength(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("Failed to load");
     expect(result.warnings[0]).toContain("corrupt file");
   });
 });
 
-describe("createToolRegistry", () => {
+describe("createModuleRegistry", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("creates a registry with no tools", () => {
+  it("creates a registry with no modules", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
 
-    const registry = createToolRegistry(mockProvider);
+    const registry = createModuleRegistry(mockProvider);
     expect(registry).toBeDefined();
     expect(registry.size).toBe(0);
   });
@@ -205,7 +205,7 @@ describe("createToolRegistry", () => {
     vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
 
-    const registry = createToolRegistry(mockProvider);
+    const registry = createModuleRegistry(mockProvider);
     expect(registry).toBeDefined();
   });
 });

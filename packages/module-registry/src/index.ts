@@ -1,11 +1,11 @@
 import { LLMProvider } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
+import { DevOpsModule } from "@dojops/sdk";
 import { DopsRuntimeV2, parseDopsFile, validateDopsModule, DocProvider } from "@dojops/runtime";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { ToolRegistry } from "./registry";
+import { ModuleRegistry } from "./registry";
 import { discoverUserDopsFiles } from "./dops-loader";
-import { loadToolPolicy, isToolAllowed } from "./policy";
+import { loadModulePolicy, isModuleAllowed } from "./policy";
 
 export * from "./registry";
 export * from "./dops-loader";
@@ -17,8 +17,8 @@ export * from "./agent-loader";
 export * from "./agent-schema";
 export * from "./prompt-validator";
 
-export interface CreateToolRegistryOptions {
-  /** Optional documentation augmenter for injecting up-to-date docs into tool prompts */
+export interface CreateModuleRegistryOptions {
+  /** Optional documentation augmenter for injecting up-to-date docs into module prompts */
   docAugmenter?: {
     augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
   };
@@ -34,15 +34,15 @@ export interface CreateToolRegistryOptions {
  * Load built-in .dops modules from @dojops/runtime/modules/.
  * Returns DopsRuntimeV2 instances for each valid v2 module.
  */
-export function loadBuiltInDopsModules(
+export function loadBuiltInModules(
   provider: LLMProvider,
-  options?: CreateToolRegistryOptions,
-): DevOpsTool[] {
+  options?: CreateModuleRegistryOptions,
+): DevOpsModule[] {
   const modulesDir = path.join(__dirname, "../../runtime/modules");
-  const tools: DevOpsTool[] = [];
+  const modules: DevOpsModule[] = [];
 
   try {
-    if (!fs.existsSync(modulesDir)) return tools;
+    if (!fs.existsSync(modulesDir)) return modules;
 
     const files = fs.readdirSync(modulesDir) as string[];
     for (const file of files) {
@@ -51,7 +51,7 @@ export function loadBuiltInDopsModules(
         const module = parseDopsFile(path.join(modulesDir, file));
         const validation = validateDopsModule(module);
         if (validation.valid) {
-          tools.push(
+          modules.push(
             new DopsRuntimeV2(module, provider, {
               docAugmenter: options?.docAugmenter,
               context7Provider: options?.context7Provider,
@@ -68,20 +68,20 @@ export function loadBuiltInDopsModules(
     // modules dir not found — not an error in dev/test
   }
 
-  return tools;
+  return modules;
 }
 
 /**
  * Load user .dops files from global/project directories.
  * Only v2 .dops modules are supported.
  */
-export function loadUserDopsModules(
+export function loadUserModules(
   provider: LLMProvider,
   projectPath?: string,
-  options?: CreateToolRegistryOptions,
-): { tools: DevOpsTool[]; warnings: string[] } {
+  options?: CreateModuleRegistryOptions,
+): { modules: DevOpsModule[]; warnings: string[] } {
   const dopsFiles = discoverUserDopsFiles(projectPath);
-  const tools: DevOpsTool[] = [];
+  const modules: DevOpsModule[] = [];
   const warnings: string[] = [];
 
   for (const entry of dopsFiles) {
@@ -89,7 +89,7 @@ export function loadUserDopsModules(
       const module = parseDopsFile(entry.filePath);
       const validation = validateDopsModule(module);
       if (validation.valid) {
-        tools.push(
+        modules.push(
           new DopsRuntimeV2(module, provider, {
             docAugmenter: options?.docAugmenter,
             context7Provider: options?.context7Provider,
@@ -108,28 +108,28 @@ export function loadUserDopsModules(
     }
   }
 
-  return { tools, warnings };
+  return { modules, warnings };
 }
 
 /**
- * Convenience factory: builds a ToolRegistry with all built-in .dops modules
+ * Convenience factory: builds a ModuleRegistry with all built-in .dops modules
  * plus any valid, policy-allowed user .dops modules.
  */
-export function createToolRegistry(
+export function createModuleRegistry(
   provider: LLMProvider,
   projectPath?: string,
-  options?: CreateToolRegistryOptions,
-): ToolRegistry {
-  // 1. Built-in .dops modules (sole built-in tool source)
-  const builtInTools: DevOpsTool[] = loadBuiltInDopsModules(provider, options);
+  options?: CreateModuleRegistryOptions,
+): ModuleRegistry {
+  // 1. Built-in .dops modules (sole built-in module source)
+  const builtInModules: DevOpsModule[] = loadBuiltInModules(provider, options);
 
   // 2. Load user .dops files, apply policy filter
-  const policy = loadToolPolicy(projectPath);
-  const { tools: userDopsTools } = loadUserDopsModules(provider, projectPath, options);
-  const allowedDops = userDopsTools.filter((rt) => isToolAllowed(rt.name, policy));
+  const policy = loadModulePolicy(projectPath);
+  const { modules: userModules } = loadUserModules(provider, projectPath, options);
+  const allowedModules = userModules.filter((m) => isModuleAllowed(m.name, policy));
 
-  // Add user .dops runtimes as built-in tools (they'll override by name in registry)
-  builtInTools.push(...allowedDops);
+  // Add user .dops runtimes (they'll override by name in registry)
+  builtInModules.push(...allowedModules);
 
-  return new ToolRegistry(builtInTools);
+  return new ModuleRegistry(builtInModules);
 }

@@ -30,7 +30,7 @@ export function serialize(data: unknown, format: string): string {
     case "toml":
       if (typeof data === "string") return data;
       throw new Error(
-        `Serializer "${format}" does not support structured data in v1. Plugin must return a raw string for this format.`,
+        `Serializer "${format}" does not support structured data. Module must return a raw string for this format.`,
       );
 
     default:

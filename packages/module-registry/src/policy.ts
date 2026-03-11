@@ -2,17 +2,18 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as yaml from "js-yaml";
 
-export interface ToolPolicy {
-  allowedTools?: string[];
-  blockedTools?: string[];
+export interface ModulePolicy {
+  allowedModules?: string[];
+  blockedModules?: string[];
 }
 
 /**
- * Loads tool policy from .dojops/policy.yaml if present.
+ * Loads module policy from .dojops/policy.yaml if present.
  * Returns empty policy (everything allowed) if file is missing.
- * Supports both new field names (allowedTools/blockedTools) and legacy (allowedPlugins/blockedPlugins).
+ * Supports new field names (allowedModules/blockedModules), previous names (allowedTools/blockedTools),
+ * and legacy names (allowedPlugins/blockedPlugins).
  */
-export function loadToolPolicy(projectPath?: string): ToolPolicy {
+export function loadModulePolicy(projectPath?: string): ModulePolicy {
   if (!projectPath) return {};
 
   const policyPath = path.join(projectPath, ".dojops", "policy.yaml");
@@ -23,17 +24,17 @@ export function loadToolPolicy(projectPath?: string): ToolPolicy {
     const data = yaml.load(content) as Record<string, unknown> | null;
     if (!data) return {};
 
-    const policy: ToolPolicy = {};
+    const policy: ModulePolicy = {};
 
-    // New field names take precedence, fall back to legacy
-    const allowed = data.allowedTools ?? data.allowedPlugins;
+    // New field names take precedence, fall back to previous, then legacy
+    const allowed = data.allowedModules ?? data.allowedTools ?? data.allowedPlugins;
     if (Array.isArray(allowed)) {
-      policy.allowedTools = allowed.filter((p): p is string => typeof p === "string");
+      policy.allowedModules = allowed.filter((p): p is string => typeof p === "string");
     }
 
-    const blocked = data.blockedTools ?? data.blockedPlugins;
+    const blocked = data.blockedModules ?? data.blockedTools ?? data.blockedPlugins;
     if (Array.isArray(blocked)) {
-      policy.blockedTools = blocked.filter((p): p is string => typeof p === "string");
+      policy.blockedModules = blocked.filter((p): p is string => typeof p === "string");
     }
 
     return policy;
@@ -43,27 +44,19 @@ export function loadToolPolicy(projectPath?: string): ToolPolicy {
 }
 
 /**
- * Checks whether a tool is allowed by the given policy.
+ * Checks whether a module is allowed by the given policy.
  *
  * Rules:
- * 1. If blockedTools is set and includes the name → denied
- * 2. If allowedTools is set → only those names are allowed
- * 3. Otherwise → allowed (default-open)
+ * 1. If blockedModules is set and includes the name -> denied
+ * 2. If allowedModules is set -> only those names are allowed
+ * 3. Otherwise -> allowed (default-open)
  */
-export function isToolAllowed(name: string, policy: ToolPolicy): boolean {
-  if (policy.blockedTools?.includes(name)) {
+export function isModuleAllowed(name: string, policy: ModulePolicy): boolean {
+  if (policy.blockedModules?.includes(name)) {
     return false;
   }
-  if (policy.allowedTools && policy.allowedTools.length > 0) {
-    return policy.allowedTools.includes(name);
+  if (policy.allowedModules && policy.allowedModules.length > 0) {
+    return policy.allowedModules.includes(name);
   }
   return true;
 }
-
-// Backward compatibility aliases
-/** @deprecated Use ToolPolicy instead */
-export type PluginPolicy = ToolPolicy;
-/** @deprecated Use loadToolPolicy instead */
-export const loadPluginPolicy = loadToolPolicy;
-/** @deprecated Use isToolAllowed instead */
-export const isPluginAllowed = isToolAllowed;

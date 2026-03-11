@@ -3,9 +3,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import * as yaml from "js-yaml";
-import { loadToolPolicy, isToolAllowed, ToolPolicy } from "../policy";
+import { loadModulePolicy, isModuleAllowed, ModulePolicy } from "../policy";
 
-describe("loadToolPolicy", () => {
+describe("loadModulePolicy", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -17,39 +17,65 @@ describe("loadToolPolicy", () => {
   });
 
   it("returns empty policy when no project path", () => {
-    const policy = loadToolPolicy();
+    const policy = loadModulePolicy();
     expect(policy).toEqual({});
   });
 
   it("returns empty policy when policy file missing", () => {
-    const policy = loadToolPolicy(tmpDir);
+    const policy = loadModulePolicy(tmpDir);
     expect(policy).toEqual({});
   });
 
-  it("loads allowedTools from policy file", () => {
+  it("loads allowedModules from policy file", () => {
     const dojopsDir = path.join(tmpDir, ".dojops");
     fs.mkdirSync(dojopsDir, { recursive: true });
     fs.writeFileSync(
       path.join(dojopsDir, "policy.yaml"),
-      yaml.dump({ allowedTools: ["tool-a", "tool-b"] }),
+      yaml.dump({ allowedModules: ["module-a", "module-b"] }),
       "utf-8",
     );
 
-    const policy = loadToolPolicy(tmpDir);
-    expect(policy.allowedTools).toEqual(["tool-a", "tool-b"]);
+    const policy = loadModulePolicy(tmpDir);
+    expect(policy.allowedModules).toEqual(["module-a", "module-b"]);
   });
 
-  it("loads blockedTools from policy file", () => {
+  it("loads blockedModules from policy file", () => {
     const dojopsDir = path.join(tmpDir, ".dojops");
     fs.mkdirSync(dojopsDir, { recursive: true });
     fs.writeFileSync(
       path.join(dojopsDir, "policy.yaml"),
-      yaml.dump({ blockedTools: ["bad-tool"] }),
+      yaml.dump({ blockedModules: ["bad-module"] }),
       "utf-8",
     );
 
-    const policy = loadToolPolicy(tmpDir);
-    expect(policy.blockedTools).toEqual(["bad-tool"]);
+    const policy = loadModulePolicy(tmpDir);
+    expect(policy.blockedModules).toEqual(["bad-module"]);
+  });
+
+  it("handles previous allowedTools field", () => {
+    const dojopsDir = path.join(tmpDir, ".dojops");
+    fs.mkdirSync(dojopsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dojopsDir, "policy.yaml"),
+      yaml.dump({ allowedTools: ["legacy-a", "legacy-b"] }),
+      "utf-8",
+    );
+
+    const policy = loadModulePolicy(tmpDir);
+    expect(policy.allowedModules).toEqual(["legacy-a", "legacy-b"]);
+  });
+
+  it("handles previous blockedTools field", () => {
+    const dojopsDir = path.join(tmpDir, ".dojops");
+    fs.mkdirSync(dojopsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dojopsDir, "policy.yaml"),
+      yaml.dump({ blockedTools: ["legacy-bad"] }),
+      "utf-8",
+    );
+
+    const policy = loadModulePolicy(tmpDir);
+    expect(policy.blockedModules).toEqual(["legacy-bad"]);
   });
 
   it("handles legacy allowedPlugins field", () => {
@@ -61,8 +87,8 @@ describe("loadToolPolicy", () => {
       "utf-8",
     );
 
-    const policy = loadToolPolicy(tmpDir);
-    expect(policy.allowedTools).toEqual(["legacy-a", "legacy-b"]);
+    const policy = loadModulePolicy(tmpDir);
+    expect(policy.allowedModules).toEqual(["legacy-a", "legacy-b"]);
   });
 
   it("handles legacy blockedPlugins field", () => {
@@ -74,24 +100,25 @@ describe("loadToolPolicy", () => {
       "utf-8",
     );
 
-    const policy = loadToolPolicy(tmpDir);
-    expect(policy.blockedTools).toEqual(["legacy-bad"]);
+    const policy = loadModulePolicy(tmpDir);
+    expect(policy.blockedModules).toEqual(["legacy-bad"]);
   });
 
-  it("prefers new field names over legacy", () => {
+  it("prefers new field names over previous and legacy", () => {
     const dojopsDir = path.join(tmpDir, ".dojops");
     fs.mkdirSync(dojopsDir, { recursive: true });
     fs.writeFileSync(
       path.join(dojopsDir, "policy.yaml"),
       yaml.dump({
-        allowedTools: ["new-field"],
-        allowedPlugins: ["old-field"],
+        allowedModules: ["new-field"],
+        allowedTools: ["old-field"],
+        allowedPlugins: ["legacy-field"],
       }),
       "utf-8",
     );
 
-    const policy = loadToolPolicy(tmpDir);
-    expect(policy.allowedTools).toEqual(["new-field"]);
+    const policy = loadModulePolicy(tmpDir);
+    expect(policy.allowedModules).toEqual(["new-field"]);
   });
 
   it("handles empty policy file", () => {
@@ -99,7 +126,7 @@ describe("loadToolPolicy", () => {
     fs.mkdirSync(dojopsDir, { recursive: true });
     fs.writeFileSync(path.join(dojopsDir, "policy.yaml"), "", "utf-8");
 
-    const policy = loadToolPolicy(tmpDir);
+    const policy = loadModulePolicy(tmpDir);
     expect(policy).toEqual({});
   });
 
@@ -108,7 +135,7 @@ describe("loadToolPolicy", () => {
     fs.mkdirSync(dojopsDir, { recursive: true });
     fs.writeFileSync(path.join(dojopsDir, "policy.yaml"), "this is not: [valid yaml: {", "utf-8");
 
-    const policy = loadToolPolicy(tmpDir);
+    const policy = loadModulePolicy(tmpDir);
     expect(policy).toEqual({});
   });
 
@@ -118,87 +145,87 @@ describe("loadToolPolicy", () => {
     fs.writeFileSync(
       path.join(dojopsDir, "policy.yaml"),
       yaml.dump({
-        allowedTools: ["valid", 42, null, "also-valid"],
+        allowedModules: ["valid", 42, null, "also-valid"],
       }),
       "utf-8",
     );
 
-    const policy = loadToolPolicy(tmpDir);
-    expect(policy.allowedTools).toEqual(["valid", "also-valid"]);
+    const policy = loadModulePolicy(tmpDir);
+    expect(policy.allowedModules).toEqual(["valid", "also-valid"]);
   });
 });
 
-describe("isToolAllowed", () => {
+describe("isModuleAllowed", () => {
   it("allows everything with empty policy", () => {
-    expect(isToolAllowed("any-tool", {})).toBe(true);
+    expect(isModuleAllowed("any-module", {})).toBe(true);
   });
 
-  it("blocks tools in blockedTools list", () => {
-    const policy: ToolPolicy = { blockedTools: ["bad-tool", "evil-tool"] };
-    expect(isToolAllowed("bad-tool", policy)).toBe(false);
-    expect(isToolAllowed("evil-tool", policy)).toBe(false);
-    expect(isToolAllowed("good-tool", policy)).toBe(true);
+  it("blocks modules in blockedModules list", () => {
+    const policy: ModulePolicy = { blockedModules: ["bad-module", "evil-module"] };
+    expect(isModuleAllowed("bad-module", policy)).toBe(false);
+    expect(isModuleAllowed("evil-module", policy)).toBe(false);
+    expect(isModuleAllowed("good-module", policy)).toBe(true);
   });
 
-  it("only allows tools in allowedTools list", () => {
-    const policy: ToolPolicy = { allowedTools: ["tool-a", "tool-b"] };
-    expect(isToolAllowed("tool-a", policy)).toBe(true);
-    expect(isToolAllowed("tool-b", policy)).toBe(true);
-    expect(isToolAllowed("tool-c", policy)).toBe(false);
+  it("only allows modules in allowedModules list", () => {
+    const policy: ModulePolicy = { allowedModules: ["module-a", "module-b"] };
+    expect(isModuleAllowed("module-a", policy)).toBe(true);
+    expect(isModuleAllowed("module-b", policy)).toBe(true);
+    expect(isModuleAllowed("module-c", policy)).toBe(false);
   });
 
-  it("blockedTools takes precedence over allowedTools", () => {
-    const policy: ToolPolicy = {
-      allowedTools: ["tool-a"],
-      blockedTools: ["tool-a"],
+  it("blockedModules takes precedence over allowedModules", () => {
+    const policy: ModulePolicy = {
+      allowedModules: ["module-a"],
+      blockedModules: ["module-a"],
     };
-    expect(isToolAllowed("tool-a", policy)).toBe(false);
+    expect(isModuleAllowed("module-a", policy)).toBe(false);
   });
 
-  it("allows everything when allowedTools is empty array", () => {
-    const policy: ToolPolicy = { allowedTools: [] };
-    expect(isToolAllowed("any-tool", policy)).toBe(true);
+  it("allows everything when allowedModules is empty array", () => {
+    const policy: ModulePolicy = { allowedModules: [] };
+    expect(isModuleAllowed("any-module", policy)).toBe(true);
   });
 
-  it("allows everything when blockedTools is empty array", () => {
-    const policy: ToolPolicy = { blockedTools: [] };
-    expect(isToolAllowed("any-tool", policy)).toBe(true);
+  it("allows everything when blockedModules is empty array", () => {
+    const policy: ModulePolicy = { blockedModules: [] };
+    expect(isModuleAllowed("any-module", policy)).toBe(true);
   });
 
-  describe("T-11: path traversal in tool names", () => {
-    it("blocks tool name containing ../ when in blockedTools", () => {
-      const policy: ToolPolicy = { blockedTools: ["../malicious-tool"] };
-      expect(isToolAllowed("../malicious-tool", policy)).toBe(false);
+  describe("T-11: path traversal in module names", () => {
+    it("blocks module name containing ../ when in blockedModules", () => {
+      const policy: ModulePolicy = { blockedModules: ["../malicious-module"] };
+      expect(isModuleAllowed("../malicious-module", policy)).toBe(false);
     });
 
-    it("does not match traversal tool name against legitimate tool in allowedTools", () => {
-      const policy: ToolPolicy = { allowedTools: ["my-tool"] };
-      // A tool name with path traversal should not be in the allowed list
-      expect(isToolAllowed("../my-tool", policy)).toBe(false);
-      expect(isToolAllowed("../../my-tool", policy)).toBe(false);
+    it("does not match traversal module name against legitimate module in allowedModules", () => {
+      const policy: ModulePolicy = { allowedModules: ["my-module"] };
+      // A module name with path traversal should not be in the allowed list
+      expect(isModuleAllowed("../my-module", policy)).toBe(false);
+      expect(isModuleAllowed("../../my-module", policy)).toBe(false);
     });
 
-    it("tool name with ../ is not allowed when only legitimate names are in allowedTools", () => {
-      const policy: ToolPolicy = { allowedTools: ["tool-a", "tool-b"] };
-      expect(isToolAllowed("../tool-a", policy)).toBe(false);
-      expect(isToolAllowed("tool-a/../tool-b", policy)).toBe(false);
+    it("module name with ../ is not allowed when only legitimate names are in allowedModules", () => {
+      const policy: ModulePolicy = { allowedModules: ["module-a", "module-b"] };
+      expect(isModuleAllowed("../module-a", policy)).toBe(false);
+      expect(isModuleAllowed("module-a/../module-b", policy)).toBe(false);
     });
 
-    it("tool name with URL-encoded traversal is treated as a different name", () => {
-      const policy: ToolPolicy = { allowedTools: ["tool-a"] };
+    it("module name with URL-encoded traversal is treated as a different name", () => {
+      const policy: ModulePolicy = { allowedModules: ["module-a"] };
       // URL-encoded ../ (%2e%2e%2f) should not match the legitimate name
-      expect(isToolAllowed("%2e%2e%2ftool-a", policy)).toBe(false);
-      expect(isToolAllowed("..%2ftool-a", policy)).toBe(false);
+      expect(isModuleAllowed("%2e%2e%2fmodule-a", policy)).toBe(false);
+      expect(isModuleAllowed("..%2fmodule-a", policy)).toBe(false);
     });
 
-    it("blocks URL-encoded traversal names via blockedTools", () => {
-      const policy: ToolPolicy = { blockedTools: ["%2e%2e%2fmalicious"] };
-      expect(isToolAllowed("%2e%2e%2fmalicious", policy)).toBe(false);
+    it("blocks URL-encoded traversal names via blockedModules", () => {
+      const policy: ModulePolicy = { blockedModules: ["%2e%2e%2fmalicious"] };
+      expect(isModuleAllowed("%2e%2e%2fmalicious", policy)).toBe(false);
     });
 
-    it("tool name with backslash traversal is treated as a different name", () => {
-      const policy: ToolPolicy = { allowedTools: ["tool-a"] };
-      expect(isToolAllowed(String.raw`..\tool-a`, policy)).toBe(false);
+    it("module name with backslash traversal is treated as a different name", () => {
+      const policy: ModulePolicy = { allowedModules: ["module-a"] };
+      expect(isModuleAllowed(String.raw`..\module-a`, policy)).toBe(false);
     });
   });
 });

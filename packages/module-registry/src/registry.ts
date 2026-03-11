@@ -1,10 +1,10 @@
-import { DevOpsTool } from "@dojops/sdk";
+import { DevOpsModule } from "@dojops/sdk";
 
 /**
  * Interface for DopsRuntime metadata access.
- * Avoids direct dependency on @dojops/runtime from tool-registry.
+ * Avoids direct dependency on @dojops/runtime from module-registry.
  */
-export interface DopsRuntimeLike extends DevOpsTool {
+export interface DopsRuntimeLike extends DevOpsModule {
   readonly systemPromptHash: string;
   readonly moduleHash: string;
   readonly metadata: {
@@ -16,11 +16,11 @@ export interface DopsRuntimeLike extends DevOpsTool {
   };
 }
 
-function isDopsRuntime(tool: DevOpsTool): tool is DopsRuntimeLike {
+function isDopsRuntime(module: DevOpsModule): module is DopsRuntimeLike {
   return (
-    "moduleHash" in tool &&
-    "metadata" in tool &&
-    typeof (tool as DopsRuntimeLike).metadata === "object"
+    "moduleHash" in module &&
+    "metadata" in module &&
+    typeof (module as DopsRuntimeLike).metadata === "object"
   );
 }
 
@@ -28,41 +28,41 @@ function isDopsRuntime(tool: DevOpsTool): tool is DopsRuntimeLike {
  * Central registry combining built-in and user .dops modules.
  * Provides a unified getAll() / get(name) interface for Planner, Executor, CLI, and API.
  */
-export class ToolRegistry {
-  private readonly toolMap: Map<string, DevOpsTool>;
-  private readonly builtIn: DevOpsTool[];
+export class ModuleRegistry {
+  private readonly moduleMap: Map<string, DevOpsModule>;
+  private readonly builtIn: DevOpsModule[];
 
-  constructor(builtInTools: DevOpsTool[]) {
-    this.builtIn = builtInTools;
-    this.toolMap = new Map();
+  constructor(builtInModules: DevOpsModule[]) {
+    this.builtIn = builtInModules;
+    this.moduleMap = new Map();
 
-    for (const tool of builtInTools) {
-      this.toolMap.set(tool.name, tool);
+    for (const mod of builtInModules) {
+      this.moduleMap.set(mod.name, mod);
     }
   }
 
-  /** All tools, deduplicated by name. */
-  getAll(): DevOpsTool[] {
-    return Array.from(this.toolMap.values());
+  /** All modules, deduplicated by name. */
+  getAll(): DevOpsModule[] {
+    return Array.from(this.moduleMap.values());
   }
 
-  /** Look up a tool by name. */
-  get(name: string): DevOpsTool | undefined {
-    return this.toolMap.get(name);
+  /** Look up a module by name. */
+  get(name: string): DevOpsModule | undefined {
+    return this.moduleMap.get(name);
   }
 
-  /** Check if a tool exists by name. */
+  /** Check if a module exists by name. */
   has(name: string): boolean {
-    return this.toolMap.has(name);
+    return this.moduleMap.has(name);
   }
 
-  /** Get only built-in tools. */
-  getBuiltIn(): DevOpsTool[] {
+  /** Get only built-in modules. */
+  getBuiltIn(): DevOpsModule[] {
     return [...this.builtIn];
   }
 
-  /** Extract tool metadata for a tool by name. */
-  getToolMetadata(name: string):
+  /** Extract module metadata by name. */
+  getModuleMetadata(name: string):
     | {
         toolType: "built-in" | "custom";
         toolVersion?: string;
@@ -71,19 +71,19 @@ export class ToolRegistry {
         systemPromptHash?: string;
       }
     | undefined {
-    const tool = this.toolMap.get(name);
-    if (!tool) return undefined;
+    const mod = this.moduleMap.get(name);
+    if (!mod) return undefined;
 
     // Check if it's a DopsRuntime instance (has metadata property)
-    if (isDopsRuntime(tool)) {
-      return tool.metadata;
+    if (isDopsRuntime(mod)) {
+      return mod.metadata;
     }
 
     return { toolType: "built-in" };
   }
 
-  /** Total count of unique tools. */
+  /** Total count of unique modules. */
   get size(): number {
-    return this.toolMap.size;
+    return this.moduleMap.size;
   }
 }
