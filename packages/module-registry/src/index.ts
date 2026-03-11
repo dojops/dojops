@@ -1,12 +1,6 @@
 import { LLMProvider } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
-import {
-  DopsRuntimeV2,
-  parseDopsFileAny,
-  validateDopsModuleAny,
-  isV2Module,
-  DocProvider,
-} from "@dojops/runtime";
+import { DopsRuntimeV2, parseDopsFile, validateDopsModule, DocProvider } from "@dojops/runtime";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { ToolRegistry } from "./registry";
@@ -58,9 +52,9 @@ export function loadBuiltInDopsModules(
     for (const file of files) {
       if (!file.endsWith(".dops")) continue;
       try {
-        const module = parseDopsFileAny(path.join(modulesDir, file));
-        const validation = validateDopsModuleAny(module);
-        if (validation.valid && isV2Module(module)) {
+        const module = parseDopsFile(path.join(modulesDir, file));
+        const validation = validateDopsModule(module);
+        if (validation.valid) {
           tools.push(
             new DopsRuntimeV2(module, provider, {
               docAugmenter: options?.docAugmenter,
@@ -96,9 +90,9 @@ export function loadUserDopsModules(
 
   for (const entry of dopsFiles) {
     try {
-      const module = parseDopsFileAny(entry.filePath);
-      const validation = validateDopsModuleAny(module);
-      if (validation.valid && isV2Module(module)) {
+      const module = parseDopsFile(entry.filePath);
+      const validation = validateDopsModule(module);
+      if (validation.valid) {
         tools.push(
           new DopsRuntimeV2(module, provider, {
             docAugmenter: options?.docAugmenter,
@@ -106,12 +100,10 @@ export function loadUserDopsModules(
             projectContext: options?.projectContext,
           }),
         );
-      } else if (!validation.valid) {
+      } else {
         warnings.push(
           `Invalid .dops file ${entry.filePath}: ${(validation.errors ?? []).join(", ")}`,
         );
-      } else {
-        warnings.push(`Skipping v1 .dops file ${entry.filePath}: only v2 modules are supported`);
       }
     } catch (err) {
       warnings.push(

@@ -19,11 +19,11 @@ import {
   parseRawContent,
   parseMultiFileOutput,
 } from "../runtime";
-import { DopsModuleV2 } from "../spec";
+import { DopsModule } from "../spec";
 import type { LLMProvider } from "@dojops/core";
 import * as fs from "node:fs";
 
-function createV2Module(overrides?: Partial<DopsModuleV2["frontmatter"]>): DopsModuleV2 {
+function createV2Module(overrides?: Partial<DopsModule["frontmatter"]>): DopsModule {
   return {
     frontmatter: {
       dops: "v2",
@@ -63,7 +63,7 @@ function createMockProvider(content: string): LLMProvider {
 /** Create a V2 module, mock provider, and runtime in one call. */
 function createRuntime(
   content = "",
-  moduleOverrides?: Partial<DopsModuleV2["frontmatter"]>,
+  moduleOverrides?: Partial<DopsModule["frontmatter"]>,
   runtimeOpts?: ConstructorParameters<typeof DopsRuntimeV2>[2],
 ) {
   const module = createV2Module(moduleOverrides);

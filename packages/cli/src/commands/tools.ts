@@ -6,7 +6,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { z } from "zod";
 import { discoverTools, discoverUserDopsFiles, validateManifest } from "@dojops/module-registry";
-import { parseDopsFileAny, validateDopsModuleAny } from "@dojops/runtime";
+import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
 import { parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { CommandHandler, CLIContext } from "../types";
@@ -137,7 +137,7 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
 
   for (const entry of dopsFiles) {
     try {
-      const module = parseDopsFileAny(entry.filePath);
+      const module = parseDopsFile(entry.filePath);
       dopsEntries.push({
         name: module.frontmatter.meta.name,
         version: module.frontmatter.meta.version,
@@ -333,8 +333,8 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
 
 function validateDopsFile(filePath: string): void {
   try {
-    const module = parseDopsFileAny(filePath);
-    const result = validateDopsModuleAny(module);
+    const module = parseDopsFile(filePath);
+    const result = validateDopsModule(module);
 
     if (result.valid) {
       p.log.success(
@@ -961,8 +961,8 @@ function validateAndParseModule(dopsPath: string): {
   fileBuffer: Buffer;
   hash: string;
 } {
-  const module = parseDopsFileAny(dopsPath);
-  const result = validateDopsModuleAny(module);
+  const module = parseDopsFile(dopsPath);
+  const result = validateDopsModule(module);
   if (!result.valid) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
@@ -1179,11 +1179,11 @@ function resolveInstallDir(isGlobal: boolean): string {
 
 async function parseDownloadedModule(
   fileBuffer: Buffer,
-): Promise<ReturnType<typeof parseDopsFileAny>> {
+): Promise<ReturnType<typeof parseDopsFile>> {
   try {
-    const { parseDopsStringAny, validateDopsModuleAny } = await import("@dojops/runtime");
-    const module = parseDopsStringAny(fileBuffer.toString("utf-8"));
-    const result = validateDopsModuleAny(module);
+    const { parseDopsString, validateDopsModule } = await import("@dojops/runtime");
+    const module = parseDopsString(fileBuffer.toString("utf-8"));
+    const result = validateDopsModule(module);
     if (!result.valid) {
       throw new Error(`Validation failed: ${(result.errors ?? []).join(", ")}`);
     }
@@ -1200,7 +1200,7 @@ async function parseDownloadedModule(
 function logUpgradeIfExists(destPath: string, version: string): void {
   if (!fs.existsSync(destPath)) return;
   try {
-    const existing = parseDopsFileAny(destPath);
+    const existing = parseDopsFile(destPath);
     p.log.info(
       pc.dim(
         `Upgrading ${existing.frontmatter.meta.name} v${existing.frontmatter.meta.version} -> v${version}`,
@@ -1424,8 +1424,8 @@ export const toolsDevCommand: CommandHandler = async (args) => {
 
 function runDevValidation(filePath: string): void {
   try {
-    const module = parseDopsFileAny(filePath);
-    const result = validateDopsModuleAny(module);
+    const module = parseDopsFile(filePath);
+    const result = validateDopsModule(module);
 
     if (result.valid) {
       p.log.success(

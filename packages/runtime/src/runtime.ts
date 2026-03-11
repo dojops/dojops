@@ -5,7 +5,7 @@ import * as yaml from "js-yaml";
 import { LLMProvider } from "@dojops/core";
 import type { DevOpsTool, ToolOutput, VerificationResult, VerificationIssue } from "@dojops/sdk";
 import { z } from "zod";
-import { DopsExecution, DopsModuleV2, DopsRisk, FileSpecV2, Context7LibraryRef } from "./spec";
+import { DopsExecution, DopsModule, DopsRisk, FileSpecV2, Context7LibraryRef } from "./spec";
 import { compilePromptV2, PromptContextV2 } from "./prompt-compiler";
 import { validateStructure } from "./structural-validator";
 import { runVerification } from "./binary-verifier";
@@ -17,7 +17,7 @@ function sha256(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
 
-/** Compute hashes for a DopsModuleV2. */
+/** Compute hashes for a DopsModule. */
 function computeModuleHashes(module: { sections: { prompt: string }; raw: string }): {
   systemPromptHash: string;
   moduleHash: string;
@@ -531,7 +531,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   readonly description: string;
   readonly inputSchema: z.ZodType;
 
-  private readonly module: DopsModuleV2;
+  private readonly module: DopsModule;
   private readonly provider: LLMProvider;
   private readonly options: DopsRuntimeV2Options;
   private readonly _systemPromptHash: string;
@@ -539,7 +539,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   /** Cache of Context7 docs fetched during generate(), reused by verify(). */
   private _lastDocsCache: string = "";
 
-  constructor(module: DopsModuleV2, provider: LLMProvider, options?: DopsRuntimeV2Options) {
+  constructor(module: DopsModule, provider: LLMProvider, options?: DopsRuntimeV2Options) {
     this.module = module;
     this.provider = provider;
     this.options = options ?? {};

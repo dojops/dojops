@@ -36,10 +36,8 @@ vi.mock("@clack/prompts", () => ({
 // Mock @dojops/runtime
 vi.mock("@dojops/runtime", () => ({
   parseDopsFile: vi.fn(),
-  parseDopsFileAny: vi.fn(),
   parseDopsString: vi.fn(),
   validateDopsModule: vi.fn(),
-  validateDopsModuleAny: vi.fn(),
 }));
 
 // Mock @dojops/module-registry

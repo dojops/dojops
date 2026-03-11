@@ -1,25 +1,21 @@
-// Spec types (v1 — kept temporarily for parser.ts compatibility, will be removed in Task 3)
+// Spec types
 export {
   DopsModule,
   DopsFrontmatter,
   DopsValidationResult,
   MarkdownSections,
-  InputFieldDef,
   StructuralRule,
   BinaryVerificationConfig,
   VerificationConfig,
-  FileSpec,
   DetectionConfig,
   DopsPermissions,
   DopsFrontmatterSchema,
   StructuralRuleSchema,
   BinaryVerificationSchema,
   VerificationConfigSchema,
-  FileSpecSchema,
   DetectionConfigSchema,
   PermissionsSchema,
   MetaSchema,
-  OutputSchemaSchema,
   ScopeSchema,
   DopsScope,
   RiskSchema,
@@ -28,41 +24,19 @@ export {
   DopsExecution,
   UpdateSchema,
   DopsUpdate,
-} from "./spec";
-
-// Spec types (v2)
-export {
   Context7LibraryRefSchema,
   Context7LibraryRef,
   ContextBlockSchema,
   ContextBlock,
   FileSpecV2Schema,
   FileSpecV2,
-  DopsFrontmatterV2Schema,
-  DopsFrontmatterV2,
-  DopsModuleV2,
-  DopsModuleAny,
-  isV2Module,
 } from "./spec";
 
-// Parser (v1)
+// Parser
 export { parseDopsFile, parseDopsString, validateDopsModule } from "./parser";
 
-// Parser (v2)
-export {
-  parseDopsFileAny,
-  parseDopsStringAny,
-  validateDopsModuleV2,
-  validateDopsModuleAny,
-} from "./parser";
-
 // Schema compiler
-export {
-  compileInputSchema,
-  compileOutputSchema,
-  jsonSchemaToZod,
-  JSONSchemaObject,
-} from "./schema-compiler";
+export { compileOutputSchema, jsonSchemaToZod, JSONSchemaObject } from "./schema-compiler";
 
 // Prompt compiler (v2)
 export { compilePromptV2, PromptContextV2 } from "./prompt-compiler";

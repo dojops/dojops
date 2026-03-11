@@ -1,15 +1,13 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { parseDopsFileAny, validateDopsModuleAny } from "../parser";
-import { isV2Module, type DopsModuleV2 } from "../spec";
+import { parseDopsFile, validateDopsModule } from "../parser";
+import type { DopsModule } from "../spec";
 
 const MODULES_DIR = path.join(__dirname, "../../modules");
 
-function parseV2Module(filename: string): DopsModuleV2 {
-  const mod = parseDopsFileAny(path.join(MODULES_DIR, filename));
-  if (!isV2Module(mod)) throw new Error(`Expected v2 module: ${filename}`);
-  return mod;
+function parseV2Module(filename: string): DopsModule {
+  return parseDopsFile(path.join(MODULES_DIR, filename));
 }
 
 /** Assert a module's context technology and fileFormat. */
@@ -63,20 +61,20 @@ describe("Built-in .dops modules", () => {
 
     describe(moduleName, () => {
       it("parses without errors", () => {
-        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
+        const module = parseDopsFile(path.join(MODULES_DIR, file));
         expect(module).toBeDefined();
         expect(module.frontmatter.dops).toBe("v2");
         expect(module.frontmatter.meta.name).toBe(moduleName);
       });
 
       it("validates successfully", () => {
-        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
-        const result = validateDopsModuleAny(module);
+        const module = parseDopsFile(path.join(MODULES_DIR, file));
+        const result = validateDopsModule(module);
         expect(result.valid).toBe(true);
       });
 
       it("has required meta fields", () => {
-        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
+        const module = parseDopsFile(path.join(MODULES_DIR, file));
         expect(module.frontmatter.meta.name).toBeTruthy();
         expect(module.frontmatter.meta.version).toBeTruthy();
         expect(module.frontmatter.meta.description).toBeTruthy();
@@ -92,17 +90,17 @@ describe("Built-in .dops modules", () => {
       });
 
       it("has at least one file spec", () => {
-        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
+        const module = parseDopsFile(path.join(MODULES_DIR, file));
         expect(module.frontmatter.files.length).toBeGreaterThanOrEqual(1);
       });
 
       it("has ## Prompt section", () => {
-        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
+        const module = parseDopsFile(path.join(MODULES_DIR, file));
         expect(module.sections.prompt).toBeTruthy();
       });
 
       it("has ## Keywords section", () => {
-        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
+        const module = parseDopsFile(path.join(MODULES_DIR, file));
         expect(module.sections.keywords).toBeTruthy();
       });
     });
@@ -133,12 +131,12 @@ describe("github-actions.dops", () => {
   });
 
   it("has binary verification with actionlint", () => {
-    const module = parseDopsFileAny(path.join(MODULES_DIR, "github-actions.dops"));
+    const module = parseDopsFile(path.join(MODULES_DIR, "github-actions.dops"));
     expect(module.frontmatter.verification?.binary?.command).toContain("actionlint");
   });
 
   it("has multiple file specs including actions and reusable workflows", () => {
-    const module = parseDopsFileAny(path.join(MODULES_DIR, "github-actions.dops"));
+    const module = parseDopsFile(path.join(MODULES_DIR, "github-actions.dops"));
     const paths = module.frontmatter.files.map((f: { path: string }) => f.path);
     expect(paths.length).toBeGreaterThanOrEqual(5);
     expect(paths.some((p: string) => p.includes(".github/workflows/"))).toBe(true);

@@ -3,10 +3,8 @@ import {
   Context7LibraryRefSchema,
   ContextBlockSchema,
   FileSpecV2Schema,
-  DopsFrontmatterV2Schema,
+  DopsFrontmatterSchema,
   DopsModule,
-  DopsModuleV2,
-  isV2Module,
 } from "../spec";
 
 describe("Context7LibraryRefSchema", () => {
@@ -188,7 +186,7 @@ describe("FileSpecV2Schema", () => {
   });
 });
 
-describe("DopsFrontmatterV2Schema", () => {
+describe("DopsFrontmatterSchema", () => {
   const validFrontmatter = {
     dops: "v2",
     kind: "tool",
@@ -207,7 +205,7 @@ describe("DopsFrontmatterV2Schema", () => {
   };
 
   it("validates complete v2 frontmatter", () => {
-    const result = DopsFrontmatterV2Schema.safeParse(validFrontmatter);
+    const result = DopsFrontmatterSchema.safeParse(validFrontmatter);
     expect(result.success).toBe(true);
     expect(result.data!.dops).toBe("v2");
     expect(result.data!.meta.name).toBe("test-tool");
@@ -216,7 +214,7 @@ describe("DopsFrontmatterV2Schema", () => {
   });
 
   it("validates with optional fields", () => {
-    const result = DopsFrontmatterV2Schema.safeParse({
+    const result = DopsFrontmatterSchema.safeParse({
       ...validFrontmatter,
       risk: { level: "MEDIUM", rationale: "Infra changes" },
       execution: { mode: "generate", deterministic: true, idempotent: false },
@@ -229,7 +227,7 @@ describe("DopsFrontmatterV2Schema", () => {
   });
 
   it("rejects invalid version (v1 instead of v2)", () => {
-    const result = DopsFrontmatterV2Schema.safeParse({
+    const result = DopsFrontmatterSchema.safeParse({
       ...validFrontmatter,
       dops: "v1",
     });
@@ -237,7 +235,7 @@ describe("DopsFrontmatterV2Schema", () => {
   });
 
   it("rejects invalid version (arbitrary string)", () => {
-    const result = DopsFrontmatterV2Schema.safeParse({
+    const result = DopsFrontmatterSchema.safeParse({
       ...validFrontmatter,
       dops: "v3",
     });
@@ -247,19 +245,19 @@ describe("DopsFrontmatterV2Schema", () => {
   it("rejects missing context block", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { context: _context, ...noContext } = validFrontmatter;
-    const result = DopsFrontmatterV2Schema.safeParse(noContext);
+    const result = DopsFrontmatterSchema.safeParse(noContext);
     expect(result.success).toBe(false);
   });
 
   it("rejects missing files array", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { files: _files, ...noFiles } = validFrontmatter;
-    const result = DopsFrontmatterV2Schema.safeParse(noFiles);
+    const result = DopsFrontmatterSchema.safeParse(noFiles);
     expect(result.success).toBe(false);
   });
 
   it("rejects empty files array", () => {
-    const result = DopsFrontmatterV2Schema.safeParse({
+    const result = DopsFrontmatterSchema.safeParse({
       ...validFrontmatter,
       files: [],
     });
@@ -267,9 +265,9 @@ describe("DopsFrontmatterV2Schema", () => {
   });
 });
 
-describe("isV2Module", () => {
-  it("returns true for v2 modules", () => {
-    const mod: DopsModuleV2 = {
+describe("DopsModule type", () => {
+  it("conforms to the DopsModule interface", () => {
+    const mod: DopsModule = {
       frontmatter: {
         dops: "v2",
         kind: "tool",
@@ -285,21 +283,7 @@ describe("isV2Module", () => {
       sections: { prompt: "Test", keywords: "test" },
       raw: "",
     };
-    expect(isV2Module(mod)).toBe(true);
-  });
-
-  it("returns false for v1 modules", () => {
-    const mod: DopsModule = {
-      frontmatter: {
-        dops: "v1",
-        kind: "tool",
-        meta: { name: "test", version: "1.0.0", description: "Test" },
-        output: { type: "object" },
-        files: [{ path: "out.yaml", format: "yaml", source: "llm" }],
-      },
-      sections: { prompt: "Test", keywords: "test" },
-      raw: "",
-    };
-    expect(isV2Module(mod)).toBe(false);
+    expect(mod.frontmatter.dops).toBe("v2");
+    expect(mod.frontmatter.context.technology).toBe("Test");
   });
 });

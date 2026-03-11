@@ -1,15 +1,6 @@
 import * as fs from "node:fs";
 import * as yaml from "js-yaml";
-import {
-  DopsFrontmatterSchema,
-  DopsFrontmatterV2Schema,
-  DopsModule,
-  DopsModuleV2,
-  DopsModuleAny,
-  DopsValidationResult,
-  MarkdownSections,
-  isV2Module,
-} from "./spec";
+import { DopsFrontmatterSchema, DopsModule, DopsValidationResult, MarkdownSections } from "./spec";
 
 const FRONTMATTER_DELIMITER = "---";
 
@@ -22,23 +13,29 @@ export function parseDopsFile(filePath: string): DopsModule {
 }
 
 /**
- * Parse a .dops file from a string.
+ * Parse a .dops file from a string. Only v2 format is supported.
  */
 export function parseDopsString(content: string): DopsModule {
   const { frontmatterRaw, body } = splitFrontmatter(content);
   const frontmatterData = parseFrontmatterYaml(frontmatterRaw);
+  const sections = parseMarkdownSections(body);
+
+  const version = (frontmatterData as Record<string, unknown>)?.dops;
+
+  if (version !== "v2") {
+    throw new Error(
+      "Unsupported .dops format. Only v2 is supported. Set 'dops: v2' in frontmatter.",
+    );
+  }
+
   const frontmatter = validateFrontmatter(
     DopsFrontmatterSchema,
     frontmatterData,
-    "DOPS frontmatter",
+    "DOPS v2 frontmatter",
   );
-  const sections = parseMarkdownSections(body);
   return { frontmatter, sections, raw: content };
 }
 
-/**
- * Validate a parsed DOPS module for completeness.
- */
 const KNOWN_VERIFICATION_PARSERS = new Set([
   "terraform-json",
   "hadolint-json",
@@ -88,27 +85,21 @@ function validateVerificationParser(
   }
 }
 
+/**
+ * Validate a parsed DOPS module for completeness.
+ */
 export function validateDopsModule(module: DopsModule): DopsValidationResult {
   const errors: string[] = [];
 
   validateRequiredSections(module.sections, errors);
 
-  if (!module.frontmatter.output?.type) {
-    errors.push("Output schema must have a 'type' field");
-  }
-
   for (const file of module.frontmatter.files) {
-    if (file.source === "template" && !file.content && file.format !== "raw") {
-      errors.push(`File '${file.path}': template source requires 'content' field`);
+    if (!file.path || file.path.trim().length === 0) {
+      errors.push("File spec has empty path");
     }
   }
 
   validateScopeWritePaths(module.frontmatter.scope, errors);
-
-  if (module.frontmatter.risk && module.frontmatter.permissions?.network === "required") {
-    errors.push("network permission must be 'none' for v1 tools");
-  }
-
   validateVerificationParser(module.frontmatter.verification, errors);
 
   return {
@@ -184,18 +175,6 @@ function parseMarkdownSections(body: string): MarkdownSections {
   };
 }
 
-// ══════════════════════════════════════════════════════
-// v2 Version-detecting parsers
-// ══════════════════════════════════════════════════════
-
-/**
- * Parse a .dops file from disk, auto-detecting v1 or v2 format.
- */
-export function parseDopsFileAny(filePath: string): DopsModuleAny {
-  const content = fs.readFileSync(filePath, "utf-8");
-  return parseDopsStringAny(content);
-}
-
 /** Parse frontmatter YAML and throw on invalid YAML. */
 function parseFrontmatterYaml(raw: string): unknown {
   try {
@@ -223,61 +202,4 @@ function validateFrontmatter<T>(
     throw new Error(`Invalid ${label}:\n  ${errors.join("\n  ")}`);
   }
   return result.data!;
-}
-
-export function parseDopsStringAny(content: string): DopsModuleAny {
-  const { frontmatterRaw, body } = splitFrontmatter(content);
-  const frontmatterData = parseFrontmatterYaml(frontmatterRaw);
-  const sections = parseMarkdownSections(body);
-
-  const version = (frontmatterData as Record<string, unknown>)?.dops;
-
-  if (version === "v2") {
-    const frontmatter = validateFrontmatter(
-      DopsFrontmatterV2Schema,
-      frontmatterData,
-      "DOPS v2 frontmatter",
-    );
-    return { frontmatter, sections, raw: content } as DopsModuleV2;
-  }
-
-  const frontmatter = validateFrontmatter(
-    DopsFrontmatterSchema,
-    frontmatterData,
-    "DOPS frontmatter",
-  );
-  return { frontmatter, sections, raw: content } as DopsModule;
-}
-
-/**
- * Validate a parsed v2 DOPS module for completeness.
- */
-export function validateDopsModuleV2(module: DopsModuleV2): DopsValidationResult {
-  const errors: string[] = [];
-
-  validateRequiredSections(module.sections, errors);
-
-  for (const file of module.frontmatter.files) {
-    if (!file.path || file.path.trim().length === 0) {
-      errors.push("File spec has empty path");
-    }
-  }
-
-  validateScopeWritePaths(module.frontmatter.scope, errors);
-  validateVerificationParser(module.frontmatter.verification, errors);
-
-  return {
-    valid: errors.length === 0,
-    errors: errors.length > 0 ? errors : undefined,
-  };
-}
-
-/**
- * Validate any DOPS module (v1 or v2) for completeness.
- */
-export function validateDopsModuleAny(module: DopsModuleAny): DopsValidationResult {
-  if (isV2Module(module)) {
-    return validateDopsModuleV2(module);
-  }
-  return validateDopsModule(module);
 }

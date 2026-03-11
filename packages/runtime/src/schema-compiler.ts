@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { InputFieldDef } from "./spec";
 
 // ── ReDoS guard ──────────────────────────────────────────────
 
@@ -79,91 +78,6 @@ export interface JSONSchemaObject {
   anyOf?: JSONSchemaObject[];
   oneOf?: JSONSchemaObject[];
   format?: string;
-}
-
-/**
- * Compile input DSL fields into a Zod schema.
- * Auto-injects optional `existingContent` field.
- */
-export function compileInputSchema(fields: Record<string, InputFieldDef>): z.ZodType {
-  const shape: Record<string, z.ZodType> = {};
-
-  for (const [name, field] of Object.entries(fields)) {
-    shape[name] = compileInputField(field);
-  }
-
-  // Auto-inject existingContent as optional
-  shape["existingContent"] = z.string().optional();
-
-  return z.object(shape);
-}
-
-// ── Input field type compilers ────────────────────────────────
-
-function compileStringField(field: InputFieldDef): z.ZodType {
-  let s = z.string();
-  if (field.minLength !== undefined) s = s.min(field.minLength);
-  if (field.maxLength !== undefined) s = s.max(field.maxLength);
-  if (field.pattern !== undefined) s = s.regex(safeRegex(field.pattern));
-  return s;
-}
-
-function compileNumberField(field: InputFieldDef, isInteger: boolean): z.ZodType {
-  let n = isInteger ? z.number().int() : z.number();
-  if (field.min !== undefined) n = n.min(field.min);
-  if (field.max !== undefined) n = n.max(field.max);
-  return n;
-}
-
-function compileEnumField(field: InputFieldDef): z.ZodType {
-  const values = field.values ?? [];
-  return values.length === 0 ? z.string() : z.enum(values as [string, ...string[]]);
-}
-
-function compileArrayField(field: InputFieldDef): z.ZodType {
-  const itemSchema = field.items ? compileInputField(field.items) : z.unknown();
-  let arr = z.array(itemSchema);
-  if (field.minItems !== undefined) arr = arr.min(field.minItems);
-  if (field.maxItems !== undefined) arr = arr.max(field.maxItems);
-  return arr;
-}
-
-function compileObjectField(field: InputFieldDef): z.ZodType {
-  if (!field.properties) return z.record(z.string(), z.unknown());
-  const shape: Record<string, z.ZodType> = {};
-  for (const [key, propDef] of Object.entries(field.properties)) {
-    shape[key] = compileInputField(propDef);
-  }
-  return z.object(shape);
-}
-
-/** Dispatch map for input field type → Zod compiler. */
-const inputFieldCompilers: Record<string, (field: InputFieldDef) => z.ZodType> = {
-  string: compileStringField,
-  number: (f) => compileNumberField(f, false),
-  integer: (f) => compileNumberField(f, true),
-  boolean: () => z.boolean(),
-  enum: compileEnumField,
-  array: compileArrayField,
-  object: compileObjectField,
-};
-
-/** Apply meta (description, default, optional) to a compiled schema. */
-function applyFieldMeta(schema: z.ZodType, field: InputFieldDef): z.ZodType {
-  let result = schema;
-  if (field.description) result = result.describe(field.description);
-  if (field.default !== undefined) result = result.default(field.default);
-  if (!field.required && field.default === undefined) result = result.optional();
-  return result;
-}
-
-/**
- * Compile a single input field DSL definition into Zod.
- */
-function compileInputField(field: InputFieldDef): z.ZodType {
-  const compiler = inputFieldCompilers[field.type];
-  const schema = compiler ? compiler(field) : z.unknown();
-  return applyFieldMeta(schema, field);
 }
 
 // ── jsonSchemaToZod handler helpers ──────────────────────────

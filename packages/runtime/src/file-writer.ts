@@ -1,7 +1,26 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { atomicWriteFileSync, backupFile, readExistingConfig } from "@dojops/sdk";
-import { DopsScope, FileSpec } from "./spec";
+import { DopsScope } from "./spec";
+
+/** Legacy v1 file spec — kept for backward compatibility with writeFiles/serializeForFile. */
+interface FileSpec {
+  path: string;
+  format: string;
+  source?: string;
+  content?: string;
+  multiDocument?: boolean;
+  dataPath?: string;
+  conditional?: boolean;
+  options?: {
+    mapAttributes?: string[];
+    keyOrder?: string[];
+    sortKeys?: boolean;
+    lineWidth?: number;
+    noRefs?: boolean;
+    indent?: number;
+  };
+}
 import { serialize, SerializerOptions } from "./serializer";
 
 export interface WriteResult {

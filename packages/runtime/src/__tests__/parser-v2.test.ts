@@ -1,42 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  parseDopsStringAny,
-  parseDopsFileAny,
-  validateDopsModuleV2,
-  validateDopsModuleAny,
-} from "../parser";
-import { isV2Module, DopsModuleV2, DopsModule } from "../spec";
+import { parseDopsString, parseDopsFile, validateDopsModule } from "../parser";
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
 }));
-
-const MINIMAL_V1_DOPS = `---
-dops: v1
-kind: tool
-meta:
-  name: v1-tool
-  version: 1.0.0
-  description: "A v1 tool"
-output:
-  type: object
-  properties:
-    result:
-      type: string
-files:
-  - path: "output.yaml"
-    format: yaml
----
-# V1 Tool
-
-## Prompt
-
-V1 prompt content.
-
-## Keywords
-
-v1, tool
-`;
 
 const MINIMAL_V2_DOPS = `---
 dops: v2
@@ -173,39 +140,32 @@ Output: resource "aws_s3_bucket" { ... }
 terraform, hcl
 `;
 
-describe("parseDopsStringAny", () => {
-  it("parses v1 strings and returns v1 module", () => {
-    const module = parseDopsStringAny(MINIMAL_V1_DOPS);
-    expect(isV2Module(module)).toBe(false);
-    expect(module.frontmatter.dops).toBe("v1");
-    expect(module.frontmatter.meta.name).toBe("v1-tool");
-    expect(module.sections.prompt).toContain("V1 prompt content");
-    expect(module.sections.keywords).toContain("v1, tool");
-
-    // v1-specific field
-    const v1Module = module as DopsModule;
-    expect(v1Module.frontmatter.output).toBeDefined();
+describe("parseDopsString", () => {
+  it("rejects v1 .dops files with clear error", () => {
+    const v1Content = `---\ndops: v1\nname: test\n---\n# Prompt\nGenerate something\n\n## Keywords\n\ntest`;
+    expect(() => parseDopsString(v1Content)).toThrow(/only v2 is supported/i);
   });
 
-  it("parses v2 strings and returns v2 module", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS);
-    expect(isV2Module(module)).toBe(true);
+  it("rejects .dops files without a version field", () => {
+    const noVersion = `---\nkind: tool\nmeta:\n  name: test\n---\n## Prompt\nTest\n\n## Keywords\n\ntest`;
+    expect(() => parseDopsString(noVersion)).toThrow(/only v2 is supported/i);
+  });
+
+  it("parses v2 strings and returns module", () => {
+    const module = parseDopsString(MINIMAL_V2_DOPS);
     expect(module.frontmatter.dops).toBe("v2");
     expect(module.frontmatter.meta.name).toBe("v2-tool");
     expect(module.sections.prompt).toContain("Generate Terraform configuration");
     expect(module.sections.keywords).toContain("terraform, hcl, iac");
 
-    // v2-specific field
-    const v2Module = module as DopsModuleV2;
-    expect(v2Module.frontmatter.context).toBeDefined();
-    expect(v2Module.frontmatter.context.technology).toBe("Terraform");
-    expect(v2Module.frontmatter.context.fileFormat).toBe("hcl");
-    expect(v2Module.frontmatter.context.bestPractices).toHaveLength(2);
+    expect(module.frontmatter.context).toBeDefined();
+    expect(module.frontmatter.context.technology).toBe("Terraform");
+    expect(module.frontmatter.context.fileFormat).toBe("hcl");
+    expect(module.frontmatter.context.bestPractices).toHaveLength(2);
   });
 
   it("parses full v2 module with all optional fields", () => {
-    const module = parseDopsStringAny(FULL_V2_DOPS) as DopsModuleV2;
-    expect(isV2Module(module)).toBe(true);
+    const module = parseDopsString(FULL_V2_DOPS);
     expect(module.frontmatter.meta.name).toBe("full-v2-tool");
     expect(module.frontmatter.meta.author).toBe("test-author");
     expect(module.frontmatter.context.context7Libraries).toHaveLength(1);
@@ -222,8 +182,7 @@ describe("parseDopsStringAny", () => {
   });
 
   it("parses v2 file with old sections (backward compat)", () => {
-    const module = parseDopsStringAny(FULL_V2_DOPS_WITH_OLD_SECTIONS) as DopsModuleV2;
-    expect(isV2Module(module)).toBe(true);
+    const module = parseDopsString(FULL_V2_DOPS_WITH_OLD_SECTIONS);
     expect(module.frontmatter.meta.name).toBe("old-v2-tool");
     // Parser still extracts old sections (needed for v1 compat), they're just ignored by compiler
     expect(module.sections.updatePrompt).toContain("Update existing config");
@@ -252,44 +211,23 @@ Test prompt.
 
 test
 `;
-    expect(() => parseDopsStringAny(invalidV2)).toThrow("Invalid DOPS v2 frontmatter");
-  });
-
-  it("throws on invalid v1 frontmatter when version is v1", () => {
-    const invalidV1 = `---
-dops: v1
-meta:
-  name: bad-v1
-  version: 1.0.0
-  description: "Missing output"
-files:
-  - path: "out.yaml"
----
-## Prompt
-
-Test.
-
-## Keywords
-
-test
-`;
-    expect(() => parseDopsStringAny(invalidV1)).toThrow("Invalid DOPS frontmatter");
+    expect(() => parseDopsString(invalidV2)).toThrow("Invalid DOPS v2 frontmatter");
   });
 
   it("throws on missing frontmatter delimiter", () => {
-    expect(() => parseDopsStringAny("no frontmatter")).toThrow(
+    expect(() => parseDopsString("no frontmatter")).toThrow(
       "DOPS file must start with --- frontmatter delimiter",
     );
   });
 
   it("throws on invalid YAML", () => {
-    expect(() => parseDopsStringAny("---\n: invalid: yaml:\n---\n")).toThrow(
+    expect(() => parseDopsString("---\n: invalid: yaml:\n---\n")).toThrow(
       "Invalid YAML in frontmatter",
     );
   });
 });
 
-describe("parseDopsFileAny", () => {
+describe("parseDopsFile", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -298,61 +236,78 @@ describe("parseDopsFileAny", () => {
     const fs = await import("node:fs");
     (fs.readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(MINIMAL_V2_DOPS);
 
-    const module = parseDopsFileAny("/path/to/tool.dops");
+    const module = parseDopsFile("/path/to/tool.dops");
 
     expect(fs.readFileSync).toHaveBeenCalledWith("/path/to/tool.dops", "utf-8");
-    expect(isV2Module(module)).toBe(true);
+    expect(module.frontmatter.dops).toBe("v2");
     expect(module.frontmatter.meta.name).toBe("v2-tool");
   });
 
-  it("reads and parses a v1 file from disk", async () => {
+  it("rejects a v1 file from disk", async () => {
+    const v1Content = `---
+dops: v1
+kind: tool
+meta:
+  name: v1-tool
+  version: 1.0.0
+  description: "A v1 tool"
+output:
+  type: object
+files:
+  - path: "output.yaml"
+    format: yaml
+---
+## Prompt
+
+V1 prompt.
+
+## Keywords
+
+v1
+`;
     const fs = await import("node:fs");
-    (fs.readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(MINIMAL_V1_DOPS);
+    (fs.readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(v1Content);
 
-    const module = parseDopsFileAny("/path/to/v1-tool.dops");
-
-    expect(fs.readFileSync).toHaveBeenCalledWith("/path/to/v1-tool.dops", "utf-8");
-    expect(isV2Module(module)).toBe(false);
-    expect(module.frontmatter.meta.name).toBe("v1-tool");
+    expect(() => parseDopsFile("/path/to/v1-tool.dops")).toThrow(/only v2 is supported/i);
   });
 });
 
-describe("validateDopsModuleV2", () => {
+describe("validateDopsModule", () => {
   it("returns valid for complete v2 module", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS) as DopsModuleV2;
-    const result = validateDopsModuleV2(module);
+    const module = parseDopsString(MINIMAL_V2_DOPS);
+    const result = validateDopsModule(module);
     expect(result.valid).toBe(true);
     expect(result.errors).toBeUndefined();
   });
 
   it("returns valid for full v2 module", () => {
-    const module = parseDopsStringAny(FULL_V2_DOPS) as DopsModuleV2;
-    const result = validateDopsModuleV2(module);
+    const module = parseDopsString(FULL_V2_DOPS);
+    const result = validateDopsModule(module);
     expect(result.valid).toBe(true);
     expect(result.errors).toBeUndefined();
   });
 
   it("returns errors for missing Prompt section", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS) as DopsModuleV2;
+    const module = parseDopsString(MINIMAL_V2_DOPS);
     module.sections.prompt = "";
-    const result = validateDopsModuleV2(module);
+    const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Missing required ## Prompt section");
   });
 
   it("returns errors for missing Keywords section", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS) as DopsModuleV2;
+    const module = parseDopsString(MINIMAL_V2_DOPS);
     module.sections.keywords = "";
-    const result = validateDopsModuleV2(module);
+    const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Missing required ## Keywords section");
   });
 
   it("returns errors for both missing Prompt and Keywords", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS) as DopsModuleV2;
+    const module = parseDopsString(MINIMAL_V2_DOPS);
     module.sections.prompt = "";
     module.sections.keywords = "";
-    const result = validateDopsModuleV2(module);
+    const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toHaveLength(2);
     expect(result.errors).toContain("Missing required ## Prompt section");
@@ -360,15 +315,15 @@ describe("validateDopsModuleV2", () => {
   });
 
   it("catches scope write path with path traversal", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS) as DopsModuleV2;
+    const module = parseDopsString(MINIMAL_V2_DOPS);
     module.frontmatter.scope = { write: ["../etc/passwd"] };
-    const result = validateDopsModuleV2(module);
+    const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Scope write path contains path traversal: '../etc/passwd'");
   });
 
   it("catches unknown verification parser", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS) as DopsModuleV2;
+    const module = parseDopsString(MINIMAL_V2_DOPS);
     module.frontmatter.verification = {
       binary: {
         command: "unknown-tool",
@@ -377,38 +332,8 @@ describe("validateDopsModuleV2", () => {
         cwd: "output",
       },
     };
-    const result = validateDopsModuleV2(module);
+    const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors![0]).toContain("Unknown verification parser");
-  });
-});
-
-describe("validateDopsModuleAny", () => {
-  it("dispatches v2 modules to validateDopsModuleV2", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS) as DopsModuleV2;
-    const result = validateDopsModuleAny(module);
-    expect(result.valid).toBe(true);
-  });
-
-  it("dispatches v1 modules to validateDopsModule", () => {
-    const module = parseDopsStringAny(MINIMAL_V1_DOPS) as DopsModule;
-    const result = validateDopsModuleAny(module);
-    expect(result.valid).toBe(true);
-  });
-
-  it("reports v2 validation errors via dispatch", () => {
-    const module = parseDopsStringAny(MINIMAL_V2_DOPS) as DopsModuleV2;
-    module.sections.prompt = "";
-    const result = validateDopsModuleAny(module);
-    expect(result.valid).toBe(false);
-    expect(result.errors).toContain("Missing required ## Prompt section");
-  });
-
-  it("reports v1 validation errors via dispatch", () => {
-    const module = parseDopsStringAny(MINIMAL_V1_DOPS) as DopsModule;
-    module.sections.keywords = "";
-    const result = validateDopsModuleAny(module);
-    expect(result.valid).toBe(false);
-    expect(result.errors).toContain("Missing required ## Keywords section");
   });
 });

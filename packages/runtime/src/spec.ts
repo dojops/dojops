@@ -1,100 +1,5 @@
 import { z } from "zod";
 
-// ── Input Field DSL ──────────────────────────────────
-
-export interface InputFieldDef {
-  type: "string" | "number" | "integer" | "boolean" | "enum" | "array" | "object";
-  required?: boolean;
-  description?: string;
-  default?: unknown;
-  minLength?: number;
-  maxLength?: number;
-  pattern?: string;
-  min?: number;
-  max?: number;
-  values?: string[];
-  items?: InputFieldDef;
-  minItems?: number;
-  maxItems?: number;
-  properties?: Record<string, InputFieldDef>;
-}
-
-const InputFieldBaseSchema: z.ZodType<InputFieldDef> = z.object({
-  type: z.enum(["string", "number", "integer", "boolean", "enum", "array", "object"]),
-  required: z.boolean().optional(),
-  description: z.string().optional(),
-  default: z.unknown().optional(),
-  // String constraints
-  minLength: z.number().int().optional(),
-  maxLength: z.number().int().optional(),
-  pattern: z.string().optional(),
-  // Number constraints
-  min: z.number().optional(),
-  max: z.number().optional(),
-  // Enum values
-  values: z.array(z.string()).optional(),
-  // Array constraints
-  items: z.lazy((): z.ZodType<InputFieldDef> => InputFieldSchema).optional(),
-  minItems: z.number().int().optional(),
-  maxItems: z.number().int().optional(),
-  // Object shape
-  properties: z
-    .record(
-      z.string(),
-      z.lazy((): z.ZodType<InputFieldDef> => InputFieldSchema),
-    )
-    .optional(),
-});
-
-export const InputFieldSchema: z.ZodType<InputFieldDef> = InputFieldBaseSchema;
-
-// ── Output Schema (JSON Schema in YAML) ─────────────
-
-export interface OutputSchemaShape {
-  type?: string;
-  properties?: Record<string, OutputSchemaShape>;
-  required?: string[];
-  items?: OutputSchemaShape;
-  enum?: unknown[];
-  default?: unknown;
-  description?: string;
-  minLength?: number;
-  maxLength?: number;
-  minimum?: number;
-  maximum?: number;
-  pattern?: string;
-  minItems?: number;
-  maxItems?: number;
-  anyOf?: OutputSchemaShape[];
-  oneOf?: OutputSchemaShape[];
-  format?: string;
-  [key: string]: unknown;
-}
-
-export const OutputSchemaSchema: z.ZodType<OutputSchemaShape> = z.lazy(() =>
-  z
-    .object({
-      type: z.string().optional(),
-      properties: z.record(z.string(), OutputSchemaSchema).optional(),
-      required: z.array(z.string()).optional(),
-      items: OutputSchemaSchema.optional(),
-      enum: z.array(z.unknown()).optional(),
-      default: z.unknown().optional(),
-      description: z.string().optional(),
-      minLength: z.number().optional(),
-      maxLength: z.number().optional(),
-      minimum: z.number().optional(),
-      maximum: z.number().optional(),
-      pattern: z.string().optional(),
-      minItems: z.number().optional(),
-      maxItems: z.number().optional(),
-      anyOf: z.array(OutputSchemaSchema).optional(),
-      oneOf: z.array(OutputSchemaSchema).optional(),
-      format: z.string().optional(),
-    })
-    .passthrough(),
-);
-
 // ── Structural Validation Rule ───────────────────────
 
 export const StructuralRuleSchema = z.object({
@@ -136,30 +41,6 @@ export const VerificationConfigSchema = z.object({
 });
 
 export type VerificationConfig = z.infer<typeof VerificationConfigSchema>;
-
-// ── File Output Spec ─────────────────────────────────
-
-export const FileSpecSchema = z.object({
-  path: z.string().min(1),
-  format: z.enum(["hcl", "yaml", "json", "raw", "ini", "toml"]).default("raw"),
-  source: z.enum(["llm", "template"]).default("llm"),
-  content: z.string().optional(),
-  multiDocument: z.boolean().optional(),
-  dataPath: z.string().optional(),
-  conditional: z.boolean().optional(),
-  options: z
-    .object({
-      mapAttributes: z.array(z.string()).optional(),
-      keyOrder: z.array(z.string()).optional(),
-      sortKeys: z.boolean().optional(),
-      lineWidth: z.number().int().optional(),
-      noRefs: z.boolean().optional(),
-      indent: z.number().int().optional(),
-    })
-    .optional(),
-});
-
-export type FileSpec = z.infer<typeof FileSpecSchema>;
 
 // ── Detection Config ─────────────────────────────────
 
@@ -250,31 +131,6 @@ export type DopsCapabilities = z.infer<typeof CapabilitiesSchema>;
 
 export type DopsUpdate = z.infer<typeof UpdateSchema>;
 
-// ── Frontmatter (YAML section) ───────────────────────
-
-export const DopsFrontmatterSchema = z.object({
-  dops: z.literal("v1"),
-  kind: z.enum(["tool"]).default("tool"),
-  meta: MetaSchema,
-  input: z
-    .object({
-      fields: z.record(z.string(), InputFieldSchema),
-    })
-    .optional(),
-  output: OutputSchemaSchema,
-  files: z.array(FileSpecSchema).min(1),
-  detection: DetectionConfigSchema.optional(),
-  verification: VerificationConfigSchema.optional(),
-  permissions: PermissionsSchema.optional(),
-  scope: ScopeSchema.optional(),
-  risk: RiskSchema.optional(),
-  execution: ExecutionSchema.optional(),
-  update: UpdateSchema.optional(),
-  capabilities: CapabilitiesSchema.optional(),
-});
-
-export type DopsFrontmatter = z.infer<typeof DopsFrontmatterSchema>;
-
 // ── Markdown Sections ────────────────────────────────
 
 export interface MarkdownSections {
@@ -285,24 +141,12 @@ export interface MarkdownSections {
   keywords: string;
 }
 
-// ── Complete DOPS Module ─────────────────────────────
-
-export interface DopsModule {
-  frontmatter: DopsFrontmatter;
-  sections: MarkdownSections;
-  raw: string;
-}
-
 // ── Validation Result ────────────────────────────────
 
 export interface DopsValidationResult {
   valid: boolean;
   errors?: string[];
 }
-
-// ══════════════════════════════════════════════════════
-// v2 Format Schemas
-// ══════════════════════════════════════════════════════
 
 // ── Context7 Library Reference ───────────────────────
 
@@ -313,7 +157,7 @@ export const Context7LibraryRefSchema = z.object({
 
 export type Context7LibraryRef = z.infer<typeof Context7LibraryRefSchema>;
 
-// ── Context Block (replaces input + output in v2) ────
+// ── Context Block ────────────────────────────────────
 
 export const ContextBlockSchema = z.object({
   technology: z.string().min(1),
@@ -325,7 +169,7 @@ export const ContextBlockSchema = z.object({
 
 export type ContextBlock = z.infer<typeof ContextBlockSchema>;
 
-// ── v2 File Spec (always raw) ────────────────────────
+// ── File Spec (always raw) ───────────────────────────
 
 export const FileSpecV2Schema = z.object({
   path: z.string().min(1),
@@ -335,9 +179,9 @@ export const FileSpecV2Schema = z.object({
 
 export type FileSpecV2 = z.infer<typeof FileSpecV2Schema>;
 
-// ── v2 Frontmatter ──────────────────────────────────
+// ── Frontmatter ──────────────────────────────────────
 
-export const DopsFrontmatterV2Schema = z.object({
+export const DopsFrontmatterSchema = z.object({
   dops: z.literal("v2"),
   kind: z.enum(["tool"]).default("tool"),
   meta: MetaSchema,
@@ -353,20 +197,12 @@ export const DopsFrontmatterV2Schema = z.object({
   capabilities: CapabilitiesSchema.optional(),
 });
 
-export type DopsFrontmatterV2 = z.infer<typeof DopsFrontmatterV2Schema>;
+export type DopsFrontmatter = z.infer<typeof DopsFrontmatterSchema>;
 
-// ── v2 Complete Module ──────────────────────────────
+// ── Complete DOPS Module ─────────────────────────────
 
-export interface DopsModuleV2 {
-  frontmatter: DopsFrontmatterV2;
+export interface DopsModule {
+  frontmatter: DopsFrontmatter;
   sections: MarkdownSections;
   raw: string;
-}
-
-// ── Version-agnostic union ──────────────────────────
-
-export type DopsModuleAny = DopsModule | DopsModuleV2;
-
-export function isV2Module(mod: DopsModuleAny): mod is DopsModuleV2 {
-  return mod.frontmatter.dops === "v2";
 }
