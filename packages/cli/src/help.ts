@@ -48,6 +48,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
   console.log(`  ${pc.cyan("cron")}               Manage scheduled jobs`);
   console.log(`  ${pc.cyan("upgrade")}            Check for and install CLI updates`);
+  console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
   console.log(

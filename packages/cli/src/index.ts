@@ -64,6 +64,13 @@ import { verifyCommand } from "./commands/verify";
 import { providerCommand } from "./commands/provider";
 import { upgradeCommand } from "./commands/upgrade";
 import { cronCommand } from "./commands/cron";
+import {
+  completionBashCommand,
+  completionZshCommand,
+  completionFishCommand,
+  completionInstallCommand,
+  completionUsageCommand,
+} from "./commands/completion";
 import { prependToolchainBinToPath } from "./toolchain-sandbox";
 
 registerCommand("init", initCommand);
@@ -138,6 +145,13 @@ registerSubcommand("toolchain", "install", toolchainInstallCommand);
 registerSubcommand("toolchain", "remove", toolchainRemoveCommand);
 registerSubcommand("toolchain", "clean", toolchainCleanCommand);
 
+// Nested: completion <sub> (shell completion scripts)
+registerCommand("completion", completionUsageCommand);
+registerSubcommand("completion", "bash", completionBashCommand);
+registerSubcommand("completion", "zsh", completionZshCommand);
+registerSubcommand("completion", "fish", completionFishCommand);
+registerSubcommand("completion", "install", completionInstallCommand);
+
 // ── Main ───────────────────────────────────────────────────────────
 
 /** Detect if we're running in a CI environment. */
@@ -161,6 +175,13 @@ function handleEarlyExits(rawArgs: string[]): boolean {
   if (rawArgs.includes("--version") || rawArgs.includes("-V")) {
     console.log(`dojops v${getDojopsVersion()}`);
     process.exit(0);
+  }
+  // --get-completions <type> — hidden flag for shell completion scripts
+  const gcIdx = rawArgs.indexOf("--get-completions");
+  if (gcIdx !== -1 && gcIdx + 1 < rawArgs.length) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { handleGetCompletions } = require("./completions/get-completions");
+    handleGetCompletions(rawArgs[gcIdx + 1]);
   }
   return false;
 }
@@ -257,6 +278,7 @@ const QUIET_COMMANDS = new Set([
   "serve",
   "help",
   "cron",
+  "completion",
 ]);
 
 const NESTED_COMMAND_PARENTS = new Set([
