@@ -70,28 +70,30 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Agents & Modules
 
-| Command                           | Description                                                |
-| --------------------------------- | ---------------------------------------------------------- |
-| `dojops agents list`              | List all agents (built-in + custom)                        |
-| `dojops agents info <name>`       | Show agent details (supports partial names)                |
-| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                      |
-| `dojops agents create --manual`   | Create a custom agent interactively                        |
-| `dojops agents remove <name>`     | Remove a custom agent                                      |
-| `dojops modules load <path>`      | Copy a local tool.yaml module into `.dojops/tools/`        |
-| `dojops modules list`             | List discovered custom modules (global + project)          |
-| `dojops modules validate <path>`  | Validate a custom module manifest                          |
-| `dojops modules init <name>`      | Scaffold a v2 `.dops` module (with optional AI generation) |
-| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub                   |
-| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub                 |
-| `dojops modules search <query>`   | Search the DojOps Hub for modules                          |
-| `dojops modules dev <path.dops>`  | Validate a .dops file with live feedback                   |
-| `dojops modules dev --watch`      | Watch mode — re-validate on file changes                   |
-| `dojops toolchain list`           | List system toolchain binaries with install status         |
-| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)      |
-| `dojops toolchain remove <name>`  | Remove a toolchain binary                                  |
-| `dojops toolchain clean`          | Remove all toolchain binaries                              |
-| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)        |
-| `dojops verify`                   | Verify audit log hash chain integrity (standalone)         |
+> **Note:** `dojops tools` is a deprecated alias for `dojops modules`. Use `dojops modules` instead.
+
+| Command                           | Description                                             |
+| --------------------------------- | ------------------------------------------------------- |
+| `dojops agents list`              | List all agents (built-in + custom)                     |
+| `dojops agents info <name>`       | Show agent details (supports partial names)             |
+| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                   |
+| `dojops agents create --manual`   | Create a custom agent interactively                     |
+| `dojops agents remove <name>`     | Remove a custom agent                                   |
+| `dojops modules load <path>`      | Copy a local `.dops` module into `.dojops/modules/`     |
+| `dojops modules list`             | List discovered custom modules (global + project)       |
+| `dojops modules validate <path>`  | Validate a custom module manifest                       |
+| `dojops modules init <name>`      | Scaffold a `.dops` module (with optional AI generation) |
+| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub                |
+| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub              |
+| `dojops modules search <query>`   | Search the DojOps Hub for modules                       |
+| `dojops modules dev <path.dops>`  | Validate a .dops file with live feedback                |
+| `dojops modules dev --watch`      | Watch mode — re-validate on file changes                |
+| `dojops toolchain list`           | List system toolchain binaries with install status      |
+| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)   |
+| `dojops toolchain remove <name>`  | Remove a toolchain binary                               |
+| `dojops toolchain clean`          | Remove all toolchain binaries                           |
+| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)     |
+| `dojops verify`                   | Verify audit log hash chain integrity (standalone)      |
 
 ### History & Audit
 
@@ -421,11 +423,8 @@ dojops modules search docker
 dojops modules search terraform --limit 5
 dojops modules search k8s --output json
 
-# Scaffold a new v2 .dops module (uses AI when provider is configured)
+# Scaffold a .dops module (uses AI when provider is configured)
 dojops modules init my-module
-
-# Scaffold with legacy v1 format
-dojops modules init my-module --legacy
 
 # Validate a custom module
 dojops modules validate my-module
@@ -459,7 +458,7 @@ dojops modules install my-module
 dojops modules install my-module --version 1.0.0 --global
 ```
 
-The CLI sends the token as a `Bearer` header. Tokens can be managed (created, viewed, revoked) from the Hub Settings page at `/settings/tokens`. See the [tools documentation](tools.md#hub-integration) for the full publish/install flow.
+The CLI sends the token as a `Bearer` header. Tokens can be managed (created, viewed, revoked) from the Hub Settings page at `/settings/tokens`. See the [modules documentation](modules.md#hub-integration) for the full publish/install flow.
 
 ### Provider Management
 

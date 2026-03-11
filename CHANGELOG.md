@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-11
+
+### Breaking Changes
+
+- **Removed `.dops v1` format support** — all modules must use `dops: v2` frontmatter
+- **Removed `tool.yaml` custom tool manifests** — create custom modules as `.dops v2` files instead
+- **Renamed `@dojops/tool-registry` to `@dojops/module-registry`**
+- **Renamed types** — `BaseTool` → `BaseModule`, `ToolRegistry` → `ModuleRegistry`, `DevOpsTool` → `DevOpsModule`, `ToolOutput` → `ModuleOutput`
+- **Hub rejects v1 uploads** — republish existing v1 packages as v2
+- **`dojops tools` deprecated** — use `dojops modules` instead (alias still works with warning)
+
+### Removed
+
+- `DopsRuntime` v1 class, v1 prompt compiler (`compilePrompt`)
+- `CustomTool` class and `tool.yaml` / `plugin.yaml` manifest discovery
+- `docs/TOOL_SPEC_v1.md` specification document
+- All deprecated `Plugin*` type aliases (`PluginManifest`, `PluginSource`, `PluginEntry`, etc.)
+- `parseDopsFile()` and `parseDopsString()` v1-only parsers
+- v1 schema types: `InputFieldDef`, `FileSpec` (v1), `DopsFrontmatterSchema` (v1)
+
+### Changed
+
+- `DopsModuleV2` renamed to `DopsModule` (only module type)
+- `DopsFrontmatterV2` renamed to `DopsFrontmatter`
+- `parseDopsFileAny()` renamed to `parseDopsFile()` (v2-only)
+- `parseDopsStringAny()` renamed to `parseDopsString()` (v2-only)
+- `createToolRegistry()` renamed to `createModuleRegistry()`
+
 ## [1.0.9] - 2026-03-11
 
 ### Added

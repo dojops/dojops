@@ -144,11 +144,11 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Tools
 
-- **13 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile
+- **13 built-in DevOps modules** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile
 - **Declarative tool metadata** — `.dops` modules declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, `context` block (v2: technology context, output guidance, best practices, Context7 libraries), and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
-- **Custom module system** — Extend DojOps with custom modules via declarative `tool.yaml` manifests + JSON Schema. Drop a module into `~/.dojops/modules/` or `.dojops/modules/` and it's automatically available to all commands. Scaffold new modules with `dojops modules init <name>`. Module isolation enforces verification command whitelisting (33 allowed binaries), `child_process` permission gating, and path traversal prevention
+- **Custom module system** — Extend DojOps with custom `.dops v2` modules. Drop a module into `~/.dojops/modules/` or `.dojops/modules/` and it's automatically available to all commands. Scaffold new modules with `dojops modules init <name>`. Module isolation enforces verification command whitelisting (33 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
-- **Schema-validated** — Every tool input is validated against Zod schemas before execution. v1 tools also validate LLM output; v2 tools generate raw content directly
+- **Schema-validated** — Every module input is validated against Zod schemas before execution
 - **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Missing verification tools are auto-installed via the toolchain. Use `--skip-verify` to disable
 - **Idempotent YAML output** — YAML keys are sorted alphabetically (GitHub Actions uses conventional key ordering) for deterministic, diff-friendly output
 - **Structured output** — Provider-native JSON modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, Gemini `responseMimeType`)
@@ -191,23 +191,23 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ```
 @dojops/cli            CLI entry point + rich TUI (@clack/prompts)
 @dojops/api            REST API (Express) + web dashboard + factory functions
-@dojops/tool-registry  Tool registry + custom tool system + custom agent discovery
+@dojops/module-registry Module registry + custom module system + custom agent discovery
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/runtime        13 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
+@dojops/runtime        13 built-in DevOps modules as .dops v2 files (DopsRuntime)
 @dojops/scanner        10 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint,
                        shellcheck, trivy-sbom, trivy-license, semgrep) + remediation
 @dojops/context        Context7 documentation augmentation for v2 tools
 @dojops/session        Chat session management + memory + context injection
 @dojops/core           LLM abstraction + 6 providers + 17 built-in specialist agents + CI debugger + infra diff + DevOps checker
-@dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
+@dojops/sdk            BaseModule<T> abstract class with Zod validation + optional verify() + file-reader utilities
                        + atomicWriteFileSync + restoreBackup
 ```
 
 ### Package Dependency Flow
 
 ```
-cli -> api -> tool-registry -> runtime -> core -> sdk
+cli -> api -> module-registry -> runtime -> core -> sdk
           -> planner -> executor
           -> scanner
           -> context -> core
@@ -418,8 +418,7 @@ dojops toolchain install kubectl
 
 # Custom module management
 dojops modules list
-dojops modules init my-module               # v2 .dops scaffold (AI-powered when provider is configured)
-dojops modules init my-module --legacy      # v1 tool.yaml scaffold
+dojops modules init my-module               # .dops scaffold (AI-powered when provider is configured)
 dojops modules validate my-module
 
 # Search the DojOps Hub for modules
@@ -497,7 +496,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Systemd        | INI                | `{name}.service`                    | ---                  |
 | Jenkinsfile    | Groovy DSL         | `Jenkinsfile`                       | ---                  |
 
-All 13 built-in tools are `.dops v2` modules in `packages/runtime/modules/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM. Tools auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename).
+All 13 built-in modules are `.dops v2` files in `packages/runtime/modules/`, processed by `DopsRuntime` — generating raw file content directly via LLM. Modules auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename).
 
 ---
 
@@ -667,33 +666,33 @@ pnpm dojops -- serve --port=8080
 packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
-  tool-registry/    Tool registry + custom tool system + custom agent discovery
+  module-registry/  Module registry + custom module system + custom agent discovery
   core/             LLM providers (6) + specialist agents (17 built-in) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
-  runtime/          13 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
+  runtime/          13 built-in DevOps modules as .dops v2 files (DopsRuntime)
   scanner/          10 security scanners + LLM-powered remediation
   context/          Context7 documentation augmentation for v2 tools
   session/          Chat session management + memory + context injection
-  sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
+  sdk/              BaseModule<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
 
 ### Test Coverage
 
-| Package                 | Tests    |
-| ----------------------- | -------- |
-| `@dojops/runtime`       | 656      |
-| `@dojops/cli`           | 575      |
-| `@dojops/core`          | 541      |
-| `@dojops/tool-registry` | 277      |
-| `@dojops/api`           | 244      |
-| `@dojops/scanner`       | 110      |
-| `@dojops/executor`      | 81       |
-| `@dojops/sdk`           | 55       |
-| `@dojops/planner`       | 40       |
-| `@dojops/session`       | 38       |
-| `@dojops/context`       | 32       |
-| **Total**               | **2649** |
+| Package                   | Tests    |
+| ------------------------- | -------- |
+| `@dojops/runtime`         | 656      |
+| `@dojops/cli`             | 575      |
+| `@dojops/core`            | 541      |
+| `@dojops/module-registry` | 277      |
+| `@dojops/api`             | 244      |
+| `@dojops/scanner`         | 110      |
+| `@dojops/executor`        | 81       |
+| `@dojops/sdk`             | 55       |
+| `@dojops/planner`         | 40       |
+| `@dojops/session`         | 38       |
+| `@dojops/context`         | 32       |
+| **Total**                 | **2649** |
 
 ---
 
@@ -706,7 +705,7 @@ npm login
 pnpm publish-packages    # Build + publish in dependency order
 ```
 
-Publish order: `sdk` -> `core` -> `context` -> `executor` -> `planner` -> `runtime` -> `tool-registry` -> `scanner` -> `session` -> `api` -> `cli`
+Publish order: `sdk` -> `core` -> `context` -> `executor` -> `planner` -> `runtime` -> `module-registry` -> `scanner` -> `session` -> `api` -> `cli`
 
 ---
 
