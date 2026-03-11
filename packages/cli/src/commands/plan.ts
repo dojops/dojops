@@ -5,6 +5,7 @@ import { createToolRegistry, ToolRegistry } from "@dojops/tool-registry";
 import { scanRepo } from "@dojops/core";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags, extractFlagValue } from "../parser";
+import { readPromptFile } from "../stdin";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { runHooks } from "../hooks";
 import { classifyPlanRisk } from "../risk-classifier";
@@ -123,11 +124,19 @@ function parsePlanArgs(
   const executeMode = hasFlag(args, "--execute");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const skipVerify = hasFlag(args, "--skip-verify");
-  const prompt = stripFlags(
+  const inlinePrompt = stripFlags(
     args,
     new Set(["--execute", "--yes", "--skip-verify", "--force", "--allow-all-paths"]),
     new Set(["--timeout", "--repair-attempts"]),
   ).join(" ");
+
+  // Build prompt: file content + inline args
+  let prompt = inlinePrompt;
+  if (ctx.globalOpts.file) {
+    const fileContent = readPromptFile(ctx.globalOpts.file);
+    prompt = inlinePrompt ? `${inlinePrompt}\n\n${fileContent}` : fileContent;
+  }
+
   return { prompt, executeMode, autoApprove, skipVerify };
 }
 

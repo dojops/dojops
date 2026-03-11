@@ -12,6 +12,8 @@ export interface GlobalOptions {
   agent?: string;
   tool?: string;
   fallbackProvider?: string;
+  /** Read prompt from a file (--file / -f). */
+  file?: string;
   output: OutputFormat;
   raw: boolean;
   nonInteractive: boolean;

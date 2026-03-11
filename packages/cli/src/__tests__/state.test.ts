@@ -123,6 +123,16 @@ describe("plans", () => {
     expect(loadPlan(tmpDir, "plan-nonexist")).toBeNull();
   });
 
+  it("saves and loads a CRITICAL risk plan", () => {
+    initProject(tmpDir);
+    const plan = makePlan("plan-critical1");
+    plan.risk = "CRITICAL";
+    savePlan(tmpDir, plan);
+    const loaded = loadPlan(tmpDir, "plan-critical1");
+    expect(loaded).not.toBeNull();
+    expect(loaded!.risk).toBe("CRITICAL");
+  });
+
   it("lists plans sorted by date", () => {
     initProject(tmpDir);
     const p1 = makePlan("plan-00000001");

@@ -1,6 +1,6 @@
 {
   "name": "@dojops/planner",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "LLM-powered task graph decomposition and topological executor for DojOps",
   "license": "MIT",
   "repository": {

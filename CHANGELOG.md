@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-03-11
+
+### Added
+
+- **`--file` / `-f` Global Option**: Read prompt content from a file (`.md`, `.txt`, or any text file) for `generate` and `plan` commands. Supports combining with inline prompts — inline text provides context, file content provides the detailed specification. Example: `dojops --file requirements.md "Use Terraform"` or `dojops plan -f spec.txt`
+
+### Fixed
+
+- **Multi-File Output Crash on Non-JSON LLM Responses**: When the LLM returns plain text analysis (e.g., during `analyze-current-dockerfile` planning tasks) instead of JSON file output, the runtime now gracefully falls back instead of throwing `"Multi-file output must be valid JSON"`. Affects analysis-type tasks in plan execution
+- **`plan --execute` Fails with "Plan not found" on CRITICAL Risk Plans**: Plans containing tasks with credential/secret/password keywords were classified as `CRITICAL` risk, but the plan validator only accepted `LOW`, `MEDIUM`, `HIGH`. The saved plan was immediately rejected on reload, causing `apply` to report "Plan not found". Added `CRITICAL` to the valid risk levels set
+- **Ansible Verification Runs on Inventory Files**: When a plan task generates only inventory/hosts files (no playbooks), the verifier ran `ansible-playbook --syntax-check` on the inventory file, which always fails. Entry-file resolution now excludes inventory, group_vars, host_vars, defaults, vars, meta, and template files. Verification is skipped when no valid playbook entry file exists
+- **Module Tasks Skipped as "Documentation Tasks"**: Tasks that mention `README.md`, `.md`, or documentation keywords in their description were incorrectly classified as documentation tasks and skipped entirely — no files written to disk. Affected Helm charts, Ansible roles, and any module task whose description listed a README among output files. Known module tools (all 13 built-in) now bypass the documentation-task filter
+
 ## [1.0.8] - 2026-03-09
 
 ### Added

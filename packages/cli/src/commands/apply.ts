@@ -632,10 +632,12 @@ async function buildToolMetadata(
     metadata.risk = classifyTaskRisk({ tool: taskDef.tool, description: taskDef.description });
     // Skip verification for analysis-only or documentation tasks
     // (analysis produces text, docs produce markdown — neither can pass tool-specific validators)
+    // But never skip for known module tools — they always produce valid tool output
     const prompt = taskDef.input?.prompt as string | undefined;
     if (
-      isAnalysisTask(taskDef.description, prompt) ||
-      isDocumentationTask(taskDef.description, prompt)
+      !KNOWN_MODULE_TOOLS.has(taskDef.tool) &&
+      (isAnalysisTask(taskDef.description, prompt) ||
+        isDocumentationTask(taskDef.description, prompt))
     ) {
       metadata.skipVerification = true;
     }
@@ -832,6 +834,23 @@ async function processExecutableTask(
   };
 }
 
+/** Built-in module tools that always produce valid tool-generated output. */
+const KNOWN_MODULE_TOOLS = new Set([
+  "terraform",
+  "kubernetes",
+  "helm",
+  "ansible",
+  "docker-compose",
+  "dockerfile",
+  "nginx",
+  "makefile",
+  "gitlab-ci",
+  "github-actions",
+  "prometheus",
+  "systemd",
+  "jenkinsfile",
+]);
+
 function shouldSkipDocTask(
   taskResult: { taskId: string },
   plan: PlanState,
@@ -839,6 +858,10 @@ function shouldSkipDocTask(
 ): boolean {
   const taskDef = plan.tasks.find((t) => t.id === taskResult.taskId);
   if (!taskDef) return false;
+
+  // Known module tools always produce file output — never skip them
+  // (a Helm chart mentioning README.md is not a "documentation task")
+  if (KNOWN_MODULE_TOOLS.has(taskDef.tool)) return false;
 
   const taskPrompt = taskDef.input?.prompt as string | undefined;
   if (!isDocumentationTask(taskDef.description, taskPrompt)) return false;

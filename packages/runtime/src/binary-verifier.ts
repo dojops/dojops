@@ -231,7 +231,11 @@ export async function verifyWithBinary(input: BinaryVerifierInput): Promise<Veri
     // Resolve {entryFile} placeholder in the verification command.
     // This allows .dops modules to reference the actual generated filename
     // instead of hardcoding (e.g., ansible playbooks may be named dynamically).
+    // Returns null when only non-entry files are present (e.g., inventory-only output).
     const resolvedCommand = resolveCommandPlaceholders(config.command, input.files, filename);
+    if (resolvedCommand === null) {
+      return { passed: true, tool: config.parser, issues: [], rawOutput: "" };
+    }
 
     const commands = resolvedCommand.split(/\s*&&\s*/); // NOSONAR
     let rawOutput = "";
@@ -262,19 +266,37 @@ function isENOENT(err: unknown): boolean {
   return (err as NodeJS.ErrnoException).code === "ENOENT";
 }
 
+/** Patterns for files that are NOT valid verification entry points (e.g., inventory, vars, templates). */
+const NON_ENTRY_PATTERNS = [
+  /inventory/i,
+  /hosts\.(ya?ml)$/i,
+  /group_vars\//i,
+  /host_vars\//i,
+  /defaults\//,
+  /\bvars\//,
+  /\bmeta\//,
+  /\.(j2|cfg|ini)$/,
+];
+
+/** Check whether a filename is a non-entry file (inventory, vars, templates, etc.). */
+function isNonEntryFile(filename: string): boolean {
+  return NON_ENTRY_PATTERNS.some((p) => p.test(filename));
+}
+
 /**
  * Resolve template placeholders in a verification command.
  *
  * Supported placeholders:
  * - `{entryFile}` — resolves to the main entry file from the files map.
  *   For multi-file outputs, picks the top-level .yml/.yaml file (prefers site.yml/playbook.yml).
- *   Falls back to the single-file filename.
+ *   Excludes inventory, vars, and template files from selection.
+ *   Returns null if no valid entry file can be found (caller should skip verification).
  */
 function resolveCommandPlaceholders(
   command: string,
   files: Record<string, string> | undefined,
   fallbackFilename: string,
-): string {
+): string | null {
   if (!command.includes("{entryFile}")) return command;
 
   let entryFile = fallbackFilename;
@@ -288,15 +310,26 @@ function resolveCommandPlaceholders(
     const match = preferred.find((p) => topLevel.includes(p));
     if (match) {
       entryFile = match;
-    } else if (topLevel.length > 0) {
-      // Pick the first top-level .yml/.yaml file
-      const yamlFile = topLevel.find((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
-      entryFile = yamlFile ?? topLevel[0];
     } else {
-      // No top-level files — use the first file
-      entryFile = fileNames[0];
+      // Filter out non-entry files (inventory, vars, templates)
+      const candidates = fileNames.filter((f) => !isNonEntryFile(f));
+      const topCandidates = candidates.filter((f) => !f.includes("/"));
+      if (topCandidates.length > 0) {
+        const yamlFile = topCandidates.find((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
+        entryFile = yamlFile ?? topCandidates[0];
+      } else if (candidates.length > 0) {
+        entryFile = candidates[0];
+      } else if (topLevel.length > 0) {
+        const yamlFile = topLevel.find((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
+        entryFile = yamlFile ?? topLevel[0];
+      } else {
+        entryFile = fileNames[0];
+      }
     }
   }
+
+  // If the resolved entry file is still a non-entry file, skip verification
+  if (isNonEntryFile(entryFile)) return null;
 
   return command.replaceAll("{entryFile}", entryFile);
 }

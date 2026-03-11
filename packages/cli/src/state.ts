@@ -344,7 +344,7 @@ export function isValidPlanId(planId: string): boolean {
   return /^plan-[a-z0-9-]+$/.test(planId);
 }
 
-const VALID_RISK_LEVELS = new Set(["LOW", "MEDIUM", "HIGH"]);
+const VALID_RISK_LEVELS = new Set(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const VALID_APPROVAL_STATUSES = new Set(["PENDING", "APPROVED", "DENIED", "APPLIED", "PARTIAL"]);
 
 /**

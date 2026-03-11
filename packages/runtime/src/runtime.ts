@@ -948,15 +948,18 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   }
 
   /**
-   * Attempt to parse multi-file JSON output. Returns null if all file specs are
-   * conditional and the content is non-JSON (graceful skip).
+   * Attempt to parse multi-file JSON output. Returns null if the content is
+   * clearly non-JSON (e.g. plain text analysis from an LLM task).
    */
   private tryParseMultiFileOutput(generated: string): Record<string, string> | null {
     try {
       return parseMultiFileOutput(generated);
     } catch (parseErr) {
-      const allConditional = this.module.frontmatter.files.every((f) => f.conditional);
-      if (allConditional && !generated.trimStart().startsWith("{")) {
+      // If the output clearly isn't JSON (doesn't start with '{'), treat as
+      // analysis/text output — return null so the caller skips file writing.
+      // This handles planner tasks like "analyze the current Dockerfile" where
+      // the LLM returns prose instead of file content.
+      if (!generated.trimStart().startsWith("{")) {
         return null;
       }
       throw parseErr;

@@ -341,6 +341,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility                               |
 | `--profile=NAME`    | Use named config profile                                                              |
 | `--module=NAME`     | Force a specific module for `generate`, `plan`, or `apply` (bypasses agent routing)   |
+| `--file, -f FILE`   | Read prompt from a file (`.md`, `.txt`); combinable with inline prompt                |
 | `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                                             |
 | `--verbose`         | Verbose output                                                                        |
 | `--debug`           | Debug-level output with stack traces                                                  |
@@ -375,6 +376,11 @@ dojops "Set up monitoring with Prometheus"
 dojops "Add caching to the GitHub Actions workflow"
 dojops "Add a Redis service to docker-compose"
 dojops "Add S3 bucket to the existing Terraform config"
+
+# Read prompt from a file
+dojops --file requirements.md
+dojops --file spec.txt "Use Terraform"    # inline prompt + file content
+dojops plan -f infrastructure-spec.md
 
 # Plan and execute
 dojops plan "Set up CI/CD for a Node.js app"

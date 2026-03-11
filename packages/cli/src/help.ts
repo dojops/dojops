@@ -62,6 +62,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--verbose")}          Verbose output`);
   console.log(`  ${pc.cyan("--debug")}            Debug-level output`);
   console.log(`  ${pc.cyan("--quiet")}            Suppress non-essential output`);
+  console.log(`  ${pc.cyan("--file=PATH, -f")}   Read prompt from a file (.md, .txt)`);
   console.log(`  ${pc.cyan("--agent=NAME")}       Force routing to a specific specialist agent`);
   console.log(`  ${pc.cyan("--fallback-provider")} Comma-separated fallback provider chain`);
   console.log(`  ${pc.cyan("--timeout=<ms>")}     Global timeout for operations`);
@@ -219,11 +220,14 @@ export function printCommandHelp(command: string): void {
       console.log(
         `  ${pc.cyan("--skip-verify")}   Skip external config validation ${pc.dim("(--execute only)")}`,
       );
+      console.log(`  ${pc.cyan("-f, --file=PATH")} Read prompt from a file (.md, .txt)`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops plan "Set up CI/CD for a Node.js app"`);
       console.log(`  ${pc.dim("$")} dojops plan --execute "Deploy a Terraform stack"`);
       console.log(`  ${pc.dim("$")} dojops plan --execute --yes "Create CI for Node app"`);
       console.log(`  ${pc.dim("$")} dojops plan "Create CI" --output json`);
+      console.log(`  ${pc.dim("$")} dojops plan -f detailed-requirements.md`);
+      console.log(`  ${pc.dim("$")} dojops plan --execute --yes -f task.txt`);
       console.log();
       break;
 
@@ -241,16 +245,20 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--write=PATH")}         Write generated output to a file`);
       console.log(`  ${pc.cyan("--allow-all-paths")}    Bypass DevOps file allowlist for --write`);
       console.log(`  ${pc.cyan("--repair-attempts=N")}  Max self-repair attempts (default: 3)`);
+      console.log(`  ${pc.cyan("-f, --file=PATH")}     Read prompt from a file (.md, .txt)`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Routes your prompt to the best-matching specialist agent and generates`);
       console.log(`  a response. This is the default command when no subcommand is given.`);
       console.log(`  Use --agent to bypass automatic routing and target a specific agent.`);
+      console.log(`  Use --file to read the prompt from a file for detailed requirements.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops "Create a Terraform config for S3"`);
       console.log(`  ${pc.dim("$")} dojops generate "Write a Kubernetes deployment"`);
       console.log(`  ${pc.dim("$")} dojops "Set up monitoring with Prometheus" --output json`);
       console.log(`  ${pc.dim("$")} dojops --agent terraform "Create S3 bucket"`);
       console.log(`  ${pc.dim("$")} dojops generate "CI for Node" --write ci.yml`);
+      console.log(`  ${pc.dim("$")} dojops -f requirements.md`);
+      console.log(`  ${pc.dim("$")} dojops plan --execute --yes -f task.txt`);
       console.log();
       break;
 

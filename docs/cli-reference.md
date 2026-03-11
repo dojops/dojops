@@ -162,6 +162,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `--fallback-provider=NAME` | Fallback LLM provider (used when primary fails)                                       |
 | `--profile=NAME`           | Use named config profile                                                              |
 | `--module=NAME`            | Force a specific module for `generate`, `plan`, or `apply` (bypasses agent routing)   |
+| `--file, -f FILE`          | Read prompt from a file (`.md`, `.txt`); combinable with inline prompt                |
 | `--agent=NAME`             | Force a specific agent for `generate` (bypasses keyword routing)                      |
 | `--timeout=MS`             | Global timeout in milliseconds                                                        |
 | `--output=FORMAT`          | Output: `table` (default), `json`, `yaml`                                             |
@@ -265,6 +266,18 @@ dojops --model=gpt-4o "Design a VPC with public and private subnets"
 # Force a specific module (bypass agent routing)
 dojops --module=terraform "Create an S3 bucket with versioning"
 dojops --module=kubernetes "Create a deployment for nginx"
+```
+
+### File-Based Prompts
+
+```bash
+# Read prompt from a file
+dojops --file requirements.md
+dojops -f spec.txt
+
+# Combine inline prompt with file content (inline provides context, file provides details)
+dojops --file infrastructure-spec.md "Use Terraform with AWS"
+dojops plan -f cicd-requirements.txt "Target GitHub Actions"
 ```
 
 ### Planning and Execution

@@ -115,6 +115,7 @@ function consumeSimpleStringFlag(args: string[], i: number, opts: GlobalOptions)
     { flags: "--fallback-provider", key: "fallbackProvider" },
     { flags: "--agent", key: "agent" },
     { flags: ["--module", "--tool"], key: "tool" },
+    { flags: ["--file", "-f"], key: "file" },
   ];
 
   for (const { flags, key } of simpleFlags) {

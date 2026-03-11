@@ -354,6 +354,55 @@ describe("{entryFile} placeholder resolution", () => {
     expect(firstCall[1]).toContain("site.yml");
   });
 
+  it("skips verification when only inventory files are present", async () => {
+    mockExecFileSync.mockReset();
+
+    const result = await verifyWithBinary({
+      content: "ignored",
+      filename: "output",
+      config: {
+        command: "ansible-playbook --syntax-check {entryFile}",
+        parser: "ansible-syntax",
+        timeout: 30000,
+        cwd: "output",
+      },
+      childProcessPermission: "required",
+      files: {
+        "ansible/inventory/hosts.yml": "all:\n  hosts:\n    web1:\n      ansible_host: 10.0.0.1",
+      },
+    });
+
+    // Should skip verification entirely and return passed
+    expect(result.passed).toBe(true);
+    expect(result.issues).toHaveLength(0);
+    expect(mockExecFileSync).not.toHaveBeenCalled();
+  });
+
+  it("picks playbook over inventory when both are nested", async () => {
+    mockExecFileSync.mockImplementation(() => {
+      throw makeEnoent();
+    });
+
+    await verifyWithBinary({
+      content: "ignored",
+      filename: "output",
+      config: {
+        command: "ansible-playbook --syntax-check {entryFile}",
+        parser: "ansible-syntax",
+        timeout: 30000,
+        cwd: "output",
+      },
+      childProcessPermission: "required",
+      files: {
+        "ansible/inventory/hosts.yml": "all:\n  hosts:\n    web1:",
+        "ansible/playbooks/install-nodejs.yml": "---\n- name: Install\n  hosts: all\n  tasks: []",
+      },
+    });
+
+    const firstCall = mockExecFileSync.mock.calls[0];
+    expect(firstCall[1]).toContain("ansible/playbooks/install-nodejs.yml");
+  });
+
   it("falls back to filename when no {entryFile} placeholder", async () => {
     mockExecFileSync.mockImplementation(() => {
       throw makeEnoent();

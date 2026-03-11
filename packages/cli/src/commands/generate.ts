@@ -10,6 +10,7 @@ import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue, hasFlag } from "../parser";
+import { readPromptFile } from "../stdin";
 import { findProjectRoot, loadContext, saveLastGeneration, loadLastGeneration } from "../state";
 import crypto from "node:crypto";
 import { TOOL_FILE_MAP, readExistingToolFile } from "../tool-file-map";
@@ -730,11 +731,26 @@ function trackAgentActivity(
 export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const writePath = extractFlagValue(args, "--write");
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
-  const prompt = args.filter((a) => !a.startsWith("-") && a !== writePath).join(" ");
+  const inlinePrompt = args.filter((a) => !a.startsWith("-") && a !== writePath).join(" ");
+
+  // Build prompt: file content + inline args
+  let prompt = inlinePrompt;
+  if (ctx.globalOpts.file) {
+    try {
+      const fileContent = readPromptFile(ctx.globalOpts.file);
+      prompt = inlinePrompt ? `${inlinePrompt}\n\n${fileContent}` : fileContent;
+      if (!isStructuredOutput(ctx)) {
+        p.log.info(`Reading prompt from ${pc.underline(ctx.globalOpts.file)}`);
+      }
+    } catch (err) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
+    }
+  }
 
   if (!prompt) {
     p.log.info(`  ${pc.dim("$")} dojops generate <prompt>`);
     p.log.info(`  ${pc.dim("$")} dojops "your prompt here"`);
+    p.log.info(`  ${pc.dim("$")} dojops -f task.md`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
 
