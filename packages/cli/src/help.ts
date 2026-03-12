@@ -57,6 +57,7 @@ export function printHelp(): void {
   );
   console.log(`  ${pc.cyan("--model=NAME")}       LLM model override`);
   console.log(`  ${pc.cyan("--temperature=N")}    LLM temperature (0-2)`);
+  console.log(`  ${pc.cyan("--thinking=LEVEL")}   Reasoning effort: none, low, medium, high`);
   console.log(`  ${pc.cyan("--profile=NAME")}     Use named config profile`);
   console.log(
     `  ${pc.cyan("--output=FORMAT")}    Output: table ${pc.dim("(default)")}, json, yaml`,

@@ -55,6 +55,14 @@ function parseOutputFormat(raw: string): OutputFormat {
   return raw as OutputFormat;
 }
 
+/** Parse and validate a thinking level value. */
+function parseThinkingLevel(raw: string): "none" | "low" | "medium" | "high" {
+  const valid = ["none", "low", "medium", "high"];
+  if (!valid.includes(raw))
+    throw new Error(`Invalid --thinking value: "${raw}". Valid: ${valid.join(", ")}`);
+  return raw as "none" | "low" | "medium" | "high";
+}
+
 /** Boolean flags that set a property to true. */
 const BOOLEAN_FLAG_MAP: Record<string, keyof GlobalOptions> = {
   "--verbose": "verbose",
@@ -146,6 +154,12 @@ function consumeValidatedFlag(args: string[], i: number, opts: GlobalOptions): n
   if (outputResult) {
     opts.output = parseOutputFormat(outputResult.value);
     return outputResult.nextIndex;
+  }
+
+  const thinkingResult = consumeStringFlag(args, i, "--thinking");
+  if (thinkingResult) {
+    opts.thinking = parseThinkingLevel(thinkingResult.value);
+    return thinkingResult.nextIndex;
   }
 
   return -1;

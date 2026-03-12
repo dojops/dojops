@@ -28,6 +28,8 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ThinkingLevel = "none" | "low" | "medium" | "high";
+
 export interface LLMRequest {
   system?: string;
   prompt: string;
@@ -35,6 +37,8 @@ export interface LLMRequest {
   temperature?: number;
   maxTokens?: number;
   schema?: z.ZodType;
+  /** Reasoning effort level. Maps to provider-specific features (e.g. Anthropic extended thinking). */
+  thinking?: ThinkingLevel;
 }
 
 export interface LLMUsage {

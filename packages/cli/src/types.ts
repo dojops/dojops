@@ -1,4 +1,4 @@
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, ThinkingLevel } from "@dojops/core";
 import { DojOpsConfig } from "./config";
 
 export type OutputFormat = "table" | "json" | "yaml";
@@ -14,6 +14,8 @@ export interface GlobalOptions {
   fallbackProvider?: string;
   /** Read prompt from a file (--file / -f). */
   file?: string;
+  /** Reasoning effort: none, low, medium, high */
+  thinking?: ThinkingLevel;
   output: OutputFormat;
   raw: boolean;
   nonInteractive: boolean;
