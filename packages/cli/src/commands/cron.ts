@@ -76,9 +76,14 @@ const cronAddCommand: CommandHandler = async (args) => {
   p.log.info(`  ${schedule} cd ${root} && dojops ${command}`);
 };
 
-const cronListCommand: CommandHandler = async () => {
+const cronListCommand: CommandHandler = async (_args, ctx) => {
   const root = requireRoot();
   const config = loadCronConfig(root);
+
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify(config.jobs, null, 2));
+    return;
+  }
 
   if (config.jobs.length === 0) {
     p.log.info("No scheduled jobs. Use `dojops cron add` to create one.");

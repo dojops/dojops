@@ -127,7 +127,16 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
   const { planId, filesToDelete, filesToRestore } = resolveRollbackTargets(root, args);
 
   if (filesToDelete.length === 0 && filesToRestore.length === 0) {
-    p.log.info("No files to roll back.");
+    if (ctx.globalOpts.output === "json") {
+      console.log(JSON.stringify({ planId, status: "noop", filesDeleted: 0, filesRestored: 0 }));
+    } else {
+      p.log.info("No files to roll back.");
+    }
+    return;
+  }
+
+  if (ctx.globalOpts.output === "json" && dryRun) {
+    console.log(JSON.stringify({ planId, dryRun: true, filesToDelete, filesToRestore }, null, 2));
     return;
   }
 
@@ -173,10 +182,26 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
       status: "success",
       durationMs: Date.now() - startTime,
     });
-    const parts: string[] = [];
-    if (filesToDelete.length > 0) parts.push(`${deleted}/${filesToDelete.length} removed`);
-    if (filesToRestore.length > 0) parts.push(`${restored}/${filesToRestore.length} restored`);
-    p.log.success(`Rolled back: ${parts.join(", ")}.`);
+    if (ctx.globalOpts.output === "json") {
+      console.log(
+        JSON.stringify(
+          {
+            planId,
+            status: "success",
+            filesDeleted: deleted,
+            filesRestored: restored,
+            durationMs: Date.now() - startTime,
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      const parts: string[] = [];
+      if (filesToDelete.length > 0) parts.push(`${deleted}/${filesToDelete.length} removed`);
+      if (filesToRestore.length > 0) parts.push(`${restored}/${filesToRestore.length} restored`);
+      p.log.success(`Rolled back: ${parts.join(", ")}.`);
+    }
   } finally {
     releaseLock(root);
   }

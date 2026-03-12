@@ -86,7 +86,16 @@ export async function cleanCommand(
   const allFiles = [...new Set([...plan.files, ...execFiles])];
 
   if (allFiles.length === 0) {
-    p.log.info("No files to clean for this plan.");
+    if (ctx.globalOpts.output === "json") {
+      console.log(JSON.stringify({ planId, status: "noop", filesDeleted: 0 }));
+    } else {
+      p.log.info("No files to clean for this plan.");
+    }
+    return;
+  }
+
+  if (ctx.globalOpts.output === "json" && dryRun) {
+    console.log(JSON.stringify({ planId, dryRun: true, files: allFiles }, null, 2));
     return;
   }
 
@@ -131,7 +140,23 @@ export async function cleanCommand(
       status: "success",
       durationMs: Date.now() - startTime,
     });
-    p.log.success(`Cleaned ${deleted}/${allFiles.length} artifacts.`);
+    if (ctx.globalOpts.output === "json") {
+      console.log(
+        JSON.stringify(
+          {
+            planId,
+            status: "success",
+            filesDeleted: deleted,
+            total: allFiles.length,
+            durationMs: Date.now() - startTime,
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      p.log.success(`Cleaned ${deleted}/${allFiles.length} artifacts.`);
+    }
   } finally {
     releaseLock(root);
   }
