@@ -2,6 +2,7 @@ import { z } from "zod";
 import { LLMProvider } from "../llm/provider";
 import { parseAndValidate } from "../llm/json-validator";
 import { wrapAsData } from "../llm/sanitizer";
+import { compressCILog } from "../compression";
 
 const MAX_INPUT_BYTES = 256 * 1024;
 
@@ -59,7 +60,11 @@ export class CIDebugger {
   constructor(private readonly provider: LLMProvider) {}
 
   async diagnose(logContent: string): Promise<CIDiagnosis> {
-    let content = logContent;
+    // Compress log before LLM: strip ANSI, deduplicate, remove noise
+    const compressed = compressCILog(logContent);
+    let content = compressed.output;
+
+    // Hard byte-limit as safety net after compression
     const byteLength = Buffer.byteLength(content);
     if (byteLength > MAX_INPUT_BYTES) {
       const truncated = byteLength - MAX_INPUT_BYTES;
