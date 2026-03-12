@@ -169,6 +169,22 @@ describe("config", () => {
     it("returns undefined when nothing set", () => {
       expect(resolveModel(undefined, {})).toBeUndefined();
     });
+
+    it("resolves model alias from config", () => {
+      const config = { aliases: { fast: "gpt-4o-mini", quality: "claude-sonnet-4-5-20250929" } };
+      expect(resolveModel("fast", config)).toBe("gpt-4o-mini");
+      expect(resolveModel("quality", config)).toBe("claude-sonnet-4-5-20250929");
+    });
+
+    it("passes through non-aliased model names unchanged", () => {
+      const config = { aliases: { fast: "gpt-4o-mini" } };
+      expect(resolveModel("gpt-4o", config)).toBe("gpt-4o");
+    });
+
+    it("resolves alias from defaultModel", () => {
+      const config = { defaultModel: "fast", aliases: { fast: "gpt-4o-mini" } };
+      expect(resolveModel(undefined, config)).toBe("gpt-4o-mini");
+    });
   });
 
   describe("resolveToken", () => {

@@ -9,6 +9,8 @@ export interface DojOpsConfig {
   defaultModel?: string;
   defaultTemperature?: number;
   tokens?: Record<string, string>;
+  /** Model aliases: friendly name -> provider/model ID (e.g. "fast" -> "gpt-4o-mini") */
+  aliases?: Record<string, string>;
   ollamaHost?: string;
   ollamaTlsRejectUnauthorized?: boolean;
 }
@@ -189,12 +191,20 @@ export function resolveProvider(cliFlag: string | undefined, config: DojOpsConfi
 /**
  * Resolves the LLM model to use.
  * Priority: CLI flag > DOJOPS_MODEL env > config defaultModel > undefined
+ * If the resolved value matches a model alias, it is expanded to the target model ID.
  */
 export function resolveModel(
   cliFlag: string | undefined,
   config: DojOpsConfig,
 ): string | undefined {
-  return cliFlag ?? process.env.DOJOPS_MODEL ?? config.defaultModel ?? undefined;
+  const raw = cliFlag ?? process.env.DOJOPS_MODEL ?? config.defaultModel ?? undefined;
+  if (!raw) return undefined;
+  return resolveAlias(raw, config);
+}
+
+/** Resolve a model alias to its target. Returns the original value if no alias matches. */
+export function resolveAlias(model: string, config: DojOpsConfig): string {
+  return config.aliases?.[model] ?? model;
 }
 
 /**

@@ -506,6 +506,64 @@ function setNestedValue(obj: DojOpsConfig, dotPath: string, raw: string): void {
   current[key] = raw;
 }
 
+function handleAliasSubcommand(args: string[]): void {
+  const sub = args[1];
+
+  // dojops config alias (no sub) — list aliases
+  if (!sub) {
+    const config = loadConfig();
+    const aliases = config.aliases ?? {};
+    if (Object.keys(aliases).length === 0) {
+      p.log.info("No model aliases configured.");
+      p.log.info(pc.dim("Set one with: dojops config alias <name> <model-id>"));
+      return;
+    }
+    const lines = Object.entries(aliases).map(
+      ([name, target]) => `  ${pc.cyan(name.padEnd(16))} → ${target}`,
+    );
+    p.note(lines.join("\n"), "Model Aliases");
+    return;
+  }
+
+  // dojops config alias remove <name>
+  if (sub === "remove" || sub === "delete") {
+    const name = args[2];
+    if (!name) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, "Usage: dojops config alias remove <name>");
+    }
+    const config = loadConfig();
+    if (!config.aliases?.[name]) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Alias "${name}" not found.`);
+    }
+    delete config.aliases[name];
+    if (Object.keys(config.aliases).length === 0) delete config.aliases;
+    saveConfig(config);
+    p.log.success(`Removed alias ${pc.bold(name)}`);
+    return;
+  }
+
+  // dojops config alias <name> <model-id>
+  const name = sub;
+  const target = args.slice(2).join(" ");
+  if (!target) {
+    // Show single alias
+    const config = loadConfig();
+    const resolved = config.aliases?.[name];
+    if (resolved) {
+      console.log(resolved);
+    } else {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Alias "${name}" not found.`);
+    }
+    return;
+  }
+
+  const config = loadConfig();
+  config.aliases = config.aliases ?? {};
+  config.aliases[name] = target;
+  saveConfig(config);
+  p.log.success(`Alias ${pc.bold(name)} → ${pc.dim(target)}`);
+}
+
 async function dispatchSubcommand(args: string[], ctx: CLIContext): Promise<boolean> {
   switch (args[0]) {
     case "show":
@@ -526,6 +584,9 @@ async function dispatchSubcommand(args: string[], ctx: CLIContext): Promise<bool
       return true;
     case "reset":
       await handleResetSubcommand(ctx);
+      return true;
+    case "alias":
+      handleAliasSubcommand(args);
       return true;
     case "profile": {
       const { configProfileCommand } = await import("./config-profile");

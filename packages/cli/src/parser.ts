@@ -236,6 +236,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "bash",
     "zsh",
     "fish",
+    "alias",
   ]);
 
   const command: string[] = [];
