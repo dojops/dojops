@@ -74,6 +74,7 @@ import {
 import { tokensCommand } from "./commands/tokens";
 import { insightsCommand } from "./commands/insights";
 import { memoryCommand } from "./commands/memory";
+import { recordCommandError } from "./memory";
 import { prependToolchainBinToPath } from "./toolchain-sandbox";
 import { withTracking } from "./tracking-provider";
 import { findProjectRoot } from "./state";
@@ -411,6 +412,12 @@ async function main() {
   try {
     await dispatchCommand(resolved, command, remapped, ctx);
   } catch (err) {
+    // Record error pattern for learning (best-effort)
+    const cmdName = command[0] ?? "unknown";
+    const root = findProjectRoot();
+    if (root) {
+      recordCommandError(root, cmdName, toErrorMessage(err));
+    }
     handleCommandError(err, globalOpts.debug);
   }
 

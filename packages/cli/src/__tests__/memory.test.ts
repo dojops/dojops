@@ -13,6 +13,11 @@ import {
   listNotes,
   removeNote,
   searchNotes,
+  recordError,
+  listErrorPatterns,
+  resolveError,
+  removeErrorPattern,
+  errorFingerprint,
 } from "../memory";
 import type { TaskRecord } from "../memory";
 
@@ -206,6 +211,7 @@ describe("buildMemoryContextString", () => {
       relatedTasks: [],
       isContinuation: false,
       relevantNotes: [],
+      errorWarnings: [],
     });
     expect(result).toBeNull();
   });
@@ -241,6 +247,7 @@ describe("buildMemoryContextString", () => {
         metadata: "{}",
       },
       relevantNotes: [],
+      errorWarnings: [],
     });
     expect(result).toContain("Continuing previous work");
     expect(result).toContain("Create Terraform config");
@@ -265,6 +272,7 @@ describe("buildMemoryContextString", () => {
       relatedTasks: [],
       isContinuation: false,
       relevantNotes: [],
+      errorWarnings: [],
     });
     expect(result).toContain("Recent successful operations");
     expect(result).toContain("3 findings");
@@ -289,6 +297,7 @@ describe("buildMemoryContextString", () => {
       relatedTasks: [],
       isContinuation: false,
       relevantNotes: [],
+      errorWarnings: [],
     });
     expect(result).not.toBeNull();
     // Budget is MAX_CONTEXT_CHARS (1200) for task lines, plus footer
@@ -396,9 +405,142 @@ describe("buildMemoryContextString with notes", () => {
           keywords: "ci node",
         },
       ],
+      errorWarnings: [],
     });
     expect(result).toContain("Project notes:");
     expect(result).toContain("CI must use Node 20 only");
     expect(result).toContain("[ci]");
+  });
+});
+
+// ── Error Pattern Learning ──────────────────────────────────────────
+
+describe("errorFingerprint", () => {
+  it("normalizes variable parts for stable grouping", () => {
+    const fp1 = errorFingerprint("ENOENT /home/user/file.ts", "generate", "terraform");
+    const fp2 = errorFingerprint("ENOENT /tmp/other/path.ts", "generate", "terraform");
+    expect(fp1).toBe(fp2);
+  });
+
+  it("differentiates by task type and module", () => {
+    const fp1 = errorFingerprint("timeout", "generate", "terraform");
+    const fp2 = errorFingerprint("timeout", "apply", "terraform");
+    expect(fp1).not.toBe(fp2);
+  });
+});
+
+describe("recordError", () => {
+  it("records a new error pattern", () => {
+    recordError(tmpDir, "ENOENT: file not found", "generate", "terraform");
+    const patterns = listErrorPatterns(tmpDir);
+    expect(patterns).toHaveLength(1);
+    expect(patterns[0].occurrences).toBe(1);
+    expect(patterns[0].task_type).toBe("generate");
+  });
+
+  it("increments count on duplicate fingerprint", () => {
+    recordError(tmpDir, "ENOENT: file not found", "generate", "terraform");
+    recordError(tmpDir, "ENOENT: file not found", "generate", "terraform");
+    recordError(tmpDir, "ENOENT: file not found", "generate", "terraform");
+    const patterns = listErrorPatterns(tmpDir);
+    expect(patterns).toHaveLength(1);
+    expect(patterns[0].occurrences).toBe(3);
+  });
+});
+
+describe("resolveError", () => {
+  it("marks an error as resolved", () => {
+    recordError(tmpDir, "timeout error", "apply", "");
+    const patterns = listErrorPatterns(tmpDir);
+    const id = patterns[0].id;
+
+    const ok = resolveError(tmpDir, id, "Increased --timeout to 120s");
+    expect(ok).toBe(true);
+
+    const updated = listErrorPatterns(tmpDir);
+    expect(updated[0].resolution).toBe("Increased --timeout to 120s");
+  });
+});
+
+describe("removeErrorPattern", () => {
+  it("deletes an error pattern", () => {
+    recordError(tmpDir, "some error", "scan", "");
+    const patterns = listErrorPatterns(tmpDir);
+    expect(removeErrorPattern(tmpDir, patterns[0].id)).toBe(true);
+    expect(listErrorPatterns(tmpDir)).toHaveLength(0);
+  });
+});
+
+describe("recordTask auto-learns errors", () => {
+  it("records error pattern when task status is failure", () => {
+    recordTask(tmpDir, {
+      timestamp: new Date().toISOString(),
+      task_type: "generate",
+      prompt: "Create Dockerfile",
+      result_summary: "LLM provider returned 429 rate limit",
+      status: "failure",
+      duration_ms: 500,
+      related_files: "[]",
+      agent_or_module: "dockerfile",
+      metadata: "{}",
+    });
+    const patterns = listErrorPatterns(tmpDir);
+    expect(patterns).toHaveLength(1);
+    expect(patterns[0].error_message).toContain("rate limit");
+  });
+
+  it("does not record error pattern on success", () => {
+    recordTask(tmpDir, {
+      timestamp: new Date().toISOString(),
+      task_type: "generate",
+      prompt: "Create Dockerfile",
+      result_summary: "Generated Dockerfile",
+      status: "success",
+      duration_ms: 500,
+      related_files: "[]",
+      agent_or_module: "dockerfile",
+      metadata: "{}",
+    });
+    expect(listErrorPatterns(tmpDir)).toHaveLength(0);
+  });
+});
+
+describe("buildMemoryContextString with error warnings", () => {
+  it("includes error warnings in context", () => {
+    const result = buildMemoryContextString({
+      recentTasks: [
+        {
+          id: 1,
+          timestamp: "2025-03-08T10:00:00Z",
+          task_type: "generate",
+          prompt: "Create CI",
+          result_summary: "Done",
+          status: "success",
+          duration_ms: 100,
+          related_files: "[]",
+          agent_or_module: "",
+          metadata: "{}",
+        },
+      ],
+      relatedTasks: [],
+      isContinuation: false,
+      relevantNotes: [],
+      errorWarnings: [
+        {
+          id: 1,
+          fingerprint: "generate::timeout",
+          error_message: "LLM request timed out after 60s",
+          task_type: "generate",
+          agent_or_module: "",
+          occurrences: 3,
+          first_seen: "2025-03-07T10:00:00Z",
+          last_seen: "2025-03-08T10:00:00Z",
+          resolution: "",
+        },
+      ],
+    });
+    expect(result).toContain("Known error patterns");
+    expect(result).toContain("LLM request timed out");
+    expect(result).toContain("3x");
   });
 });

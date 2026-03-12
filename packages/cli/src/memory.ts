@@ -28,12 +28,25 @@ export interface NoteRecord {
   keywords: string;
 }
 
+export interface ErrorPattern {
+  id: number;
+  fingerprint: string;
+  error_message: string;
+  task_type: string;
+  agent_or_module: string;
+  occurrences: number;
+  first_seen: string;
+  last_seen: string;
+  resolution: string;
+}
+
 export interface MemoryContext {
   recentTasks: TaskRecord[];
   relatedTasks: TaskRecord[];
   isContinuation: boolean;
   continuationOf?: TaskRecord;
   relevantNotes: NoteRecord[];
+  errorWarnings: ErrorPattern[];
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -75,6 +88,22 @@ CREATE INDEX IF NOT EXISTS idx_notes_category
   ON notes(category);
 CREATE INDEX IF NOT EXISTS idx_notes_ts
   ON notes(timestamp DESC);
+
+CREATE TABLE IF NOT EXISTS error_patterns (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  fingerprint      TEXT    NOT NULL UNIQUE,
+  error_message    TEXT    NOT NULL,
+  task_type        TEXT    NOT NULL,
+  agent_or_module  TEXT    NOT NULL DEFAULT '',
+  occurrences      INTEGER NOT NULL DEFAULT 1,
+  first_seen       TEXT    NOT NULL,
+  last_seen        TEXT    NOT NULL,
+  resolution       TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_error_patterns_type
+  ON error_patterns(task_type);
+CREATE INDEX IF NOT EXISTS idx_error_patterns_occurrences
+  ON error_patterns(occurrences DESC);
 `;
 
 // ── Database lifecycle ─────────────────────────────────────────────
@@ -139,7 +168,7 @@ export function closeMemoryDb(rootDir: string): void {
 
 // ── Write ──────────────────────────────────────────────────────────
 
-/** Record a completed task. Silent on failure — memory is non-critical. */
+/** Record a completed task. If the task failed, also records the error pattern. */
 export function recordTask(rootDir: string, record: Omit<TaskRecord, "id">): void {
   try {
     const db = openMemoryDb(rootDir);
@@ -163,9 +192,22 @@ export function recordTask(rootDir: string, record: Omit<TaskRecord, "id">): voi
       record.agent_or_module,
       record.metadata,
     );
+
+    // Auto-learn error patterns from failures
+    if (record.status === "failure" && record.result_summary) {
+      recordError(rootDir, record.result_summary, record.task_type, record.agent_or_module);
+    }
   } catch {
     // silent — memory is non-critical
   }
+}
+
+/**
+ * Record a command-level error for pattern learning.
+ * Called from the main error handler to capture errors that bypass recordTask.
+ */
+export function recordCommandError(rootDir: string, command: string, errorMsg: string): void {
+  recordError(rootDir, errorMsg, command);
 }
 
 // ── Notes CRUD ────────────────────────────────────────────────────
@@ -250,6 +292,143 @@ export function searchNotes(rootDir: string, query: string, limit = 20): NoteRec
   }
 }
 
+// ── Error Pattern Learning ────────────────────────────────────────
+
+/**
+ * Generate a stable fingerprint from an error message.
+ * Strips variable parts (paths, IDs, timestamps, numbers) to group similar errors.
+ */
+export function errorFingerprint(
+  errorMsg: string,
+  taskType: string,
+  agentOrModule: string,
+): string {
+  const normalized = errorMsg
+    .replace(/\/[\w./\\-]+/g, "<path>") // paths
+    .replace(/\b[0-9a-f]{8,}\b/gi, "<id>") // hex IDs
+    .replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}[:\d.Z]*/g, "<ts>") // timestamps
+    .replace(/\d+/g, "<n>") // remaining numbers
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .slice(0, 200);
+  return `${taskType}:${agentOrModule}:${normalized}`;
+}
+
+/** Record an error occurrence. Upserts — increments count if fingerprint exists. */
+export function recordError(
+  rootDir: string,
+  errorMsg: string,
+  taskType: string,
+  agentOrModule = "",
+): void {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return;
+
+    const fp = errorFingerprint(errorMsg, taskType, agentOrModule);
+    const now = new Date().toISOString();
+
+    // Truncate error message for storage
+    const truncated = errorMsg.length > 500 ? errorMsg.slice(0, 497) + "..." : errorMsg;
+
+    db.prepare(
+      `INSERT INTO error_patterns (fingerprint, error_message, task_type, agent_or_module, occurrences, first_seen, last_seen)
+       VALUES (?, ?, ?, ?, 1, ?, ?)
+       ON CONFLICT(fingerprint) DO UPDATE SET
+         occurrences = occurrences + 1,
+         last_seen = excluded.last_seen,
+         error_message = excluded.error_message`,
+    ).run(fp, truncated, taskType, agentOrModule, now, now);
+  } catch {
+    // silent — non-critical
+  }
+}
+
+/** Mark an error pattern as resolved with a note. */
+export function resolveError(rootDir: string, id: number, resolution: string): boolean {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return false;
+
+    const result = db
+      .prepare(`UPDATE error_patterns SET resolution = ? WHERE id = ?`)
+      .run(resolution, id);
+    return result.changes > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** List error patterns, sorted by frequency. */
+export function listErrorPatterns(rootDir: string, taskType?: string, limit = 20): ErrorPattern[] {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return [];
+
+    if (taskType) {
+      return db
+        .prepare(
+          `SELECT * FROM error_patterns WHERE task_type = ? ORDER BY occurrences DESC LIMIT ?`,
+        )
+        .all(taskType, limit) as ErrorPattern[];
+    }
+    return db
+      .prepare(`SELECT * FROM error_patterns ORDER BY occurrences DESC LIMIT ?`)
+      .all(limit) as ErrorPattern[];
+  } catch {
+    return [];
+  }
+}
+
+/** Find error patterns matching keywords in the error message. */
+export function findMatchingErrors(
+  rootDir: string,
+  taskType: string,
+  agentOrModule: string,
+  limit = 3,
+): ErrorPattern[] {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return [];
+
+    // Match by task type + agent/module for relevant warnings
+    if (agentOrModule) {
+      return db
+        .prepare(
+          `SELECT * FROM error_patterns
+           WHERE task_type = ? AND agent_or_module = ?
+           ORDER BY occurrences DESC, last_seen DESC
+           LIMIT ?`,
+        )
+        .all(taskType, agentOrModule, limit) as ErrorPattern[];
+    }
+    return db
+      .prepare(
+        `SELECT * FROM error_patterns
+         WHERE task_type = ?
+         ORDER BY occurrences DESC, last_seen DESC
+         LIMIT ?`,
+      )
+      .all(taskType, limit) as ErrorPattern[];
+  } catch {
+    return [];
+  }
+}
+
+/** Delete an error pattern by ID. */
+export function removeErrorPattern(rootDir: string, id: number): boolean {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return false;
+
+    const result = db.prepare(`DELETE FROM error_patterns WHERE id = ?`).run(id);
+    return result.changes > 0;
+  } catch {
+    return false;
+  }
+}
+
 // ── Read ───────────────────────────────────────────────────────────
 
 /**
@@ -287,6 +466,7 @@ export function queryMemory(rootDir: string, taskType: TaskType, prompt: string)
     relatedTasks: [],
     isContinuation: false,
     relevantNotes: [],
+    errorWarnings: [],
   };
 
   try {
@@ -348,7 +528,18 @@ export function queryMemory(rootDir: string, taskType: TaskType, prompt: string)
     // Fetch notes relevant to the prompt
     const relevantNotes = prompt ? searchNotes(rootDir, prompt, 5) : [];
 
-    return { recentTasks, relatedTasks, isContinuation, continuationOf, relevantNotes };
+    // Fetch unresolved error warnings for this task type
+    const allErrors = findMatchingErrors(rootDir, taskType, "", 5);
+    const errorWarnings = allErrors.filter((e) => !e.resolution);
+
+    return {
+      recentTasks,
+      relatedTasks,
+      isContinuation,
+      continuationOf,
+      relevantNotes,
+      errorWarnings,
+    };
   } catch {
     return empty;
   }
@@ -446,6 +637,15 @@ export function buildMemoryContextString(ctx: MemoryContext): string | null {
     lines.push("Recent failures (avoid repeating):");
     for (const t of failed) {
       lines.push(`- ${summarizeTask(t)}`);
+    }
+  }
+
+  if (ctx.errorWarnings && ctx.errorWarnings.length > 0) {
+    lines.push("");
+    lines.push("Known error patterns (watch out for these):");
+    for (const ep of ctx.errorWarnings.slice(0, 3)) {
+      const count = ep.occurrences > 1 ? ` (occurred ${ep.occurrences}x)` : "";
+      lines.push(`- ${truncate(ep.error_message, 100)}${count}`);
     }
   }
 
