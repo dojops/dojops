@@ -2,7 +2,7 @@ import { z } from "zod";
 import { LLMProvider } from "../llm/provider";
 import { parseAndValidate } from "../llm/json-validator";
 import { wrapAsData, sanitizeUserInput } from "../llm/sanitizer";
-import { stripAnsi } from "../compression";
+import { stripAnsi, compressSourceCode } from "../compression";
 
 export const CheckFindingSchema = z.object({
   file: z.string(),
@@ -66,7 +66,11 @@ export class DevOpsChecker {
     fileContents: { path: string; content: string }[],
   ): Promise<CheckReport> {
     const filesSection = fileContents
-      .map((f) => wrapAsData(stripAnsi(sanitizeUserInput(f.content)), f.path))
+      .map((f) => {
+        const cleaned = stripAnsi(sanitizeUserInput(f.content));
+        const compressed = compressSourceCode(cleaned, f.path);
+        return wrapAsData(compressed.output, f.path);
+      })
       .join("\n\n");
 
     // Extract key project info for explicit constraint reinforcement

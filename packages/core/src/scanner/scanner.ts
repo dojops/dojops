@@ -3,6 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import type { LLMProvider } from "../llm/provider";
 import { parseAndValidate } from "../llm/json-validator";
+import { compressSourceCode } from "../compression";
 import type {
   LanguageDetection,
   PackageManager,
@@ -1024,7 +1025,9 @@ function readKeyFiles(root: string): string {
       if (content.length > MAX_FILE_SIZE) {
         content = content.slice(0, MAX_FILE_SIZE) + "\n... (truncated)";
       }
-      parts.push(`### ${rel}\n\`\`\`\n${content}\n\`\`\``);
+      // Language-aware compression: strip function bodies, keep signatures
+      const compressed = compressSourceCode(content, rel);
+      parts.push(`### ${rel}\n\`\`\`\n${compressed.output}\n\`\`\``);
     } catch {
       // Skip unreadable
     }
