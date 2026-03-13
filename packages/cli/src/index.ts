@@ -98,6 +98,11 @@ registerCommand("tokens", tokensCommand);
 registerCommand("insights", insightsCommand);
 registerCommand("memory", memoryCommand);
 
+// `dojops version` → print version and exit
+registerCommand("version", async () => {
+  console.log(`dojops v${getDojopsVersion()}`);
+});
+
 // `dojops help <command>` → show per-command help
 registerCommand("help", async (args) => {
   const subCommand = args[0];
@@ -181,7 +186,7 @@ function handleEarlyExits(rawArgs: string[]): boolean {
     printHelp();
     process.exit(0);
   }
-  if (rawArgs.includes("--version") || rawArgs.includes("-V")) {
+  if (rawArgs.includes("--version") || rawArgs.includes("-V") || rawArgs.includes("-v")) {
     console.log(`dojops v${getDojopsVersion()}`);
     process.exit(0);
   }
@@ -279,6 +284,7 @@ const QUIET_COMMANDS = new Set([
   "tools",
   "toolchain",
   "scan",
+  "version",
   "chat",
   "check",
   "verify",

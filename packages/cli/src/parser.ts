@@ -208,6 +208,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "tokens",
     "insights",
     "memory",
+    "version",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([

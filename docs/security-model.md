@@ -309,6 +309,20 @@ In `--replay` mode, version mismatches are blocking errors. In normal `apply` mo
 
 ---
 
+## Encrypted Secrets Vault
+
+DojOps stores API tokens encrypted at rest using AES-256-GCM:
+
+- **Key derivation** — User passphrase → scrypt (N=2^14, r=8, p=1) → 256-bit key
+- **Encryption** — Random 16-byte IV, AES-256-GCM with 16-byte auth tag
+- **Storage** — Encrypted tokens in `~/.dojops/vault.json` (mode `0o600`)
+- **Environment variable** — `DOJOPS_VAULT_KEY` for CI/CD and non-interactive use
+- **Automatic migration** — `dojops provider add` encrypts tokens into the vault; plaintext tokens in `config.json` are not used when the vault is active
+
+This eliminates plaintext API token storage, which is a common credential exposure vector in developer workstations and CI pipelines.
+
+---
+
 ## Best Practices
 
 1. **Keep verification enabled** (the default) in production for Terraform, Dockerfile, and Kubernetes tools. Only use `--skip-verify` for speed during development
@@ -317,3 +331,4 @@ In `--replay` mode, version mismatches are blocking errors. In normal `apply` mo
 4. **Use `--dry-run`** to preview changes before applying
 5. **Restrict `allowedPaths`** in execution policies to limit blast radius
 6. **Run `dojops scan`** after applying changes to check for introduced vulnerabilities
+7. **Enable the encrypted vault** for API token storage — avoid plaintext tokens in config files

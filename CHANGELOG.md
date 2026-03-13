@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Token Usage Analytics** (`dojops tokens`): Track and analyze LLM token usage per provider, command, and time period with daily and total summaries
+- **Smart Output Compression**: Intelligent output formatting that compresses verbose LLM responses while preserving key information
+- **Model Aliases**: Configure short model aliases (e.g., `fast`, `smart`) mapping to provider-specific models via `~/.dojops/config.json`
+- **Thinking/Reasoning Levels**: `--thinking` flag with extended thinking/reasoning modes for compatible providers (Anthropic, DeepSeek)
+- **Tee/Recovery for Tool Failures**: Automatic retry with fallback provider when primary LLM provider fails during tool execution
+- **Log Deduplication**: Deduplicate repeated audit log entries to reduce storage and improve readability
+- **Opportunity Detection** (`dojops insights`): Analyze project history to surface actionable insights across efficiency, security, quality, and cost categories. Supports category filtering and `--all` flag
+- **Config Backup & Restore**: `dojops config backup` saves current config as a timestamped snapshot; `dojops config restore` restores from a backup
+- **Config Apply & Export**: `dojops config apply <file>` imports config from a YAML/JSON file; `dojops config export <file>` exports current config
+- **Structured JSON Output**: `--output json` support added to `cron`, `rollback`, and `clean` commands
+- **Encrypted Secrets Vault**: AES-256-GCM encrypted vault for API tokens, replacing plaintext storage in `config.json`. Scrypt key derivation from passphrase or `DOJOPS_VAULT_KEY` environment variable. Commands: `dojops provider add` auto-encrypts, `dojops config vault-status` shows vault state
+- **Memory System** (`dojops memory`): Persistent project notes with keyword-based search and RAG-style injection into LLM context. SQLite-backed storage in `.dojops/memory/dojops.db`. Subcommands: `list`, `add`, `remove`/`rm`, `search`. Supports `--category` and `--keywords` flags
+- **Error Pattern Learning**: Automatic error fingerprinting and deduplication across commands. Records error patterns from task failures, tracks occurrence counts, and supports resolutions via `dojops memory add "fix: ..."`
+- **Enhanced Insights**: `dojops insights` now analyzes error patterns (recurring errors, module-specific failure concentrations) and memory usage, suggesting corrective actions
+
 ## [1.1.0] - 2026-03-11
 
 ### Added

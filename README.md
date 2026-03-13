@@ -181,6 +181,10 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 - **Metrics dashboard** — Overview (plans, success rate, execution time, critical issues), Security (severity breakdown, findings trend, top issues, scan history), and Audit (chain integrity, status breakdown, command distribution, timeline) — with 30-second auto-refresh
 - **Hash-chained audit logs** — Tamper-evident JSONL audit trail with SHA-256 chain integrity verification via `dojops history verify`. JSONL format is compatible with SIEM ingestion (Splunk, ELK, Datadog)
+- **Token usage analytics** — `dojops tokens` tracks LLM token usage per provider and command with daily and total summaries
+- **Opportunity detection** — `dojops insights` analyzes project history to surface actionable insights across efficiency, security, quality, and cost categories
+- **Error pattern learning** — Automatic error fingerprinting, deduplication, and occurrence tracking across all commands. Recurring patterns are surfaced in `dojops insights`
+- **Project memory** — `dojops memory` stores persistent project notes with keyword-based search and RAG-style injection into LLM context for smarter generation
 - **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
 - **Rich terminal UI** — Interactive prompts, spinners, styled panels, semantic log levels — powered by `@clack/prompts`
 - **Doctor diagnostics** — `dojops doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity). Always shows installed tools regardless of project context
@@ -340,6 +344,16 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops serve --tls-cert --tls-key` | Enable HTTPS/TLS on the API server                                                        |
 | `dojops serve credentials`          | Generate API key for dashboard/API authentication                                         |
 | `dojops init`                       | Initialize `.dojops/` + comprehensive repo scan (11 CI platforms, IaC, scripts, security) |
+| `dojops tokens`                     | Show LLM token usage analytics (per provider, daily, total)                               |
+| `dojops insights [category]`        | Surface actionable insights from project history (`--all` for full list)                  |
+| `dojops memory list`                | List persistent project notes (`--category` to filter)                                    |
+| `dojops memory add <text>`          | Add a project note (`--category`, `--keywords`)                                           |
+| `dojops memory remove <id>`         | Remove a project note                                                                     |
+| `dojops memory search <query>`      | Search notes by keyword                                                                   |
+| `dojops config backup`              | Save current config as a timestamped backup                                               |
+| `dojops config restore [file]`      | Restore config from a backup                                                              |
+| `dojops config apply <file>`        | Import config from a YAML/JSON file                                                       |
+| `dojops config export <file>`       | Export current config to a file                                                           |
 | `dojops status`                     | System health diagnostics + project metrics (alias: `doctor`)                             |
 | `dojops upgrade`                    | Check for and install CLI updates (`--check` for check-only)                              |
 
@@ -481,6 +495,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits                                          |
 | **Approval workflows**  | Configurable handlers: auto-approve, auto-deny, or interactive callback with diff preview                                                         |
 | **Sandboxed execution** | `SandboxedFs` restricts file operations to policy-allowed paths with atomic writes and audit logging                                              |
+| **Encrypted vault**     | AES-256-GCM encrypted secrets vault for API tokens with scrypt key derivation. Replaces plaintext token storage                                   |
 | **Audit trail**         | Append-only JSONL with SHA-256 hash chaining (seq + previousHash + hash). Tamper detection via `dojops history verify`                            |
 | **Execution locking**   | PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup                                                               |
 

@@ -222,19 +222,20 @@ dojops config profile use prod   # Uses OpenAI GPT-4o
 
 ## Environment Variables Reference
 
-| Variable                         | Description                           | Default                  |
-| -------------------------------- | ------------------------------------- | ------------------------ |
-| `DOJOPS_PROVIDER`                | LLM provider name                     | `openai`                 |
-| `DOJOPS_MODEL`                   | Model override                        | Provider default         |
-| `DOJOPS_TEMPERATURE`             | Temperature override                  | Provider default         |
-| `OPENAI_API_KEY`                 | OpenAI API key                        | --                       |
-| `ANTHROPIC_API_KEY`              | Anthropic API key                     | --                       |
-| `DEEPSEEK_API_KEY`               | DeepSeek API key                      | --                       |
-| `GEMINI_API_KEY`                 | Google Gemini API key                 | --                       |
-| `DOJOPS_API_PORT`                | API server port                       | `3000`                   |
-| `OLLAMA_HOST`                    | Ollama server URL                     | `http://localhost:11434` |
-| `OLLAMA_TLS_REJECT_UNAUTHORIZED` | TLS cert verification for Ollama      | `true`                   |
-| `GITHUB_COPILOT_TOKEN`           | GitHub OAuth token (skip device flow) | --                       |
+| Variable                         | Description                            | Default                  |
+| -------------------------------- | -------------------------------------- | ------------------------ |
+| `DOJOPS_PROVIDER`                | LLM provider name                      | `openai`                 |
+| `DOJOPS_MODEL`                   | Model override                         | Provider default         |
+| `DOJOPS_TEMPERATURE`             | Temperature override                   | Provider default         |
+| `OPENAI_API_KEY`                 | OpenAI API key                         | --                       |
+| `ANTHROPIC_API_KEY`              | Anthropic API key                      | --                       |
+| `DEEPSEEK_API_KEY`               | DeepSeek API key                       | --                       |
+| `GEMINI_API_KEY`                 | Google Gemini API key                  | --                       |
+| `DOJOPS_API_PORT`                | API server port                        | `3000`                   |
+| `OLLAMA_HOST`                    | Ollama server URL                      | `http://localhost:11434` |
+| `OLLAMA_TLS_REJECT_UNAUTHORIZED` | TLS cert verification for Ollama       | `true`                   |
+| `GITHUB_COPILOT_TOKEN`           | GitHub OAuth token (skip device flow)  | --                       |
+| `DOJOPS_VAULT_KEY`               | Passphrase for encrypted secrets vault | --                       |
 
 ### Ollama Setup
 
@@ -295,6 +296,69 @@ The Device Flow works as follows:
 Tokens are stored in `~/.dojops/copilot-token.json` (mode 0600). The Copilot API is OpenAI-compatible, so you can use models like `gpt-4o`, `gpt-4o-mini`, `claude-3.5-sonnet`, `o1-mini`, etc. depending on your subscription tier. After authentication, all three commands (`auth login`, `provider add`, and `config`) will present a model picker so you can choose your preferred model immediately.
 
 For CI/CD, you can set `GITHUB_COPILOT_TOKEN` to a GitHub OAuth token (`ghu_xxx`) to skip the interactive Device Flow.
+
+---
+
+## Encrypted Secrets Vault
+
+DojOps can encrypt API tokens at rest using AES-256-GCM instead of storing them as plaintext in `config.json`.
+
+### How It Works
+
+When you add a provider with `dojops provider add`, DojOps encrypts the token using:
+
+1. A passphrase (prompted interactively) or the `DOJOPS_VAULT_KEY` environment variable
+2. **scrypt** key derivation (N=2^14, r=8, p=1) to derive the encryption key
+3. **AES-256-GCM** authenticated encryption with a random 16-byte IV and 16-byte auth tag
+
+Encrypted tokens are stored in `~/.dojops/vault.json` instead of plaintext in `config.json`.
+
+### Environment Variable
+
+For CI/CD and non-interactive use, set the vault passphrase via environment variable:
+
+```bash
+export DOJOPS_VAULT_KEY="your-passphrase"
+```
+
+### Vault Status
+
+```bash
+dojops config vault-status     # Show vault state (encrypted provider count)
+```
+
+---
+
+## Config Backup & Restore
+
+```bash
+# Save current config as a timestamped backup
+dojops config backup
+
+# Restore from a backup (interactive picker)
+dojops config restore
+
+# Restore from a specific file
+dojops config restore ~/.dojops/backups/config-2026-03-12T10-00-00.json
+```
+
+Backups are saved to `~/.dojops/backups/` with timestamps in the filename.
+
+---
+
+## Config Import & Export
+
+```bash
+# Export current config to YAML or JSON
+dojops config export config.yaml
+dojops config export config.json
+
+# Import config from a file (merges with existing config)
+dojops config apply staging-config.yaml
+dojops config apply config.json
+```
+
+File format is detected from the extension (`.yaml`/`.yml` for YAML, `.json` for JSON).
 
 ---
 
