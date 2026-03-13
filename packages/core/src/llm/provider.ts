@@ -53,8 +53,13 @@ export interface LLMResponse<T = unknown> {
   usage?: LLMUsage;
 }
 
+/** Callback invoked with each text chunk during streaming generation. */
+export type StreamCallback = (chunk: string) => void;
+
 export interface LLMProvider {
   name: string;
   generate(request: LLMRequest): Promise<LLMResponse>;
+  /** Stream generation — calls onChunk with each text delta. Returns full response when done. */
+  generateStream?(request: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse>;
   listModels?(): Promise<string[]>;
 }

@@ -14,6 +14,9 @@ import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
+import { renderHeader } from "../tui/status-bar";
+import type { StatusBarState } from "../tui/status-bar";
+import { highlightCodeBlocks } from "../tui/code-highlight";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 
@@ -91,6 +94,29 @@ function validateAgentFlag(session: ChatSession, agentFlag: string): void {
 
 const formatError = toErrorMessage;
 
+// ── Status bar state ────────────────────────────────────────────
+
+function buildStatusBarState(
+  session: ChatSession,
+  ctx: CLIContext,
+  streaming: boolean,
+): StatusBarState {
+  const state = session.getState();
+  return {
+    sessionId: state.id,
+    sessionName: state.name,
+    agent: state.pinnedAgent ?? "auto-route",
+    model: ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)",
+    provider: ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai",
+    tokenEstimate: state.metadata.totalTokensEstimate,
+    messageCount: state.metadata.messageCount,
+    mode: state.mode,
+    streaming,
+  };
+}
+
+// ── Single message mode ─────────────────────────────────────────
+
 async function sendSingleMessage(
   session: ChatSession,
   messageFlag: string,
@@ -119,7 +145,7 @@ function displaySingleResult(
     console.log(JSON.stringify({ agent: result.agent, content: result.content }));
     return;
   }
-  p.log.message(result.content);
+  p.log.message(highlightCodeBlocks(result.content));
 }
 
 async function handleSingleMessage(
@@ -136,31 +162,34 @@ async function handleSingleMessage(
   }
 }
 
-function showWelcome(session: ChatSession, contextInfo: unknown): void {
+// ── TUI Welcome ─────────────────────────────────────────────────
+
+function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown): void {
+  p.intro(pc.bold(pc.cyan("DojOps Interactive Chat")));
+
+  // Rich header bar
+  const barState = buildStatusBarState(session, ctx, false);
+  console.log(renderHeader(barState));
+
   const sessionState = session.getState();
-  const modeLabel =
-    sessionState.mode === "DETERMINISTIC" ? pc.yellow("DETERMINISTIC") : pc.green("INTERACTIVE");
-  const pinnedLabel = sessionState.pinnedAgent
-    ? pc.cyan(sessionState.pinnedAgent)
-    : pc.dim("auto-route");
   const msgCount = sessionState.messages.length;
 
-  p.intro(pc.bold(pc.cyan("DojOps Interactive Chat")));
+  const details = [
+    msgCount > 0 ? `${pc.dim("History:")} ${msgCount} messages` : "",
+    contextInfo ? pc.dim("Project context loaded") : "",
+  ]
+    .filter(Boolean)
+    .join("  ");
+  if (details) p.log.info(details);
+
   p.log.info(
-    [
-      `Session: ${pc.cyan(session.id)}`,
-      `Mode:    ${modeLabel}`,
-      `Agent:   ${pinnedLabel}`,
-      msgCount > 0 ? `History: ${msgCount} messages` : "",
-      contextInfo ? `Context: ${pc.dim("project context loaded")}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  );
-  p.log.info(
-    pc.dim("Commands: /exit, /agent <name>, /history, /clear, /save, /plan <goal>, /apply, /scan"),
+    pc.dim(
+      "Commands: /exit  /agent <name>  /model  /sessions  /status  /history  /clear  /save  /plan  /apply  /scan",
+    ),
   );
 }
+
+// ── Slash command handlers ──────────────────────────────────────
 
 function handleHistoryCommand(session: ChatSession): void {
   const msgs = session.messages;
@@ -171,7 +200,7 @@ function handleHistoryCommand(session: ChatSession): void {
   for (const msg of msgs.slice(-20)) {
     const role = msg.role === "user" ? pc.cyan("You") : pc.green("Agent");
     const time = pc.dim(new Date(msg.timestamp).toLocaleTimeString());
-    p.log.message(`${role} ${time}\n${msg.content}`);
+    p.log.message(`${role} ${time}\n${highlightCodeBlocks(msg.content)}`);
   }
 }
 
@@ -188,6 +217,67 @@ function handleAgentCommand(session: ChatSession, trimmed: string): void {
   } catch (err) {
     p.log.error((err as Error).message);
   }
+}
+
+function handleStatusCommand(session: ChatSession, ctx: CLIContext): void {
+  const barState = buildStatusBarState(session, ctx, false);
+  console.log(renderHeader(barState));
+}
+
+async function handleModelCommand(ctx: CLIContext): Promise<void> {
+  const provider = ctx.getProvider();
+  if (!provider.listModels) {
+    p.log.warn("Current provider does not support model listing.");
+    return;
+  }
+
+  const s = p.spinner();
+  s.start("Fetching available models...");
+
+  try {
+    const models = await provider.listModels();
+    s.stop(`${models.length} models available`);
+
+    if (models.length === 0) {
+      p.log.info("No models returned by provider.");
+      return;
+    }
+
+    const selected = await p.select({
+      message: "Select a model:",
+      options: models.slice(0, 20).map((m) => ({ value: m, label: m })),
+    });
+
+    if (p.isCancel(selected)) return;
+
+    // Update model in context for subsequent commands
+    ctx.globalOpts.model = selected as string;
+    process.env.DOJOPS_MODEL = selected as string;
+    p.log.success(`Model switched to ${pc.yellow(selected as string)}`);
+  } catch (err) {
+    s.stop("Error");
+    p.log.error(formatError(err));
+  }
+}
+
+function handleSessionsCommand(rootDir: string): void {
+  const sessions = listChatSessions(rootDir);
+  if (sessions.length === 0) {
+    p.log.info("No saved sessions.");
+    return;
+  }
+
+  const lines = sessions.slice(0, 15).map((s, i) => {
+    const name = s.name ? pc.cyan(s.name) : pc.dim(s.id.slice(0, 12));
+    const msgs = `${s.metadata.messageCount} msgs`;
+    const time = pc.dim(new Date(s.updatedAt).toLocaleDateString());
+    const agent = s.metadata.lastAgentUsed ? pc.magenta(s.metadata.lastAgentUsed) : "";
+    const marker = i === 0 ? pc.green(" (latest)") : "";
+    return `  ${name}  ${msgs}  ${agent}  ${time}${marker}`;
+  });
+
+  p.log.info(`Sessions (${sessions.length}):\n${lines.join("\n")}`);
+  p.log.info(pc.dim("Resume with: dojops chat --resume --session <name|id>"));
 }
 
 function logCommandError(err: unknown): void {
@@ -248,17 +338,30 @@ async function handleScanCommand(
   }
 }
 
+// ── Streaming message handler ───────────────────────────────────
+
 async function handleSendMessage(session: ChatSession, trimmed: string): Promise<void> {
-  const s = p.spinner();
-  s.start("Thinking...");
+  // Try streaming first
   try {
-    const result = await session.send(trimmed);
-    const agentLabel = `${pc.green("Agent")} ${pc.dim("(" + result.agent + ")")}`;
-    s.stop(agentLabel);
-    p.log.message(result.content);
+    process.stdout.write(`${pc.green("Agent")} ${pc.dim("streaming...")}\n`);
+    let hasChunks = false;
+
+    const result = await session.sendStream(trimmed, (chunk: string) => {
+      hasChunks = true;
+      process.stdout.write(chunk);
+    });
+
+    if (hasChunks) {
+      // Finish the streaming line
+      process.stdout.write("\n");
+    }
+
+    // Show agent name after response
+    const agentLabel = pc.dim(`(${result.agent})`);
+    p.log.info(agentLabel);
+
     showContextWarning(session);
   } catch (err) {
-    s.stop("Error");
     p.log.error(formatError(err));
   }
 }
@@ -277,6 +380,8 @@ function showContextWarning(session: ChatSession): void {
     p.log.info(pc.dim(`Context: ~${Math.round(estimatedTokens / 1000)}K tokens`));
   }
 }
+
+// ── Slash command router ────────────────────────────────────────
 
 async function handleSlashCommand(
   trimmed: string,
@@ -298,6 +403,18 @@ async function handleSlashCommand(
     p.log.success(`Session saved: ${session.id}`);
     return true;
   }
+  if (trimmed === "/status") {
+    handleStatusCommand(session, ctx);
+    return true;
+  }
+  if (trimmed === "/model") {
+    await handleModelCommand(ctx);
+    return true;
+  }
+  if (trimmed === "/sessions") {
+    handleSessionsCommand(rootDir);
+    return true;
+  }
   if (trimmed.startsWith("/agent ")) {
     handleAgentCommand(session, trimmed);
     return true;
@@ -316,6 +433,8 @@ async function handleSlashCommand(
   }
   return false;
 }
+
+// ── Interactive loop ────────────────────────────────────────────
 
 function isExitInput(input: unknown): boolean {
   return p.isCancel(input) || input === "/exit";
@@ -370,6 +489,8 @@ async function runInteractiveLoop(
   process.exit(ExitCode.SUCCESS);
 }
 
+// ── Export / format helpers ──────────────────────────────────────
+
 /** @internal exported for testing */
 export function getRoleLabel(role: string): string {
   if (role === "user") return "**You**";
@@ -397,6 +518,8 @@ export function formatSessionAsMarkdown(session: ChatSessionState): string {
   }
   return lines.join("\n");
 }
+
+// ── Chat export ─────────────────────────────────────────────────
 
 async function chatExportCommand(args: string[], ctx: CLIContext): Promise<void> {
   const rootDir = findProjectRoot(ctx.cwd);
@@ -444,6 +567,8 @@ async function chatExportCommand(args: string[], ctx: CLIContext): Promise<void>
   }
 }
 
+// ── Main entry point ────────────────────────────────────────────
+
 export async function chatCommand(args: string[], ctx: CLIContext): Promise<void> {
   if (args[0] === "export") {
     return chatExportCommand(args, ctx);
@@ -481,6 +606,6 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     return;
   }
 
-  showWelcome(session, contextInfo);
+  showWelcome(session, ctx, contextInfo);
   await runInteractiveLoop(session, rootDir, ctx);
 }

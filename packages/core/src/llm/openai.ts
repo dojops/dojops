@@ -1,6 +1,16 @@
 import OpenAI from "openai";
-import { LLMProvider, LLMRequest, LLMResponse, getRequestTimeoutMs } from "./provider";
-import { openaiCompatGenerate, openaiCompatListModels } from "./openai-compat";
+import {
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  StreamCallback,
+  getRequestTimeoutMs,
+} from "./provider";
+import {
+  openaiCompatGenerate,
+  openaiCompatGenerateStream,
+  openaiCompatListModels,
+} from "./openai-compat";
 
 export class OpenAIProvider implements LLMProvider {
   name = "openai";
@@ -14,6 +24,10 @@ export class OpenAIProvider implements LLMProvider {
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
     return openaiCompatGenerate(this.client, this.model, "OpenAI", req);
+  }
+
+  async generateStream(req: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> {
+    return openaiCompatGenerateStream(this.client, this.model, "OpenAI", req, onChunk);
   }
 
   async listModels(): Promise<string[]> {

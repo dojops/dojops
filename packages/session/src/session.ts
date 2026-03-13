@@ -1,4 +1,4 @@
-import { LLMProvider, AgentRouter } from "@dojops/core";
+import { LLMProvider, AgentRouter, StreamCallback } from "@dojops/core";
 import { ChatMessage, ChatSessionState, SessionMode } from "./types";
 import { MemoryManager } from "./memory";
 import { SessionSummarizer } from "./summarizer";
@@ -151,6 +151,85 @@ export class ChatSession {
         `Session approaching token limit: ~${this.state.metadata.totalTokensEstimate} tokens`,
       );
     }
+
+    return { content: response.content, agent: agent.name };
+  }
+
+  /**
+   * Send a message with streaming — calls onChunk with each text delta.
+   * Falls back to non-streaming send() if the agent doesn't support it.
+   */
+  async sendStream(userMessage: string, onChunk: StreamCallback): Promise<SendResult> {
+    // Bridge commands don't stream
+    const bridge = this.isBridgeCommand(userMessage);
+    if (bridge) {
+      const content = `__bridge__:${bridge.command}:${bridge.args}`;
+      onChunk(content);
+      return { content, agent: "bridge" };
+    }
+
+    // Add user message
+    const userMsg: ChatMessage = {
+      role: "user",
+      content: userMessage,
+      timestamp: new Date().toISOString(),
+    };
+    this.state.messages.push(userMsg);
+
+    // Summarization check (same as send)
+    if (
+      this.state.mode === "INTERACTIVE" &&
+      this.memoryManager.needsSummarization(this.state.messages.length)
+    ) {
+      try {
+        const keepCount = this.memoryManager["maxMessages"];
+        const oldMessages = this.state.messages.slice(0, this.state.messages.length - keepCount);
+        this.state.summary = await this.summarizer.summarize(oldMessages);
+        this.state.messages = this.state.messages.slice(-keepCount);
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // Route to agent
+    const agentName = this.state.pinnedAgent;
+    const agents = this.router.getAgents();
+    let agent = agentName ? agents.find((a) => a.name === agentName) : undefined;
+    if (!agent) {
+      const route = this.router.route(userMessage, { projectDomains: this.projectDomains });
+      agent = route.agent;
+    }
+
+    // Build context
+    const contextMessages = this.memoryManager.getContextMessages(
+      this.state.messages,
+      this.state.summary,
+    );
+
+    // Stream response
+    let response;
+    try {
+      response = await agent.streamWithHistory(contextMessages, onChunk);
+    } catch (err) {
+      this.state.messages.pop();
+      throw err;
+    }
+
+    // Record assistant message
+    const assistantMsg: ChatMessage = {
+      role: "assistant",
+      content: response.content,
+      timestamp: new Date().toISOString(),
+    };
+    this.state.messages.push(assistantMsg);
+
+    // Update metadata
+    this.state.metadata.messageCount = this.state.messages.length;
+    this.state.metadata.totalTokensEstimate = this.memoryManager.estimateTokens(
+      this.state.messages,
+    );
+    this.state.metadata.lastAgentUsed = agent.name;
+    this.state.updatedAt = new Date().toISOString();
 
     return { content: response.content, agent: agent.name };
   }

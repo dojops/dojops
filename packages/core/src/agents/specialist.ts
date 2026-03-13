@@ -1,4 +1,4 @@
-import { ChatMessage, LLMProvider, LLMRequest, LLMResponse } from "../llm/provider";
+import { ChatMessage, LLMProvider, LLMRequest, LLMResponse, StreamCallback } from "../llm/provider";
 import { sanitizeUserInput } from "../llm/sanitizer";
 import { validateRequestSize } from "../llm/input-validator";
 import { ToolDependency } from "./tool-deps";
@@ -141,6 +141,62 @@ export class SpecialistAgent {
         }),
       timeoutMs,
     );
+  }
+
+  /** Whether the underlying provider supports streaming. */
+  get supportsStreaming(): boolean {
+    return typeof this.provider.generateStream === "function";
+  }
+
+  /**
+   * Stream a response with full chat history. Falls back to non-streaming if
+   * the provider does not implement generateStream.
+   */
+  async streamWithHistory(
+    messages: ChatMessage[],
+    onChunk: StreamCallback,
+    opts?: Omit<LLMRequest, "system" | "prompt" | "messages"> & { timeoutMs?: number },
+  ): Promise<LLMResponse> {
+    if (!this.provider.generateStream) {
+      // Fallback: run non-streaming, emit full content as one chunk
+      const result = await this.runWithHistory(messages, opts);
+      onChunk(result.content);
+      return result;
+    }
+
+    const sanitizedMessages = messages
+      .filter((m) => m.content.length <= MAX_MESSAGE_LENGTH)
+      .map((m) => ({
+        ...m,
+        content: m.role === "user" ? sanitizeUserInput(m.content) : m.content,
+      }));
+
+    let systemPrompt = this.config.systemPrompt;
+    if (this.docAugmenter && sanitizedMessages.length > 0) {
+      try {
+        const lastUserMsg = [...sanitizedMessages].reverse().find((m) => m.role === "user");
+        if (lastUserMsg) {
+          const keywords = [this.config.domain, ...this.config.keywords.slice(0, 3)];
+          systemPrompt = await this.docAugmenter.augmentPrompt(
+            systemPrompt,
+            keywords,
+            lastUserMsg.content,
+          );
+        }
+      } catch {
+        // Graceful degradation: proceed without docs
+      }
+    }
+
+    const { timeoutMs, ...llmOpts } = opts ?? {};
+    const request: LLMRequest = {
+      ...llmOpts,
+      prompt: "",
+      messages: sanitizedMessages,
+      system: systemPrompt,
+    };
+
+    return this.executeWithRetry(() => this.provider.generateStream!(request, onChunk), timeoutMs);
   }
 
   /** Execute an LLM call with timeout and a single retry on transient errors. */

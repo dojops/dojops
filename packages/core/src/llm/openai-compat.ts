@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { LLMRequest, LLMResponse, LLMUsage } from "./provider";
+import { LLMRequest, LLMResponse, LLMUsage, StreamCallback } from "./provider";
 import { parseAndValidate } from "./json-validator";
 import { redactSecrets } from "./redact";
 import { augmentSystemPrompt } from "./schema-prompt";
@@ -92,6 +92,75 @@ export function extractApiError(err: unknown): string {
     return redactSecrets(err.message);
   }
   return redactSecrets(String(err));
+}
+
+/** Shared streaming generate for OpenAI-compatible providers. */
+export async function openaiCompatGenerateStream(
+  client: OpenAI,
+  model: string,
+  providerName: string,
+  req: LLMRequest,
+  onChunk: StreamCallback,
+): Promise<LLMResponse> {
+  // Structured output (JSON mode) cannot stream reliably — fall back to non-streaming
+  if (req.schema) {
+    return openaiCompatGenerate(client, model, providerName, req);
+  }
+
+  const systemContent = augmentSystemPrompt(req.system, req.schema);
+
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = req.messages
+    ?.length
+    ? [
+        { role: "system" as const, content: systemContent },
+        ...req.messages
+          .filter((m) => m.role !== "system")
+          .map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+      ]
+    : [
+        { role: "system" as const, content: systemContent },
+        { role: "user" as const, content: req.prompt },
+      ];
+
+  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+  try {
+    stream = await client.chat.completions.create({
+      model,
+      messages,
+      stream: true,
+      ...(req.temperature === undefined ? {} : { temperature: req.temperature }),
+    });
+  } catch (err: unknown) {
+    throw new Error(extractApiError(err), { cause: err });
+  }
+
+  const chunks: string[] = [];
+  let promptTokens = 0;
+  let completionTokens = 0;
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (delta) {
+      chunks.push(delta);
+      onChunk(delta);
+    }
+    // Capture usage from the final chunk (OpenAI includes it with stream_options)
+    if (chunk.usage) {
+      promptTokens = chunk.usage.prompt_tokens;
+      completionTokens = chunk.usage.completion_tokens;
+    }
+  }
+
+  const content = chunks.join("");
+  const usage: LLMUsage | undefined =
+    promptTokens > 0
+      ? { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens }
+      : undefined;
+
+  return { content, usage };
 }
 
 /** Shared listModels helper. */
