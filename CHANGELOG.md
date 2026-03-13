@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat Progress Phases**: Chat TUI now displays phase-by-phase progress during message processing (Routing → Compacting → Generating → Done) with colored indicators showing the current phase, active agent name, and provider/model info
+- **Visible Auto-Compaction**: When conversation history exceeds the context window, a visible "Conversation compacted" notification shows how many messages were summarized and retained, replacing the previously silent compaction
+- **LLM-Based Chat Routing**: Chat sessions now use LLM intent classification (`routeWithLLM()`) to select the best specialist agent instead of keyword matching. Falls back to keyword-based `route()` when LLM routing fails
+- **Chat Project File Context**: Chat agents now receive actual DevOps file contents (CI/CD, Dockerfile, Terraform, Ansible, etc.) from the project, enabling specific file-level analysis instead of generic advice. Files are discovered via `discoverDevOpsFiles()` and injected into the system prompt
+- **Analysis Intent Detection**: `dojops "prompt"` now detects analysis/review questions (e.g., "what do you think about our workflows?") and routes them to specialist agents for natural language analysis instead of incorrectly triggering module file generation
+- **Formatted File Output**: When modules generate `{ "files": { ... } }` JSON output, the CLI now renders each file as a labeled code block with syntax highlighting instead of dumping raw JSON
+
+### Fixed
+
+- **Chat Agents Missing Project Context**: System messages containing project context, chat-mode instructions, and conversation summaries were silently stripped by all LLM providers (OpenAI, Anthropic, Ollama, Gemini, DeepSeek). `SpecialistAgent` now merges system messages from the messages array into the system prompt before sending to providers
+- **Analysis Questions Triggering File Generation**: Prompts like "what do you think about our github workflows?" matched MODULE_KEYWORDS and routed to the github-actions module (which generates new files) instead of a specialist agent. Intent detection now skips module auto-detection for analysis/review questions
 - **Token Usage Analytics** (`dojops tokens`): Track and analyze LLM token usage per provider, command, and time period with daily and total summaries
 - **Smart Output Compression**: Intelligent output formatting that compresses verbose LLM responses while preserving key information
 - **Model Aliases**: Configure short model aliases (e.g., `fast`, `smart`) mapping to provider-specific models via `~/.dojops/config.json`
