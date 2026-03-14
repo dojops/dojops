@@ -2,14 +2,17 @@
 
 ## Supported Versions
 
-| Version | Supported |
-| ------- | --------- |
-| 1.0.x   | Yes       |
-| < 1.0   | No        |
+| Version | Supported           |
+| ------- | ------------------- |
+| 1.1.x   | Yes                 |
+| 1.0.x   | Security fixes only |
+| < 1.0   | No                  |
 
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in DojOps, please report it responsibly.
+
+**Preferred:** [GitHub Security Advisories](https://github.com/dojops/dojops/security/advisories/new) (private disclosure)
 
 **Email:** chlagoumedhedi@outlook.com
 
@@ -35,6 +38,11 @@ Please include:
 
 ## Scope
 
-This policy applies to all packages in the `@dojops/*` npm scope and the DojOps CLI.
+This policy applies to:
 
-Security issues in third-party dependencies should be reported to those projects directly, but we appreciate being notified so we can update our dependencies.
+- All packages in the `@dojops/*` npm scope (CLI, API, core, executor, etc.)
+- Docker images published to `ghcr.io/dojops/dojops`
+- DojOps Hub (`hub.dojops.ai`)
+- DojOps documentation site (`docs.dojops.ai`)
+
+**Out of scope:** Social engineering, denial-of-service attacks against hosted services, and issues in third-party dependencies. For dependency vulnerabilities, please report to those projects directly — but we appreciate being notified so we can update our dependencies.

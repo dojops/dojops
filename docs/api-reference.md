@@ -1,6 +1,6 @@
 # API Reference
 
-DojOps exposes a REST API via Express with 20 endpoints covering generation, planning, diagnostics, scanning, chat, metrics, and history. Start the server with `dojops serve`.
+DojOps exposes a REST API via Express with 21 endpoints covering generation, planning, autonomous agent, diagnostics, scanning, chat, metrics, and history. Start the server with `dojops serve`.
 
 ---
 
@@ -162,6 +162,61 @@ Decompose a goal into a dependency-aware task graph with optional execution.
 curl -X POST http://localhost:3000/api/plan \
   -H "Content-Type: application/json" \
   -d '{"goal": "Set up CI/CD for a Node.js app", "execute": false}'
+```
+
+---
+
+### Autonomous Agent
+
+#### `POST /api/auto`
+
+Run the autonomous agent loop (ReAct pattern). The agent iteratively reads files, makes changes, runs commands, and verifies until the task is complete.
+
+**Request:**
+
+```json
+{
+  "prompt": "Add health check endpoint to the Express API",
+  "maxIterations": 20,
+  "allowAllPaths": false
+}
+```
+
+| Field           | Type    | Required | Description                             |
+| --------------- | ------- | -------- | --------------------------------------- |
+| `prompt`        | string  | Yes      | Task description                        |
+| `maxIterations` | number  | No       | Max agent loop iterations (default: 20) |
+| `allowAllPaths` | boolean | No       | Bypass write path restrictions          |
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "summary": "Added GET /health endpoint with database connectivity check",
+  "iterations": 5,
+  "totalTokens": 12500,
+  "toolCalls": [
+    { "name": "read_file", "arguments": { "path": "src/app.ts" } },
+    {
+      "name": "edit_file",
+      "arguments": { "path": "src/app.ts", "old_string": "...", "new_string": "..." }
+    },
+    { "name": "run_command", "arguments": { "command": "npm test" } },
+    { "name": "done", "arguments": { "summary": "Added health check endpoint" } }
+  ],
+  "filesWritten": [],
+  "filesModified": ["src/app.ts"],
+  "historyId": "auto-a1b2c3d4"
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:3000/api/auto \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Add health check endpoint to the Express API"}'
 ```
 
 ---
@@ -492,10 +547,10 @@ List execution history with optional filtering.
 
 **Query Parameters:**
 
-| Param   | Type   | Description                                                    |
-| ------- | ------ | -------------------------------------------------------------- |
-| `type`  | string | Filter: `generate`, `plan`, `debug-ci`, `diff`, `scan`, `chat` |
-| `limit` | number | Max entries to return                                          |
+| Param   | Type   | Description                                                            |
+| ------- | ------ | ---------------------------------------------------------------------- |
+| `type`  | string | Filter: `generate`, `plan`, `auto`, `debug-ci`, `diff`, `scan`, `chat` |
+| `limit` | number | Max entries to return                                                  |
 
 **Response:**
 

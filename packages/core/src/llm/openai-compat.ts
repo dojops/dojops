@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { LLMRequest, LLMResponse, LLMUsage, StreamCallback } from "./provider";
+import type { LLMToolRequest, LLMToolResponse, ToolCall, AgentMessage } from "./tool-types";
 import { parseAndValidate } from "./json-validator";
 import { redactSecrets } from "./redact";
 import { augmentSystemPrompt } from "./schema-prompt";
@@ -161,6 +162,98 @@ export async function openaiCompatGenerateStream(
       : undefined;
 
   return { content, usage };
+}
+
+/** Map AgentMessage[] to OpenAI-compatible message format. */
+function mapToOpenAIToolMessages(
+  system: string | undefined,
+  messages: AgentMessage[],
+): Array<Record<string, unknown>> {
+  const result: Array<Record<string, unknown>> = [];
+  if (system) {
+    result.push({ role: "system", content: system });
+  }
+
+  for (const m of messages) {
+    if (m.role === "system") continue; // Already added above
+    if (m.role === "tool") {
+      result.push({ role: "tool", tool_call_id: m.callId, content: m.content });
+    } else if (m.role === "assistant" && m.toolCalls?.length) {
+      result.push({
+        role: "assistant",
+        content: m.content || null,
+        tool_calls: m.toolCalls.map((tc) => ({
+          id: tc.id,
+          type: "function",
+          function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+        })),
+      });
+    } else {
+      result.push({ role: m.role, content: m.content });
+    }
+  }
+
+  return result;
+}
+
+/** Shared generateWithTools logic for OpenAI-compatible providers (OpenAI, DeepSeek, Copilot). */
+export async function openaiCompatGenerateWithTools(
+  client: OpenAI,
+  model: string,
+  providerName: string,
+  req: LLMToolRequest,
+): Promise<LLMToolResponse> {
+  const messages = mapToOpenAIToolMessages(req.system, req.messages);
+
+  const tools = req.tools.map((t) => ({
+    type: "function" as const,
+    function: { name: t.name, description: t.description, parameters: t.parameters },
+  }));
+
+  let completion: OpenAI.Chat.ChatCompletion;
+  try {
+    completion = await client.chat.completions.create({
+      model,
+      messages: messages as unknown as OpenAI.Chat.ChatCompletionMessageParam[],
+      tools,
+      ...(req.temperature === undefined ? {} : { temperature: req.temperature }),
+      ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
+    });
+  } catch (err: unknown) {
+    throw new Error(extractApiError(err), { cause: err });
+  }
+
+  const choice = completion.choices[0];
+  if (!choice) {
+    throw new Error(`${providerName} returned empty choices array (model: ${model})`);
+  }
+
+  const content = choice.message.content ?? "";
+  const toolCalls: ToolCall[] = (choice.message.tool_calls ?? []).map((tc) => {
+    const fn = (tc as { id: string; function: { name: string; arguments: string } }).function;
+    return {
+      id: tc.id,
+      name: fn.name,
+      arguments: JSON.parse(fn.arguments || "{}") as Record<string, unknown>,
+    };
+  });
+
+  const stopReason: LLMToolResponse["stopReason"] =
+    choice.finish_reason === "tool_calls"
+      ? "tool_use"
+      : choice.finish_reason === "length"
+        ? "max_tokens"
+        : "end_turn";
+
+  const usage = completion.usage
+    ? {
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        totalTokens: completion.usage.total_tokens,
+      }
+    : undefined;
+
+  return { content, toolCalls, stopReason, usage };
 }
 
 /** Shared listModels helper. */

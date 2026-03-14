@@ -1,7 +1,12 @@
 import OpenAI from "openai";
 import { LLMProvider, LLMRequest, LLMResponse, getRequestTimeoutMs } from "./provider";
 import { getValidCopilotToken } from "./copilot-auth";
-import { openaiCompatGenerate, openaiCompatListModels } from "./openai-compat";
+import {
+  openaiCompatGenerate,
+  openaiCompatGenerateWithTools,
+  openaiCompatListModels,
+} from "./openai-compat";
+import type { LLMToolRequest, LLMToolResponse } from "./tool-types";
 
 const COPILOT_HEADERS: Record<string, string> = {
   "editor-version": "vscode/1.95.0",
@@ -42,6 +47,11 @@ export class GitHubCopilotProvider implements LLMProvider {
   async generate(req: LLMRequest): Promise<LLMResponse> {
     const client = await this.getClient();
     return openaiCompatGenerate(client, this.model, "GitHub Copilot", req);
+  }
+
+  async generateWithTools(req: LLMToolRequest): Promise<LLMToolResponse> {
+    const client = await this.getClient();
+    return openaiCompatGenerateWithTools(client, this.model, "GitHub Copilot", req);
   }
 
   async listModels(): Promise<string[]> {

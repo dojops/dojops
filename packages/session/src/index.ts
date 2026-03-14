@@ -1,5 +1,7 @@
 export { ChatSession } from "./session";
 export type { ChatSessionOptions, BridgeCommand, SendResult } from "./session";
+export { AgentLoop } from "./agent-loop";
+export type { AgentLoopOptions, AgentLoopResult } from "./agent-loop";
 export { MemoryManager } from "./memory";
 export { SessionSummarizer } from "./summarizer";
 export {

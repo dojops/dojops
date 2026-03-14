@@ -39,6 +39,7 @@
     "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
   },
   "dependencies": {
+    "@dojops/core": "workspace:*",
     "@dojops/sdk": "workspace:*",
     "zod": "^4.0.0"
   }

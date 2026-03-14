@@ -19,6 +19,7 @@ import {
   createChatRouter,
   createMetricsRouter,
   createReviewRouter,
+  createAutoRouter,
 } from "./routes";
 import { MetricsAggregator } from "./metrics";
 import { TokenTracker } from "./token-tracker";
@@ -274,6 +275,7 @@ export function createApp(deps: AppDependencies): Express {
     deps.rootDir,
     deps.context7Provider,
   );
+  const autoRouter = createAutoRouter(deps.provider, deps.tools, deps.store, deps.rootDir);
 
   // Mount routes at both /api/ (backward compat) and /api/v1/ (versioned)
   const mountRoutes = (prefix: string) => {
@@ -286,6 +288,7 @@ export function createApp(deps: AppDependencies): Express {
     app.use(`${prefix}/scan`, scanLimiter, scanRouter);
     app.use(`${prefix}/chat`, llmLimiter, chatRouter);
     app.use(`${prefix}/review`, llmLimiter, reviewRouter);
+    app.use(`${prefix}/auto`, planLimiter, autoRouter);
   };
 
   // #27: API versioning — /api/v1/ is the canonical prefix (middleware registered above health routes)

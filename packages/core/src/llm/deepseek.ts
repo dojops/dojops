@@ -9,8 +9,10 @@ import {
 import {
   openaiCompatGenerate,
   openaiCompatGenerateStream,
+  openaiCompatGenerateWithTools,
   openaiCompatListModels,
 } from "./openai-compat";
+import type { LLMToolRequest, LLMToolResponse } from "./tool-types";
 
 export class DeepSeekProvider implements LLMProvider {
   name = "deepseek";
@@ -32,6 +34,10 @@ export class DeepSeekProvider implements LLMProvider {
 
   async generateStream(req: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> {
     return openaiCompatGenerateStream(this.client, this.model, "DeepSeek", req, onChunk);
+  }
+
+  async generateWithTools(req: LLMToolRequest): Promise<LLMToolResponse> {
+    return openaiCompatGenerateWithTools(this.client, this.model, "DeepSeek", req);
   }
 
   async listModels(): Promise<string[]> {

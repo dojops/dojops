@@ -91,3 +91,12 @@ export const ReviewRequestSchema = z.object({
 });
 
 export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
+
+export const AutoRequestSchema = z.object({
+  prompt: z.string().min(1, "prompt is required").max(65536, "prompt too long"),
+  maxIterations: z.number().min(1).max(50).optional().default(20),
+  allowAllPaths: z.boolean().optional().default(false),
+  cwd: z.string().optional(),
+});
+
+export type AutoRequest = z.infer<typeof AutoRequestSchema>;

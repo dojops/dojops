@@ -8,7 +8,7 @@ Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps 
 
 - **[Getting Started](getting-started.md)** — Installation, setup, and your first generation
 - **[CLI Reference](cli-reference.md)** — Complete command reference with examples
-- **[API Reference](api-reference.md)** — All 19 REST endpoints with schemas and curl examples
+- **[API Reference](api-reference.md)** — All 21 REST endpoints with schemas and curl examples
 
 ---
 

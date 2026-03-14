@@ -187,6 +187,9 @@ importers:
 
   packages/executor:
     dependencies:
+      '@dojops/core':
+        specifier: workspace:*
+        version: link:../core
       '@dojops/sdk':
         specifier: workspace:*
         version: link:../sdk
@@ -248,6 +251,9 @@ importers:
       '@dojops/core':
         specifier: workspace:*
         version: link:../core
+      '@dojops/executor':
+        specifier: workspace:*
+        version: link:../executor
       '@dojops/sdk':
         specifier: workspace:*
         version: link:../sdk

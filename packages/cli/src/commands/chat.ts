@@ -388,6 +388,26 @@ async function handleScanCommand(
   }
 }
 
+async function handleAutoCommand(
+  trimmed: string,
+  rootDir: string,
+  session: ChatSession,
+  ctx: CLIContext,
+): Promise<void> {
+  const autoPrompt = trimmed.slice(6).trim();
+  if (!autoPrompt) {
+    p.log.warn("Usage: /auto <task description>");
+    return;
+  }
+  saveChatSession(rootDir, session.getState());
+  try {
+    const { autoCommand } = await import("./auto");
+    await autoCommand([autoPrompt], ctx);
+  } catch (err) {
+    logCommandError(err);
+  }
+}
+
 // ── Phase line helpers ───────────────────────────────────────────
 
 function writePhaseLine(line: string): void {
@@ -489,6 +509,7 @@ const HELP_ENTRIES: Array<{ cmd: string; args?: string; desc: string }> = [
   { cmd: "/plan", args: "<goal>", desc: "Decompose a goal into a task plan" },
   { cmd: "/apply", args: "[plan-id]", desc: "Execute a saved plan" },
   { cmd: "/scan", args: "[type]", desc: "Run security/dependency scanners" },
+  { cmd: "/auto", args: "<prompt>", desc: "Run autonomous agent (iterative tool-use)" },
 ];
 
 function handleHelpCommand(): void {
@@ -560,6 +581,10 @@ async function handleSlashCommand(
   }
   if (trimmed === "/scan" || trimmed.startsWith("/scan ")) {
     await handleScanCommand(trimmed, rootDir, session, ctx);
+    return true;
+  }
+  if (trimmed.startsWith("/auto ")) {
+    await handleAutoCommand(trimmed, rootDir, session, ctx);
     return true;
   }
   return false;

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage, getRequestTimeoutMs } from "./provider";
+import type { LLMToolRequest, LLMToolResponse, ToolCall } from "./tool-types";
 import { buildLLMResponse, extractApiError } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
 
@@ -90,6 +91,87 @@ export class AnthropicProvider implements LLMProvider {
     }
 
     return buildLLMResponse(content, this.extractUsage(message), req);
+  }
+
+  async generateWithTools(req: LLMToolRequest): Promise<LLMToolResponse> {
+    const system = req.system || undefined;
+    const tools: Anthropic.Tool[] = req.tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.parameters as Anthropic.Tool.InputSchema,
+    }));
+
+    // Map AgentMessages to Anthropic format
+    const messages: Anthropic.MessageParam[] = [];
+    for (const m of req.messages) {
+      if (m.role === "system") continue;
+      if (m.role === "tool") {
+        // Anthropic expects tool results as user messages with tool_result content blocks
+        messages.push({
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: m.callId,
+              content: m.content,
+              is_error: m.isError,
+            },
+          ],
+        });
+      } else if (m.role === "assistant" && m.toolCalls?.length) {
+        // Anthropic assistant messages contain tool_use blocks alongside text
+        const content: Anthropic.ContentBlockParam[] = [];
+        if (m.content) {
+          content.push({ type: "text", text: m.content });
+        }
+        for (const tc of m.toolCalls) {
+          content.push({ type: "tool_use", id: tc.id, name: tc.name, input: tc.arguments });
+        }
+        messages.push({ role: "assistant", content });
+      } else {
+        messages.push({ role: m.role as "user" | "assistant", content: m.content });
+      }
+    }
+
+    let message: Anthropic.Message;
+    try {
+      message = await this.client.messages.create({
+        model: this.model,
+        max_tokens: req.maxTokens ?? 8192,
+        system,
+        messages,
+        tools,
+        ...(req.temperature === undefined ? {} : { temperature: req.temperature }),
+      });
+    } catch (err: unknown) {
+      throw new Error(extractApiError(err), { cause: err });
+    }
+
+    // Extract text and tool_use blocks
+    let content = "";
+    const toolCalls: ToolCall[] = [];
+    for (const block of message.content) {
+      if (block.type === "text") {
+        content += block.text;
+      } else if (block.type === "tool_use") {
+        toolCalls.push({
+          id: block.id,
+          name: block.name,
+          arguments: block.input as Record<string, unknown>,
+        });
+      }
+    }
+
+    const stopReason: LLMToolResponse["stopReason"] =
+      message.stop_reason === "tool_use"
+        ? "tool_use"
+        : message.stop_reason === "max_tokens"
+          ? "max_tokens"
+          : "end_turn";
+
+    const usage = this.extractUsage(message);
+
+    return { content, toolCalls, stopReason, usage };
   }
 
   async listModels(): Promise<string[]> {

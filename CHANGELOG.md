@@ -5,10 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-03-14
 
 ### Added
 
+- **Autonomous Agent Loop (ReAct Pattern)**: New `dojops auto "prompt"` command that iteratively reads files, makes changes, runs commands, and verifies — all autonomously. Replaces the one-shot generation model with an observe → think → act cycle. The LLM can call 7 tools (`read_file`, `write_file`, `edit_file`, `run_command`, `run_skill`, `search_files`, `done`) and loop until the task is complete or the iteration limit is reached
+  - **Native Tool-Calling**: `LLMProvider` interface extended with optional `generateWithTools()` method. OpenAI, Anthropic, and Gemini use provider-native tool-calling APIs; Ollama uses a prompt-based fallback that injects tool descriptions into the system prompt and parses JSON output
+  - **ToolExecutor** (`@dojops/executor`): Dispatches tool calls to sandboxed operations enforced by `ExecutionPolicy`. Supports file read/write/edit with policy checks, shell command execution with timeout, skill invocation, and glob/grep file search. Output truncated at 32KB
+  - **AgentLoop** (`@dojops/session`): ReAct loop controller with configurable max iterations (default 20), token budget tracking, context compaction after 15 messages, and progress callbacks. Falls back to prompt-based tool calling for providers without native support
+  - **`POST /api/auto` Endpoint**: REST API for autonomous agent mode with request validation, policy configuration, and history storage
+  - **Chat `/auto` Command**: Bridge command in interactive chat mode to invoke autonomous agent inline
+  - **`--max-iterations`** and **`--allow-all-paths`** flags on `dojops auto`
+  - 46 new tests across core (tool types, prompt-tool-calling), executor (ToolExecutor), and session (AgentLoop)
 - **Agent-Aware Plan Execution**: The task planner now assigns specialist agents to tasks during goal decomposition. Each task in the `TaskGraph` gets an optional `agent` field (e.g., `terraform-specialist`, `kubernetes-specialist`) assigned by the LLM based on domain relevance. During execution, the assigned agent's system prompt is injected as domain context into the skill's LLM call via `_agentContext`, giving the LLM both specialist expertise and skill-specific generation instructions. Backward-compatible — existing plans without agent assignments still work
 - **Chat Progress Phases**: Chat TUI now displays phase-by-phase progress during message processing (Routing → Compacting → Generating → Done) with colored indicators showing the current phase, active agent name, and provider/model info
 - **Visible Auto-Compaction**: When conversation history exceeds the context window, a visible "Conversation compacted" notification shows how many messages were summarized and retained, replacing the previously silent compaction
@@ -16,21 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Chat Project File Context**: Chat agents now receive actual DevOps file contents (CI/CD, Dockerfile, Terraform, Ansible, etc.) from the project, enabling specific file-level analysis instead of generic advice. Files are discovered via `discoverDevOpsFiles()` and injected into the system prompt
 - **Analysis Intent Detection**: `dojops "prompt"` now detects analysis/review questions (e.g., "what do you think about our workflows?") and routes them to specialist agents for natural language analysis instead of incorrectly triggering skill file generation
 - **Formatted File Output**: When skills generate `{ "files": { ... } }` JSON output, the CLI now renders each file as a labeled code block with syntax highlighting instead of dumping raw JSON
-
-### Fixed
-
-- **Chat Agents Missing Project Context**: System messages containing project context, chat-mode instructions, and conversation summaries were silently stripped by all LLM providers (OpenAI, Anthropic, Ollama, Gemini, DeepSeek). `SpecialistAgent` now merges system messages from the messages array into the system prompt before sending to providers
-- **Analysis Questions Triggering File Generation**: Prompts like "what do you think about our github workflows?" matched SKILL_KEYWORDS and routed to the github-actions skill (which generates new files) instead of a specialist agent. Intent detection now skips skill auto-detection for analysis/review questions
-
-### Breaking Changes
-
-- **Renamed "modules" to "skills" across the entire platform** — `.dops` files are now called "skills" instead of "modules"
-- **Renamed `@dojops/module-registry` to `@dojops/skill-registry`** — package name, all exports, and types updated
-- **Renamed types** — `BaseModule` → `BaseSkill`, `ModuleRegistry` → `SkillRegistry`, `ModuleEntry` → `SkillEntry`, `ModulePolicy` → `SkillPolicy`, `ModuleOutput` → `SkillOutput`, `DopsModule` → `DopsSkill`
-- **CLI command rename** — `dojops modules` → `dojops skills` (no legacy alias)
-- **CLI flag rename** — `--module` / `--tool` → `--skill`
-- **Directory paths** — `.dojops/modules/` and `.dojops/tools/` → `.dojops/skills/`, `packages/runtime/modules/` → `packages/runtime/skills/`
-- **Hub, docs, and marketing site** updated to use "skills" terminology throughout
+- **Shell Auto-Completion**: Tab completion for Bash, Zsh, and Fish shells. Covers all 31 commands, subcommands, global/command-specific flags, and dynamic value completions for `--provider`, `--agent`, and `--skill` flags
+  - `dojops completion bash|zsh|fish` — print completion script to stdout
+  - `dojops completion install [shell]` — auto-detect shell and install to standard location
+  - Hidden `--get-completions <type>` flag for dynamic provider/agent/skill lookups at tab-completion time
+  - 3-level nesting support (`config profile create|use|delete|list`)
+  - Command-specific flag completions for `plan`, `apply`, `scan`, `serve`, `chat`, `auto`
+  - 2-second timeout on dynamic completions to prevent shell hang
 - **Token Usage Analytics** (`dojops tokens`): Track and analyze LLM token usage per provider, command, and time period with daily and total summaries
 - **Smart Output Compression**: Intelligent output formatting that compresses verbose LLM responses while preserving key information
 - **Model Aliases**: Configure short model aliases (e.g., `fast`, `smart`) mapping to provider-specific models via `~/.dojops/config.json`
@@ -46,26 +46,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Error Pattern Learning**: Automatic error fingerprinting and deduplication across commands. Records error patterns from task failures, tracks occurrence counts, and supports resolutions via `dojops memory add "fix: ..."`
 - **Enhanced Insights**: `dojops insights` now analyzes error patterns (recurring errors, module-specific failure concentrations) and memory usage, suggesting corrective actions
 
-## [1.1.0] - 2026-03-11
+### Fixed
 
-### Added
+- **Chat Agents Missing Project Context**: System messages containing project context, chat-mode instructions, and conversation summaries were silently stripped by all LLM providers (OpenAI, Anthropic, Ollama, Gemini, DeepSeek). `SpecialistAgent` now merges system messages from the messages array into the system prompt before sending to providers
+- **Analysis Questions Triggering File Generation**: Prompts like "what do you think about our github workflows?" matched SKILL_KEYWORDS and routed to the github-actions skill (which generates new files) instead of a specialist agent. Intent detection now skips skill auto-detection for analysis/review questions
 
-- **Shell Auto-Completion**: Tab completion for Bash, Zsh, and Fish shells. Covers all 31 commands, subcommands, global/command-specific flags, and dynamic value completions for `--provider`, `--agent`, and `--skill` flags
-  - `dojops completion bash|zsh|fish` — print completion script to stdout
-  - `dojops completion install [shell]` — auto-detect shell and install to standard location
-  - Hidden `--get-completions <type>` flag for dynamic provider/agent/skill lookups at tab-completion time
-  - 3-level nesting support (`config profile create|use|delete|list`)
-  - Command-specific flag completions for `plan`, `apply`, `scan`, `serve`, `chat`, `auto`
-  - 2-second timeout on dynamic completions to prevent shell hang
+### Changed
 
-### Breaking Changes
-
-- **Removed `.dops v1` format support** — all modules must use `dops: v2` frontmatter
-- **Removed `tool.yaml` custom tool manifests** — create custom modules as `.dops v2` files instead
-- **Renamed `@dojops/tool-registry` to `@dojops/module-registry`**
-- **Renamed types** — `BaseTool` → `BaseModule`, `ToolRegistry` → `ModuleRegistry`, `DevOpsTool` → `DevOpsModule`, `ToolOutput` → `ModuleOutput`
-- **Hub rejects v1 uploads** — republish existing v1 packages as v2
-- **`dojops tools` deprecated** — use `dojops modules` instead (alias still works with warning)
+- **Super-Agent Uses Autonomous Mode**: `dojops-super-agent` now invokes `dojops auto` instead of `dojops plan --execute --yes` for ticket processing, gaining iterative file reading, targeted edits, and error recovery capabilities
+- **`dojops auto` Evolved to Full Agent Mode**: Transformed from a thin `plan --execute --yes` wrapper into an autonomous agent with iterative tool-use (ReAct pattern). Now builds a `ToolExecutor` with policy enforcement, loads skills, and runs an `AgentLoop` with rich TUI output
+- `DopsModuleV2` renamed to `DopsSkill` (only skill type)
+- `DopsFrontmatterV2` renamed to `DopsFrontmatter`
+- `parseDopsFileAny()` renamed to `parseDopsFile()` (v2-only)
+- `parseDopsStringAny()` renamed to `parseDopsString()` (v2-only)
+- `createToolRegistry()` renamed to `createSkillRegistry()`
 
 ### Removed
 
@@ -76,13 +70,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `parseDopsFile()` and `parseDopsString()` v1-only parsers
 - v1 schema types: `InputFieldDef`, `FileSpec` (v1), `DopsFrontmatterSchema` (v1)
 
-### Changed
+### Breaking Changes
 
-- `DopsModuleV2` renamed to `DopsModule` (only module type)
-- `DopsFrontmatterV2` renamed to `DopsFrontmatter`
-- `parseDopsFileAny()` renamed to `parseDopsFile()` (v2-only)
-- `parseDopsStringAny()` renamed to `parseDopsString()` (v2-only)
-- `createToolRegistry()` renamed to `createModuleRegistry()`
+- **Renamed "tools"/"modules" to "skills" across the entire platform** — `.dops` files are now called "skills". `@dojops/tool-registry` → `@dojops/skill-registry` (through intermediate `module-registry` rename)
+- **Renamed types** — `BaseTool` → `BaseSkill`, `ToolRegistry` → `SkillRegistry`, `ModuleEntry` → `SkillEntry`, `ModulePolicy` → `SkillPolicy`, `DevOpsTool` → `DevOpsSkill`, `ToolOutput` → `SkillOutput`, `DopsModule` → `DopsSkill`
+- **CLI command rename** — `dojops tools` / `dojops modules` → `dojops skills` (no legacy alias)
+- **CLI flag rename** — `--tool` / `--module` → `--skill`
+- **Directory paths** — `.dojops/tools/` and `.dojops/modules/` → `.dojops/skills/`, `packages/runtime/modules/` → `packages/runtime/skills/`
+- **Hub, docs, and marketing site** updated to use "skills" terminology throughout
+- **Removed `.dops v1` format support** — all skills must use `dops: v2` frontmatter
+- **Removed `tool.yaml` custom tool manifests** — create custom skills as `.dops v2` files instead
+- **Hub rejects v1 uploads** — republish existing v1 packages as v2
 
 ## [1.0.9] - 2026-03-11
 

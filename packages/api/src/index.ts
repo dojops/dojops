@@ -11,6 +11,7 @@ export {
   ChatRequestSchema,
   ChatSessionRequestSchema,
   ReviewRequestSchema,
+  AutoRequestSchema,
 } from "./schemas";
 export type {
   GenerateRequest,
@@ -21,6 +22,7 @@ export type {
   ChatRequest,
   ChatSessionRequest,
   ReviewRequest,
+  AutoRequest,
 } from "./schemas";
 export {
   createProvider,
@@ -32,6 +34,7 @@ export {
   createReviewer,
 } from "./factory";
 export { runReviewPipeline } from "./routes/review";
+export { createAutoRouter } from "./routes/auto";
 export type { ReviewPipelineResult } from "./routes/review";
 export { NoopProvider } from "./noop-provider";
 export type { ProviderOptions, CreateRouterResult } from "./factory";

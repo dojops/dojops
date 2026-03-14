@@ -44,7 +44,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
 @dojops/runtime        13 built-in DevOps skills as .dops v2 files (DopsRuntime)
 @dojops/scanner        10 security scanners + remediation engine
-@dojops/session        Chat session management + memory + context injection
+@dojops/session        Chat session management + autonomous agent loop (AgentLoop) + memory + context injection
 @dojops/context        Context7 documentation augmentation for v2 skills
 @dojops/core           LLM abstraction + 6 providers + 17 specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseSkill<T> abstract class with Zod validation + optional verify() + file-reader utilities
@@ -65,6 +65,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
   |     |     +-- @dojops/core
   |     |           +-- @dojops/sdk (zod)
   |     +-- @dojops/executor
+  |     |     +-- @dojops/core
   |     |     +-- @dojops/sdk
   |     +-- @dojops/scanner
   |     +-- @dojops/context
@@ -80,7 +81,7 @@ cli -> api -> skill-registry -> runtime -> core -> sdk
           -> planner -> executor
           -> scanner
           -> context -> core
-          -> session -> core
+          -> session -> executor -> core
 ```
 
 ---
@@ -106,9 +107,12 @@ Key interface:
 interface LLMProvider {
   name: string;
   generate(request: LLMRequest): Promise<LLMResponse>;
+  generateWithTools?(request: LLMToolRequest): Promise<LLMToolResponse>;
   listModels?(): Promise<string[]>;
 }
 ```
+
+The optional `generateWithTools()` method enables native tool-calling for the autonomous agent loop. OpenAI, Anthropic, and Gemini use provider-native tool-calling APIs; Ollama uses a prompt-based fallback that injects tool descriptions into the system prompt and parses structured JSON output.
 
 All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema. All 6 providers support `temperature` passthrough for deterministic reproducibility (conditionally included in API calls only when explicitly set). A `DeterministicProvider` wrapper forces `temperature: 0` on every call for replay mode (`apply --replay`). A `FallbackProvider` wraps multiple providers and automatically falls back to the next on failure (configured via `--fallback-provider` flag or `DOJOPS_FALLBACK_PROVIDER` env var). The `GitHubCopilotProvider` creates a new OpenAI client per `generate()` call to use the freshest JWT (tokens expire every ~30 min).
 
@@ -205,9 +209,19 @@ See [Security Scanning](security-scanning.md) for details.
 
 Multi-turn conversation management with memory windowing, LLM-generated summaries, project context injection, and session persistence.
 
+### 8b. Autonomous Agent Loop (`@dojops/session` + `@dojops/executor`)
+
+The `AgentLoop` implements a ReAct (Reasoning + Acting) pattern — an iterative cycle where the LLM reasons about what to do, calls a tool, observes the result, and repeats until the task is complete. This replaces the one-shot generation model for complex tasks that require project awareness.
+
+**7 agent tools:** `read_file`, `write_file`, `edit_file`, `run_command`, `run_skill`, `search_files`, `done`
+
+The `ToolExecutor` dispatches tool calls to sandboxed operations enforced by `ExecutionPolicy`. File writes are policy-checked, commands run with timeouts, and outputs are truncated at 32KB. The loop terminates on the `done` tool, iteration limit (default 20), or token budget exhaustion.
+
+Available via `dojops auto <prompt>` (CLI), `POST /api/auto` (API), and `/auto <prompt>` (chat).
+
 ### 9. REST API & Dashboard (`@dojops/api`)
 
-Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/skill-registry` to load all built-in + custom skills. 20 endpoints exposing all capabilities over HTTP with API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias, `X-API-Version: 1` header on v1 routes). Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customSkillCount`. Per-route rate limiting and token budget tracking via `TokenTracker`.
+Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/skill-registry` to load all built-in + custom skills. 21 endpoints exposing all capabilities over HTTP with API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias, `X-API-Version: 1` header on v1 routes). Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customSkillCount`. Per-route rate limiting and token budget tracking via `TokenTracker`.
 
 See [API Reference](api-reference.md) and [Web Dashboard](dashboard.md).
 

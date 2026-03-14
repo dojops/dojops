@@ -9,8 +9,10 @@ import {
 import {
   openaiCompatGenerate,
   openaiCompatGenerateStream,
+  openaiCompatGenerateWithTools,
   openaiCompatListModels,
 } from "./openai-compat";
+import type { LLMToolRequest, LLMToolResponse } from "./tool-types";
 
 export class OpenAIProvider implements LLMProvider {
   name = "openai";
@@ -28,6 +30,10 @@ export class OpenAIProvider implements LLMProvider {
 
   async generateStream(req: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> {
     return openaiCompatGenerateStream(this.client, this.model, "OpenAI", req, onChunk);
+  }
+
+  async generateWithTools(req: LLMToolRequest): Promise<LLMToolResponse> {
+    return openaiCompatGenerateWithTools(this.client, this.model, "OpenAI", req);
   }
 
   async listModels(): Promise<string[]> {

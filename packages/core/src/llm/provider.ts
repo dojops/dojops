@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { LLMToolRequest, LLMToolResponse } from "./tool-types";
 
 /**
  * Returns the request timeout in milliseconds.
@@ -61,5 +62,7 @@ export interface LLMProvider {
   generate(request: LLMRequest): Promise<LLMResponse>;
   /** Stream generation — calls onChunk with each text delta. Returns full response when done. */
   generateStream?(request: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse>;
+  /** Tool-calling generation for agent loop. Returns text + tool calls. */
+  generateWithTools?(request: LLMToolRequest): Promise<LLMToolResponse>;
   listModels?(): Promise<string[]>;
 }

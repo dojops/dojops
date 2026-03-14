@@ -52,6 +52,16 @@ Complete reference for the `dojops` command-line interface.
 | `dojops review --no-auto-discover` | Skip auto-discovery, review only explicitly listed files                                       |
 | `dojops review --context7`         | Enable Context7 documentation augmentation for review                                          |
 
+### Autonomous Agent
+
+| Command                          | Description                                                     |
+| -------------------------------- | --------------------------------------------------------------- |
+| `dojops auto <prompt>`           | Autonomous agent mode — iterative tool-use loop (ReAct pattern) |
+| `dojops auto --max-iterations=N` | Set max loop iterations (default: 20)                           |
+| `dojops auto --allow-all-paths`  | Bypass DevOps file write allowlist                              |
+
+The autonomous agent reads files, makes targeted changes, runs commands, and verifies — all iteratively. It uses 7 tools: `read_file`, `write_file`, `edit_file`, `run_command`, `run_skill`, `search_files`, and `done`.
+
 ### Interactive
 
 | Command                            | Description                                            |
@@ -66,7 +76,7 @@ Complete reference for the `dojops` command-line interface.
 | `dojops chat export --format=json` | Export as JSON instead of markdown                     |
 | `dojops chat export --output=FILE` | Write export to a file instead of stdout               |
 
-Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
+Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/auto <prompt>`, `/scan`, `/history`, `/clear`, `/save`.
 
 ### Agents & Skills
 
@@ -328,6 +338,16 @@ dojops -f spec.txt
 # Combine inline prompt with file content (inline provides context, file provides details)
 dojops --file infrastructure-spec.md "Use Terraform with AWS"
 dojops plan -f cicd-requirements.txt "Target GitHub Actions"
+```
+
+### Autonomous Agent
+
+```bash
+# Let the agent iteratively read, edit, and verify
+dojops auto "Add a health check endpoint to the Express API"
+dojops auto "Create CI for this Node app — read package.json first"
+dojops auto "Fix the failing Terraform validation" --max-iterations=30
+dojops auto "Refactor the Dockerfile to multi-stage build" --allow-all-paths
 ```
 
 ### Planning and Execution

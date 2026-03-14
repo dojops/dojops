@@ -2,8 +2,10 @@ import https from "node:https";
 import axios from "axios";
 import { z } from "zod";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage, getRequestTimeoutMs } from "./provider";
+import type { LLMToolRequest, LLMToolResponse } from "./tool-types";
 import { buildLLMResponse } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
+import { buildToolCallingSystemPrompt, parseToolCallsFromContent } from "./prompt-tool-calling";
 
 function extractUsage(data: Record<string, unknown>): LLMUsage | undefined {
   const prompt = data?.prompt_eval_count;
@@ -145,6 +147,53 @@ export class OllamaProvider implements LLMProvider {
       );
     }
     return new Error(`Ollama request failed: ${err.message}`, { cause: err });
+  }
+
+  async generateWithTools(req: LLMToolRequest): Promise<LLMToolResponse> {
+    // Ollama's native tool-calling varies by model — use prompt-based fallback
+    const augmentedSystem = buildToolCallingSystemPrompt(req.system ?? "", req.tools);
+
+    // Convert AgentMessages to Ollama chat format
+    const chatMessages: Array<{ role: string; content: string }> = [
+      { role: "system", content: augmentedSystem },
+    ];
+
+    for (const m of req.messages) {
+      if (m.role === "system") continue;
+      if (m.role === "tool") {
+        chatMessages.push({ role: "user", content: `Tool result (${m.callId}): ${m.content}` });
+      } else if (m.role === "assistant" && m.toolCalls?.length) {
+        // Reconstruct the JSON format the LLM previously produced
+        const callsJson = JSON.stringify({
+          tool_calls: m.toolCalls.map((tc) => ({ name: tc.name, arguments: tc.arguments })),
+        });
+        chatMessages.push({ role: "assistant", content: callsJson });
+      } else {
+        chatMessages.push({ role: m.role, content: m.content });
+      }
+    }
+
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/api/chat`,
+        {
+          model: this.model,
+          messages: chatMessages,
+          stream: false,
+          ...(req.temperature === undefined ? {} : { options: { temperature: req.temperature } }),
+          keep_alive: this.keepAlive,
+        },
+        this.getAxiosConfig(),
+      );
+
+      const content = response.data?.message?.content ?? "";
+      const usage = extractUsage(response.data);
+      const result = parseToolCallsFromContent(content);
+      result.usage = usage;
+      return result;
+    } catch (err) {
+      throw this.wrapError(err);
+    }
   }
 
   async listModels(): Promise<string[]> {
