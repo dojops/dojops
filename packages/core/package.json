@@ -44,10 +44,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
-    "@google/genai": "^1.43.0",
+    "@google/genai": "^1.45.0",
     "axios": "^1.13.6",
     "js-yaml": "^4.1.0",
-    "openai": "^6.0.0",
+    "openai": "^6.29.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
