@@ -14,7 +14,8 @@ COPY packages/runtime/package.json packages/runtime/
 COPY packages/executor/package.json packages/executor/
 COPY packages/scanner/package.json packages/scanner/
 COPY packages/session/package.json packages/session/
-COPY packages/tool-registry/package.json packages/tool-registry/
+COPY packages/context/package.json packages/context/
+COPY packages/skill-registry/package.json packages/skill-registry/
 COPY packages/api/package.json packages/api/
 COPY packages/cli/package.json packages/cli/
 
