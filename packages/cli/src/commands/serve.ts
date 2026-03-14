@@ -288,4 +288,8 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+
+  // Keep the process alive — resolve only when the server closes.
+  // Without this, main().then(() => process.exit(0)) kills the server immediately.
+  await new Promise<void>(() => {});
 }
