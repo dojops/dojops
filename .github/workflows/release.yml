@@ -86,6 +86,25 @@ jobs:
           body: ${{ steps.changelog.outputs.notes }}
           files: checksums/SHA256SUMS.txt
 
+      - name: Notify subscribers
+        if: ${{ secrets.BROADCAST_WEBHOOK_SECRET != '' }}
+        env:
+          BROADCAST_WEBHOOK_SECRET: ${{ secrets.BROADCAST_WEBHOOK_SECRET }}
+          RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
+          HUB_URL: https://hub.dojops.ai
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BODY=$(jq -n \
+            --arg subject "DojOps v${VERSION} Released" \
+            --arg body "$RELEASE_NOTES" \
+            --arg version "$VERSION" \
+            '{subject: $subject, body: $body, version: $version}')
+          SIGNATURE="sha256=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$BROADCAST_WEBHOOK_SECRET" | awk '{print $NF}')"
+          curl -sf -X POST "${HUB_URL}/api/newsletter/broadcast" \
+            -H "Content-Type: application/json" \
+            -H "X-Broadcast-Signature: ${SIGNATURE}" \
+            -d "$BODY" || echo "::warning::Newsletter broadcast failed (non-fatal)"
+
   docker:
     needs: release
     runs-on: ubuntu-latest
