@@ -95,14 +95,14 @@ Verification runs by default for CLI commands (`apply`, `plan --execute`). It gr
 
 ### Layer 3b: DOPS Scope Enforcement
 
-`.dops` modules can declare explicit write boundaries via the `scope` section:
+`.dops` skills can declare explicit write boundaries via the `scope` section:
 
 ```yaml
 scope:
   write: ["{outputPath}/main.tf", "{outputPath}/variables.tf"]
 ```
 
-At file-write time, `writeFiles()` validates each resolved path against the expanded `scope.write` patterns. Writes to paths not covered by any scope pattern are rejected with an error. This provides tool-level write restriction independent of the global `ExecutionPolicy`, enabling defense-in-depth: even if the policy allows a broad set of paths, individual tools are constrained to their declared scope.
+At file-write time, `writeFiles()` validates each resolved path against the expanded `scope.write` patterns. Writes to paths not covered by any scope pattern are rejected with an error. This provides skill-level write restriction independent of the global `ExecutionPolicy`, enabling defense-in-depth: even if the policy allows a broad set of paths, individual skills are constrained to their declared scope.
 
 Path traversal (`..`) in scope patterns is rejected at parse time by the Zod schema validator.
 
@@ -140,7 +140,7 @@ The approval context includes file paths, content preview, and tool name.
 
 `SafeExecutor` also performs pre-execution path checks on declared output files and post-hoc validation on actually written files. Per-file audit logging (files written/modified, timestamps, duration) is recorded in execution audit entries.
 
-All 13 built-in tools and custom tools also use `atomicWriteFileSync()` from `@dojops/sdk` for direct file writes outside the sandbox.
+All 13 built-in skills and custom skills also use `atomicWriteFileSync()` from `@dojops/sdk` for direct file writes outside the sandbox.
 
 ### Layer 7: Immutable Audit Log
 
@@ -219,13 +219,13 @@ See [Security Scanning](security-scanning.md) for details.
 
 ---
 
-## Tool Isolation
+## Skill Isolation
 
-Custom tools execute through the same `SafeExecutor` pipeline as built-in tools (inheriting `maxFileSize`, `timeoutMs`, DevOps write allowlist, and per-file audit logging), plus three additional security controls:
+Custom skills execute through the same `SafeExecutor` pipeline as built-in skills (inheriting `maxFileSize`, `timeoutMs`, DevOps write allowlist, and per-file audit logging), plus three additional security controls:
 
 ### Verification Command Whitelist
 
-The `verification.command` field in tool manifests can only invoke whitelisted binaries:
+The `verification.command` field in skill manifests can only invoke whitelisted binaries:
 
 ```
 terraform, kubectl, helm, ansible-lint, docker, hadolint,
@@ -245,15 +245,15 @@ The `permissions.child_process` field controls whether verification commands exe
 | `"none"`     | Command is never executed (skip)                    |
 | _(omitted)_  | Default-safe: command is never executed             |
 
-This ensures custom tools cannot execute shell commands unless they explicitly declare `child_process: "required"` AND the command is whitelisted.
+This ensures custom skills cannot execute shell commands unless they explicitly declare `child_process: "required"` AND the command is whitelisted.
 
 ### Path Traversal Prevention
 
-File paths in `files[].path` and `detector.path` are validated at schema level — any segment containing `..` is rejected. This prevents custom tools from writing to or detecting files outside the project directory (e.g., `../../etc/passwd`).
+File paths in `files[].path` and `detector.path` are validated at schema level — any segment containing `..` is rejected. This prevents custom skills from writing to or detecting files outside the project directory (e.g., `../../etc/passwd`).
 
-### Tool Hash Integrity
+### Skill Hash Integrity
 
-Each custom tool has a SHA-256 hash computed from its `tool.yaml` content. This hash is pinned into plans at creation time and validated on `--resume` and `--replay` to detect tool modifications between plan creation and execution. See [Tool Specification v1](TOOL_SPEC_v1.md) for the full security model.
+Each custom skill has a SHA-256 hash computed from its `.dops` content. This hash is pinned into plans at creation time and validated on `--resume` and `--replay` to detect skill modifications between plan creation and execution.
 
 ### Replay Validation
 
@@ -261,7 +261,7 @@ Each custom tool has a SHA-256 hash computed from its `tool.yaml` content. This 
 
 1. Forcing `temperature: 0` via a `DeterministicProvider` wrapper
 2. Validating `provider` and `model` match the plan's execution context
-3. Validating `systemPromptHash` for custom tool tasks to detect prompt drift
+3. Validating `systemPromptHash` for custom skill tasks to detect prompt drift
 
 If any check fails, replay is aborted unless `--force` overrides the check. The `--yes` flag intentionally does **not** bypass replay validation, since deterministic replay requires an exact environment match to produce meaningful results.
 
@@ -279,7 +279,7 @@ HIGH risk plans require explicit confirmation even with `--yes` (unless `--force
 
 ### DOPS-Declared Risk
 
-`.dops` modules can also self-classify their risk level via the `risk` frontmatter section:
+`.dops` skills can also self-classify their risk level via the `risk` frontmatter section:
 
 ```yaml
 risk:
@@ -287,7 +287,7 @@ risk:
   rationale: "Infrastructure changes may affect cloud resources"
 ```
 
-This metadata is exposed via `DopsRuntime.metadata.riskLevel` and can be consumed by planners and approval workflows. The declared risk level complements the CLI's keyword-based classifier — the CLI classifies plans, while `.dops` modules classify individual tools. When both are present, the higher risk level takes precedence.
+This metadata is exposed via `DopsRuntime.metadata.riskLevel` and can be consumed by planners and approval workflows. The declared risk level complements the CLI's keyword-based classifier — the CLI classifies plans, while `.dops` skills classify individual skills. When both are present, the higher risk level takes precedence.
 
 ---
 

@@ -40,19 +40,19 @@ pnpm lint
 packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
-  tool-registry/    Tool registry + custom tool system (built-in + custom tool discovery)
+  skill-registry/   Skill registry + custom skill system (built-in + custom skill discovery)
   core/             LLM providers (6) + specialist agents (16) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
-  tools/            13 built-in DevOps tools
+  runtime/          13 built-in DevOps skills as .dops v2 files
   scanner/          10 security scanners + remediation engine
   session/          Chat session management + memory + context injection
-  sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
+  sdk/              BaseSkill<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
 
 Package scope: `@dojops/*`
 
-Dependency flow: `cli -> api -> tool-registry -> tools -> core -> sdk`
+Dependency flow: `cli -> api -> skill-registry -> runtime -> core -> sdk`
 
 ---
 
@@ -109,19 +109,19 @@ Key conventions:
 
 DojOps uses Vitest for testing. Current coverage:
 
-| Package                 | Tests    |
-| ----------------------- | -------- |
-| `@dojops/runtime`       | 481      |
-| `@dojops/core`          | 465      |
-| `@dojops/cli`           | 247      |
-| `@dojops/api`           | 236      |
-| `@dojops/tool-registry` | 224      |
-| `@dojops/scanner`       | 110      |
-| `@dojops/executor`      | 67       |
-| `@dojops/planner`       | 39       |
-| `@dojops/session`       | 38       |
-| `@dojops/sdk`           | 24       |
-| **Total**               | **1931** |
+| Package                  | Tests    |
+| ------------------------ | -------- |
+| `@dojops/runtime`        | 481      |
+| `@dojops/core`           | 465      |
+| `@dojops/cli`            | 247      |
+| `@dojops/api`            | 236      |
+| `@dojops/skill-registry` | 224      |
+| `@dojops/scanner`        | 110      |
+| `@dojops/executor`       | 67       |
+| `@dojops/planner`        | 39       |
+| `@dojops/session`        | 38       |
+| `@dojops/sdk`            | 24       |
+| **Total**                | **1931** |
 
 ### Writing Tests
 
@@ -132,13 +132,13 @@ DojOps uses Vitest for testing. Current coverage:
 
 ---
 
-## Adding a New Tool
+## Adding a New Skill
 
-All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the full pattern.
+All skills follow the `BaseSkill<T>` pattern. See [DevOps Skills](skills.md) for the full pattern.
 
 ### Step-by-Step
 
-1. **Create directory:** `packages/tools/src/my-tool/`
+1. **Create directory:** `packages/runtime/src/my-skill/`
 
 2. **Define schemas** (`schemas.ts`):
 
@@ -186,12 +186,12 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
    }
    ```
 
-4. **Create tool class** (`my-tool.ts`):
+4. **Create skill class** (`my-skill.ts`):
 
    ```typescript
-   import { BaseTool, readExistingConfig, backupFile, atomicWriteFileSync } from "@dojops/sdk";
+   import { BaseSkill, readExistingConfig, backupFile, atomicWriteFileSync } from "@dojops/sdk";
 
-   export class MyTool extends BaseTool<MyToolInput> {
+   export class MySkill extends BaseSkill<MyToolInput> {
      name = "my-tool";
      inputSchema = MyToolInputSchema;
 
@@ -219,43 +219,41 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
 
 6. **Optional: Add verifier** (`verifier.ts`) for external tool validation
 
-7. **Export:** Add to `packages/tools/src/index.ts`
+7. **Export:** Add to `packages/runtime/src/index.ts`
 
-8. **Write tests:** `my-tool.test.ts` with mocked LLM provider — include tests for auto-detection of existing files, update mode prompts, and `.bak` backup creation
+8. **Write tests:** `my-skill.test.ts` with mocked LLM provider — include tests for auto-detection of existing files, update mode prompts, and `.bak` backup creation
 
 ---
 
-## Creating a Custom Tool
+## Creating a Custom Skill
 
-For tools that don't need to be built into the core, use the custom tool system instead. Custom tools are declarative — no TypeScript code required.
+For skills that don't need to be built into the core, use the custom skill system instead. Custom skills are declarative — no TypeScript code required.
 
 ### Step-by-Step
 
-1. **Scaffold** a custom tool:
+1. **Scaffold** a custom skill:
 
    ```bash
-   dojops tools init my-tool
+   dojops skills init my-skill
    ```
 
-   This creates `.dojops/tools/my-tool/` with template `tool.yaml` and `input.schema.json`.
+   This creates `.dojops/skills/my-skill.dops` with a template `.dops v2` file.
 
-2. **Edit** `tool.yaml` — set the name, description, system prompt, output files, and serializer.
+2. **Edit** the `.dops` file — set the name, description, context, output files, and prompt sections.
 
-3. **Edit** `input.schema.json` — define the JSON Schema for your tool's input parameters.
-
-4. **Validate** the tool:
+3. **Validate** the skill:
 
    ```bash
-   dojops tools validate .dojops/tools/my-tool/
+   dojops skills validate .dojops/skills/my-skill.dops
    ```
 
-5. **Test** by generating a config:
+4. **Test** by generating a config:
 
    ```bash
-   dojops "Generate my-tool config for production"
+   dojops "Generate my-skill config for production"
    ```
 
-Custom tools are automatically discovered and available to the Planner, Executor, and API. See [DevOps Tools — Custom Tool System](tools.md#custom-tool-system) for the full manifest format.
+Custom skills are automatically discovered and available to the Planner, Executor, and API. See [DevOps Skills — Custom Skill System](skills.md#custom-skill-system) for the full format.
 
 ---
 
@@ -326,7 +324,7 @@ Built-in agents are defined in `packages/core/src/agents/specialists.ts`.
 - [ ] Linting passes (`pnpm lint`)
 - [ ] Formatting is correct (`pnpm format:check`)
 - [ ] New features include tests
-- [ ] New tools follow the `BaseTool<T>` pattern
+- [ ] New skills follow the `BaseSkill<T>` pattern
 - [ ] Breaking changes are documented
 
 ---

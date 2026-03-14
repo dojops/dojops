@@ -150,13 +150,13 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **DevOps config checker** — LLM-powered quality analysis of detected DevOps files with maturity scoring (0-100), severity-ranked findings, and missing file recommendations
 - **6 LLM providers** — OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini, GitHub Copilot — with dynamic model selection via provider API and temperature passthrough for deterministic reproducibility
 
-### Tools
+### Skills
 
-- **13 built-in DevOps modules** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile
-- **Declarative tool metadata** — `.dops` modules declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, `context` block (v2: technology context, output guidance, best practices, Context7 libraries), and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
-- **Custom module system** — Extend DojOps with custom `.dops v2` modules. Drop a module into `~/.dojops/modules/` or `.dojops/modules/` and it's automatically available to all commands. Scaffold new modules with `dojops modules init <name>`. Module isolation enforces verification command whitelisting (33 allowed binaries), `child_process` permission gating, and path traversal prevention
-- **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
-- **Schema-validated** — Every module input is validated against Zod schemas before execution
+- **13 built-in DevOps skills** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile
+- **Declarative skill metadata** — `.dops` skills declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, `context` block (v2: technology context, output guidance, best practices, Context7 libraries), and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
+- **Custom skill system** — Extend DojOps with custom `.dops v2` skills. Drop a skill into `~/.dojops/skills/` or `.dojops/skills/` and it's automatically available to all commands. Scaffold new skills with `dojops skills init <name>`. Skill isolation enforces verification command whitelisting (33 allowed binaries), `child_process` permission gating, and path traversal prevention
+- **Update existing configs** — Skills auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
+- **Schema-validated** — Every skill input is validated against Zod schemas before execution
 - **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Missing verification tools are auto-installed via the toolchain. Use `--skip-verify` to disable
 - **Idempotent YAML output** — YAML keys are sorted alphabetically (GitHub Actions uses conventional key ordering) for deterministic, diff-friendly output
 - **Structured output** — Provider-native JSON modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, Gemini `responseMimeType`)
@@ -164,18 +164,18 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ### Execution
 
 - **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution (Kahn's algorithm)
-- **Risk-aware planning** — Plans are automatically classified as LOW / MEDIUM / HIGH risk based on tool types and keyword analysis (IAM, production, secrets, RBAC). HIGH risk plans require explicit confirmation even with `--yes`
-- **Verification pipeline** — `verify()` step between generate and execute validates output with external tools (terraform validate, hadolint, kubectl dry-run) and built-in structure linters (GitHub Actions, GitLab CI). Enabled by default; use `--skip-verify` to skip
-- **Drift awareness** — Pre-apply warnings for stateful tools (Terraform, Kubernetes, Helm, Ansible) remind users to verify remote state before applying local config changes
+- **Risk-aware planning** — Plans are automatically classified as LOW / MEDIUM / HIGH risk based on skill types and keyword analysis (IAM, production, secrets, RBAC). HIGH risk plans require explicit confirmation even with `--yes`
+- **Verification pipeline** — `verify()` step between generate and execute validates output with external validators (terraform validate, hadolint, kubectl dry-run) and built-in structure linters (GitHub Actions, GitLab CI). Enabled by default; use `--skip-verify` to skip
+- **Drift awareness** — Pre-apply warnings for stateful skills (Terraform, Kubernetes, Helm, Ansible) remind users to verify remote state before applying local config changes
 - **Git dirty check** — `apply` warns when uncommitted changes exist in the working tree. Use `--force` to skip
 - **Atomic file writes** — All file writes use temp-file + rename for crash safety (no partial writes)
 - **DevOps write allowlist** — By default, only DevOps files (CI configs, Dockerfiles, Terraform, K8s manifests, etc.) can be written. Prevents LLM-generated code from mutating application source. Use `--allow-all-paths` to bypass
-- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with per-file size limits (1MB default), execution timeouts (30s default), and atomic writes. These guardrails apply uniformly to both built-in tools and custom tools
+- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with per-file size limits (1MB default), execution timeouts (30s default), and atomic writes. These guardrails apply uniformly to both built-in skills and custom skills
 - **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, DevOps allowlist, environment variables, timeouts, file size limits, and verification toggle
 - **Approval workflows** — Auto-approve, auto-deny, or interactive callback with diff preview before any write operation
 - **Resume on failure** — `dojops apply --resume` skips completed tasks and retries failed ones
-- **Deterministic replay** — `dojops apply --replay` forces temperature=0 and validates that provider, model, and custom tool system prompts match the plan's execution context for deterministic execution under identical provider and model conditions
-- **Plan snapshot freezing** — Plans capture DojOps version, policy hash, and tool versions at creation time. Version drift is detected at apply time (warning in normal mode, blocking in `--replay` mode)
+- **Deterministic replay** — `dojops apply --replay` forces temperature=0 and validates that provider, model, and custom skill system prompts match the plan's execution context for deterministic execution under identical provider and model conditions
+- **Plan snapshot freezing** — Plans capture DojOps version, policy hash, and skill versions at creation time. Version drift is detected at apply time (warning in normal mode, blocking in `--replay` mode)
 
 ### Observability
 
@@ -187,7 +187,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **Project memory** — `dojops memory` stores persistent project notes with keyword-based search and RAG-style injection into LLM context for smarter generation
 - **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
 - **Rich terminal UI** — Interactive prompts, spinners, styled panels, semantic log levels — powered by `@clack/prompts`
-- **Doctor diagnostics** — `dojops doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity). Always shows installed tools regardless of project context
+- **Doctor diagnostics** — `dojops doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity). Always shows installed toolchain binaries regardless of project context
 
 ### Platform
 
@@ -203,23 +203,23 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ```
 @dojops/cli            CLI entry point + rich TUI (@clack/prompts)
 @dojops/api            REST API (Express) + web dashboard + factory functions
-@dojops/module-registry Module registry + custom module system + custom agent discovery
+@dojops/skill-registry Skill registry + custom skill system + custom agent discovery
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/runtime        13 built-in DevOps modules as .dops v2 files (DopsRuntime)
+@dojops/runtime        13 built-in DevOps skills as .dops v2 files (DopsRuntime)
 @dojops/scanner        10 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint,
                        shellcheck, trivy-sbom, trivy-license, semgrep) + remediation
-@dojops/context        Context7 documentation augmentation for v2 tools
+@dojops/context        Context7 documentation augmentation for v2 skills
 @dojops/session        Chat session management + memory + context injection
 @dojops/core           LLM abstraction + 6 providers + 17 built-in specialist agents + CI debugger + infra diff + DevOps checker
-@dojops/sdk            BaseModule<T> abstract class with Zod validation + optional verify() + file-reader utilities
+@dojops/sdk            BaseSkill<T> abstract class with Zod validation + optional verify() + file-reader utilities
                        + atomicWriteFileSync + restoreBackup
 ```
 
 ### Package Dependency Flow
 
 ```
-cli -> api -> module-registry -> runtime -> core -> sdk
+cli -> api -> skill-registry -> runtime -> core -> sdk
           -> planner -> executor
           -> scanner
           -> context -> core
@@ -269,7 +269,7 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 | `dojops scan --license`      | Run license compliance scanners (trivy-license)       |
 | `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
 | `dojops scan --compare`      | Compare findings with previous scan report            |
-| `dojops review [files...]`   | DevSecOps review: tool validation + LLM analysis      |
+| `dojops review [files...]`   | DevSecOps review: skill validation + LLM analysis     |
 | `dojops review --context7`   | Review with Context7 documentation augmentation       |
 
 #### Interactive
@@ -284,26 +284,26 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
 
-#### Agents & Modules
+#### Agents & Skills
 
-| Command                           | Description                                                |
-| --------------------------------- | ---------------------------------------------------------- |
-| `dojops agents list`              | List all agents (built-in + custom)                        |
-| `dojops agents info <name>`       | Show agent details (supports partial names)                |
-| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                      |
-| `dojops agents create --manual`   | Create a custom agent interactively                        |
-| `dojops agents remove <name>`     | Remove a custom agent                                      |
-| `dojops modules list`             | List discovered custom modules (global + project)          |
-| `dojops modules validate <path>`  | Validate a custom module manifest                          |
-| `dojops modules init <name>`      | Scaffold a v2 `.dops` module (with optional AI generation) |
-| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub                   |
-| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub                 |
-| `dojops modules search <query>`   | Search the DojOps Hub for modules                          |
-| `dojops toolchain list`           | List system toolchain binaries with install status         |
-| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)      |
-| `dojops toolchain remove <name>`  | Remove a toolchain binary                                  |
-| `dojops toolchain clean`          | Remove all toolchain binaries                              |
-| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)        |
+| Command                           | Description                                               |
+| --------------------------------- | --------------------------------------------------------- |
+| `dojops agents list`              | List all agents (built-in + custom)                       |
+| `dojops agents info <name>`       | Show agent details (supports partial names)               |
+| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                     |
+| `dojops agents create --manual`   | Create a custom agent interactively                       |
+| `dojops agents remove <name>`     | Remove a custom agent                                     |
+| `dojops skills list`              | List discovered custom skills (global + project)          |
+| `dojops skills validate <path>`   | Validate a custom skill manifest                          |
+| `dojops skills init <name>`       | Scaffold a v2 `.dops` skill (with optional AI generation) |
+| `dojops skills publish <file>`    | Publish a .dops skill to the DojOps Hub                   |
+| `dojops skills install <name>`    | Install a .dops skill from the DojOps Hub                 |
+| `dojops skills search <query>`    | Search the DojOps Hub for skills                          |
+| `dojops toolchain list`           | List system toolchain binaries with install status        |
+| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)     |
+| `dojops toolchain remove <name>`  | Remove a toolchain binary                                 |
+| `dojops toolchain clean`          | Remove all toolchain binaries                             |
+| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)       |
 
 #### History & Audit
 
@@ -365,7 +365,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `--model=NAME`      | LLM model override                                                                    |
 | `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility                               |
 | `--profile=NAME`    | Use named config profile                                                              |
-| `--module=NAME`     | Force a specific module for `generate`, `plan`, or `apply` (bypasses agent routing)   |
+| `--skill=NAME`      | Force a specific skill for `generate`, `plan`, or `apply` (bypasses agent routing)    |
 | `--file, -f FILE`   | Read prompt from a file (`.md`, `.txt`); combinable with inline prompt                |
 | `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                                             |
 | `--verbose`         | Verbose output                                                                        |
@@ -438,25 +438,25 @@ dojops chat --session myproject --agent terraform
 dojops toolchain install terraform
 dojops toolchain install kubectl
 
-# Custom module management
-dojops modules list
-dojops modules init my-module               # .dops scaffold (AI-powered when provider is configured)
-dojops modules validate my-module
+# Custom skill management
+dojops skills list
+dojops skills init my-skill                 # .dops scaffold (AI-powered when provider is configured)
+dojops skills validate my-skill
 
-# Search the DojOps Hub for modules
-dojops modules search docker
-dojops modules search terraform --limit 5
-dojops modules search k8s --output json
+# Search the DojOps Hub for skills
+dojops skills search docker
+dojops skills search terraform --limit 5
+dojops skills search k8s --output json
 
-# Publish & install modules from DojOps Hub (https://hub.dojops.ai)
-dojops modules publish my-module.dops --changelog "Initial release"
-dojops modules install nginx-config
-dojops modules install nginx-config --version 1.0.0 --global
+# Publish & install skills from DojOps Hub (https://hub.dojops.ai)
+dojops skills publish my-skill.dops --changelog "Initial release"
+dojops skills install nginx-config
+dojops skills install nginx-config --version 1.0.0 --global
 
-# Force a specific module (bypass agent routing)
-dojops --module=terraform "Create an S3 bucket with versioning"
-dojops --module=kubernetes "Create a deployment for nginx"
-dojops --module=terraform plan "Set up S3 with CloudFront"
+# Force a specific skill (bypass agent routing)
+dojops --skill=terraform "Create an S3 bucket with versioning"
+dojops --skill=kubernetes "Create a deployment for nginx"
+dojops --skill=terraform plan "Set up S3 with CloudFront"
 
 # Custom agents
 dojops agents create "an SRE specialist for incident response"
@@ -489,8 +489,8 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Layer                   | Mechanism                                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                                                           |
-| **Tool isolation**      | Verification command whitelist (33 binaries), `child_process` permission enforcement, path traversal prevention                                   |
-| **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                                                    |
+| **Skill isolation**     | Verification command whitelist (33 binaries), `child_process` permission enforcement, path traversal prevention                                   |
+| **Schema validation**   | Every skill input and LLM output validated against Zod schemas before execution                                                                   |
 | **Deep verification**   | External tool validation by default: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write. `--skip-verify` to disable |
 | **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits                                          |
 | **Approval workflows**  | Configurable handlers: auto-approve, auto-deny, or interactive callback with diff preview                                                         |
@@ -501,9 +501,9 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 
 ---
 
-## Tools
+## Skills
 
-| Tool           | Serialization      | Output Files                        | Verifier             |
+| Skill          | Serialization      | Output Files                        | Verifier             |
 | -------------- | ------------------ | ----------------------------------- | -------------------- |
 | GitHub Actions | YAML               | `.github/workflows/ci.yml`          | ---                  |
 | Terraform      | HCL                | `main.tf`, `variables.tf`           | `terraform validate` |
@@ -519,7 +519,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Systemd        | INI                | `{name}.service`                    | ---                  |
 | Jenkinsfile    | Groovy DSL         | `Jenkinsfile`                       | ---                  |
 
-All 13 built-in modules are `.dops v2` files in `packages/runtime/modules/`, processed by `DopsRuntime` — generating raw file content directly via LLM. Modules auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename).
+All 13 built-in skills are `.dops v2` files in `packages/runtime/skills/`, processed by `DopsRuntime` — generating raw file content directly via LLM. Skills auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename).
 
 ---
 
@@ -553,29 +553,29 @@ DojOps includes 17 built-in agents plus support for user-defined custom agents. 
 
 ### Endpoints
 
-| Method   | Path                     | Description                                          |
-| -------- | ------------------------ | ---------------------------------------------------- |
-| `GET`    | `/api/health`            | Provider info, tool list, metricsEnabled flag        |
-| `POST`   | `/api/generate`          | Agent-routed LLM generation                          |
-| `POST`   | `/api/plan`              | Decompose goal into task graph                       |
-| `POST`   | `/api/debug-ci`          | Diagnose CI log failures                             |
-| `POST`   | `/api/diff`              | Analyze infrastructure diff                          |
-| `POST`   | `/api/scan`              | Run security scan (all, security, deps, iac, sbom)   |
-| `POST`   | `/api/review`            | DevSecOps review with tool validation + LLM analysis |
-| `POST`   | `/api/chat`              | Send chat message to a session                       |
-| `POST`   | `/api/chat/sessions`     | Create new chat session                              |
-| `GET`    | `/api/chat/sessions`     | List all chat sessions                               |
-| `GET`    | `/api/chat/sessions/:id` | Get chat session by ID                               |
-| `DELETE` | `/api/chat/sessions/:id` | Delete chat session                                  |
-| `GET`    | `/api/agents`            | List specialist agents                               |
-| `GET`    | `/api/history`           | Execution history                                    |
-| `GET`    | `/api/history/:id`       | Single history entry                                 |
-| `DELETE` | `/api/history`           | Clear history                                        |
-| `GET`    | `/api/metrics`           | Full dashboard metrics (overview + security + audit) |
-| `GET`    | `/api/metrics/overview`  | Plan/execution/scan aggregates                       |
-| `GET`    | `/api/metrics/security`  | Scan findings, severity trends, top issues           |
-| `GET`    | `/api/metrics/audit`     | Audit chain integrity, command distribution          |
-| `GET`    | `/api/metrics/tokens`    | LLM token usage tracking                             |
+| Method   | Path                     | Description                                           |
+| -------- | ------------------------ | ----------------------------------------------------- |
+| `GET`    | `/api/health`            | Provider info, skill list, metricsEnabled flag        |
+| `POST`   | `/api/generate`          | Agent-routed LLM generation                           |
+| `POST`   | `/api/plan`              | Decompose goal into task graph                        |
+| `POST`   | `/api/debug-ci`          | Diagnose CI log failures                              |
+| `POST`   | `/api/diff`              | Analyze infrastructure diff                           |
+| `POST`   | `/api/scan`              | Run security scan (all, security, deps, iac, sbom)    |
+| `POST`   | `/api/review`            | DevSecOps review with skill validation + LLM analysis |
+| `POST`   | `/api/chat`              | Send chat message to a session                        |
+| `POST`   | `/api/chat/sessions`     | Create new chat session                               |
+| `GET`    | `/api/chat/sessions`     | List all chat sessions                                |
+| `GET`    | `/api/chat/sessions/:id` | Get chat session by ID                                |
+| `DELETE` | `/api/chat/sessions/:id` | Delete chat session                                   |
+| `GET`    | `/api/agents`            | List specialist agents                                |
+| `GET`    | `/api/history`           | Execution history                                     |
+| `GET`    | `/api/history/:id`       | Single history entry                                  |
+| `DELETE` | `/api/history`           | Clear history                                         |
+| `GET`    | `/api/metrics`           | Full dashboard metrics (overview + security + audit)  |
+| `GET`    | `/api/metrics/overview`  | Plan/execution/scan aggregates                        |
+| `GET`    | `/api/metrics/security`  | Scan findings, severity trends, top issues            |
+| `GET`    | `/api/metrics/audit`     | Audit chain integrity, command distribution           |
+| `GET`    | `/api/metrics/tokens`    | LLM token usage tracking                              |
 
 ### Examples
 
@@ -689,33 +689,33 @@ pnpm dojops -- serve --port=8080
 packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
-  module-registry/  Module registry + custom module system + custom agent discovery
+  skill-registry/   Skill registry + custom skill system + custom agent discovery
   core/             LLM providers (6) + specialist agents (17 built-in) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
-  runtime/          13 built-in DevOps modules as .dops v2 files (DopsRuntime)
+  runtime/          13 built-in DevOps skills as .dops v2 files (DopsRuntime)
   scanner/          10 security scanners + LLM-powered remediation
-  context/          Context7 documentation augmentation for v2 tools
+  context/          Context7 documentation augmentation for v2 skills
   session/          Chat session management + memory + context injection
-  sdk/              BaseModule<T> abstract class + Zod re-export + verification types + file-reader utilities
+  sdk/              BaseSkill<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
 
 ### Test Coverage
 
-| Package                   | Tests    |
-| ------------------------- | -------- |
-| `@dojops/runtime`         | 656      |
-| `@dojops/cli`             | 575      |
-| `@dojops/core`            | 541      |
-| `@dojops/module-registry` | 277      |
-| `@dojops/api`             | 244      |
-| `@dojops/scanner`         | 110      |
-| `@dojops/executor`        | 81       |
-| `@dojops/sdk`             | 55       |
-| `@dojops/planner`         | 40       |
-| `@dojops/session`         | 38       |
-| `@dojops/context`         | 32       |
-| **Total**                 | **2649** |
+| Package                  | Tests    |
+| ------------------------ | -------- |
+| `@dojops/runtime`        | 656      |
+| `@dojops/cli`            | 575      |
+| `@dojops/core`           | 541      |
+| `@dojops/skill-registry` | 277      |
+| `@dojops/api`            | 244      |
+| `@dojops/scanner`        | 110      |
+| `@dojops/executor`       | 81       |
+| `@dojops/sdk`            | 55       |
+| `@dojops/planner`        | 40       |
+| `@dojops/session`        | 38       |
+| `@dojops/context`        | 32       |
+| **Total**                | **2649** |
 
 ---
 
@@ -728,7 +728,7 @@ npm login
 pnpm publish-packages    # Build + publish in dependency order
 ```
 
-Publish order: `sdk` -> `core` -> `context` -> `executor` -> `planner` -> `runtime` -> `module-registry` -> `scanner` -> `session` -> `api` -> `cli`
+Publish order: `sdk` -> `core` -> `context` -> `executor` -> `planner` -> `runtime` -> `skill-registry` -> `scanner` -> `session` -> `api` -> `cli`
 
 ---
 
@@ -742,7 +742,7 @@ and scan reports are stored locally in your `.dojops/` directory.
 
 ## Contributing
 
-Contributions are welcome! Please see the [contributing guide](docs/contributing.md) for development setup, coding standards, and how to add new tools and agents. See [docs/architecture.md](docs/architecture.md) for system design patterns.
+Contributions are welcome! Please see the [contributing guide](docs/contributing.md) for development setup, coding standards, and how to add new skills and agents. See [docs/architecture.md](docs/architecture.md) for system design patterns.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)

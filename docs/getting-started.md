@@ -265,24 +265,24 @@ See [Web Dashboard](dashboard.md) for the full guide.
 
 ---
 
-## Extending with Custom Tools
+## Extending with Custom Skills
 
-DojOps supports custom tools via a declarative tool system. Create a custom tool by dropping a `tool.yaml` manifest + JSON Schema into `~/.dojops/tools/` (global) or `.dojops/tools/` (project-scoped):
+DojOps supports custom skills via a declarative `.dops v2` skill system. Create a custom skill by dropping a `.dops` file into `~/.dojops/skills/` (global) or `.dojops/skills/` (project-scoped):
 
 ```bash
-# Scaffold a new custom tool
-dojops tools init my-tool
+# Scaffold a new custom skill
+dojops skills init my-skill
 
-# List discovered custom tools
-dojops tools list
+# List discovered custom skills
+dojops skills list
 
-# Validate a tool manifest
-dojops tools validate .dojops/tools/my-tool/
+# Validate a skill
+dojops skills validate .dojops/skills/my-skill.dops
 ```
 
-Custom tools are automatically available to all commands — the Planner includes them in capabilities, the Executor validates and runs them, and the audit trail tracks their usage.
+Custom skills are automatically available to all commands — the Planner includes them in capabilities, the Executor validates and runs them, and the audit trail tracks their usage.
 
-See [DevOps Tools — Custom Tool System](tools.md#custom-tool-system) for the full guide.
+See [DevOps Skills — Custom Skill System](skills.md#custom-skill-system) for the full guide.
 
 ---
 

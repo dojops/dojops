@@ -37,7 +37,7 @@ audit() ------- AuditEntry logged with hash chain (SHA-256)
 
 The `SafeExecutor` orchestrates the full pipeline. It receives:
 
-- A `BaseTool` instance
+- A `BaseSkill` instance
 - An `ExecutionPolicy`
 - An `ApprovalHandler`
 
@@ -291,7 +291,7 @@ Plans are automatically classified into risk levels based on their content:
 
 HIGH risk plans always prompt for confirmation unless `--force` is also passed.
 
-Additionally, `.dops` modules can self-declare their risk level via the `risk` frontmatter section (`LOW`, `MEDIUM`, or `HIGH` with a rationale string). This metadata is exposed in `DopsRuntime.metadata.riskLevel` and complements the keyword-based classifier — providing tool-level risk classification alongside plan-level classification.
+Additionally, `.dops` skills can self-declare their risk level via the `risk` frontmatter section (`LOW`, `MEDIUM`, or `HIGH` with a rationale string). This metadata is exposed in `DopsRuntime.metadata.riskLevel` and complements the keyword-based classifier — providing skill-level risk classification alongside plan-level classification.
 
 ---
 

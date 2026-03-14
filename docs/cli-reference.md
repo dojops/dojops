@@ -68,32 +68,32 @@ Complete reference for the `dojops` command-line interface.
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
 
-### Agents & Modules
+### Agents & Skills
 
-> **Note:** `dojops tools` is a deprecated alias for `dojops modules`. Use `dojops modules` instead.
+> **Note:** `dojops tools` and `dojops modules` are deprecated aliases for `dojops skills`. Use `dojops skills` instead.
 
-| Command                           | Description                                             |
-| --------------------------------- | ------------------------------------------------------- |
-| `dojops agents list`              | List all agents (built-in + custom)                     |
-| `dojops agents info <name>`       | Show agent details (supports partial names)             |
-| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                   |
-| `dojops agents create --manual`   | Create a custom agent interactively                     |
-| `dojops agents remove <name>`     | Remove a custom agent                                   |
-| `dojops modules load <path>`      | Copy a local `.dops` module into `.dojops/modules/`     |
-| `dojops modules list`             | List discovered custom modules (global + project)       |
-| `dojops modules validate <path>`  | Validate a custom module manifest                       |
-| `dojops modules init <name>`      | Scaffold a `.dops` module (with optional AI generation) |
-| `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub                |
-| `dojops modules install <name>`   | Install a .dops module from the DojOps Hub              |
-| `dojops modules search <query>`   | Search the DojOps Hub for modules                       |
-| `dojops modules dev <path.dops>`  | Validate a .dops file with live feedback                |
-| `dojops modules dev --watch`      | Watch mode — re-validate on file changes                |
-| `dojops toolchain list`           | List system toolchain binaries with install status      |
-| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)   |
-| `dojops toolchain remove <name>`  | Remove a toolchain binary                               |
-| `dojops toolchain clean`          | Remove all toolchain binaries                           |
-| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)     |
-| `dojops verify`                   | Verify audit log hash chain integrity (standalone)      |
+| Command                           | Description                                            |
+| --------------------------------- | ------------------------------------------------------ |
+| `dojops agents list`              | List all agents (built-in + custom)                    |
+| `dojops agents info <name>`       | Show agent details (supports partial names)            |
+| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                  |
+| `dojops agents create --manual`   | Create a custom agent interactively                    |
+| `dojops agents remove <name>`     | Remove a custom agent                                  |
+| `dojops skills load <path>`       | Copy a local `.dops` skill into `.dojops/skills/`      |
+| `dojops skills list`              | List discovered custom skills (global + project)       |
+| `dojops skills validate <path>`   | Validate a custom skill manifest                       |
+| `dojops skills init <name>`       | Scaffold a `.dops` skill (with optional AI generation) |
+| `dojops skills publish <file>`    | Publish a .dops skill to the DojOps Hub                |
+| `dojops skills install <name>`    | Install a .dops skill from the DojOps Hub              |
+| `dojops skills search <query>`    | Search the DojOps Hub for skills                       |
+| `dojops skills dev <path.dops>`   | Validate a .dops file with live feedback               |
+| `dojops skills dev --watch`       | Watch mode — re-validate on file changes               |
+| `dojops toolchain list`           | List system toolchain binaries with install status     |
+| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)  |
+| `dojops toolchain remove <name>`  | Remove a toolchain binary                              |
+| `dojops toolchain clean`          | Remove all toolchain binaries                          |
+| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)    |
+| `dojops verify`                   | Verify audit log hash chain integrity (standalone)     |
 
 ### History & Audit
 
@@ -211,7 +211,7 @@ dojops completion install fish
 | `--temperature=N`          | LLM temperature (0-2) for deterministic reproducibility                               |
 | `--fallback-provider=NAME` | Fallback LLM provider (used when primary fails)                                       |
 | `--profile=NAME`           | Use named config profile                                                              |
-| `--module=NAME`            | Force a specific module for `generate`, `plan`, or `apply` (bypasses agent routing)   |
+| `--skill=NAME`             | Force a specific skill for `generate`, `plan`, or `apply` (bypasses agent routing)    |
 | `--file, -f FILE`          | Read prompt from a file (`.md`, `.txt`); combinable with inline prompt                |
 | `--agent=NAME`             | Force a specific agent for `generate` (bypasses keyword routing)                      |
 | `--timeout=MS`             | Global timeout in milliseconds                                                        |
@@ -313,9 +313,9 @@ dojops "Add an S3 bucket to the existing Terraform config"
 dojops --provider=anthropic "Create a Helm chart for Redis"
 dojops --model=gpt-4o "Design a VPC with public and private subnets"
 
-# Force a specific module (bypass agent routing)
-dojops --module=terraform "Create an S3 bucket with versioning"
-dojops --module=kubernetes "Create a deployment for nginx"
+# Force a specific skill (bypass agent routing)
+dojops --skill=terraform "Create an S3 bucket with versioning"
+dojops --skill=kubernetes "Create a deployment for nginx"
 ```
 
 ### File-Based Prompts
@@ -350,9 +350,9 @@ dojops apply --resume --retry   # resume + retry failed tasks
 dojops apply --replay           # deterministic: temp=0, validate env match
 dojops apply --replay --yes     # force replay despite mismatches
 
-# Force a specific module for planning or execution
-dojops --module=terraform plan "Set up S3 with CloudFront"
-dojops apply plan-abc --module=terraform   # only run terraform tasks from plan
+# Force a specific skill for planning or execution
+dojops --skill=terraform plan "Set up S3 with CloudFront"
+dojops apply plan-abc --skill=terraform   # only run terraform tasks from plan
 ```
 
 ### Diagnostics
@@ -460,34 +460,34 @@ dojops toolchain install hadolint
 dojops toolchain clean
 ```
 
-### Custom Module Management
+### Custom Skill Management
 
 ```bash
-# List discovered custom modules (global + project)
-dojops modules list
+# List discovered custom skills (global + project)
+dojops skills list
 
-# Search the DojOps Hub for modules
-dojops modules search docker
-dojops modules search terraform --limit 5
-dojops modules search k8s --output json
+# Search the DojOps Hub for skills
+dojops skills search docker
+dojops skills search terraform --limit 5
+dojops skills search k8s --output json
 
-# Scaffold a .dops module (uses AI when provider is configured)
-dojops modules init my-module
+# Scaffold a .dops skill (uses AI when provider is configured)
+dojops skills init my-skill
 
-# Validate a custom module
-dojops modules validate my-module
+# Validate a custom skill
+dojops skills validate my-skill
 
-# Publish a module to DojOps Hub (requires DOJOPS_HUB_TOKEN)
-dojops modules publish my-module.dops --changelog "Initial release"
+# Publish a skill to DojOps Hub (requires DOJOPS_HUB_TOKEN)
+dojops skills publish my-skill.dops --changelog "Initial release"
 
-# Install a module from DojOps Hub
-dojops modules install nginx-config
-dojops modules install nginx-config --version 1.0.0 --global
+# Install a skill from DojOps Hub
+dojops skills install nginx-config
+dojops skills install nginx-config --version 1.0.0 --global
 ```
 
 ### Hub Publishing Setup
 
-Publishing modules to the [DojOps Hub](https://hub.dojops.ai) requires an API token:
+Publishing skills to the [DojOps Hub](https://hub.dojops.ai) requires an API token:
 
 ```bash
 # 1. Sign in at hub.dojops.ai → Settings → API Tokens
@@ -495,18 +495,18 @@ Publishing modules to the [DojOps Hub](https://hub.dojops.ai) requires an API to
 # 3. Set the environment variable:
 export DOJOPS_HUB_TOKEN="dojops_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
 
-# Publish a module
-dojops modules publish my-module.dops
+# Publish a skill
+dojops skills publish my-skill.dops
 
 # Publish with changelog
-dojops modules publish my-module.dops --changelog "v1.1.0: Added Redis support"
+dojops skills publish my-skill.dops --changelog "v1.1.0: Added Redis support"
 
 # Install from hub (no token required)
-dojops modules install my-module
-dojops modules install my-module --version 1.0.0 --global
+dojops skills install my-skill
+dojops skills install my-skill --version 1.0.0 --global
 ```
 
-The CLI sends the token as a `Bearer` header. Tokens can be managed (created, viewed, revoked) from the Hub Settings page at `/settings/tokens`. See the [modules documentation](modules.md#hub-integration) for the full publish/install flow.
+The CLI sends the token as a `Bearer` header. Tokens can be managed (created, viewed, revoked) from the Hub Settings page at `/settings/tokens`. See the [skills documentation](skills.md#hub-integration) for the full publish/install flow.
 
 ### Provider Management
 
@@ -630,11 +630,11 @@ dojops cron list                                        # View all jobs
 dojops cron remove job-abc123                           # Remove a job
 ```
 
-### Module Development
+### Skill Development
 
 ```bash
-dojops modules dev my-tool.dops          # Validate a module
-dojops modules dev my-tool.dops --watch  # Watch mode
+dojops skills dev my-tool.dops          # Validate a skill
+dojops skills dev my-tool.dops --watch  # Watch mode
 ```
 
 ### Chat Export

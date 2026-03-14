@@ -1,14 +1,14 @@
-# DevOps Modules
+# DevOps Skills
 
-DojOps includes 13 built-in DevOps modules covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All modules follow a consistent pattern built on the `BaseModule<T>` abstract class. Additionally, a **custom module system** lets you extend DojOps with custom `.dops v2` modules.
+DojOps includes 13 built-in DevOps skills covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All skills follow a consistent pattern built on the `BaseSkill<T>` abstract class. Additionally, a **custom skill system** lets you extend DojOps with custom `.dops v2` skills.
 
 > **As of v2.0.0, only `.dops v2` format is supported.** The legacy v1 format and `tool.yaml` manifests have been removed.
 
 ---
 
-## Module Overview
+## Skill Overview
 
-| Module         | Output Format     | Output Files                        | Detector | Verifier             |
+| Skill          | Output Format     | Output Files                        | Detector | Verifier             |
 | -------------- | ----------------- | ----------------------------------- | -------- | -------------------- |
 | GitHub Actions | YAML (raw)        | `.github/workflows/ci.yml`          | Yes      | Structure lint       |
 | Terraform      | HCL (raw)         | `main.tf`, `variables.tf`           | Yes      | `terraform validate` |
@@ -26,12 +26,12 @@ DojOps includes 13 built-in DevOps modules covering CI/CD, infrastructure-as-cod
 
 ---
 
-## Module Pattern
+## Skill Pattern
 
-All 13 built-in modules are defined as `.dops v2` module files in `packages/runtime/modules/`. Each module is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
+All 13 built-in skills are defined as `.dops v2` skill files in `packages/runtime/skills/`. Each skill is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
 
 ```
-packages/runtime/modules/
+packages/runtime/skills/
   github-actions.dops    GitHub Actions workflow generator
   terraform.dops         Terraform HCL generator
   kubernetes.dops        Kubernetes manifest generator
@@ -47,10 +47,10 @@ packages/runtime/modules/
   jenkinsfile.dops       Jenkinsfile pipeline generator
 ```
 
-### BaseModule Abstract Class
+### BaseSkill Abstract Class
 
 ```typescript
-abstract class BaseModule<TInput> {
+abstract class BaseSkill<TInput> {
   abstract name: string;
   abstract inputSchema: z.ZodType<TInput>;
 
@@ -81,9 +81,9 @@ Optional filesystem detector that identifies project context:
 
 ### Verifier (`verifier.ts`)
 
-Optional validation of generated output. Five modules implement verification:
+Optional validation of generated output. Five skills implement verification:
 
-| Module         | Verification Method           | Verification Command / Check                              |
+| Skill          | Verification Method           | Verification Command / Check                              |
 | -------------- | ----------------------------- | --------------------------------------------------------- |
 | Terraform      | External binary (`terraform`) | `terraform validate`                                      |
 | Dockerfile     | External binary (`hadolint`)  | `hadolint Dockerfile`                                     |
@@ -93,15 +93,15 @@ Optional validation of generated output. Five modules implement verification:
 
 Verification runs by default in CLI commands. Use `--skip-verify` to disable. Built-in verifiers always run.
 
-**Auto-install of missing binaries:** When an external verification binary (e.g. `terraform`, `hadolint`, `kubectl`) is not found on the system, DojOps automatically installs it via `dojops toolchain install` and retries verification. This eliminates the need to manually install verification tools before use. The `OnBinaryMissing` callback pattern propagates from the CLI through `module-registry` and `runtime` to the binary verifier, triggering automatic installation on first encounter.
+**Auto-install of missing binaries:** When an external verification binary (e.g. `terraform`, `hadolint`, `kubectl`) is not found on the system, DojOps automatically installs it via `dojops toolchain install` and retries verification. This eliminates the need to manually install verification tools before use. The `OnBinaryMissing` callback pattern propagates from the CLI through `skill-registry` and `runtime` to the binary verifier, triggering automatic installation on first encounter.
 
 **Dynamic filename resolution:** Verification commands support the `{entryFile}` placeholder, which resolves to the actual output filename at runtime. For example, a verification command `hadolint {entryFile}` will resolve to `hadolint Dockerfile` based on the generated file path.
 
 ### Existing Config Auto-Detection
 
-All 13 modules auto-detect existing config files and switch to update mode when found. Each module knows its output file path and reads existing content automatically:
+All 13 skills auto-detect existing config files and switch to update mode when found. Each skill knows its output file path and reads existing content automatically:
 
-| Module         | Auto-Detect Path                                                       |
+| Skill          | Auto-Detect Path                                                       |
 | -------------- | ---------------------------------------------------------------------- |
 | GitHub Actions | `{projectPath}/.github/workflows/ci.yml`                               |
 | Terraform      | `{projectPath}/main.tf`                                                |
@@ -120,13 +120,13 @@ All 13 modules auto-detect existing config files and switch to update mode when 
 **Behavior:**
 
 1. If `existingContent` is explicitly passed in the input, it takes priority over auto-detection
-2. Otherwise, the module reads the file at the auto-detect path using `readExistingConfig()` (from `@dojops/sdk`)
+2. Otherwise, the skill reads the file at the auto-detect path using `readExistingConfig()` (from `@dojops/sdk`)
 3. Files larger than 50KB are skipped (returns `null`)
 4. The `generate()` output includes `isUpdate: boolean` so callers (CLI, planner) can distinguish create vs update
 
 ### Atomic File Writes
 
-All module `execute()` methods use `atomicWriteFileSync()` from `@dojops/sdk`. This writes to a temporary file first, then atomically renames it to the target path using `fs.renameSync` (POSIX atomic rename). This prevents corrupted or partial files if the process crashes mid-write.
+All skill `execute()` methods use `atomicWriteFileSync()` from `@dojops/sdk`. This writes to a temporary file first, then atomically renames it to the target path using `fs.renameSync` (POSIX atomic rename). This prevents corrupted or partial files if the process crashes mid-write.
 
 ### Backup Before Overwrite
 
@@ -139,7 +139,7 @@ Backups are only created when updating existing files, not when creating new one
 
 ### File Tracking
 
-All module `execute()` methods return `filesWritten` and `filesModified` arrays in the `ModuleOutput`:
+All skill `execute()` methods return `filesWritten` and `filesModified` arrays in the `SkillOutput`:
 
 - `filesWritten` — All files written during execution (both new and updated)
 - `filesModified` — Files that existed before and were overwritten (have `.bak` backups)
@@ -170,7 +170,7 @@ interface VerificationIssue {
 
 ---
 
-## Module Details
+## Skill Details
 
 ### GitHub Actions
 
@@ -269,34 +269,34 @@ Generates systemd service unit files.
 
 ---
 
-## Creating a New Module
+## Creating a New Skill
 
-To add a new built-in module to DojOps, create a `.dops v2` file in `packages/runtime/modules/`. See the existing modules for the format. For custom modules, use `dojops modules init <name>` to scaffold a new `.dops v2` file.
+To add a new built-in skill to DojOps, create a `.dops v2` file in `packages/runtime/skills/`. See the existing skills for the format. For custom skills, use `dojops skills init <name>` to scaffold a new `.dops v2` file.
 
 ---
 
-## DOPS Module Format
+## DOPS Skill Format
 
-Built-in modules are defined as `.dops` module files — a declarative format combining YAML frontmatter with markdown prompt sections. The `@dojops/runtime` package processes these modules through `DopsRuntime` (v2-only as of v2.0.0).
+Built-in skills are defined as `.dops` skill files — a declarative format combining YAML frontmatter with markdown prompt sections. The `@dojops/runtime` package processes these skills through `DopsRuntime` (v2-only as of v2.0.0).
 
 ### Frontmatter Sections
 
 All sections are defined in YAML between `---` delimiters:
 
-| Section        | Required | Description                                                             |
-| -------------- | -------- | ----------------------------------------------------------------------- |
-| `dops`         | Yes      | Version identifier (`v2`)                                               |
-| `kind`         | No       | Module kind (`tool`, default: `tool`)                                   |
-| `meta`         | Yes      | Module name, version, description, author, license, tags, repository    |
-| `context`      | Yes      | Technology context, output guidance, best practices, Context7 libs      |
-| `files`        | Yes      | Output file specs (path templates, format, serialization options)       |
-| `scope`        | No       | Write boundary — explicit list of allowed write paths                   |
-| `risk`         | No       | Module risk self-classification (`LOW` / `MEDIUM` / `HIGH` + rationale) |
-| `execution`    | No       | Mutation semantics (mode, deterministic, idempotent flags)              |
-| `update`       | No       | Structured update behavior (strategy, inputSource, injectAs)            |
-| `detection`    | No       | Existing file detection paths for auto-update mode                      |
-| `verification` | No       | Structural rules + optional binary verification command                 |
-| `permissions`  | No       | Filesystem, child_process, and network permission declarations          |
+| Section        | Required | Description                                                            |
+| -------------- | -------- | ---------------------------------------------------------------------- |
+| `dops`         | Yes      | Version identifier (`v2`)                                              |
+| `kind`         | No       | Skill kind (`tool`, default: `tool`)                                   |
+| `meta`         | Yes      | Skill name, version, description, author, license, tags, repository    |
+| `context`      | Yes      | Technology context, output guidance, best practices, Context7 libs     |
+| `files`        | Yes      | Output file specs (path templates, format, serialization options)      |
+| `scope`        | No       | Write boundary — explicit list of allowed write paths                  |
+| `risk`         | No       | Skill risk self-classification (`LOW` / `MEDIUM` / `HIGH` + rationale) |
+| `execution`    | No       | Mutation semantics (mode, deterministic, idempotent flags)             |
+| `update`       | No       | Structured update behavior (strategy, inputSource, injectAs)           |
+| `detection`    | No       | Existing file detection paths for auto-update mode                     |
+| `verification` | No       | Structural rules + optional binary verification command                |
+| `permissions`  | No       | Filesystem, child_process, and network permission declarations         |
 
 ### Context Block (v2)
 
@@ -346,11 +346,11 @@ Each entry in the `files` array defines an output file:
 | `format`      | string  | `raw`   | File format (`raw` is standard for v2)           |
 | `conditional` | boolean | —       | Only write if LLM produces content for this file |
 
-Modules use `format: "raw"` exclusively. The LLM generates raw file content directly, and the runtime strips code fences via `stripCodeFences()` before writing.
+Skills use `format: "raw"` exclusively. The LLM generates raw file content directly, and the runtime strips code fences via `stripCodeFences()` before writing.
 
 ### Scope — Write Boundary Enforcement
 
-The `scope` section declares which files a module is allowed to write. Paths use the same `{var}` template syntax as `files[].path`:
+The `scope` section declares which files a skill is allowed to write. Paths use the same `{var}` template syntax as `files[].path`:
 
 ```yaml
 scope:
@@ -359,11 +359,11 @@ scope:
 
 At execution time, resolved file paths are validated against the expanded scope patterns. Writes to paths not in `scope.write` are rejected with an error. Path traversal (`..`) in scope patterns is rejected at parse time.
 
-When `scope` is omitted, the module can write to any path.
+When `scope` is omitted, the skill can write to any path.
 
-### Risk — Module Self-Classification
+### Risk — Skill Self-Classification
 
-Modules declare their own risk level:
+Skills declare their own risk level:
 
 ```yaml
 risk:
@@ -408,9 +408,9 @@ After the closing `---` delimiter, markdown sections define prompts:
 - `## Prompt` (required) — Main generation prompt with `{var}` template substitution
 - `## Keywords` (required) — Comma-separated keywords for agent routing
 
-### Built-in Module Risk Levels
+### Built-in Skill Risk Levels
 
-| Module         | Risk   | Rationale                                             |
+| Skill          | Risk   | Rationale                                             |
 | -------------- | ------ | ----------------------------------------------------- |
 | terraform      | MEDIUM | Infrastructure changes may affect cloud resources     |
 | kubernetes     | MEDIUM | Cluster configuration changes affect running services |
@@ -427,52 +427,52 @@ After the closing `---` delimiter, markdown sections define prompts:
 
 ---
 
-## Custom Module System
+## Custom Skill System
 
-DojOps supports custom modules via the `@dojops/module-registry` custom module system. Custom modules are discovered automatically and behave exactly like built-in modules — they go through the same Planner, Executor, verification, and audit pipeline.
+DojOps supports custom skills via the `@dojops/skill-registry` custom skill system. Custom skills are discovered automatically and behave exactly like built-in skills — they go through the same Planner, Executor, verification, and audit pipeline.
 
-### Custom Module Discovery
+### Custom Skill Discovery
 
-Custom modules are discovered from two locations (in priority order):
+Custom skills are discovered from two locations (in priority order):
 
-1. **Project modules:** `.dojops/modules/<name>.dops` (highest priority)
-2. **Global modules:** `~/.dojops/modules/<name>.dops`
+1. **Project skills:** `.dojops/skills/<name>.dops` (highest priority)
+2. **Global skills:** `~/.dojops/skills/<name>.dops`
 
-Project modules override global modules of the same name. Custom module discovery happens automatically on every command — no manual registration needed.
+Project skills override global skills of the same name. Custom skill discovery happens automatically on every command — no manual registration needed.
 
-### Custom Module CLI Commands
+### Custom Skill CLI Commands
 
 ```bash
-# List all discovered custom modules (global + project)
-dojops modules list
+# List all discovered custom skills (global + project)
+dojops skills list
 
-# Validate a module manifest
-dojops modules validate .dojops/modules/my-module/
+# Validate a skill manifest
+dojops skills validate .dojops/skills/my-skill/
 
-# Scaffold a new .dops module (uses AI when provider is configured)
-dojops modules init my-module
+# Scaffold a new .dops skill (uses AI when provider is configured)
+dojops skills init my-skill
 
-# Publish a .dops module to DojOps Hub (requires DOJOPS_HUB_TOKEN)
-dojops modules publish my-module.dops
-dojops modules publish my-module.dops --changelog "Added Docker support"
+# Publish a .dops skill to DojOps Hub (requires DOJOPS_HUB_TOKEN)
+dojops skills publish my-skill.dops
+dojops skills publish my-skill.dops --changelog "Added Docker support"
 
-# Install a .dops module from DojOps Hub
-dojops modules install nginx-config
-dojops modules install nginx-config --version 1.0.0 --global
+# Install a .dops skill from DojOps Hub
+dojops skills install nginx-config
+dojops skills install nginx-config --version 1.0.0 --global
 
-# Search the DojOps Hub for modules
-dojops modules search docker
-dojops modules search terraform --limit 5
-dojops modules search k8s --output json
+# Search the DojOps Hub for skills
+dojops skills search docker
+dojops skills search terraform --limit 5
+dojops skills search k8s --output json
 ```
 
 #### Hub Integration
 
-The `publish` and `install` commands connect to the [DojOps Hub](https://hub.dojops.ai) — a module marketplace where users share `.dops` modules.
+The `publish` and `install` commands connect to the [DojOps Hub](https://hub.dojops.ai) — a skill marketplace where users share `.dops` skills.
 
 ##### Authentication Setup
 
-Publishing modules to the Hub requires an API token. Tokens follow the GitHub PAT model — shown once at creation, stored as SHA-256 hashes.
+Publishing skills to the Hub requires an API token. Tokens follow the GitHub PAT model — shown once at creation, stored as SHA-256 hashes.
 
 **1. Sign in to the Hub** — Go to [hub.dojops.ai](https://hub.dojops.ai) and sign in with your GitHub account.
 
@@ -497,19 +497,19 @@ export DOJOPS_HUB_TOKEN="dojops_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
 
 You can manage up to 10 tokens per account. View active tokens, their last-used timestamps, and revoke compromised tokens from the Settings page at any time.
 
-##### Publishing a Module
+##### Publishing a Skill
 
 The publish flow validates locally, computes a SHA-256 hash for integrity, and uploads to the Hub.
 
 ```bash
 # Publish a .dops file
-dojops modules publish my-module.dops
+dojops skills publish my-skill.dops
 
 # Publish with a changelog message
-dojops modules publish my-module.dops --changelog "Added Docker support"
+dojops skills publish my-skill.dops --changelog "Added Docker support"
 
-# Publish by module name (looks up in .dojops/modules/)
-dojops modules publish my-module
+# Publish by skill name (looks up in .dojops/skills/)
+dojops skills publish my-skill
 ```
 
 **What happens during publish:**
@@ -525,7 +525,7 @@ dojops modules publish my-module
 ```
 ◇  Validated: my-tool v1.0.0
 ◇  SHA256: a1b2c3d4e5f6...
-┌  Published new module
+┌  Published new skill
 │  Name:    my-tool
 │  Version: v1.0.0
 │  Slug:    my-tool
@@ -534,26 +534,26 @@ dojops modules publish my-module
 └
 ```
 
-**Publishing a new version** of an existing module uses the same command — the Hub detects the existing package and adds the new version:
+**Publishing a new version** of an existing skill uses the same command — the Hub detects the existing package and adds the new version:
 
 ```bash
 # Update version in .dops frontmatter, then:
-dojops modules publish my-module.dops --changelog "v1.1.0: Added Redis support"
+dojops skills publish my-skill.dops --changelog "v1.1.0: Added Redis support"
 ```
 
-##### Installing a Module
+##### Installing a Skill
 
-The install flow downloads the module, verifies its integrity against the publisher's hash, and places it in your modules directory.
+The install flow downloads the skill, verifies its integrity against the publisher's hash, and places it in your skills directory.
 
 ```bash
 # Install latest version (project-local)
-dojops modules install nginx-config
+dojops skills install nginx-config
 
 # Install a specific version
-dojops modules install nginx-config --version 1.0.0
+dojops skills install nginx-config --version 1.0.0
 
-# Install globally (~/.dojops/modules/)
-dojops modules install nginx-config --global
+# Install globally (~/.dojops/skills/)
+dojops skills install nginx-config --global
 ```
 
 **What happens during install:**
@@ -561,17 +561,17 @@ dojops modules install nginx-config --global
 1. **Fetch metadata** — The CLI queries `GET /api/packages/<slug>` to resolve the latest version (unless `--version` is specified)
 2. **Download** — The `.dops` file is downloaded from `GET /api/download/<slug>/<version>` with the publisher's SHA-256 hash in the `X-Checksum-Sha256` response header
 3. **Integrity check** — The CLI recomputes the SHA-256 hash locally and compares it against the publisher's hash. **Mismatches abort the install** with a tampering warning
-4. **Validation** — The downloaded file is parsed and validated as a `.dops` module
-5. **Write** — The file is saved to `.dojops/modules/<name>.dops` (project) or `~/.dojops/modules/<name>.dops` (global)
+4. **Validation** — The downloaded file is parsed and validated as a `.dops` skill
+5. **Write** — The file is saved to `.dojops/skills/<name>.dops` (project) or `~/.dojops/skills/<name>.dops` (global)
 
 **Example output:**
 
 ```
 ◇  Downloading nginx-config v1.0.0...
-┌  Module installed
+┌  Skill installed
 │  Name:    nginx-config
 │  Version: v1.0.0
-│  Path:    .dojops/modules/nginx-config.dops
+│  Path:    .dojops/skills/nginx-config.dops
 │  Scope:   project
 │  SHA256:  f9e8d7c6b5a4...
 │  Verify:  OK — matches publisher hash
@@ -594,36 +594,36 @@ dojops modules install nginx-config --global
 | `DOJOPS_HUB_URL`   | Hub API base URL                                           | `https://hub.dojops.ai` |
 | `DOJOPS_HUB_TOKEN` | API token for publishing (generated at `/settings/tokens`) | —                       |
 
-### Module Policy
+### Skill Policy
 
-Control which custom modules are allowed via `.dojops/policy.yaml`:
+Control which custom skills are allowed via `.dojops/policy.yaml`:
 
 ```yaml
-# Only allow specific modules
-allowedModules:
+# Only allow specific skills
+allowedSkills:
   - my-tool
   - another-tool
 
-# Block specific modules (takes precedence over allowedModules)
-blockedModules:
+# Block specific skills (takes precedence over allowedSkills)
+blockedSkills:
   - untrusted-tool
 ```
 
-### Module Isolation
+### Skill Isolation
 
-Custom modules are sandboxed with the same guardrails as built-in modules, plus additional controls:
+Custom skills are sandboxed with the same guardrails as built-in skills, plus additional controls:
 
 - **Verification command whitelist** — Only 33 known DevOps binaries are allowed (terraform, kubectl, helm, ansible-lint, ansible-playbook, docker, hadolint, yamllint, jsonlint, shellcheck, tflint, kubeval, conftest, checkov, trivy, kube-score, polaris, nginx, promtool, systemd-analyze, make, actionlint, caddy, haproxy, nomad, podman, fluentd, opa, vault, circleci, npx, tsc, cfn-lint). Non-whitelisted commands are rejected at runtime
 - **Permission enforcement** — The `permissions.child_process` field must be `"required"` for verification commands to execute. Omitted or `"none"` means the command is silently skipped (default-safe)
 - **Path traversal prevention** — File paths in `files[].path` and `detector.path` cannot contain `..` segments, preventing writes outside the project directory
-- **Execution guardrails** — Custom tools execute through the same `SafeExecutor` pipeline as built-in modules, inheriting `maxFileSize` (1MB default), `timeoutMs` (30s default), DevOps write allowlist enforcement, and per-file audit logging
+- **Execution guardrails** — Custom skills execute through the same `SafeExecutor` pipeline as built-in skills, inheriting `maxFileSize` (1MB default), `timeoutMs` (30s default), DevOps write allowlist enforcement, and per-file audit logging
 
-### Custom Module Audit Trail
+### Custom Skill Audit Trail
 
-Custom module executions include additional audit metadata:
+Custom skill executions include additional audit metadata:
 
-- `toolType: "custom"` — distinguishes from built-in modules
-- `toolSource: "global" | "project"` — where the custom module was discovered
+- `toolType: "custom"` — distinguishes from built-in skills
+- `toolSource: "global" | "project"` — where the custom skill was discovered
 - `toolVersion` — version from the manifest
-- `toolHash` — SHA-256 hash of module directory for integrity verification
-- `systemPromptHash` — SHA-256 hash of the custom module's system prompt for reproducibility tracking
+- `toolHash` — SHA-256 hash of skill directory for integrity verification
+- `systemPromptHash` — SHA-256 hash of the custom skill's system prompt for reproducibility tracking
