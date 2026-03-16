@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-03-17
+
+### Added
+
+- **Agentic mode: CLI binary discovery**: The `dojops auto` system prompt now probes PATH for ~35 DevOps binaries (terraform, kubectl, helm, docker, etc.) and lists available tools, so the LLM knows which CLI commands it can run
+- **Agentic mode: skill listing in system prompt**: Available DojOps skills are now listed in the agent's system prompt with exact names, preventing the LLM from inventing skill names
+- **Dynamic Zod schema for task decomposition**: `createTaskGraphSchema()` constrains the `tool` field to a `z.enum()` of valid skill names, catching hallucinated names at parse time
+- **Fuzzy skill name resolution**: Both `PlannerExecutor` and `ToolExecutor` now strip common LLM-hallucinated suffixes (`-chart`, `-config`, `-file`, `-template`, `-manifest`, `-setup`, `-yaml`, `-yml`) and try prefix matching before failing
+- **Auto-redirect skill-as-tool calls**: When the LLM calls a skill name directly as a tool (e.g. `dockerfile` instead of `run_skill`), `ToolExecutor` auto-redirects to `run_skill` instead of returning "Unknown tool"
+
+### Fixed
+
+- **`search_files` fails on path-containing patterns**: Patterns like `terraform-iac/**/*.tf` always returned zero results because `find -name` only matches basenames. Added `normalizeSearchPattern()` to extract directory components and adjust the search path
+- **`search_files` misleading "No search criteria" error**: When search criteria was provided but no files matched, the error message said "No search criteria provided", causing the LLM to waste iterations retrying with different argument formats. Now returns accurate "No files found matching X" message
+- **Raw JSON displayed as agent summary**: When the LLM returned the `done` tool call as truncated JSON text, `extractSummaryFromContent()` fell through to displaying raw JSON. Added regex fallback for truncated/malformed JSON and a `cleanDisplayText()` safety net at display time
+- **`search_files` tool description encouraged broken patterns**: The pattern parameter examples (`'**/*.ts'`, `'src/**/*.yaml'`) included path separators that `find -name` cannot match. Updated description to use simple filename globs and direct users to the `path` parameter for subdirectories
+
+### Changed
+
+- **Default max iterations increased from 20 to 50**: Complex multi-step tasks frequently hit the 20-iteration ceiling. Default increased to 50 for both `AgentLoop` and the CLI `--max-iterations` flag
+
 ## [1.1.1] - 2026-03-14
 
 ### Added

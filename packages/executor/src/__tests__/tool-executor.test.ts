@@ -194,6 +194,49 @@ describe("ToolExecutor", () => {
     });
   });
 
+  describe("search_files", () => {
+    it("finds files with simple name pattern", async () => {
+      fs.mkdirSync(path.join(tmpDir, "infra"));
+      fs.writeFileSync(path.join(tmpDir, "infra", "main.tf"), "resource {}", "utf-8");
+      const result = await executor.execute(
+        makeCall("search_files", { pattern: "*.tf", path: "infra" }),
+      );
+      expect(result.isError).toBeUndefined();
+      expect(result.output).toContain("main.tf");
+    });
+
+    it("normalizes path-containing patterns like 'subdir/**/*.tf'", async () => {
+      fs.mkdirSync(path.join(tmpDir, "terraform-iac"));
+      fs.writeFileSync(path.join(tmpDir, "terraform-iac", "vars.tf"), "variable {}", "utf-8");
+      // LLMs often pass "terraform-iac/**/*.tf" as pattern instead of using path arg
+      const result = await executor.execute(
+        makeCall("search_files", { pattern: "terraform-iac/**/*.tf" }),
+      );
+      expect(result.isError).toBeUndefined();
+      expect(result.output).toContain("vars.tf");
+    });
+
+    it("normalizes 'subdir/*' patterns", async () => {
+      fs.mkdirSync(path.join(tmpDir, "configs"));
+      fs.writeFileSync(path.join(tmpDir, "configs", "app.yaml"), "key: val", "utf-8");
+      const result = await executor.execute(makeCall("search_files", { pattern: "configs/*" }));
+      expect(result.isError).toBeUndefined();
+      expect(result.output).toContain("app.yaml");
+    });
+
+    it("returns clear message when no files match", async () => {
+      const result = await executor.execute(makeCall("search_files", { pattern: "*.nonexistent" }));
+      expect(result.output).toContain("No files found");
+      expect(result.isError).toBeUndefined();
+    });
+
+    it("returns error when no criteria provided", async () => {
+      const result = await executor.execute(makeCall("search_files", {}));
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("No search criteria");
+    });
+  });
+
   describe("done", () => {
     it("returns summary", async () => {
       const result = await executor.execute(makeCall("done", { summary: "All tasks complete" }));

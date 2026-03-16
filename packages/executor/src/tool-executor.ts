@@ -24,6 +24,46 @@ function truncateOutput(output: string): string {
   return `${truncated}\n\n[truncated — output exceeded ${MAX_OUTPUT_BYTES} bytes]`;
 }
 
+/**
+ * Extract directory components from glob patterns.
+ * LLMs often combine directory + glob into the pattern field (e.g. "terraform-iac/**\/*.tf")
+ * instead of using the path argument for directories and pattern for just the filename glob.
+ * find -name only matches basenames, so "terraform-iac/**\/*.tf" would always return zero results.
+ */
+function normalizeSearchPattern(
+  pattern: string,
+  basePath: string,
+): { pattern: string; searchPath: string } {
+  if (!pattern.includes("/")) return { pattern, searchPath: basePath };
+
+  const segments = pattern.split("/");
+  const dirSegments: string[] = [];
+
+  // Collect concrete directory segments, stop at globs
+  for (let i = 0; i < segments.length - 1; i++) {
+    const seg = segments[i];
+    if (seg === "**" || seg === "*") continue;
+    if (seg.includes("*") || seg.includes("?")) break;
+    dirSegments.push(seg);
+  }
+
+  // Last segment is the filename pattern
+  const lastSeg = segments[segments.length - 1];
+  const filePattern = lastSeg && lastSeg !== "**" ? lastSeg : "*";
+
+  if (dirSegments.length === 0) {
+    return { pattern: filePattern, searchPath: basePath };
+  }
+
+  // Only use resolved dir if it actually exists
+  const resolvedDir = path.resolve(basePath, dirSegments.join("/"));
+  if (fs.existsSync(resolvedDir) && fs.statSync(resolvedDir).isDirectory()) {
+    return { pattern: filePattern, searchPath: resolvedDir };
+  }
+
+  return { pattern: filePattern, searchPath: basePath };
+}
+
 /** Search for files by name pattern using find. Falls back to -path for glob patterns. */
 function searchByFilePattern(pattern: string, searchPath: string): string[] {
   try {
@@ -131,7 +171,19 @@ export class ToolExecutor {
           };
           break;
         default:
-          result = { callId: call.id, output: `Unknown tool: ${call.name}`, isError: true };
+          // Auto-redirect: if the unknown tool name matches a skill, run it as run_skill
+          if (this.opts.skills && this.resolveSkill(call.name)) {
+            result = await this.runSkill({
+              ...call,
+              name: "run_skill",
+              arguments: {
+                skill: call.name,
+                input: call.arguments,
+              },
+            });
+          } else {
+            result = { callId: call.id, output: `Unknown tool: ${call.name}`, isError: true };
+          }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -264,6 +316,45 @@ export class ToolExecutor {
     }
   }
 
+  /**
+   * Resolve a possibly-hallucinated skill name to a valid one.
+   * Tries exact match, then strips common LLM-hallucinated suffixes.
+   */
+  private resolveSkill(name: string): DevOpsSkill | undefined {
+    const skills = this.opts.skills;
+    if (!skills) return undefined;
+
+    // Exact match
+    const exact = skills.get(name);
+    if (exact) return exact;
+
+    // Strip common suffixes (e.g. "helm-chart" → "helm")
+    const suffixes = [
+      "-chart",
+      "-config",
+      "-file",
+      "-template",
+      "-manifest",
+      "-setup",
+      "-yaml",
+      "-yml",
+    ];
+    for (const suffix of suffixes) {
+      if (name.endsWith(suffix)) {
+        const match = skills.get(name.slice(0, -suffix.length));
+        if (match) return match;
+      }
+    }
+
+    // Prefix matching
+    const lower = name.toLowerCase();
+    for (const [key, skill] of skills) {
+      if (lower.startsWith(key) || key.startsWith(lower)) return skill;
+    }
+
+    return undefined;
+  }
+
   private async runSkill(call: ToolCall): Promise<ToolResult> {
     const skillName = call.arguments.skill as string;
     const input = call.arguments.input as Record<string, unknown>;
@@ -272,7 +363,7 @@ export class ToolExecutor {
       return { callId: call.id, output: "No skills available.", isError: true };
     }
 
-    const skill = this.opts.skills.get(skillName);
+    const skill = this.resolveSkill(skillName);
     if (!skill) {
       const available = [...this.opts.skills.keys()].join(", ");
       return {
@@ -302,11 +393,29 @@ export class ToolExecutor {
   }
 
   private async searchFiles(call: ToolCall): Promise<ToolResult> {
-    const pattern = call.arguments.pattern as string | undefined;
+    const rawPattern = call.arguments.pattern as string | undefined;
     const contentPattern = call.arguments.content_pattern as string | undefined;
-    const searchPath = call.arguments.path
+    let searchPath = call.arguments.path
       ? this.resolvePath(call.arguments.path as string)
       : this.opts.cwd;
+
+    // No criteria provided at all
+    if (!rawPattern && !contentPattern) {
+      return {
+        callId: call.id,
+        output:
+          "No search criteria provided. Use 'pattern' for file name matching and/or 'content_pattern' for content search.",
+        isError: true,
+      };
+    }
+
+    // Normalize pattern: extract directory components from patterns like "terraform-iac/**/*.tf"
+    let pattern = rawPattern;
+    if (pattern && pattern.includes("/")) {
+      const normalized = normalizeSearchPattern(pattern, searchPath);
+      pattern = normalized.pattern;
+      searchPath = normalized.searchPath;
+    }
 
     const results: string[] = [];
 
@@ -319,11 +428,13 @@ export class ToolExecutor {
     }
 
     if (results.length === 0) {
-      return {
-        callId: call.id,
-        output: "No search criteria provided. Use 'pattern' and/or 'content_pattern'.",
-        isError: true,
-      };
+      const criteria = [
+        pattern && `name "${pattern}"`,
+        contentPattern && `content "${contentPattern}"`,
+      ]
+        .filter(Boolean)
+        .join(" and ");
+      return { callId: call.id, output: `No files found matching ${criteria} in ${searchPath}.` };
     }
 
     return { callId: call.id, output: truncateOutput(results.join("\n\n")) };

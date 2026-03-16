@@ -311,4 +311,46 @@ describe("AgentLoop", () => {
     expect(result.summary).toBe("Fallback works");
     expect(provider.generate).toHaveBeenCalled();
   });
+
+  it("extracts summary from truncated JSON (missing closing brace)", async () => {
+    const provider: LLMProvider = {
+      name: "truncated-json-provider",
+      generate: vi.fn(async () => ({
+        content:
+          '{"tool_calls":[{"name":"done","arguments":{"summary":"Dockerfile reviewed and fixed."}}]',
+      })),
+    };
+
+    const loop = new AgentLoop({
+      provider,
+      toolExecutor: mockToolExecutor(),
+      tools,
+      systemPrompt: "Test",
+    });
+
+    const result = await loop.run("Review dockerfile");
+    expect(result.success).toBe(true);
+    expect(result.summary).toBe("Dockerfile reviewed and fixed.");
+  });
+
+  it("extracts summary from JSON embedded in surrounding text", async () => {
+    const provider: LLMProvider = {
+      name: "embedded-json-provider",
+      generate: vi.fn(async () => ({
+        content:
+          'Here is the result:\n{"tool_calls":[{"name":"done","arguments":{"summary":"All done."}}]}',
+      })),
+    };
+
+    const loop = new AgentLoop({
+      provider,
+      toolExecutor: mockToolExecutor(),
+      tools,
+      systemPrompt: "Test",
+    });
+
+    const result = await loop.run("Test prompt");
+    expect(result.success).toBe(true);
+    expect(result.summary).toBe("All done.");
+  });
 });

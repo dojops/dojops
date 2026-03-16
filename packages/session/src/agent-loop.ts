@@ -14,7 +14,7 @@ export interface AgentLoopOptions {
   toolExecutor: ToolExecutor;
   tools: ToolDefinition[];
   systemPrompt: string;
-  /** Maximum number of LLM iterations (default: 20). */
+  /** Maximum number of LLM iterations (default: 50). */
   maxIterations?: number;
   /** Maximum total tokens before stopping (default: 200_000). */
   maxTotalTokens?: number;
@@ -35,28 +35,73 @@ export interface AgentLoopResult {
 }
 
 /**
+ * Try to extract summary from a parsed JSON object.
+ * Handles {"tool_calls":[{"name":"done","arguments":{"summary":"..."}}]}
+ * and {"summary":"..."} formats.
+ */
+function extractFromParsedJson(parsed: Record<string, unknown>): string | null {
+  if (Array.isArray(parsed.tool_calls)) {
+    const done = (
+      parsed.tool_calls as Array<{ name?: string; arguments?: Record<string, unknown> }>
+    ).find((tc) => tc.name === "done");
+    if (done?.arguments?.summary && typeof done.arguments.summary === "string") {
+      return done.arguments.summary;
+    }
+  }
+  if (typeof parsed.summary === "string") return parsed.summary;
+  return null;
+}
+
+/**
+ * Regex fallback: extract "summary" value from malformed/truncated JSON.
+ * Handles cases where JSON.parse fails due to truncation (e.g. missing closing brace).
+ */
+function extractSummaryByRegex(text: string): string | null {
+  const match = /"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text);
+  if (!match) return null;
+  return match[1]
+    .replace(/\\"/g, '"')
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\\\/g, "\\");
+}
+
+/**
  * Extract a human-readable summary from LLM content.
- * Some models return the "done" tool call as JSON text instead of a native tool call.
- * This extracts the summary from that JSON, falling back to the raw content.
+ * Some models return the "done" tool call as JSON text instead of a native tool call,
+ * sometimes truncated or embedded in surrounding text. This tries multiple strategies:
+ * 1. JSON.parse for well-formed JSON
+ * 2. Regex extraction for malformed/truncated JSON
+ * 3. Strip JSON wrapper if present, return clean text
  */
 function extractSummaryFromContent(content: string): string {
   if (!content) return "Task completed (no summary provided).";
   const trimmed = content.trim();
-  if (trimmed.startsWith("{")) {
+
+  // 1. Try JSON.parse (handles well-formed JSON anywhere in content)
+  const jsonStart = trimmed.indexOf("{");
+  if (jsonStart !== -1) {
+    const jsonCandidate = trimmed.slice(jsonStart);
     try {
-      const parsed = JSON.parse(trimmed);
-      // Handle {"tool_calls":[{"name":"done","arguments":{"summary":"..."}}]}
-      if (Array.isArray(parsed.tool_calls)) {
-        const done = parsed.tool_calls.find((tc: { name?: string }) => tc.name === "done");
-        if (done?.arguments?.summary) return done.arguments.summary;
-      }
-      // Handle {"summary":"..."} directly
-      if (typeof parsed.summary === "string") return parsed.summary;
+      const parsed = JSON.parse(jsonCandidate) as Record<string, unknown>;
+      const extracted = extractFromParsedJson(parsed);
+      if (extracted) return extracted;
     } catch {
-      // Not valid JSON, use as-is
+      // JSON.parse failed — try regex fallback
     }
+
+    // 2. Regex fallback for truncated/malformed JSON
+    const regexResult = extractSummaryByRegex(jsonCandidate);
+    if (regexResult) return regexResult;
   }
-  return content;
+
+  // 3. If content is mostly JSON with a "done" reference but we couldn't extract, use default
+  if (trimmed.includes('"done"') && trimmed.includes('"summary"')) {
+    return "Task completed.";
+  }
+
+  // 4. Return content, stripping any leading/trailing non-text artifacts
+  return trimmed;
 }
 
 /**
@@ -70,7 +115,7 @@ export class AgentLoop {
   private totalTokens = 0;
 
   constructor(private readonly opts: AgentLoopOptions) {
-    this.maxIterations = opts.maxIterations ?? 20;
+    this.maxIterations = opts.maxIterations ?? 50;
     this.maxTotalTokens = opts.maxTotalTokens ?? 200_000;
   }
 

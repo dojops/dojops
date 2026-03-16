@@ -1,7 +1,7 @@
 import { LLMProvider, parseAndValidate } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 import { DevOpsSkill } from "@dojops/sdk";
-import { TaskGraph, TaskGraphSchema } from "./types";
+import { TaskGraph, createTaskGraphSchema } from "./types";
 import { zodSchemaToText } from "./schema-to-text";
 
 export interface AgentInfo {
@@ -140,10 +140,16 @@ export async function decompose(
     ? `\n## Execution Memory\n\n${options.executionMemory}\n\nUse this history to avoid duplicating work already completed. If a task was recently completed successfully, skip it unless the user explicitly asks to redo it.\n`
     : "";
 
+  const validToolNames = tools.map((t) => t.name);
+  const dynamicSchema = createTaskGraphSchema(validToolNames);
+
   const response = await provider.generate({
     system: `You are a DevOps task planner. Break down the user's goal into precise, narrowly-scoped tasks using available tools.
 
 ## Available tools
+
+IMPORTANT: The "tool" field in each task MUST be one of these exact names: ${validToolNames.join(", ")}.
+Do NOT invent tool names, add suffixes, or use variations. For example, use "helm" not "helm-chart", use "kubernetes" not "k8s-manifest".
 
 ${toolList}
 ${agentSection}
@@ -241,11 +247,11 @@ Respond with a JSON object:
 
 Do NOT ask follow-up questions. Provide the complete task graph only.`,
     prompt: goal,
-    schema: TaskGraphSchema,
+    schema: dynamicSchema,
   });
 
   if (response.parsed) {
     return response.parsed as TaskGraph;
   }
-  return parseAndValidate(response.content, TaskGraphSchema) as TaskGraph;
+  return parseAndValidate(response.content, dynamicSchema) as TaskGraph;
 }

@@ -110,7 +110,8 @@ export const SEARCH_FILES_TOOL: ToolDefinition = {
     properties: {
       pattern: {
         type: "string",
-        description: "Glob pattern to match file names (e.g. '**/*.ts', 'src/**/*.yaml')",
+        description:
+          "File name glob pattern (e.g. '*.tf', '*.yaml'). To search a subdirectory, use the 'path' parameter instead of including directory names here.",
       },
       content_pattern: {
         type: "string",
