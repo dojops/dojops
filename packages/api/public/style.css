@@ -55,7 +55,8 @@
 
   /* ── Typography ──────────────────────────────────────── */
   --font-display: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
 
   /* ── Layout ──────────────────────────────────────────── */
   --sidebar-w: 240px;
@@ -70,7 +71,15 @@
 
   /* ── Brand gradient ──────────────────────────────────── */
   --gradient-brand: linear-gradient(135deg, #06b6d4, #3b82f6, #8b5cf6);
-  --gradient-brand-wide: linear-gradient(90deg, transparent 0%, #06b6d4 20%, #3b82f6 40%, #8b5cf6 60%, #d946ef 80%, transparent 100%);
+  --gradient-brand-wide: linear-gradient(
+    90deg,
+    transparent 0%,
+    #06b6d4 20%,
+    #3b82f6 40%,
+    #8b5cf6 60%,
+    #d946ef 80%,
+    transparent 100%
+  );
   --gradient-text: linear-gradient(135deg, #06b6d4, #3b82f6, #d946ef);
 }
 
@@ -197,8 +206,12 @@ body {
 }
 
 @keyframes gradient-shift {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
 }
 
 .sidebar__brand {
