@@ -9,7 +9,7 @@ import os from "node:os";
 
 export type Platform = "linux" | "darwin" | "win32";
 export type Arch = "x64" | "arm64";
-export type ArchiveType = "zip" | "tar.gz" | "tar.xz" | "standalone" | "pipx";
+export type ArchiveType = "zip" | "tar.gz" | "tar.xz" | "standalone" | "pipx" | "source";
 
 export interface SystemTool {
   name: string;
@@ -124,6 +124,8 @@ export const BINARY_TO_SYSTEM_TOOL: Record<string, string> = {
   promtool: "promtool",
   circleci: "circleci",
   gh: "gh",
+  "whisper-cli": "whisper-cpp",
+  "whisper-cpp": "whisper-cpp",
 };
 
 export const SYSTEM_TOOLS: SystemTool[] = [
@@ -256,6 +258,20 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     archMap: ARCH_AMD64,
     binaryPathInArchive: "circleci-cli_{{version}}_{{platform}}_{{arch}}/circleci",
   }),
+  defineTool({
+    name: "whisper-cpp",
+    description: "Local speech-to-text engine for voice input (whisper.cpp)",
+    latestVersion: "1.8.3",
+    archiveType: "source",
+    binaryName: "whisper-cli",
+    verifyCommand: ["whisper-cli", "--help"],
+    // Windows gets pre-built zip; Linux/macOS built from source via custom installer
+    urlTemplate:
+      "https://github.com/ggml-org/whisper.cpp/releases/download/v{{version}}/whisper-bin-x64.zip",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_NATIVE,
+    supportedTargets: UNIX_TARGETS,
+  }),
 ];
 
 /**
@@ -294,7 +310,7 @@ function interpolate(template: string, tool: SystemTool, version: string): strin
  * Returns undefined for pipx tools (no binary download).
  */
 export function buildDownloadUrl(tool: SystemTool, version?: string): string | undefined {
-  if (tool.archiveType === "pipx") return undefined;
+  if (tool.archiveType === "pipx" || tool.archiveType === "source") return undefined;
   if (!tool.urlTemplate) return undefined;
   return interpolate(tool.urlTemplate, tool, version ?? tool.latestVersion);
 }

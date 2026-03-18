@@ -4,4 +4,4 @@ export * from "./sandbox";
 export * from "./approval";
 export * from "./safe-executor";
 export { ToolExecutor } from "./tool-executor";
-export type { ToolExecutorOptions } from "./tool-executor";
+export type { ToolExecutorOptions, McpToolDispatcher } from "./tool-executor";

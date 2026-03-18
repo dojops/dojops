@@ -167,9 +167,20 @@ export const toolchainLoadCommand: CommandHandler = async (_args, ctx) => {
   }
 };
 
+/** Tools that must be installed globally (e.g. large shared assets like whisper model). */
+const GLOBAL_ONLY_TOOLS = new Set(["whisper-cpp"]);
+
 export const toolchainInstallCommand: CommandHandler = async (args, ctx) => {
-  const tcCtx = await selectToolchainScope(ctx.globalOpts.nonInteractive);
   const skillName = args[0];
+
+  // Force global scope for tools with large shared assets (e.g. whisper-cpp model)
+  let tcCtx: ToolchainContext;
+  if (skillName && GLOBAL_ONLY_TOOLS.has(skillName)) {
+    tcCtx = globalToolchainCtx();
+    p.log.info(`${pc.cyan(skillName)} installs globally (includes shared model file).`);
+  } else {
+    tcCtx = await selectToolchainScope(ctx.globalOpts.nonInteractive);
+  }
 
   if (!skillName) {
     // Interactive selection

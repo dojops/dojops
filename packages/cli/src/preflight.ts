@@ -49,13 +49,34 @@ async function lookupInstallHint(skillName: string): Promise<string | undefined>
 }
 
 /**
+ * Find the project toolchain bin dir by walking up from cwd.
+ * Returns undefined if no .dojops/toolchain/bin/ is found.
+ */
+function findProjectToolchainBinDir(): string | undefined {
+  let dir = process.cwd();
+  const root = nodePath.parse(dir).root;
+  while (dir !== root) {
+    const binDir = nodePath.join(dir, ".dojops", "toolchain", "bin");
+    if (fs.existsSync(binDir)) return binDir;
+    const parent = nodePath.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+/**
  * Attempt to resolve a binary on PATH.
- * Checks toolchain sandbox first (bin/ and node_modules/.bin/), then system PATH.
+ * Checks project toolchain first, then global toolchain, then system PATH.
  * Returns the absolute path if found, undefined otherwise.
  */
 export function resolveBinary(name: string): string | undefined {
-  // Check sandbox first (system tools bin, then npm bin)
-  for (const dir of [TOOLCHAIN_BIN_DIR, TOOLCHAIN_NPM_BIN]) {
+  // Check project-scoped toolchain first (installed via `dojops toolchain install --scope=project`)
+  const projectBinDir = findProjectToolchainBinDir();
+
+  const dirs = [...(projectBinDir ? [projectBinDir] : []), TOOLCHAIN_BIN_DIR, TOOLCHAIN_NPM_BIN];
+
+  for (const dir of dirs) {
     if (fs.existsSync(dir)) {
       const sandboxPath = nodePath.join(dir, name);
       if (fs.existsSync(sandboxPath)) {
@@ -378,6 +399,7 @@ export const SYSTEM_TOOL_DOMAINS: Record<string, string[]> = {
   actionlint: ["ci-cd", "ci-debugging"],
   promtool: ["observability"],
   circleci: ["ci-cd"],
+  "whisper-cpp": ["voice-input"],
 };
 
 /**

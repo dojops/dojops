@@ -20,7 +20,8 @@
       "@dojops/session/*": ["packages/session/src/*"],
       "@dojops/skill-registry/*": ["packages/skill-registry/src/*"],
       "@dojops/runtime/*": ["packages/runtime/src/*"],
-      "@dojops/context/*": ["packages/context/src/*"]
+      "@dojops/context/*": ["packages/context/src/*"],
+      "@dojops/mcp/*": ["packages/mcp/src/*"]
     }
   }
 }

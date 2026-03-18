@@ -2,7 +2,16 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
-import { addNote, listNotes, removeNote, searchNotes, NoteRecord } from "../memory";
+import {
+  addNote,
+  listNotes,
+  removeNote,
+  searchNotes,
+  listErrorPatterns,
+  loadMemoryConfig,
+  saveMemoryConfig,
+  NoteRecord,
+} from "../memory";
 import { extractFlagValue, hasFlag, stripFlags } from "../parser";
 
 function getRoot(): string {
@@ -103,6 +112,48 @@ function handleSearch(args: string[], ctx: CLIContext): void {
   p.note(lines, `Search: "${query}" (${notes.length})`);
 }
 
+function handleAuto(args: string[]): void {
+  const rootDir = getRoot();
+  const toggle = args[0];
+
+  if (toggle === "on") {
+    saveMemoryConfig(rootDir, true);
+    p.log.success("Auto-memory enrichment enabled for `dojops auto`.");
+  } else if (toggle === "off") {
+    saveMemoryConfig(rootDir, false);
+    p.log.success("Auto-memory enrichment disabled for `dojops auto`.");
+  } else {
+    const enabled = loadMemoryConfig(rootDir);
+    p.log.info(`Auto-memory enrichment: ${enabled ? pc.green("on") : pc.dim("off")}`);
+    p.log.info(pc.dim("Toggle with: dojops memory auto on|off"));
+  }
+}
+
+function handleErrors(args: string[], ctx: CLIContext): void {
+  const rootDir = getRoot();
+  const taskType = extractFlagValue(args, "--type") ?? undefined;
+  const patterns = listErrorPatterns(rootDir, taskType, 20);
+
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify(patterns, null, 2));
+    return;
+  }
+
+  if (patterns.length === 0) {
+    p.log.info("No error patterns recorded.");
+    return;
+  }
+
+  const lines = patterns.map((ep) => {
+    const count = ep.occurrences > 1 ? pc.yellow(` (${ep.occurrences}x)`) : "";
+    const resolved = ep.resolution ? pc.green(" [resolved]") : "";
+    const msg =
+      ep.error_message.length > 80 ? ep.error_message.slice(0, 77) + "..." : ep.error_message;
+    return `${pc.cyan(`#${ep.id}`)} ${pc.dim(ep.task_type)}${count}${resolved}  ${msg}`;
+  });
+  p.note(lines.join("\n"), `Error patterns (${patterns.length})`);
+}
+
 export async function memoryCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0] ?? "list";
   const rest = args.slice(1);
@@ -128,7 +179,15 @@ export async function memoryCommand(args: string[], ctx: CLIContext): Promise<vo
     case "search":
       handleSearch(rest, ctx);
       break;
+    case "auto":
+      handleAuto(rest);
+      break;
+    case "errors":
+      handleErrors(rest, ctx);
+      break;
     default:
-      throw new Error(`Unknown memory subcommand: "${sub}". Available: list, add, remove, search`);
+      throw new Error(
+        `Unknown memory subcommand: "${sub}". Available: list, add, remove, search, auto, errors`,
+      );
   }
 }

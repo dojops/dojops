@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createRouter } from "@dojops/api";
+import { createRouter, createProvider } from "@dojops/api";
 import {
   ChatSession,
   buildSessionContext,
@@ -13,6 +13,7 @@ import type { ChatSessionState, SessionMode, ChatProgressCallbacks } from "@dojo
 import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
+import { VALID_PROVIDERS, resolveToken, resolveOllamaHost, resolveOllamaTls } from "../config";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import {
   renderHeader,
@@ -25,6 +26,7 @@ import {
 import type { StatusBarState, TurnStats, ContextBarState } from "../tui/status-bar";
 import { execFileSync } from "node:child_process";
 import { highlightCodeBlocks } from "../tui/code-highlight";
+import type { VoiceConfig } from "../voice";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 
@@ -313,6 +315,113 @@ async function handleModelCommand(ctx: CLIContext): Promise<void> {
   }
 }
 
+async function handleProviderCommand(
+  trimmed: string,
+  session: ChatSession,
+  rootDir: string,
+  ctx: CLIContext,
+  docAugmenter: DocAugmenter | undefined,
+): Promise<void> {
+  const providerArg = trimmed.slice(10).trim(); // "/provider ".length === 10
+
+  if (!providerArg) {
+    // Show interactive picker
+    const selected = await p.select({
+      message: "Select a provider:",
+      options: VALID_PROVIDERS.map((v) => ({ value: v, label: v })),
+    });
+    if (p.isCancel(selected)) return;
+    return switchProvider(selected as string, session, rootDir, ctx, docAugmenter);
+  }
+
+  // Direct name
+  if (!VALID_PROVIDERS.includes(providerArg as (typeof VALID_PROVIDERS)[number])) {
+    p.log.error(`Unknown provider "${providerArg}". Available: ${VALID_PROVIDERS.join(", ")}`);
+    return;
+  }
+  return switchProvider(providerArg, session, rootDir, ctx, docAugmenter);
+}
+
+function switchProvider(
+  providerName: string,
+  session: ChatSession,
+  rootDir: string,
+  ctx: CLIContext,
+  docAugmenter: DocAugmenter | undefined,
+): void {
+  try {
+    const apiKey = resolveToken(providerName, ctx.config);
+    const ollamaHost =
+      providerName === "ollama" ? resolveOllamaHost(undefined, ctx.config) : undefined;
+    const ollamaTls =
+      providerName === "ollama" ? resolveOllamaTls(undefined, ctx.config) : undefined;
+
+    const newProvider = createProvider({
+      provider: providerName,
+      model: ctx.globalOpts.model || undefined,
+      apiKey,
+      ollamaHost,
+      ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
+    });
+
+    const { router } = createRouter(newProvider, rootDir, docAugmenter);
+
+    session.setProvider(newProvider);
+    session.setRouter(router);
+
+    // Update context so status bar and subsequent commands reflect the change
+    ctx.globalOpts.provider = providerName;
+    process.env.DOJOPS_PROVIDER = providerName;
+
+    // Reset model — new provider may not support the old model
+    ctx.globalOpts.model = undefined;
+    delete process.env.DOJOPS_MODEL;
+
+    const msgCount = session.messages.length;
+    p.log.success(
+      `Switched to ${pc.bold(providerName)}` +
+        (msgCount > 0 ? pc.dim(` — ${msgCount} messages preserved`) : ""),
+    );
+  } catch (err) {
+    p.log.error(`Failed to switch provider: ${formatError(err)}`);
+  }
+}
+
+async function handleVoiceCommand(
+  session: ChatSession,
+  ctx: CLIContext,
+  voiceConfig: VoiceConfig | undefined,
+): Promise<void> {
+  if (!voiceConfig) {
+    try {
+      const { resolveVoiceConfig } = await import("../voice");
+      voiceConfig = resolveVoiceConfig();
+    } catch (err) {
+      p.log.error((err as Error).message);
+      return;
+    }
+  }
+
+  p.log.info(`${pc.cyan("Recording...")} Speak now (press Enter to stop, max 30s)`);
+
+  try {
+    const { voiceInput } = await import("../voice");
+    const text = await voiceInput(voiceConfig);
+
+    if (!text) {
+      p.log.warn("No speech detected.");
+      return;
+    }
+
+    p.log.info(`${pc.dim("Transcribed:")} ${text}`);
+
+    // Send the transcribed text as a message
+    await handleSendMessage(session, text, ctx);
+  } catch (err) {
+    p.log.error(`Voice input failed: ${formatError(err)}`);
+  }
+}
+
 function handleSessionsCommand(rootDir: string): void {
   const sessions = listChatSessions(rootDir);
   if (sessions.length === 0) {
@@ -504,6 +613,7 @@ const HELP_ENTRIES: Array<{ cmd: string; args?: string; desc: string }> = [
   { cmd: "/exit", desc: "Save session and exit chat" },
   { cmd: "/agent", args: "<name>", desc: "Pin routing to a specific agent (use 'auto' to unpin)" },
   { cmd: "/model", desc: "Switch LLM model (interactive picker)" },
+  { cmd: "/provider", args: "[name]", desc: "Switch LLM provider mid-session (preserves history)" },
   { cmd: "/sessions", desc: "List saved chat sessions" },
   { cmd: "/status", desc: "Show current session status bar" },
   { cmd: "/history", desc: "Show recent messages in this session" },
@@ -513,6 +623,7 @@ const HELP_ENTRIES: Array<{ cmd: string; args?: string; desc: string }> = [
   { cmd: "/apply", args: "[plan-id]", desc: "Execute a saved plan" },
   { cmd: "/scan", args: "[type]", desc: "Run security/dependency scanners" },
   { cmd: "/auto", args: "<prompt>", desc: "Run autonomous agent (iterative tool-use)" },
+  { cmd: "/voice", desc: "Push-to-talk voice input (requires whisper.cpp + sox)" },
 ];
 
 function handleHelpCommand(): void {
@@ -539,6 +650,8 @@ async function handleSlashCommand(
   session: ChatSession,
   rootDir: string,
   ctx: CLIContext,
+  docAugmenter?: DocAugmenter,
+  voiceConfig?: VoiceConfig,
 ): Promise<boolean> {
   if (trimmed === "/help") {
     handleHelpCommand();
@@ -566,6 +679,10 @@ async function handleSlashCommand(
     await handleModelCommand(ctx);
     return true;
   }
+  if (trimmed === "/provider" || trimmed.startsWith("/provider ")) {
+    await handleProviderCommand(trimmed, session, rootDir, ctx, docAugmenter);
+    return true;
+  }
   if (trimmed === "/sessions") {
     handleSessionsCommand(rootDir);
     return true;
@@ -588,6 +705,10 @@ async function handleSlashCommand(
   }
   if (trimmed.startsWith("/auto ")) {
     await handleAutoCommand(trimmed, rootDir, session, ctx);
+    return true;
+  }
+  if (trimmed === "/voice") {
+    await handleVoiceCommand(session, ctx, voiceConfig);
     return true;
   }
   return false;
@@ -625,11 +746,20 @@ async function processLoopInput(
   session: ChatSession,
   rootDir: string,
   ctx: CLIContext,
+  docAugmenter?: DocAugmenter,
+  voiceConfig?: VoiceConfig,
 ): Promise<void> {
   const trimmed = input.trim();
   if (!trimmed) return;
 
-  const handled = await handleSlashCommand(trimmed, session, rootDir, ctx);
+  const handled = await handleSlashCommand(
+    trimmed,
+    session,
+    rootDir,
+    ctx,
+    docAugmenter,
+    voiceConfig,
+  );
   if (!handled) {
     // Block unknown slash commands from being sent to the LLM
     if (trimmed.startsWith("/")) {
@@ -647,6 +777,8 @@ async function runInteractiveLoop(
   session: ChatSession,
   rootDir: string,
   ctx: CLIContext,
+  docAugmenter?: DocAugmenter,
+  voiceConfig?: VoiceConfig,
 ): Promise<void> {
   const saveAndExit = () => {
     saveChatSession(rootDir, session.getState());
@@ -677,7 +809,7 @@ async function runInteractiveLoop(
       break;
     }
 
-    await processLoopInput(input as string, session, rootDir, ctx);
+    await processLoopInput(input as string, session, rootDir, ctx, docAugmenter, voiceConfig);
   }
 
   process.off("SIGINT", saveAndExit);
@@ -774,6 +906,7 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   const sessionName = extractFlagValue(args, "--session");
   const resumeFlag = hasFlag(args, "--resume");
   const deterministic = hasFlag(args, "--deterministic");
+  const voiceFlag = hasFlag(args, "--voice");
   const agentFlag = ctx.globalOpts.agent ?? extractFlagValue(args, "--agent");
   const messageFlag = extractFlagValue(args, "--message") ?? extractFlagValue(args, "-m");
 
@@ -783,6 +916,14 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
       ExitCode.VALIDATION_ERROR,
       "No .dojops/ project found. Run `dojops init` first.",
     );
+  }
+
+  // Resolve voice config if --voice flag is set (fail early if deps missing)
+  let voiceConfig: VoiceConfig | undefined;
+  if (voiceFlag) {
+    const { resolveVoiceConfig } = await import("../voice");
+    voiceConfig = resolveVoiceConfig();
+    p.log.info(`${pc.cyan("Voice mode enabled")} — use /voice for push-to-talk`);
   }
 
   const provider = ctx.getProvider();
@@ -804,5 +945,5 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   showWelcome(session, ctx, contextInfo);
-  await runInteractiveLoop(session, rootDir, ctx);
+  await runInteractiveLoop(session, rootDir, ctx, docAugmenter, voiceConfig);
 }

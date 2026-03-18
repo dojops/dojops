@@ -122,13 +122,20 @@ function outputPlanResult(
 function parsePlanArgs(
   args: string[],
   ctx: CLIContext,
-): { prompt: string; executeMode: boolean; autoApprove: boolean; skipVerify: boolean } {
+): {
+  prompt: string;
+  executeMode: boolean;
+  autoApprove: boolean;
+  skipVerify: boolean;
+  useVoice: boolean;
+} {
   const executeMode = hasFlag(args, "--execute");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const skipVerify = hasFlag(args, "--skip-verify");
+  const useVoice = hasFlag(args, "--voice");
   const inlinePrompt = stripFlags(
     args,
-    new Set(["--execute", "--yes", "--skip-verify", "--force", "--allow-all-paths"]),
+    new Set(["--execute", "--yes", "--skip-verify", "--force", "--allow-all-paths", "--voice"]),
     new Set(["--timeout", "--repair-attempts"]),
   ).join(" ");
 
@@ -139,7 +146,7 @@ function parsePlanArgs(
     prompt = inlinePrompt ? `${inlinePrompt}\n\n${fileContent}` : fileContent;
   }
 
-  return { prompt, executeMode, autoApprove, skipVerify };
+  return { prompt, executeMode, autoApprove, skipVerify, useVoice };
 }
 
 /** Filter modules to a single module if --module flag is set. */
@@ -295,7 +302,27 @@ async function loadExecutionMemory(
 }
 
 export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
-  const { prompt, executeMode, autoApprove, skipVerify } = parsePlanArgs(args, ctx);
+  const {
+    prompt: textPrompt,
+    executeMode,
+    autoApprove,
+    skipVerify,
+    useVoice,
+  } = parsePlanArgs(args, ctx);
+
+  let prompt = textPrompt;
+
+  // Voice input: record + transcribe when --voice flag is set
+  if (useVoice && !prompt) {
+    const { resolveVoiceConfig, voiceInput } = await import("../voice");
+    const voiceConfig = resolveVoiceConfig();
+    p.log.info(`${pc.cyan("Recording...")} Speak your plan goal (press Enter to stop, max 30s)`);
+    const transcribed = await voiceInput(voiceConfig);
+    if (transcribed) {
+      p.log.info(`${pc.dim("Transcribed:")} ${transcribed}`);
+      prompt = transcribed;
+    }
+  }
 
   if (!prompt) {
     p.log.info(`  ${pc.dim("$")} dojops plan <prompt>`);

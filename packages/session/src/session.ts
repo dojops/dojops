@@ -32,10 +32,10 @@ export interface SendResult {
 
 export class ChatSession {
   private readonly state: ChatSessionState;
-  private readonly provider: LLMProvider;
-  private readonly router: AgentRouter;
+  private provider: LLMProvider;
+  private router: AgentRouter;
   private readonly memoryManager: MemoryManager;
-  private readonly summarizer: SessionSummarizer;
+  private summarizer: SessionSummarizer;
   private readonly projectDomains: string[];
   private readonly projectContext?: string;
 
@@ -301,6 +301,23 @@ export class ChatSession {
   }
 
   unpinAgent(): void {
+    this.state.pinnedAgent = undefined;
+  }
+
+  /**
+   * Swap the LLM provider mid-session — message history is preserved since it
+   * uses a provider-agnostic format. The summarizer is also replaced so future
+   * compaction uses the new provider.
+   */
+  setProvider(provider: LLMProvider): void {
+    this.provider = provider;
+    this.summarizer = new SessionSummarizer(provider);
+  }
+
+  /** Swap the agent router mid-session (needed when the underlying provider changes). */
+  setRouter(router: AgentRouter): void {
+    this.router = router;
+    // Unpin agent — old agent reference may not exist in new router
     this.state.pinnedAgent = undefined;
   }
 

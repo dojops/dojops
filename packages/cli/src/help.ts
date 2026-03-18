@@ -53,6 +53,7 @@ export function printHelp(): void {
   console.log(
     `  ${pc.cyan("memory")}             Manage persistent project notes (add/search/remove)`,
   );
+  console.log(`  ${pc.cyan("runs")}               Manage background agent runs (list/show/clean)`);
   console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
@@ -228,6 +229,9 @@ export function printCommandHelp(command: string): void {
         `  ${pc.cyan("--skip-verify")}   Skip external config validation ${pc.dim("(--execute only)")}`,
       );
       console.log(`  ${pc.cyan("-f, --file=PATH")} Read prompt from a file (.md, .txt)`);
+      console.log(
+        `  ${pc.cyan("--voice")}         Use voice input as prompt ${pc.dim("(requires whisper.cpp + sox)")}`,
+      );
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops plan "Set up CI/CD for a Node.js app"`);
       console.log(`  ${pc.dim("$")} dojops plan --execute "Deploy a Terraform stack"`);
@@ -235,6 +239,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops plan "Create CI" --output json`);
       console.log(`  ${pc.dim("$")} dojops plan -f detailed-requirements.md`);
       console.log(`  ${pc.dim("$")} dojops plan --execute --yes -f task.txt`);
+      console.log(`  ${pc.dim("$")} dojops plan --voice`);
       console.log();
       break;
 

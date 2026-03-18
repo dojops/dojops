@@ -106,6 +106,27 @@ CREATE INDEX IF NOT EXISTS idx_error_patterns_occurrences
   ON error_patterns(occurrences DESC);
 `;
 
+// ── Memory config ──────────────────────────────────────────────────
+
+/** Check if auto-enrichment is enabled for a project. Defaults to true. */
+export function loadMemoryConfig(rootDir: string): boolean {
+  try {
+    const configPath = path.join(rootDir, ".dojops", MEMORY_DIR, "config.json");
+    if (!fs.existsSync(configPath)) return true; // enabled by default
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return config.autoEnrich !== false;
+  } catch {
+    return true;
+  }
+}
+
+/** Save auto-enrichment config. */
+export function saveMemoryConfig(rootDir: string, autoEnrich: boolean): void {
+  const dir = memoryDir(rootDir);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify({ autoEnrich }, null, 2));
+}
+
 // ── Database lifecycle ─────────────────────────────────────────────
 
 const dbCache = new Map<string, Database.Database>();

@@ -8,25 +8,27 @@ Complete reference for the `dojops` command-line interface.
 
 ### Generation & Planning
 
-| Command                           | Description                                                 |
-| --------------------------------- | ----------------------------------------------------------- |
-| `dojops <prompt>`                 | Generate DevOps config (default command)                    |
-| `dojops generate <prompt>`        | Explicit generation (same as default)                       |
-| `dojops plan <prompt>`            | Decompose goal into dependency-aware task graph             |
-| `dojops plan --execute <prompt>`  | Plan + execute with approval workflow                       |
-| `dojops apply [<plan-id>]`        | Execute a saved plan                                        |
-| `dojops apply --skip-verify`      | Skip external config verification (on by default)           |
-| `dojops apply --allow-all-paths`  | Bypass DevOps file write allowlist                          |
-| `dojops apply --resume`           | Resume a partially-failed plan                              |
-| `dojops apply --replay`           | Deterministic replay: temp=0, validate env match            |
-| `dojops apply --dry-run`          | Preview changes without writing files                       |
-| `dojops apply --force`            | Skip git dirty check, HIGH risk gate, and replay validation |
-| `dojops apply --task <id>`        | Run only a single task from the plan                        |
-| `dojops apply --timeout <sec>`    | Per-task timeout in seconds (default: 60)                   |
-| `dojops apply --retry`            | Retry failed tasks when used with `--resume`                |
-| `dojops apply --install-packages` | Run package manager install after successful apply          |
-| `dojops validate [<plan-id>]`     | Validate plan against schemas                               |
-| `dojops explain [<plan-id>]`      | LLM explains a plan in plain language                       |
+| Command                           | Description                                                     |
+| --------------------------------- | --------------------------------------------------------------- |
+| `dojops <prompt>`                 | Generate DevOps config (default command)                        |
+| `dojops generate <prompt>`        | Explicit generation (same as default)                           |
+| `dojops plan <prompt>`            | Decompose goal into dependency-aware task graph                 |
+| `dojops plan --voice`             | Use voice input as the plan prompt (requires whisper.cpp + sox) |
+| `dojops plan --execute <prompt>`  | Plan + execute with approval workflow                           |
+| `dojops apply [<plan-id>]`        | Execute a saved plan                                            |
+| `dojops apply --skip-verify`      | Skip external config verification (on by default)               |
+| `dojops apply --allow-all-paths`  | Bypass DevOps file write allowlist                              |
+| `dojops apply --resume`           | Resume a partially-failed plan                                  |
+| `dojops apply --replay`           | Deterministic replay: temp=0, validate env match                |
+| `dojops apply --dry-run`          | Preview changes without writing files                           |
+| `dojops apply --force`            | Skip git dirty check, HIGH risk gate, and replay validation     |
+| `dojops apply --task <id>`        | Run only a single task from the plan                            |
+| `dojops apply --timeout <sec>`    | Per-task timeout in seconds (default: 60)                       |
+| `dojops apply --retry`            | Retry failed tasks when used with `--resume`                    |
+| `dojops apply --parallel <n>`     | Max concurrent tasks per wave (default: 3, semaphore pool)      |
+| `dojops apply --install-packages` | Run package manager install after successful apply              |
+| `dojops validate [<plan-id>]`     | Validate plan against schemas                                   |
+| `dojops explain [<plan-id>]`      | LLM explains a plan in plain language                           |
 
 ### Diagnostics & Analysis
 
@@ -54,13 +56,37 @@ Complete reference for the `dojops` command-line interface.
 
 ### Autonomous Agent
 
-| Command                          | Description                                                     |
-| -------------------------------- | --------------------------------------------------------------- |
-| `dojops auto <prompt>`           | Autonomous agent mode — iterative tool-use loop (ReAct pattern) |
-| `dojops auto --max-iterations=N` | Set max loop iterations (default: 20)                           |
-| `dojops auto --allow-all-paths`  | Bypass DevOps file write allowlist                              |
+| Command                             | Description                                                     |
+| ----------------------------------- | --------------------------------------------------------------- |
+| `dojops auto <prompt>`              | Autonomous agent mode — iterative tool-use loop (ReAct pattern) |
+| `dojops auto --max-iterations=N`    | Set max loop iterations (default: 50)                           |
+| `dojops auto --allow-all-paths`     | Bypass DevOps file write allowlist                              |
+| `dojops auto --voice`               | Use voice input as the task prompt (requires whisper.cpp + sox) |
+| `dojops auto --background <prompt>` | Run agent in background, return run ID immediately              |
 
 The autonomous agent reads files, makes targeted changes, runs commands, and verifies — all iteratively. It uses 7 tools: `read_file`, `write_file`, `edit_file`, `run_command`, `run_skill`, `search_files`, and `done`.
+
+Auto-memory is enabled by default — the agent injects context from previous sessions and records completed tasks. Toggle with `dojops memory auto on|off`.
+
+### Background Runs
+
+| Command                 | Description                                                 |
+| ----------------------- | ----------------------------------------------------------- |
+| `dojops runs list`      | List all background runs with status and duration           |
+| `dojops runs show <id>` | Show run details, result, and tail of output log            |
+| `dojops runs clean [N]` | Remove completed/failed runs older than N days (default: 7) |
+
+Background runs store output in `.dojops/runs/<id>/` (meta.json, output.log, result.json). Prefix matching is supported for run IDs.
+
+### MCP (Model Context Protocol)
+
+| Command             | Description                                                |
+| ------------------- | ---------------------------------------------------------- |
+| `dojops mcp list`   | List configured MCP servers, test connections, show tools  |
+| `dojops mcp add`    | Add an MCP server interactively (stdio or streamable-http) |
+| `dojops mcp remove` | Remove an MCP server by name                               |
+
+MCP servers extend the autonomous agent with external tools (databases, cloud APIs, GitHub, etc.). Configure in `.dojops/mcp.json` (project) or `~/.dojops/mcp.json` (global). Tools appear as `mcp__<server>__<tool>` in `dojops auto`.
 
 ### Interactive
 
@@ -71,12 +97,13 @@ The autonomous agent reads files, makes targeted changes, runs commands, and ver
 | `dojops chat --resume`             | Resume the most recent session                         |
 | `dojops chat --agent=NAME`         | Pin conversation to a specialist agent                 |
 | `dojops chat --message=TEXT`       | Send a single message and exit (scriptable, also `-m`) |
+| `dojops chat --voice`              | Enable voice input mode (requires whisper.cpp + sox)   |
 | `dojops chat export`               | Export all sessions as markdown                        |
 | `dojops chat export <id>`          | Export a specific session                              |
 | `dojops chat export --format=json` | Export as JSON instead of markdown                     |
 | `dojops chat export --output=FILE` | Write export to a file instead of stdout               |
 
-Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/auto <prompt>`, `/scan`, `/history`, `/clear`, `/save`.
+Chat supports slash commands: `/exit`, `/agent <name>`, `/model`, `/provider [name]`, `/voice`, `/plan <goal>`, `/apply`, `/auto <prompt>`, `/scan`, `/history`, `/clear`, `/save`.
 
 ### Agents & Skills
 
@@ -174,6 +201,8 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops memory add <text> --category=TYPE --keywords=k1,k2` | Add with category and keywords                              |
 | `dojops memory remove <id>`                                 | Remove a note by ID (alias: `rm`)                           |
 | `dojops memory search <query>`                              | Search notes by keyword                                     |
+| `dojops memory auto [on\|off]`                              | Toggle auto-memory enrichment for `dojops auto`             |
+| `dojops memory errors`                                      | List learned error patterns (frequency, resolution status)  |
 
 ### Scheduled Jobs
 
@@ -348,6 +377,49 @@ dojops auto "Add a health check endpoint to the Express API"
 dojops auto "Create CI for this Node app — read package.json first"
 dojops auto "Fix the failing Terraform validation" --max-iterations=30
 dojops auto "Refactor the Dockerfile to multi-stage build" --allow-all-paths
+
+# Voice input — speak the task instead of typing
+dojops auto --voice
+
+# Background mode — fire and forget
+dojops auto --background "Set up monitoring for all services"
+dojops runs list                  # check status
+dojops runs show abc12345         # view result + output log
+dojops runs clean                 # remove old completed runs
+```
+
+### MCP Servers
+
+```bash
+# List configured MCP servers and test connections
+dojops mcp list
+
+# Add an MCP server interactively
+dojops mcp add
+# Prompts for: name, transport (stdio/streamable-http), command/URL
+
+# Add MCP server config manually (.dojops/mcp.json)
+cat > .dojops/mcp.json << 'EOF'
+{
+  "mcpServers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    "github": {
+      "transport": "streamable-http",
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+EOF
+
+# Remove a server
+dojops mcp remove filesystem
+
+# Agent auto-discovers MCP tools
+dojops auto "Use the filesystem MCP server to list /tmp contents"
 ```
 
 ### Planning and Execution
@@ -355,6 +427,10 @@ dojops auto "Refactor the Dockerfile to multi-stage build" --allow-all-paths
 ```bash
 # Decompose a complex goal into tasks
 dojops plan "Set up CI/CD for a Node.js app with Docker and Kubernetes"
+
+# Voice input — speak the plan goal instead of typing
+dojops plan --voice
+dojops plan --voice --execute --yes   # speak + plan + execute
 
 # Plan and execute immediately
 dojops plan --execute --yes "Create CI pipeline for a Python project"
@@ -367,6 +443,7 @@ dojops apply --force            # skip git dirty working tree check
 dojops apply --allow-all-paths  # bypass DevOps file write allowlist
 dojops apply --resume --yes     # resume failed tasks, auto-approve
 dojops apply --resume --retry   # resume + retry failed tasks
+dojops apply --parallel 5        # 5 concurrent tasks per wave (semaphore)
 dojops apply --replay           # deterministic: temp=0, validate env match
 dojops apply --replay --yes     # force replay despite mismatches
 
@@ -463,6 +540,16 @@ dojops chat --resume
 # Single message (non-interactive, scriptable)
 dojops chat --message "What tools are missing in this project?"
 dojops chat -m "Explain the CI pipeline" --output json
+
+# Voice-enabled chat (requires whisper.cpp + sox)
+dojops chat --voice
+
+# In-session: switch provider mid-conversation
+# /provider anthropic
+# /provider ollama
+
+# In-session: push-to-talk voice input
+# /voice
 ```
 
 ### Toolchain Management
@@ -476,9 +563,138 @@ dojops toolchain install terraform
 dojops toolchain install kubectl
 dojops toolchain install hadolint
 
+# Install voice input engine (whisper.cpp + model)
+dojops toolchain install whisper-cpp
+
 # Cleanup
 dojops toolchain clean
 ```
+
+### Voice Input Setup
+
+Voice input uses [whisper.cpp](https://github.com/ggml-org/whisper.cpp) for local speech-to-text and [SoX](https://sox.sourceforge.net/) for audio recording. All processing happens locally — no audio data leaves your machine.
+
+#### Prerequisites
+
+Voice input requires two system dependencies:
+
+| Dependency      | Purpose                                    | Installed via                          |
+| --------------- | ------------------------------------------ | -------------------------------------- |
+| **whisper.cpp** | Speech-to-text engine (local AI model)     | `dojops toolchain install whisper-cpp` |
+| **SoX**         | Audio recording (`rec` command)            | System package manager                 |
+| **cmake**       | Build tool (needed to compile whisper.cpp) | System package manager                 |
+| **C compiler**  | Build tool (gcc or clang)                  | System package manager                 |
+
+#### Step 1: Install build tools and SoX
+
+**macOS:**
+
+```bash
+xcode-select --install      # C compiler
+brew install cmake sox
+```
+
+**Linux / WSL (Debian/Ubuntu):**
+
+```bash
+sudo apt update
+sudo apt install build-essential cmake git sox libsox-fmt-all
+```
+
+**Linux (Fedora/RHEL):**
+
+```bash
+sudo dnf install gcc gcc-c++ cmake git sox sox-plugins-freeworld
+```
+
+**Linux (Arch):**
+
+```bash
+sudo pacman -S base-devel cmake git sox
+```
+
+**Windows:**
+SoX can be installed from [the SoX SourceForge page](https://sox.sourceforge.net/). Voice input on Windows is experimental.
+
+#### Step 2: Install whisper.cpp
+
+This builds whisper.cpp from source using cmake and downloads the default model (~142 MB). The binary and all shared libraries are installed into `~/.dojops/toolchain/`, and the model is stored at `~/.dojops/voice/ggml-base.en.bin`.
+
+```bash
+dojops toolchain install whisper-cpp
+```
+
+> **Note:** whisper-cpp always installs globally (shared model file). No scope prompt is shown.
+
+#### Step 3: Verify
+
+```bash
+dojops doctor          # Shows voice dependency status under "Voice" section
+```
+
+You should see:
+
+```
+  Voice: whisper.cpp   pass   Found (~/.dojops/toolchain/bin/whisper-cli)
+  Voice: SoX (rec)     pass   Found (/usr/bin/rec)
+  Voice: whisper model  pass   Found (~/.dojops/voice/ggml-base.en.bin)
+```
+
+#### Using voice input
+
+Voice input is available in three modes:
+
+**1. Chat mode — `/voice` slash command:**
+
+```bash
+dojops chat
+# Then type: /voice
+# Recording starts — press Enter to stop
+# Transcribed text is sent as a chat message
+```
+
+**2. Chat mode — `--voice` flag (pre-validates dependencies):**
+
+```bash
+dojops chat --voice
+# Then type: /voice anytime during the session
+```
+
+**3. Plan command — `--voice` flag (voice as prompt):**
+
+```bash
+dojops plan --voice
+# Recording starts — press Enter to stop
+# Transcribed text becomes the plan prompt
+
+# Combine with --execute to plan + execute in one step:
+dojops plan --voice --execute
+dojops plan --voice --execute --yes
+```
+
+**4. Autonomous agent — `--voice` flag (voice as task):**
+
+```bash
+dojops auto --voice
+# Recording starts — press Enter to stop
+# Transcribed text becomes the autonomous agent task
+```
+
+#### How recording works
+
+- When recording starts, you'll see: `Recording... Speak now (press Enter to stop, max 30s)`
+- **Press Enter** (or Space) to stop recording — the audio is sent for transcription
+- **Ctrl+C** also stops recording without exiting the session
+- Maximum recording duration is 30 seconds
+- Audio is recorded at 16kHz mono WAV (what whisper.cpp expects)
+- Temporary audio files are cleaned up automatically after transcription
+
+#### Environment variables (optional — most users don't need these)
+
+DojOps auto-detects whisper.cpp from the toolchain and system PATH. These variables are only needed if your binary or model is in a non-standard location (e.g. custom builds, CI environments):
+
+- `DOJOPS_WHISPER_BIN` — Override the whisper binary path (normally auto-detected from `~/.dojops/toolchain/bin/` and PATH)
+- `DOJOPS_WHISPER_MODEL` — Override the model file path (normally auto-detected from `~/.dojops/voice/ggml-base.en.bin`)
 
 ### Custom Skill Management
 
@@ -639,6 +855,11 @@ dojops memory list
 dojops memory list --category=convention
 dojops memory search terraform
 dojops memory remove 3
+
+# Auto-memory (enriches dojops auto with session context)
+dojops memory auto               # check status (on/off)
+dojops memory auto off           # disable auto-enrichment
+dojops memory errors             # list learned error patterns
 ```
 
 ### Scheduled Jobs

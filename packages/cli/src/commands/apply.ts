@@ -65,6 +65,7 @@ interface ApplyFlags {
   singleTaskId: string | undefined;
   planId: string | undefined;
   maxRepairAttempts: number;
+  maxConcurrency: number | undefined;
 }
 
 interface TaskResultEntry {
@@ -107,8 +108,16 @@ function parseApplyFlags(args: string[], ctx: CLIContext): ApplyFlags {
       `Invalid --repair-attempts value: "${repairAttemptsArg}". Must be a non-negative integer.`,
     );
   }
+  const parallelArg = extractFlagValue(args, "--parallel");
+  const maxConcurrency = parallelArg ? Number.parseInt(parallelArg, 10) : undefined;
+  if (parallelArg && (!Number.isFinite(maxConcurrency!) || maxConcurrency! < 1)) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Invalid --parallel value: "${parallelArg}". Must be a positive integer.`,
+    );
+  }
   const planId = args.find(
-    (a) => !a.startsWith("-") && a !== singleTaskId && a !== repairAttemptsArg,
+    (a) => !a.startsWith("-") && a !== singleTaskId && a !== repairAttemptsArg && a !== parallelArg,
   );
 
   return {
@@ -126,6 +135,7 @@ function parseApplyFlags(args: string[], ctx: CLIContext): ApplyFlags {
     singleTaskId,
     planId,
     maxRepairAttempts,
+    maxConcurrency,
   };
 }
 
@@ -1184,7 +1194,10 @@ async function executeApplyPlan(
     flags.jsonOutput,
     flags.timeoutMs,
   );
-  const planResult = await executor.execute(graph, { completedTaskIds });
+  const planResult = await executor.execute(graph, {
+    completedTaskIds,
+    maxConcurrency: flags.maxConcurrency,
+  });
   progress?.done();
 
   const applyCtx: ApplyContext = {

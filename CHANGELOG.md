@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.1.3] - 2026-03-18
+
+### Added
+
+- **Parallel task execution (semaphore pool)**: Replaced fixed-size chunk batching in `PlannerExecutor` with a semaphore-based concurrency pool. New tasks start the instant any slot frees up instead of waiting for an entire batch to complete. Add `--parallel <n>` flag to `dojops apply` to control concurrency (default: 3)
+- **Background agent delegation**: `dojops auto --background <prompt>` spawns a detached agent process and returns immediately with a run ID. Results stored in `.dojops/runs/<id>/`. New `dojops runs list|show|clean` commands to manage background runs. API supports `background: true` in `POST /api/auto` (returns HTTP 202) with `GET /api/auto/runs/:id` for status polling
+- **Auto-enriched persistent memory**: `dojops auto` now automatically injects memory context from previous sessions into the agent's system prompt and records completed tasks to the memory database. Enables continuation detection (recognizes follow-up tasks) and error pattern awareness. Toggle with `dojops memory auto on|off` (enabled by default). New `dojops memory errors` command lists learned error patterns
+- **Seamless multi-provider in-session switching**: New `/provider [name]` slash command in interactive chat swaps the LLM provider mid-session while preserving full message history. Interactive picker when no name given. `ChatSession.setProvider()` and `setRouter()` enable programmatic switching. Message format is already provider-agnostic — no normalization needed
+- **Voice input via whisper.cpp**: Local speech-to-text using whisper.cpp (no API calls, fully offline). `/voice` push-to-talk command in interactive chat records audio via SoX, transcribes locally, and sends as a message. `--voice` flag on `dojops plan` and `dojops auto` enables speaking prompts instead of typing. Installable via `dojops toolchain install whisper-cpp` (cmake-based build with proper shared library handling). Recording uses Enter/Space to stop instead of Ctrl+C — SIGINT is intercepted during recording to avoid killing the chat session. whisper-cpp is forced to global scope (shared 142MB model). `dojops doctor` shows voice dependency status
+
+- **MCP (Model Context Protocol) support**: New `@dojops/mcp` package enabling the autonomous agent to call tools from external MCP servers (databases, cloud APIs, GitHub, etc.). Supports both `stdio` (local subprocess) and `streamable-http` (remote endpoint) transports. MCP is a Linux Foundation standard.
+- **MCP config system**: Project-level (`.dojops/mcp.json`) and global (`~/.dojops/mcp.json`) MCP server configuration with Zod validation and automatic merging (project overrides global by server name)
+- **MCP CLI commands**: `dojops mcp list` (show servers and connection status), `dojops mcp add` (interactive server setup), `dojops mcp remove` (remove a server)
+- **MCP tool namespacing**: External tools appear as `mcp__<server>__<tool>` in the agent loop, matching the Claude Code convention. The `ToolExecutor` dispatch chain: built-in tools → skill resolution → MCP dispatcher → unknown tool error
+- **MCP agent loop integration**: `dojops auto` dynamically loads MCP config, connects servers at start, merges MCP tools with built-in tools, and disconnects in a `finally` block. MCP is optional — failures are non-fatal
+- **Streaming output for Anthropic provider**: `generateStream()` using `client.messages.stream()` — tokens appear progressively instead of blocking behind a spinner. Falls back to non-streaming for structured output (schema requests)
+- **Streaming output for GitHub Copilot provider**: `generateStream()` delegating to shared `openaiCompatGenerateStream()` — all 4 OpenAI-compatible providers (OpenAI, DeepSeek, Copilot, Ollama) now support streaming
+- **Streaming in generation commands**: `dojops "prompt"` now streams tokens to the terminal in real-time when the provider supports it (instead of showing a spinner for 10-30s). Streaming is skipped for structured output (skills) and file-writing modes
+- **Shared stream renderer utility**: `createStreamRenderer()` in `@dojops/cli` encapsulates ANSI line overwriting for reusable streaming UX across commands
+
 ## [1.1.2] - 2026-03-17
 
 ### Added

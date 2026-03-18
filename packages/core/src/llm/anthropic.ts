@@ -1,5 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { LLMProvider, LLMRequest, LLMResponse, LLMUsage, getRequestTimeoutMs } from "./provider";
+import {
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  LLMUsage,
+  StreamCallback,
+  getRequestTimeoutMs,
+} from "./provider";
 import type { AgentMessage, LLMToolRequest, LLMToolResponse, ToolCall } from "./tool-types";
 import { buildLLMResponse, extractApiError } from "./openai-compat";
 import { augmentSystemPrompt } from "./schema-prompt";
@@ -91,6 +98,37 @@ export class AnthropicProvider implements LLMProvider {
     }
 
     return buildLLMResponse(content, this.extractUsage(message), req);
+  }
+
+  async generateStream(req: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> {
+    // Structured output cannot stream reliably — fall back to non-streaming
+    if (req.schema) {
+      return this.generate(req);
+    }
+
+    const system = req.system || undefined;
+    const messages = this.buildMessages(req);
+
+    let stream: ReturnType<typeof this.client.messages.stream>;
+    try {
+      stream = this.client.messages.stream(this.buildCreateParams(system, messages, req));
+    } catch (err: unknown) {
+      throw new Error(extractApiError(err), { cause: err });
+    }
+
+    const chunks: string[] = [];
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        chunks.push(event.delta.text);
+        onChunk(event.delta.text);
+      }
+    }
+
+    const finalMessage = await stream.finalMessage();
+    const content = chunks.join("");
+    const usage = this.extractUsage(finalMessage);
+
+    return { content, usage };
   }
 
   async generateWithTools(req: LLMToolRequest): Promise<LLMToolResponse> {

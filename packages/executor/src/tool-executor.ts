@@ -3,8 +3,16 @@ import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { ExecutionPolicy } from "./types";
 import { checkWriteAllowed, checkFileSize } from "./policy";
-import type { ToolCall, ToolResult } from "@dojops/core";
+import type { ToolCall, ToolResult, ToolDefinition } from "@dojops/core";
 import type { DevOpsSkill } from "@dojops/sdk";
+
+/** Interface for an MCP tool dispatcher that can handle mcp__-prefixed tool calls. */
+export interface McpToolDispatcher {
+  isConnected(): boolean;
+  canHandle(toolName: string): boolean;
+  getToolDefinitions(): ToolDefinition[];
+  execute(call: ToolCall): Promise<ToolResult>;
+}
 
 /** Maximum tool output size before truncation (32KB). */
 const MAX_OUTPUT_BYTES = 32_768;
@@ -13,6 +21,7 @@ export interface ToolExecutorOptions {
   policy: ExecutionPolicy;
   cwd: string;
   skills?: Map<string, DevOpsSkill>;
+  mcpDispatcher?: McpToolDispatcher;
   onToolStart?: (call: ToolCall) => void;
   onToolEnd?: (call: ToolCall, result: ToolResult) => void;
 }
@@ -181,6 +190,8 @@ export class ToolExecutor {
                 input: call.arguments,
               },
             });
+          } else if (this.opts.mcpDispatcher?.canHandle(call.name)) {
+            result = await this.opts.mcpDispatcher.execute(call);
           } else {
             result = { callId: call.id, output: `Unknown tool: ${call.name}`, isError: true };
           }

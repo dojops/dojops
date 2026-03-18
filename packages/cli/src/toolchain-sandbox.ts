@@ -270,6 +270,9 @@ export async function installSystemTool(
   if (tool.archiveType === "pipx") {
     return installAnsible(tool, ctx);
   }
+  if (tool.archiveType === "source") {
+    return installFromSource(tool, version, ctx);
+  }
 
   const tc = ctx ?? globalToolchainCtx();
   const ver = version ?? tool.latestVersion;
@@ -615,6 +618,196 @@ function registerAnsible(
   saveToolchainRegistry(registry, ctx);
 
   return installed;
+}
+
+/**
+ * Install a tool that requires building from source.
+ * Dispatches to tool-specific handlers (like pipx → installAnsible).
+ */
+async function installFromSource(
+  tool: SystemTool,
+  version?: string,
+  ctx?: ToolchainContext,
+): Promise<InstalledTool> {
+  if (tool.name === "whisper-cpp") {
+    return installWhisperCpp(tool, version, ctx);
+  }
+  throw new Error(`No source install handler for ${tool.name}`);
+}
+
+/** URL template for whisper.cpp model downloads from Hugging Face. */
+const WHISPER_MODEL_URL =
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
+
+/**
+ * Install whisper.cpp by cloning the repo and building from source.
+ *
+ * Uses cmake with --prefix to install ALL binaries and shared libraries
+ * (libwhisper, libggml, libggml-base, libggml-cpu, etc.) into the
+ * toolchain directory. A wrapper script sets LD_LIBRARY_PATH so the
+ * linker finds everything without system-level install.
+ *
+ * Steps:
+ * 1. Validate build prerequisites (git, cmake, cc)
+ * 2. Clone a shallow copy of the release tag
+ * 3. Build + install via cmake (--prefix targets toolchain dir)
+ * 4. Create wrapper script for LD_LIBRARY_PATH
+ * 5. Download the default model to ~/.dojops/voice/
+ */
+async function installWhisperCpp(
+  tool: SystemTool,
+  version?: string,
+  ctx?: ToolchainContext,
+): Promise<InstalledTool> {
+  const tc = ctx ?? globalToolchainCtx();
+  const ver = version ?? tool.latestVersion;
+  ensureToolchainDir(ctx);
+
+  // Check build prerequisites
+  const missing: string[] = [];
+  if (!commandExists("git")) missing.push("git");
+  if (!commandExists("cmake")) missing.push("cmake");
+  if (!commandExists("make") && !commandExists("ninja")) missing.push("make or ninja");
+  if (!commandExists("cc") && !commandExists("gcc") && !commandExists("clang")) {
+    missing.push("cc/gcc/clang (C compiler)");
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Cannot build whisper.cpp — missing: ${missing.join(", ")}.\n` +
+        "Install build tools:\n" +
+        "  macOS: xcode-select --install && brew install cmake\n" +
+        "  Linux: sudo apt install build-essential cmake git",
+    );
+  }
+
+  // Clone to temp directory
+  const buildDir = path.join(os.tmpdir(), `dojops-whisper-build-${Date.now()}`);
+  try {
+    runBin(
+      "git",
+      [
+        "clone",
+        "--depth",
+        "1",
+        "--branch",
+        `v${ver}`,
+        "https://github.com/ggerganov/whisper.cpp.git",
+        buildDir,
+      ],
+      { timeout: 120_000, stdio: "pipe" },
+    );
+
+    // Configure with cmake — install prefix targets the toolchain directory
+    const cpuCount = Math.max(1, os.cpus().length);
+    runBin(
+      "cmake",
+      ["-B", "build", "-DCMAKE_BUILD_TYPE=Release", `-DCMAKE_INSTALL_PREFIX=${tc.dir}`],
+      {
+        timeout: 60_000,
+        stdio: "pipe",
+        cwd: buildDir,
+      },
+    );
+
+    // Build
+    runBin("cmake", ["--build", "build", "--config", "Release", "-j", String(cpuCount)], {
+      timeout: 300_000,
+      stdio: "pipe",
+      cwd: buildDir,
+    });
+
+    // Install — cmake copies binaries to bin/, libraries to lib/
+    runBin("cmake", ["--install", "build"], {
+      timeout: 60_000,
+      stdio: "pipe",
+      cwd: buildDir,
+    });
+
+    // cmake --install puts binary at <prefix>/bin/whisper-cli
+    // and all shared libs at <prefix>/lib/
+    const installedBin = path.join(tc.binDir, "whisper-cli");
+    if (!fs.existsSync(installedBin)) {
+      // Fallback: check for 'main' binary name (older versions)
+      const mainBin = path.join(tc.binDir, "main");
+      if (fs.existsSync(mainBin)) {
+        fs.renameSync(mainBin, installedBin);
+      } else {
+        throw new Error("cmake install completed but whisper-cli binary not found in " + tc.binDir);
+      }
+    }
+
+    // Rename the real binary and create a wrapper that sets library path
+    const libDir = path.join(tc.dir, "lib");
+    const actualBin = path.join(tc.binDir, "whisper-cli.bin");
+    fs.renameSync(installedBin, actualBin);
+    chmodExecutable(actualBin);
+
+    const isLinux = process.platform === "linux";
+    const ldVar = isLinux ? "LD_LIBRARY_PATH" : "DYLD_LIBRARY_PATH";
+    const wrapper = [
+      "#!/bin/sh",
+      `export ${ldVar}="${libDir}\${${ldVar}:+:$${ldVar}}"`,
+      `exec "${actualBin}" "$@"`,
+      "",
+    ].join("\n");
+    fs.writeFileSync(installedBin, wrapper, { mode: 0o755 });
+
+    // Register in toolchain
+    const stat = fs.statSync(installedBin);
+    const installed: InstalledTool = {
+      name: tool.name,
+      version: ver,
+      installedAt: new Date().toISOString(),
+      size: stat.size,
+      binaryPath: installedBin,
+    };
+
+    const registry = loadToolchainRegistry(ctx);
+    registry.tools = registry.tools.filter((t) => t.name !== tool.name);
+    registry.tools.push(installed);
+    saveToolchainRegistry(registry, ctx);
+
+    // Download default model (non-fatal but warn on failure)
+    try {
+      await downloadWhisperModel();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `Warning: whisper model download failed: ${msg}\n` +
+          `Download manually: curl -L -o ~/.dojops/voice/ggml-base.en.bin ${WHISPER_MODEL_URL}`,
+      );
+    }
+
+    return installed;
+  } finally {
+    try {
+      fs.rmSync(buildDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Download the default whisper.cpp model (ggml-base.en.bin) to ~/.dojops/voice/.
+ * Always uses the global location — models are large (~142MB) and shared across projects.
+ * Skips if model already exists.
+ */
+async function downloadWhisperModel(): Promise<void> {
+  const voiceDir = path.join(os.homedir(), ".dojops", "voice");
+  const modelPath = path.join(voiceDir, "ggml-base.en.bin");
+
+  if (fs.existsSync(modelPath)) return; // Already downloaded
+
+  fs.mkdirSync(voiceDir, { recursive: true });
+
+  const tmpFile = await downloadToTemp(WHISPER_MODEL_URL);
+  fs.copyFileSync(tmpFile, modelPath);
+  try {
+    fs.unlinkSync(tmpFile);
+  } catch {
+    /* ignore */
+  }
 }
 
 /**

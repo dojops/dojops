@@ -1,8 +1,15 @@
 import OpenAI from "openai";
-import { LLMProvider, LLMRequest, LLMResponse, getRequestTimeoutMs } from "./provider";
+import {
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  StreamCallback,
+  getRequestTimeoutMs,
+} from "./provider";
 import { getValidCopilotToken } from "./copilot-auth";
 import {
   openaiCompatGenerate,
+  openaiCompatGenerateStream,
   openaiCompatGenerateWithTools,
   openaiCompatListModels,
 } from "./openai-compat";
@@ -47,6 +54,11 @@ export class GitHubCopilotProvider implements LLMProvider {
   async generate(req: LLMRequest): Promise<LLMResponse> {
     const client = await this.getClient();
     return openaiCompatGenerate(client, this.model, "GitHub Copilot", req);
+  }
+
+  async generateStream(req: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> {
+    const client = await this.getClient();
+    return openaiCompatGenerateStream(client, this.model, "GitHub Copilot", req, onChunk);
   }
 
   async generateWithTools(req: LLMToolRequest): Promise<LLMToolResponse> {

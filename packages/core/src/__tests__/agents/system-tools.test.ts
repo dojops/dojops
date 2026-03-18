@@ -191,8 +191,8 @@ describe("system-tools", () => {
   });
 
   describe("SYSTEM_TOOLS registry", () => {
-    it("contains 12 tool definitions", () => {
-      expect(SYSTEM_TOOLS).toHaveLength(12);
+    it("contains 13 tool definitions", () => {
+      expect(SYSTEM_TOOLS).toHaveLength(13);
     });
 
     it("all tools have required fields", () => {

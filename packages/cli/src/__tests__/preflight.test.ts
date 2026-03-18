@@ -203,6 +203,7 @@ describe("SYSTEM_TOOL_DOMAINS", () => {
       "application-security",
       "shell-scripting",
       "python-scripting",
+      "voice-input",
     ]);
 
     for (const [, domains] of Object.entries(SYSTEM_TOOL_DOMAINS)) {

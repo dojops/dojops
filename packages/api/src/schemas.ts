@@ -97,6 +97,7 @@ export const AutoRequestSchema = z.object({
   maxIterations: z.number().min(1).max(50).optional().default(20),
   allowAllPaths: z.boolean().optional().default(false),
   cwd: z.string().optional(),
+  background: z.boolean().optional().default(false),
 });
 
 export type AutoRequest = z.infer<typeof AutoRequestSchema>;

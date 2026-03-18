@@ -1,16 +1,29 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { AGENT_TOOLS } from "@dojops/core";
-import type { ToolCall } from "@dojops/core";
+import type { ToolCall, ToolDefinition } from "@dojops/core";
 import { ToolExecutor } from "@dojops/executor";
+import type { McpToolDispatcher as McpToolDispatcherType } from "@dojops/executor";
 import { AgentLoop } from "@dojops/session";
 import { createTools } from "@dojops/api";
 import { CLIContext } from "../types";
-import { stripFlags, extractFlagValue } from "../parser";
+import { stripFlags, extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import { readPromptFile } from "../stdin";
 import { findProjectRoot } from "../state";
+import {
+  writeRunMeta,
+  updateRunStatus,
+  writeRunResult,
+  outputLogPath,
+  runDir,
+  RunMeta,
+} from "../runs";
+import { queryMemory, buildMemoryContextString, recordTask, loadMemoryConfig } from "../memory";
+import type { TaskType } from "../memory";
 
 /**
  * Strip JSON wrapper from text for human-readable display.
@@ -177,10 +190,23 @@ Use these for validation (e.g. terraform validate, helm lint, kubectl --dry-run)
  * Usage: dojops auto "Create CI for Node app"
  */
 export async function autoCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const isBackground = hasFlag(args, "--background");
+  const isBackgroundChild = hasFlag(args, "--_background-child");
+  const backgroundRunId = extractFlagValue(args, "--run-id");
+
+  const useVoice = hasFlag(args, "--voice");
   const inlinePrompt = stripFlags(
     args,
-    new Set(["--skip-verify", "--force", "--allow-all-paths", "--commit"]),
-    new Set(["--timeout", "--repair-attempts", "--max-iterations"]),
+    new Set([
+      "--skip-verify",
+      "--force",
+      "--allow-all-paths",
+      "--commit",
+      "--background",
+      "--_background-child",
+      "--voice",
+    ]),
+    new Set(["--timeout", "--repair-attempts", "--max-iterations", "--run-id"]),
   ).join(" ");
 
   // Build prompt: file content + inline args (same pattern as plan command)
@@ -190,10 +216,62 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     prompt = inlinePrompt ? `${inlinePrompt}\n\n${fileContent}` : fileContent;
   }
 
+  // Voice input: record + transcribe when --voice flag is set and no text prompt
+  if (useVoice && !prompt) {
+    const { resolveVoiceConfig, voiceInput } = await import("../voice");
+    const voiceConfig = resolveVoiceConfig();
+    p.log.info(`${pc.cyan("Recording...")} Speak your task (press Enter to stop, max 30s)`);
+    const transcribed = await voiceInput(voiceConfig);
+    if (transcribed) {
+      p.log.info(`${pc.dim("Transcribed:")} ${transcribed}`);
+      prompt = transcribed;
+    }
+  }
+
   if (!prompt) {
     p.log.info(`  ${pc.dim("$")} dojops auto <prompt>`);
     p.log.info(`  ${pc.dim("$")} dojops auto -f prompt.md`);
+    p.log.info(`  ${pc.dim("$")} dojops auto --background <prompt>`);
+    p.log.info(`  ${pc.dim("$")} dojops auto --voice`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
+  }
+
+  // ── Background spawning ──────────────────────────────────────────
+  if (isBackground) {
+    const rootDir = findProjectRoot(ctx.cwd) ?? ctx.cwd;
+    const runId = randomUUID();
+    const dir = runDir(rootDir, runId);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const meta: RunMeta = {
+      id: runId,
+      prompt,
+      status: "running",
+      pid: 0,
+      startedAt: new Date().toISOString(),
+    };
+
+    const logStream = fs.openSync(outputLogPath(rootDir, runId), "w");
+
+    // Re-build argv: replace --background with --_background-child + --run-id
+    const childArgs = process.argv.slice(1).filter((a) => a !== "--background");
+    childArgs.push("--_background-child", `--run-id=${runId}`);
+
+    const child = spawn(process.execPath, childArgs, {
+      detached: true,
+      stdio: ["ignore", logStream, logStream],
+      cwd: ctx.cwd,
+      env: process.env,
+    });
+
+    meta.pid = child.pid ?? 0;
+    writeRunMeta(rootDir, meta);
+    child.unref();
+    fs.closeSync(logStream);
+
+    p.log.success(`Background run started: ${pc.cyan(runId)}`);
+    p.log.info(pc.dim(`Check progress: dojops runs show ${runId.slice(0, 8)}`));
+    return;
   }
 
   const maxIterations = Number.parseInt(extractFlagValue(args, "--max-iterations") ?? "50", 10);
@@ -219,6 +297,33 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     // Skills loading is optional — agent can still read/write/run commands
   }
 
+  // Load MCP tools (optional — external tool servers)
+  let mcpDispatcher: McpToolDispatcherType | undefined;
+  let mcpDisconnect: (() => Promise<void>) | undefined;
+  let mcpTools: ToolDefinition[] = [];
+  try {
+    const { loadMcpConfig, McpClientManager, McpToolDispatcher } = await import("@dojops/mcp");
+    const mcpConfig = loadMcpConfig(rootDir ?? cwd);
+    if (Object.keys(mcpConfig.mcpServers).length > 0) {
+      const mcpManager = new McpClientManager();
+      await mcpManager.connectAll(mcpConfig);
+      const connected = mcpManager.getConnectedServers();
+      if (connected.length > 0) {
+        const dispatcher = new McpToolDispatcher(mcpManager);
+        mcpDispatcher = dispatcher;
+        mcpTools = dispatcher.getToolDefinitions();
+        mcpDisconnect = () => mcpManager.disconnectAll();
+        p.log.info(
+          pc.dim(
+            `Connected ${connected.length} MCP server${connected.length > 1 ? "s" : ""} (${mcpTools.length} tools)`,
+          ),
+        );
+      }
+    }
+  } catch {
+    // MCP is optional — @dojops/mcp may not be installed or config may not exist
+  }
+
   const toolExecutor = new ToolExecutor({
     policy: {
       allowWrite: true,
@@ -238,6 +343,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     },
     cwd,
     skills: skillsMap,
+    mcpDispatcher,
     onToolStart: (call) => {
       p.log.step(`${pc.cyan(call.name)} ${summarizeArgs(call)}`);
     },
@@ -252,11 +358,30 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
   const availableBinaries = discoverAvailableBinaries();
   const skillNames = [...skillsMap.keys()];
 
+  const allTools = [...AGENT_TOOLS, ...mcpTools];
+
+  // ── Auto-memory: inject context from previous sessions ───────────
+  let systemPrompt = buildAutoSystemPrompt(cwd, skillNames, availableBinaries);
+  const effectiveRootDir = rootDir ?? cwd;
+  const memoryEnabled = loadMemoryConfig(effectiveRootDir);
+
+  if (memoryEnabled) {
+    try {
+      const memCtx = queryMemory(effectiveRootDir, "generate" as TaskType, prompt);
+      const contextStr = buildMemoryContextString(memCtx);
+      if (contextStr) {
+        systemPrompt += `\n\n## Memory Context (from previous sessions)\n${contextStr}`;
+      }
+    } catch {
+      // Memory is non-critical — continue without it
+    }
+  }
+
   const loop = new AgentLoop({
     provider,
     toolExecutor,
-    tools: AGENT_TOOLS,
-    systemPrompt: buildAutoSystemPrompt(cwd, skillNames, availableBinaries),
+    tools: allTools,
+    systemPrompt,
     maxIterations,
     onThinking: (text) => {
       if (text) {
@@ -271,36 +396,90 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     },
   });
 
-  const s = p.spinner();
-  s.start("Agent working...");
+  const startTime = Date.now();
+
+  // Background child: suppress interactive output
+  const isInteractive = !isBackgroundChild;
+  const s = isInteractive ? p.spinner() : null;
+  s?.start("Agent working...");
 
   try {
     const result = await loop.run(prompt);
-    s.stop(result.success ? pc.green("Done") : pc.yellow("Stopped"));
+    s?.stop(result.success ? pc.green("Done") : pc.yellow("Stopped"));
 
     // Display summary — strip any JSON wrapper that leaked through from LLM output
     const summary = cleanDisplayText(result.summary);
-    console.log();
-    p.log.message(summary);
+    if (isInteractive) {
+      console.log();
+      p.log.message(summary);
 
-    // Display file changes (relative to cwd for readability)
-    const rel = (f: string) => (f.startsWith(cwd) ? f.slice(cwd.length + 1) : f);
-    if (result.filesWritten.length > 0) {
-      p.log.success(`Created: ${result.filesWritten.map((f) => pc.green(rel(f))).join(", ")}`);
-    }
-    if (result.filesModified.length > 0) {
-      p.log.success(`Modified: ${result.filesModified.map((f) => pc.yellow(rel(f))).join(", ")}`);
+      // Display file changes (relative to cwd for readability)
+      const rel = (f: string) => (f.startsWith(cwd) ? f.slice(cwd.length + 1) : f);
+      if (result.filesWritten.length > 0) {
+        p.log.success(`Created: ${result.filesWritten.map((f) => pc.green(rel(f))).join(", ")}`);
+      }
+      if (result.filesModified.length > 0) {
+        p.log.success(`Modified: ${result.filesModified.map((f) => pc.yellow(rel(f))).join(", ")}`);
+      }
+
+      // Display stats
+      p.log.info(
+        pc.dim(
+          `${result.iterations} iterations · ${result.toolCalls.length} tool calls · ${result.totalTokens.toLocaleString()} tokens`,
+        ),
+      );
     }
 
-    // Display stats
-    p.log.info(
-      pc.dim(
-        `${result.iterations} iterations · ${result.toolCalls.length} tool calls · ${result.totalTokens.toLocaleString()} tokens`,
-      ),
-    );
+    // ── Auto-memory: record completed task ───────────────────────────
+    if (memoryEnabled) {
+      try {
+        recordTask(effectiveRootDir, {
+          timestamp: new Date().toISOString(),
+          task_type: "generate" as TaskType,
+          prompt,
+          result_summary: summary.slice(0, 500),
+          status: result.success ? "success" : "failure",
+          duration_ms: Date.now() - startTime,
+          related_files: JSON.stringify([...result.filesWritten, ...result.filesModified]),
+          agent_or_skill: "auto",
+          metadata: JSON.stringify({
+            iterations: result.iterations,
+            toolCalls: result.toolCalls.length,
+            totalTokens: result.totalTokens,
+          }),
+        });
+      } catch {
+        // Memory is non-critical
+      }
+    }
+
+    // ── Background child: write result and update meta ──────────────
+    if (isBackgroundChild && backgroundRunId) {
+      writeRunResult(effectiveRootDir, backgroundRunId, {
+        success: result.success,
+        summary,
+        iterations: result.iterations,
+        toolCalls: result.toolCalls.length,
+        totalTokens: result.totalTokens,
+        filesWritten: result.filesWritten,
+        filesModified: result.filesModified,
+      });
+      updateRunStatus(effectiveRootDir, backgroundRunId, result.success ? "completed" : "failed");
+    }
   } catch (err) {
-    s.stop("Error");
+    s?.stop("Error");
+
+    // Background child: mark run as failed
+    if (isBackgroundChild && backgroundRunId) {
+      updateRunStatus(effectiveRootDir, backgroundRunId, "failed");
+    }
+
     const message = err instanceof Error ? err.message : String(err);
     throw new CLIError(ExitCode.GENERAL_ERROR, message);
+  } finally {
+    // Disconnect MCP servers (best-effort)
+    if (mcpDisconnect) {
+      await mcpDisconnect().catch(() => {});
+    }
   }
 }

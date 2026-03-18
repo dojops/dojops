@@ -916,12 +916,35 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const augmentedPrompt = buildAugmentedPrompt(prompt, projectRoot, ctx.globalOpts.verbose);
 
   const structured = isStructuredOutput(ctx);
-  const s2 = p.spinner();
-  if (!structured) s2.start("Thinking...");
-  const genStart = Date.now();
-  const result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
-  const genDuration = Date.now() - genStart;
-  if (!structured) s2.stop("Done.");
+  const canStream = !structured && !writePath && route.agent.supportsStreaming;
+
+  let result: {
+    content: string;
+    usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  };
+  let genDuration: number;
+
+  if (canStream) {
+    // Stream tokens progressively to terminal
+    const { createStreamRenderer } = await import("../tui/stream-renderer");
+    const renderer = createStreamRenderer({ quiet: ctx.globalOpts.quiet });
+    renderer.showPhase(`${route.agent.name} generating...`);
+    const genStart = Date.now();
+    result = await route.agent.streamWithHistory(
+      [{ role: "user", content: sanitizeUserInput(augmentedPrompt) }],
+      (chunk) => renderer.writeChunk(chunk),
+    );
+    genDuration = Date.now() - genStart;
+    renderer.finalize();
+  } else {
+    // Existing spinner path (structured output, file writing, or non-streaming provider)
+    const s2 = p.spinner();
+    if (!structured) s2.start("Thinking...");
+    const genStart = Date.now();
+    result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
+    genDuration = Date.now() - genStart;
+    if (!structured) s2.stop("Done.");
+  }
 
   if (ctx.globalOpts.verbose) {
     p.log.info(`Generation completed in ${genDuration}ms (${result.content.length} chars)`);

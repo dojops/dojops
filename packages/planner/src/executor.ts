@@ -133,15 +133,43 @@ export interface PlannerExecuteOptions {
   maxConcurrency?: number;
 }
 
-async function executeInChunks<T>(
+/**
+ * Semaphore-based concurrency pool: starts a new task the instant any slot
+ * frees up, instead of waiting for an entire fixed-size chunk to complete.
+ */
+async function executeWithSemaphore<T>(
   items: T[],
   maxConcurrency: number,
   fn: (item: T) => Promise<void>,
 ): Promise<void> {
-  for (let i = 0; i < items.length; i += maxConcurrency) {
-    const chunk = items.slice(i, i + maxConcurrency);
-    await Promise.all(chunk.map(fn));
-  }
+  if (items.length === 0) return;
+
+  let running = 0;
+  let index = 0;
+
+  return new Promise<void>((resolve, reject) => {
+    let rejected = false;
+    function startNext(): void {
+      while (!rejected && running < maxConcurrency && index < items.length) {
+        const item = items[index++];
+        running++;
+        fn(item).then(
+          () => {
+            running--;
+            if (index >= items.length && running === 0) resolve();
+            else startNext();
+          },
+          (err) => {
+            if (!rejected) {
+              rejected = true;
+              reject(err);
+            }
+          },
+        );
+      }
+    }
+    startNext();
+  });
 }
 
 export interface PlannerExecutorOptions {
@@ -348,7 +376,7 @@ export class PlannerExecutor {
       const wave = [...ready];
       ready.clear();
 
-      await executeInChunks(wave, maxConcurrency, async (taskId) => {
+      await executeWithSemaphore(wave, maxConcurrency, async (taskId) => {
         const task = taskMap.get(taskId)!;
         processed.add(taskId);
         await this.executeTask(task, completedTaskIds, failed, results);

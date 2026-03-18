@@ -74,8 +74,10 @@ import {
 import { tokensCommand } from "./commands/tokens";
 import { insightsCommand } from "./commands/insights";
 import { memoryCommand } from "./commands/memory";
+import { runsCommand } from "./commands/runs";
+import { mcpCommand } from "./commands/mcp";
 import { recordCommandError } from "./memory";
-import { prependToolchainBinToPath } from "./toolchain-sandbox";
+import { prependToolchainBinToPath, projectToolchainCtx } from "./toolchain-sandbox";
 import { withTracking } from "./tracking-provider";
 
 registerCommand("init", initCommand);
@@ -96,6 +98,21 @@ registerCommand("cron", cronCommand);
 registerCommand("tokens", tokensCommand);
 registerCommand("insights", insightsCommand);
 registerCommand("memory", memoryCommand);
+registerCommand("runs", runsCommand);
+
+// Nested: runs <sub> (background run management)
+registerSubcommand("runs", "list", (args, ctx) => runsCommand(["list", ...args], ctx));
+registerSubcommand("runs", "show", (args, ctx) => runsCommand(["show", ...args], ctx));
+registerSubcommand("runs", "clean", (args, ctx) => runsCommand(["clean", ...args], ctx));
+
+// Nested: memory <sub> (additional subcommands)
+registerSubcommand("memory", "auto", (args, ctx) => memoryCommand(["auto", ...args], ctx));
+registerSubcommand("memory", "errors", (args, ctx) => memoryCommand(["errors", ...args], ctx));
+
+// Nested: mcp <sub> (MCP server management)
+registerSubcommand("mcp", "list", (args, ctx) => mcpCommand(["list", ...args], ctx));
+registerSubcommand("mcp", "add", (args, ctx) => mcpCommand(["add", ...args], ctx));
+registerSubcommand("mcp", "remove", (args, ctx) => mcpCommand(["remove", ...args], ctx));
 
 // `dojops version` → print version and exit
 registerCommand("version", async () => {
@@ -283,6 +300,8 @@ const QUIET_COMMANDS = new Set([
   "tokens",
   "insights",
   "memory",
+  "runs",
+  "mcp",
 ]);
 
 const NESTED_COMMAND_PARENTS = new Set([
@@ -295,6 +314,8 @@ const NESTED_COMMAND_PARENTS = new Set([
   "inspect",
   "scan",
   "completion",
+  "runs",
+  "mcp",
 ]);
 
 /** Route the resolved command or fall back to generate. */
@@ -378,7 +399,9 @@ async function main() {
     process.exit(130);
   });
 
-  prependToolchainBinToPath();
+  // Prepend both project and global toolchain bin dirs to PATH
+  const projectRoot = findProjectRoot();
+  prependToolchainBinToPath(projectRoot ? projectToolchainCtx(projectRoot) : undefined);
 
   const isCI = detectCI();
   const rawArgs = process.argv.slice(2);

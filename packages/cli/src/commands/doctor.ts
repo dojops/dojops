@@ -29,6 +29,7 @@ import {
   SYSTEM_TOOL_DOMAINS,
 } from "../preflight";
 import { loadToolchainRegistry, ensureToolchainDir } from "../toolchain-sandbox";
+import { checkVoiceAvailability } from "../voice";
 
 interface Check {
   name: string;
@@ -279,6 +280,40 @@ function checkSystemTools(projectDomains: string[], repoCtx: RepoContext | null)
   return results;
 }
 
+/**
+ * Check voice input dependencies (SoX + whisper model).
+ * whisper-cpp binary is already covered by checkSystemTools — this adds the remaining deps.
+ * Only shown when whisper-cpp is installed or the user has set voice env vars.
+ */
+function checkVoiceDeps(): Check[] {
+  const status = checkVoiceAvailability();
+
+  // Only show voice checks if user has some voice setup (whisper installed, or env vars set)
+  const hasVoiceIntent =
+    !!status.whisperBin || !!process.env.DOJOPS_WHISPER_BIN || !!process.env.DOJOPS_WHISPER_MODEL;
+  if (!hasVoiceIntent) return [];
+
+  const checks: Check[] = [];
+
+  checks.push({
+    name: "Voice: SoX (rec)",
+    status: status.recBin ? "pass" : "warn",
+    detail: status.recBin
+      ? `Found (${status.recBin})`
+      : "Not found — brew install sox (macOS) / apt install sox (Linux)",
+  });
+
+  checks.push({
+    name: "Voice: whisper model",
+    status: status.modelPath ? "pass" : "warn",
+    detail: status.modelPath
+      ? `Found (${status.modelPath})`
+      : "Not found — reinstall whisper-cpp or set DOJOPS_WHISPER_MODEL",
+  });
+
+  return checks;
+}
+
 function checkProjectMetrics(root: string | null): Check[] {
   if (!root || !fs.existsSync(`${root}/.dojops`)) return [];
 
@@ -433,6 +468,7 @@ async function collectAllChecks(
   checks.push(
     ...checkBuiltInTools(projectDomains),
     ...checkSystemTools(projectDomains, repoCtx),
+    ...checkVoiceDeps(),
     ...checkProjectMetrics(root),
   );
 

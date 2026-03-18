@@ -34,7 +34,7 @@ Execution Engine (Sandboxed, policy-enforced, approval-gated, audit-logged)
 
 DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, CommonJS). All packages use the `@dojops/*` scope.
 
-### 11 Packages
+### 12 Packages
 
 ```
 @dojops/cli            CLI entry point + rich TUI (@clack/prompts)
@@ -42,6 +42,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/skill-registry Skill registry + custom skill system (discovers built-in + custom skills)
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
+@dojops/mcp            MCP (Model Context Protocol) client — server lifecycle, tool discovery, dispatcher
 @dojops/runtime        13 built-in DevOps skills as .dops v2 files (DopsRuntime)
 @dojops/scanner        10 security scanners + remediation engine
 @dojops/session        Chat session management + autonomous agent loop (AgentLoop) + memory + context injection
@@ -82,6 +83,7 @@ cli -> api -> skill-registry -> runtime -> core -> sdk
           -> scanner
           -> context -> core
           -> session -> executor -> core
+cli -> mcp -> core (optional, dynamic import)
 ```
 
 ---
@@ -132,7 +134,7 @@ See [Specialist Agents](agents.md) for the full agent list.
 
 ### 3. Task Planner (`@dojops/planner`)
 
-LLM-powered goal decomposition into structured, dependency-aware task graphs with **agent-aware delegation**. The decomposer assigns specialist agents to tasks based on domain relevance, and the executor injects each agent's system prompt as domain context during skill generation. Uses Kahn's algorithm for topological execution ordering, `$ref:<taskId>` for inter-task data wiring, and `completedTaskIds` for resume after partial failures.
+LLM-powered goal decomposition into structured, dependency-aware task graphs with **agent-aware delegation**. The decomposer assigns specialist agents to tasks based on domain relevance, and the executor injects each agent's system prompt as domain context during skill generation. Uses Kahn's algorithm for topological execution ordering, `$ref:<taskId>` for inter-task data wiring, `completedTaskIds` for resume after partial failures, and a **semaphore-based concurrency pool** (`--parallel <n>`) that starts new tasks the instant any slot frees up.
 
 See [Task Planner](planner.md) for details.
 
@@ -217,7 +219,54 @@ The `AgentLoop` implements a ReAct (Reasoning + Acting) pattern — an iterative
 
 The `ToolExecutor` dispatches tool calls to sandboxed operations enforced by `ExecutionPolicy`. File writes are policy-checked, commands run with timeouts, and outputs are truncated at 32KB. The loop terminates on the `done` tool, iteration limit (default 20), or token budget exhaustion.
 
-Available via `dojops auto <prompt>` (CLI), `POST /api/auto` (API), and `/auto <prompt>` (chat).
+Available via `dojops auto <prompt>` (CLI), `POST /api/auto` (API), and `/auto <prompt>` (chat). Supports **background mode** (`--background` CLI flag, `background: true` API field) — spawns a detached process and returns a run ID. Check results with `dojops runs show <id>` or `GET /api/auto/runs/:id`. Auto-memory is enabled by default — the agent injects context from previous sessions and records completed tasks.
+
+### 8c. MCP Support (`@dojops/mcp`)
+
+The MCP (Model Context Protocol) package enables the autonomous agent to call tools from external servers — databases, cloud APIs, GitHub, etc. MCP is a Linux Foundation standard supported by Claude Code, Codex, Gemini CLI, and Copilot CLI.
+
+**Architecture:**
+
+- `McpClientManager` — Manages server lifecycle (connect all at agent start, disconnect on completion). Supports `stdio` (local subprocess) and `streamable-http` (remote endpoint) transports via `@modelcontextprotocol/sdk`.
+- `McpToolDispatcher` — Bridges MCP tools into the `ToolExecutor` dispatch chain. Parses `mcp__<server>__<tool>` names and routes to the correct server.
+- Tool naming: `mcp__<servername>__<toolname>` convention (matches Claude Code). Double-underscore delimiter prevents collisions.
+
+**Config:** `.dojops/mcp.json` (project) + `~/.dojops/mcp.json` (global). Project config overrides global by server name.
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    "remote-api": {
+      "transport": "streamable-http",
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+**Integration:** `dojops auto` dynamically loads MCP config, connects all servers, merges MCP tools with the 7 built-in agent tools, passes the dispatcher to `ToolExecutor`, and disconnects in a `finally` block. MCP is optional — connection failures are non-fatal and silently skipped.
+
+**CLI:** `dojops mcp list` (show servers + test connections), `dojops mcp add` (interactive setup), `dojops mcp remove` (remove by name).
+
+### 8d. Streaming Output
+
+All 6 LLM providers support `generateStream()` for real-time token streaming. The `LLMProvider` interface includes an optional `generateStream?(request, onChunk)` method:
+
+| Provider       | Streaming Mechanism                                          |
+| -------------- | ------------------------------------------------------------ |
+| OpenAI         | `stream: true` on `chat.completions.create()`                |
+| Anthropic      | `client.messages.stream()` with `content_block_delta`        |
+| DeepSeek       | OpenAI-compatible streaming via `openaiCompatGenerateStream` |
+| GitHub Copilot | OpenAI-compatible streaming via `openaiCompatGenerateStream` |
+| Ollama         | OpenAI-compatible streaming via `openaiCompatGenerateStream` |
+| Gemini         | Not yet streaming (falls back to spinner)                    |
+
+Streaming is used in `dojops "prompt"` for agent-routed generation commands. Structured output (schema/skill requests) and file-writing modes fall back to the spinner path. The `createStreamRenderer()` utility encapsulates ANSI line overwriting for consistent streaming UX.
 
 ### 9. REST API & Dashboard (`@dojops/api`)
 
@@ -262,6 +311,7 @@ DojOps stores project state in the `.dojops/` directory:
   agents/                Project-scoped custom agents (<name>/README.md)
   memory/
     dojops.db            SQLite database (WAL mode): tasks_history, notes, error_patterns
+  mcp.json               MCP server configuration (project-scoped)
   policy.yaml            Skill policy (allowedSkills / blockedSkills)
   history/
     audit.jsonl          Hash-chained audit log (append-only)
@@ -274,4 +324,5 @@ DojOps stores project state in the `.dojops/` directory:
   skills/                Global custom skills (shared across projects)
   toolchain/             System binary sandbox (installed verification binaries)
   agents/                Global custom agents (shared across projects)
+  mcp.json               Global MCP server configuration
 ```
