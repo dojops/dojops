@@ -37,7 +37,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
   console.log(`  ${pc.cyan("check")}              LLM-powered DevOps config quality check`);
   console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
-  console.log(`  ${pc.cyan("skills")}            Manage DevOps skills (custom + marketplace)`);
+  console.log(`  ${pc.cyan("skills")}             Manage DevOps skills (custom + marketplace)`);
   console.log(`  ${pc.cyan("toolchain")}          Manage system toolchain (~/.dojops/toolchain/)`);
   console.log(
     `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
@@ -54,6 +54,7 @@ export function printHelp(): void {
     `  ${pc.cyan("memory")}             Manage persistent project notes (add/search/remove)`,
   );
   console.log(`  ${pc.cyan("runs")}               Manage background agent runs (list/show/clean)`);
+  console.log(`  ${pc.cyan("mcp")}                Manage MCP servers (list/add/remove)`);
   console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
@@ -72,6 +73,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--quiet")}            Suppress non-essential output`);
   console.log(`  ${pc.cyan("--file=PATH, -f")}   Read prompt from a file (.md, .txt)`);
   console.log(`  ${pc.cyan("--agent=NAME")}       Force routing to a specific specialist agent`);
+  console.log(`  ${pc.cyan("--skill=NAME")}       Force routing to a specific skill`);
   console.log(`  ${pc.cyan("--fallback-provider")} Comma-separated fallback provider chain`);
   console.log(`  ${pc.cyan("--timeout=<ms>")}     Global timeout for operations`);
   console.log(`  ${pc.cyan("--dry-run")}          Preview changes without writing files`);
@@ -83,6 +85,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--execute")}          Generate + execute with approval workflow`);
   console.log(`  ${pc.cyan("--yes")}              Auto-approve all executions`);
   console.log(`  ${pc.cyan("--skip-verify")}      Skip external config validation`);
+  console.log(
+    `  ${pc.cyan("--voice")}            Use voice input as prompt ${pc.dim("(requires whisper.cpp + sox)")}`,
+  );
   console.log();
   console.log(pc.bold("APPLY OPTIONS"));
   console.log(`  ${pc.cyan("--resume")}               Resume a partially-applied plan`);
@@ -97,16 +102,27 @@ export function printHelp(): void {
     `  ${pc.cyan("--replay")}               Deterministic mode: temp=0, validate provider/model/prompts`,
   );
   console.log(`  ${pc.cyan("--task=ID")}              Execute only a single task from the plan`);
-  console.log(
-    `  ${pc.cyan("--timeout <sec>")}        Execution timeout per task in seconds (default: 60)`,
-  );
+  console.log(`  ${pc.cyan("--timeout=<ms>")}         Execution timeout per task in milliseconds`);
+  console.log(`  ${pc.cyan("--parallel=N")}          Max parallel tasks during apply`);
   console.log(`  ${pc.cyan("--repair-attempts=N")}    Max self-repair attempts (default: 3)`);
   console.log();
   console.log(pc.bold("AUTO OPTIONS"));
   console.log(`  ${pc.cyan("--skip-verify")}          Skip external config validation`);
   console.log(`  ${pc.cyan("--force")}                Skip git dirty working tree check`);
   console.log(`  ${pc.cyan("--allow-all-paths")}      Bypass DevOps file write allowlist`);
-  console.log(`  ${pc.cyan("--repair-attempts=N")}    Max self-repair attempts (default: 4)`);
+  console.log(`  ${pc.cyan("--commit")}               Auto-commit changes to git`);
+  console.log(
+    `  ${pc.cyan("--background")}           Run in background, return run ID immediately`,
+  );
+  console.log(
+    `  ${pc.cyan("--max-iterations=N")}     Max agent iterations ${pc.dim("(default: 50)")}`,
+  );
+  console.log(
+    `  ${pc.cyan("--repair-attempts=N")}    Max self-repair attempts ${pc.dim("(default: 4)")}`,
+  );
+  console.log(
+    `  ${pc.cyan("--voice")}                Use voice input as prompt ${pc.dim("(requires whisper.cpp + sox)")}`,
+  );
   console.log();
   console.log(pc.bold("SCAN OPTIONS"));
   console.log(
@@ -128,6 +144,9 @@ export function printHelp(): void {
   console.log(pc.bold("CHAT OPTIONS"));
   console.log(
     `  ${pc.cyan("--message=<text>")}   Single chat message (non-interactive) ${pc.dim("(alias: -m)")}`,
+  );
+  console.log(
+    `  ${pc.cyan("--voice")}            Start chat with voice input ${pc.dim("(requires whisper.cpp + sox)")}`,
   );
   console.log(`  ${pc.cyan("export [id]")}        Export session(s) as Markdown or JSON`);
   console.log(
@@ -175,6 +194,10 @@ export function printHelp(): void {
   console.log(`  ${pc.dim("$")} dojops serve --port=8080`);
   console.log(`  ${pc.dim("$")} dojops plan "Create CI" --output json`);
   console.log(`  ${pc.dim("$")} dojops config profile create staging`);
+  console.log(`  ${pc.dim("$")} dojops plan --voice`);
+  console.log(`  ${pc.dim("$")} dojops auto --background "Create a Dockerfile"`);
+  console.log(`  ${pc.dim("$")} dojops runs list`);
+  console.log(`  ${pc.dim("$")} dojops mcp list`);
   console.log();
   console.log(pc.bold("CONFIGURATION PRECEDENCE"));
   console.log(`  Provider:  --provider  >  $DOJOPS_PROVIDER  >  config  >  openai`);
@@ -258,6 +281,9 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--allow-all-paths")}    Bypass DevOps file allowlist for --write`);
       console.log(`  ${pc.cyan("--repair-attempts=N")}  Max self-repair attempts (default: 3)`);
       console.log(`  ${pc.cyan("-f, --file=PATH")}     Read prompt from a file (.md, .txt)`);
+      console.log(
+        `  ${pc.cyan("--voice")}              Use voice input as prompt ${pc.dim("(requires whisper.cpp + sox)")}`,
+      );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Routes your prompt to the best-matching specialist agent and generates`);
       console.log(`  a response. This is the default command when no subcommand is given.`);
@@ -293,6 +319,10 @@ export function printCommandHelp(command: string): void {
       console.log(
         `  ${pc.cyan("--replay")}            Deterministic replay: force temp=0, validate environment match`,
       );
+      console.log(`  ${pc.cyan("--task=ID")}           Execute only a single task from the plan`);
+      console.log(`  ${pc.cyan("--timeout=<ms>")}      Execution timeout per task in milliseconds`);
+      console.log(`  ${pc.cyan("--parallel=N")}        Max parallel tasks during apply`);
+      console.log(`  ${pc.cyan("--repair-attempts=N")} Max self-repair attempts (default: 3)`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Executes a previously saved plan. If no plan ID is given, uses the`);
       console.log(`  current session plan or the most recent one.`);
@@ -493,6 +523,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("show <plan-id>")}    Show plan details and execution results`);
       console.log(`  ${pc.cyan("verify")}            Verify audit log hash chain integrity`);
       console.log(`  ${pc.cyan("audit")}             View audit log entries`);
+      console.log(`  ${pc.cyan("repair")}            Repair broken audit log hash chain`);
       console.log(`\n${pc.bold("AUDIT OPTIONS")}`);
       console.log(`  ${pc.cyan("--planId=ID")}       Filter audit entries by plan ID`);
       console.log(
@@ -796,9 +827,14 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--deps")}         Run dependency audit only (npm, pip)`);
       console.log(`  ${pc.cyan("--iac")}          Run IaC scanners only (checkov, hadolint)`);
       console.log(`  ${pc.cyan("--sbom")}         Generate Software Bill of Materials (CycloneDX)`);
+      console.log(`  ${pc.cyan("--license")}      License compliance scan only`);
       console.log(`  ${pc.cyan("--fix")}          Generate and apply LLM-powered remediation`);
       console.log(
         `  ${pc.cyan("--compare")}      Compare with previous scan (new/resolved findings)`,
+      );
+      console.log(`  ${pc.cyan("--target=<dir>")} Target directory for scanning`);
+      console.log(
+        `  ${pc.cyan("--fail-on <sev>")} Exit non-zero at severity: CRITICAL, HIGH ${pc.dim("(default)")}, MEDIUM, LOW`,
       );
       console.log(
         `  ${pc.cyan("--yes")}          Auto-approve remediation ${pc.dim("(requires --fix)")}`,
@@ -868,9 +904,7 @@ export function printCommandHelp(command: string): void {
     case "skills":
       console.log(`\n${pc.bold("dojops skills")} — Manage DevOps skills (custom + marketplace)`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(
-        `  ${pc.dim("$")} dojops skills [list|init|validate|load|publish|install|search|dev]`,
-      );
+      console.log(`  ${pc.dim("$")} dojops skills [list|init|validate|publish|install|search|dev]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all custom skills ${pc.dim("(default)")}`,
@@ -879,7 +913,6 @@ export function printCommandHelp(command: string): void {
         `  ${pc.cyan("init <name>")}      Scaffold a new v2 .dops skill (AI-powered when provider is configured)`,
       );
       console.log(`  ${pc.cyan("validate <name>")}  Validate a skill manifest`);
-      console.log(`  ${pc.cyan("load <path>")}      Load a skill from a local directory`);
       console.log(`  ${pc.cyan("publish <file>")}   Publish a .dops skill to the DojOps Hub`);
       console.log(`  ${pc.cyan("install <name>")}   Install a .dops skill from the DojOps Hub`);
       console.log(`  ${pc.cyan("search <query>")}   Search the DojOps Hub for skills`);
@@ -908,7 +941,6 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops skills list`);
       console.log(`  ${pc.dim("$")} dojops skills init my-skill`);
       console.log(`  ${pc.dim("$")} dojops skills validate my-skill`);
-      console.log(`  ${pc.dim("$")} dojops skills load /path/to/skill`);
       console.log(
         `  ${pc.dim("$")} dojops skills publish my-skill.dops --changelog "Initial release"`,
       );
@@ -1043,6 +1075,146 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
+    case "auto":
+      console.log(
+        `\n${pc.bold("dojops auto")} — Autonomous agent: plan + execute with self-repair`,
+      );
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops auto <prompt>`);
+      console.log(`  ${pc.dim("$")} dojops auto --background <prompt>`);
+      console.log(`  ${pc.dim("$")} dojops auto --voice`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--skip-verify")}          Skip external config validation`);
+      console.log(`  ${pc.cyan("--force")}                Skip git dirty working tree check`);
+      console.log(`  ${pc.cyan("--allow-all-paths")}      Bypass DevOps file write allowlist`);
+      console.log(`  ${pc.cyan("--commit")}               Auto-commit changes to git`);
+      console.log(
+        `  ${pc.cyan("--background")}           Run in background, return run ID immediately`,
+      );
+      console.log(
+        `  ${pc.cyan("--max-iterations=N")}     Max agent iterations ${pc.dim("(default: 50)")}`,
+      );
+      console.log(
+        `  ${pc.cyan("--repair-attempts=N")}    Max self-repair attempts ${pc.dim("(default: 4)")}`,
+      );
+      console.log(`  ${pc.cyan("--timeout=<ms>")}         Execution timeout`);
+      console.log(
+        `  ${pc.cyan("--voice")}                Use voice input as prompt ${pc.dim("(requires whisper.cpp + sox)")}`,
+      );
+      console.log(`  ${pc.cyan("-f, --file=PATH")}        Read prompt from a file (.md, .txt)`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  The autonomous agent reads project files, plans changes, writes code,`);
+      console.log(`  runs verification, and self-repairs on failure — all in an iterative`);
+      console.log(`  tool-use loop. With --background, the agent runs detached and results`);
+      console.log(`  are stored in .dojops/runs/<id>/ for later inspection.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops auto "Add a Dockerfile with multi-stage build"`);
+      console.log(`  ${pc.dim("$")} dojops auto --background "Set up CI/CD pipeline"`);
+      console.log(`  ${pc.dim("$")} dojops auto --max-iterations 10 "Fix the linting errors"`);
+      console.log(`  ${pc.dim("$")} dojops auto --commit "Add health check endpoint"`);
+      console.log(`  ${pc.dim("$")} dojops auto --voice`);
+      console.log();
+      break;
+
+    case "runs":
+    case "runs list":
+    case "runs show":
+    case "runs clean":
+      console.log(`\n${pc.bold("dojops runs")} — Manage background agent runs`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops runs list`);
+      console.log(`  ${pc.dim("$")} dojops runs show <id>`);
+      console.log(`  ${pc.dim("$")} dojops runs clean [maxAgeDays]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("list")}       List all background runs ${pc.dim("(default)")}`);
+      console.log(`  ${pc.cyan("show <id>")}  Show run details, output, and result`);
+      console.log(
+        `  ${pc.cyan("clean")}      Remove completed runs older than N days ${pc.dim("(default: 7)")}`,
+      );
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(
+        `  Background runs are created by ${pc.cyan("dojops auto --background")}. Each run`,
+      );
+      console.log(`  stores metadata, output log, and result in .dojops/runs/<id>/.`);
+      console.log(`  Use a run ID prefix for ${pc.cyan("show")} — full ID not required.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops runs list`);
+      console.log(`  ${pc.dim("$")} dojops runs show c7e02c3f`);
+      console.log(`  ${pc.dim("$")} dojops runs clean 14`);
+      console.log();
+      break;
+
+    case "mcp":
+    case "mcp list":
+    case "mcp add":
+    case "mcp remove":
+      console.log(`\n${pc.bold("dojops mcp")} — Manage MCP (Model Context Protocol) servers`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops mcp list`);
+      console.log(`  ${pc.dim("$")} dojops mcp add`);
+      console.log(`  ${pc.dim("$")} dojops mcp remove [name]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(
+        `  ${pc.cyan("list")}            List configured MCP servers ${pc.dim("(default)")}`,
+      );
+      console.log(`  ${pc.cyan("add")}             Add a new MCP server (interactive)`);
+      console.log(`  ${pc.cyan("remove [name]")}   Remove an MCP server by name`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  MCP servers extend DojOps with external tools via the Model Context`);
+      console.log(`  Protocol. Servers can use stdio or streamable-http transport.`);
+      console.log(`  Configuration is stored in .dojops/mcp.json.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops mcp list`);
+      console.log(`  ${pc.dim("$")} dojops mcp add`);
+      console.log(`  ${pc.dim("$")} dojops mcp remove my-server`);
+      console.log();
+      break;
+
+    case "upgrade":
+      console.log(`\n${pc.bold("dojops upgrade")} — Check for and install CLI updates`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops upgrade`);
+      console.log(`  ${pc.dim("$")} dojops upgrade --check`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--check")}    Only check for updates, don't install`);
+      console.log(
+        `  ${pc.cyan("--yes")}      Auto-confirm upgrade ${pc.dim("(skip interactive prompt)")}`,
+      );
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Checks the npm registry for newer versions of @dojops/cli.`);
+      console.log(`  Without --check, prompts to install the update automatically.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops upgrade`);
+      console.log(`  ${pc.dim("$")} dojops upgrade --check`);
+      console.log(`  ${pc.dim("$")} dojops upgrade --yes`);
+      console.log();
+      break;
+
+    case "insights":
+      console.log(
+        `\n${pc.bold("dojops insights")} — Actionable suggestions from execution history`,
+      );
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops insights`);
+      console.log(`  ${pc.dim("$")} dojops insights [category]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--all")}      Show all insights ${pc.dim("(default: top 10)")}`);
+      console.log(`\n${pc.bold("CATEGORIES")}`);
+      console.log(`  ${pc.cyan("efficiency")}   Usage patterns and missing best practices`);
+      console.log(`  ${pc.cyan("security")}     Vulnerability trends and persistent findings`);
+      console.log(`  ${pc.cyan("quality")}      Failure rates and error patterns`);
+      console.log(`  ${pc.cyan("cost")}         Token usage and provider diversity`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Analyzes audit logs, scan history, token usage, and error patterns`);
+      console.log(`  to generate actionable recommendations for improving your DevOps`);
+      console.log(`  workflows.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops insights`);
+      console.log(`  ${pc.dim("$")} dojops insights security`);
+      console.log(`  ${pc.dim("$")} dojops insights --all`);
+      console.log();
+      break;
+
     case "memory":
       console.log(`\n${pc.bold("dojops memory")} — Persistent project notes for RAG context`);
       console.log(`\n${pc.bold("USAGE")}`);
@@ -1055,6 +1227,8 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("add")}        Add a note with optional category and keywords`);
       console.log(`  ${pc.cyan("remove")}     Remove a note by ID (alias: rm)`);
       console.log(`  ${pc.cyan("search")}     Search notes by keyword`);
+      console.log(`  ${pc.cyan("auto")}       Toggle auto-enrichment from agent runs (on/off)`);
+      console.log(`  ${pc.cyan("errors")}     List learned error patterns`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Notes persist in .dojops/memory/dojops.db and are automatically`);
       console.log(`  injected into LLM context when relevant to the current prompt.`);

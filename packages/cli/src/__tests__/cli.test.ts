@@ -128,7 +128,7 @@ describe("CLI", () => {
       ["validate", ["dojops validate", "plan-id"]],
       ["auth", ["dojops auth", "login", "status"]],
       ["analyze", ["dojops analyze diff", "risk"]],
-      ["skills", ["dojops skills", "list", "init", "validate", "load"]],
+      ["skills", ["dojops skills", "list", "init", "validate", "publish"]],
     ];
 
     for (const [cmd, expected, notExpected] of helpCases) {

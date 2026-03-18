@@ -56,8 +56,11 @@ function parseMcpToolName(name: string): { serverName: string; toolName: string 
   const sepIdx = rest.indexOf("__");
   if (sepIdx < 1) return null;
 
+  const toolName = rest.slice(sepIdx + 2);
+  if (!toolName) return null;
+
   return {
     serverName: rest.slice(0, sepIdx),
-    toolName: rest.slice(sepIdx + 2),
+    toolName,
   };
 }

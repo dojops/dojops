@@ -1,13 +1,25 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+
+// Mock node:os to control homedir() — ESM exports are non-configurable
+const mockHomedir = vi.fn(() => os.tmpdir());
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return { ...actual, homedir: () => mockHomedir() };
+});
+
+// Import after mock setup
 import { loadMcpConfig, saveMcpConfig } from "../config";
+import type { McpConfig } from "../types";
 
 let tmpDir: string;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-config-test-"));
+  // Default: point homedir to nonexistent path (no global config)
+  mockHomedir.mockReturnValue(path.join(tmpDir, "no-home"));
 });
 
 afterEach(() => {
@@ -16,11 +28,11 @@ afterEach(() => {
 
 describe("loadMcpConfig", () => {
   it("returns empty config when no files exist", () => {
-    const config = loadMcpConfig(tmpDir);
-    expect(config.mcpServers).toEqual({});
+    const config = loadMcpConfig(path.join(tmpDir, "no-project"));
+    expect(config).toEqual({ mcpServers: {} });
   });
 
-  it("loads project config from .dojops/mcp.json", () => {
+  it("loads project-level stdio config", () => {
     const configDir = path.join(tmpDir, ".dojops");
     fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(
@@ -37,9 +49,11 @@ describe("loadMcpConfig", () => {
     );
 
     const config = loadMcpConfig(tmpDir);
-    expect(config.mcpServers.filesystem).toBeDefined();
-    expect(config.mcpServers.filesystem.transport).toBe("stdio");
-    expect((config.mcpServers.filesystem as { command: string }).command).toBe("npx");
+    expect(config.mcpServers.filesystem).toEqual({
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    });
   });
 
   it("loads HTTP server config", () => {
@@ -51,26 +65,70 @@ describe("loadMcpConfig", () => {
         mcpServers: {
           remote: {
             transport: "streamable-http",
-            url: "http://localhost:8080/mcp",
-            headers: { Authorization: "Bearer token" },
+            url: "https://mcp.example.com/v1",
+            headers: { Authorization: "Bearer token123" },
           },
         },
       }),
     );
 
     const config = loadMcpConfig(tmpDir);
-    expect(config.mcpServers.remote).toBeDefined();
-    expect(config.mcpServers.remote.transport).toBe("streamable-http");
-    expect((config.mcpServers.remote as { url: string }).url).toBe("http://localhost:8080/mcp");
+    expect(config.mcpServers.remote).toEqual({
+      transport: "streamable-http",
+      url: "https://mcp.example.com/v1",
+      headers: { Authorization: "Bearer token123" },
+    });
   });
 
-  it("returns empty config for invalid JSON", () => {
+  it("project config overrides global by server name", () => {
+    // Set up global config
+    const globalDir = path.join(tmpDir, "global-home");
+    const globalMcpDir = path.join(globalDir, ".dojops");
+    fs.mkdirSync(globalMcpDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(globalMcpDir, "mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          shared: { transport: "stdio", command: "global-cmd", args: ["--global"] },
+          "global-only": { transport: "stdio", command: "only-in-global" },
+        },
+      }),
+    );
+    mockHomedir.mockReturnValue(globalDir);
+
+    // Set up project config
+    const projectDir = path.join(tmpDir, "project");
+    const projectMcpDir = path.join(projectDir, ".dojops");
+    fs.mkdirSync(projectMcpDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectMcpDir, "mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          shared: { transport: "stdio", command: "project-cmd", args: ["--project"] },
+          "project-only": { transport: "stdio", command: "only-in-project" },
+        },
+      }),
+    );
+
+    const config = loadMcpConfig(projectDir);
+
+    // Project overrides global for "shared"
+    expect((config.mcpServers.shared as { command: string }).command).toBe("project-cmd");
+    // Global-only server preserved
+    expect(config.mcpServers["global-only"]).toBeDefined();
+    // Project-only server preserved
+    expect(config.mcpServers["project-only"]).toBeDefined();
+    // Total: 3 servers
+    expect(Object.keys(config.mcpServers)).toHaveLength(3);
+  });
+
+  it("returns empty config for invalid JSON file", () => {
     const configDir = path.join(tmpDir, ".dojops");
     fs.mkdirSync(configDir, { recursive: true });
-    fs.writeFileSync(path.join(configDir, "mcp.json"), "not json");
+    fs.writeFileSync(path.join(configDir, "mcp.json"), "not valid json {{{");
 
     const config = loadMcpConfig(tmpDir);
-    expect(config.mcpServers).toEqual({});
+    expect(config).toEqual({ mcpServers: {} });
   });
 
   it("returns empty config for invalid schema", () => {
@@ -78,83 +136,71 @@ describe("loadMcpConfig", () => {
     fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(
       path.join(configDir, "mcp.json"),
-      JSON.stringify({ mcpServers: { bad: { transport: "invalid" } } }),
+      JSON.stringify({
+        mcpServers: {
+          bad: { transport: "unknown-transport", command: "test" },
+        },
+      }),
     );
 
     const config = loadMcpConfig(tmpDir);
-    expect(config.mcpServers).toEqual({});
+    expect(config).toEqual({ mcpServers: {} });
   });
 
-  it("merges project over global config", () => {
-    // Create global config
-    const globalDir = path.join(os.homedir(), ".dojops");
-    const globalPath = path.join(globalDir, "mcp.json");
-    const hadGlobal = fs.existsSync(globalPath);
-    let globalBackup: string | undefined;
-    if (hadGlobal) globalBackup = fs.readFileSync(globalPath, "utf-8");
+  it("handles empty mcpServers object", () => {
+    const configDir = path.join(tmpDir, ".dojops");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "mcp.json"), JSON.stringify({ mcpServers: {} }));
 
-    try {
-      fs.mkdirSync(globalDir, { recursive: true });
-      fs.writeFileSync(
-        globalPath,
-        JSON.stringify({
-          mcpServers: {
-            shared: { transport: "stdio", command: "global-cmd" },
-            globalOnly: { transport: "stdio", command: "global-only" },
-          },
-        }),
-      );
-
-      // Create project config
-      const projectDir = path.join(tmpDir, ".dojops");
-      fs.mkdirSync(projectDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(projectDir, "mcp.json"),
-        JSON.stringify({
-          mcpServers: {
-            shared: { transport: "stdio", command: "project-cmd" },
-            projectOnly: { transport: "stdio", command: "project-only" },
-          },
-        }),
-      );
-
-      const config = loadMcpConfig(tmpDir);
-
-      // Project overrides global
-      expect((config.mcpServers.shared as { command: string }).command).toBe("project-cmd");
-      // Global-only preserved
-      expect(config.mcpServers.globalOnly).toBeDefined();
-      // Project-only preserved
-      expect(config.mcpServers.projectOnly).toBeDefined();
-    } finally {
-      // Restore global config
-      if (globalBackup !== undefined) {
-        fs.writeFileSync(globalPath, globalBackup);
-      } else if (!hadGlobal) {
-        try {
-          fs.unlinkSync(globalPath);
-        } catch {
-          /* noop */
-        }
-      }
-    }
+    const config = loadMcpConfig(tmpDir);
+    expect(config).toEqual({ mcpServers: {} });
   });
 });
 
 describe("saveMcpConfig", () => {
-  it("writes config to .dojops/mcp.json", () => {
-    saveMcpConfig(tmpDir, {
+  it("saves config to .dojops/mcp.json", () => {
+    const config: McpConfig = {
       mcpServers: {
-        test: { transport: "stdio", command: "echo" },
+        test: { transport: "stdio", command: "echo", args: ["hello"] },
       },
-    });
+    };
+
+    saveMcpConfig(tmpDir, config);
 
     const saved = JSON.parse(fs.readFileSync(path.join(tmpDir, ".dojops", "mcp.json"), "utf-8"));
-    expect(saved.mcpServers.test.command).toBe("echo");
+    expect(saved).toEqual(config);
   });
 
   it("creates .dojops directory if missing", () => {
+    const newDir = path.join(tmpDir, "new-project");
+    fs.mkdirSync(newDir);
+
+    saveMcpConfig(newDir, { mcpServers: {} });
+
+    expect(fs.existsSync(path.join(newDir, ".dojops", "mcp.json"))).toBe(true);
+  });
+
+  it("overwrites existing config", () => {
+    const config1: McpConfig = {
+      mcpServers: { a: { transport: "stdio", command: "first" } },
+    };
+    const config2: McpConfig = {
+      mcpServers: { b: { transport: "stdio", command: "second" } },
+    };
+
+    saveMcpConfig(tmpDir, config1);
+    saveMcpConfig(tmpDir, config2);
+
+    const saved = JSON.parse(fs.readFileSync(path.join(tmpDir, ".dojops", "mcp.json"), "utf-8"));
+    expect(saved).toEqual(config2);
+    expect(saved.mcpServers).not.toHaveProperty("a");
+  });
+
+  it("writes pretty-printed JSON with trailing newline", () => {
     saveMcpConfig(tmpDir, { mcpServers: {} });
-    expect(fs.existsSync(path.join(tmpDir, ".dojops", "mcp.json"))).toBe(true);
+
+    const raw = fs.readFileSync(path.join(tmpDir, ".dojops", "mcp.json"), "utf-8");
+    expect(raw).toContain("  "); // indented
+    expect(raw.endsWith("\n")).toBe(true);
   });
 });

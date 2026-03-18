@@ -2,11 +2,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { McpClientManager } from "../client-manager";
 import type { McpConfig } from "../types";
 
+// Track connection count so we can simulate partial failures
+let connectCallCount = 0;
+let failOnConnect = -1; // Set to N to make the Nth connect() call reject
+
 // Mock the MCP SDK with class-based mocks
 vi.mock("@modelcontextprotocol/sdk/client/index.js", () => {
   return {
     Client: class MockClient {
-      connect = vi.fn().mockResolvedValue(undefined);
+      connect = vi.fn().mockImplementation(() => {
+        connectCallCount++;
+        if (connectCallCount === failOnConnect) {
+          return Promise.reject(new Error("Connection refused"));
+        }
+        return Promise.resolve(undefined);
+      });
       close = vi.fn().mockResolvedValue(undefined);
       listTools = vi.fn().mockResolvedValue({
         tools: [
@@ -54,6 +64,8 @@ describe("McpClientManager", () => {
 
   beforeEach(() => {
     manager = new McpClientManager();
+    connectCallCount = 0;
+    failOnConnect = -1;
   });
 
   const stdioConfig: McpConfig = {
@@ -99,6 +111,34 @@ describe("McpClientManager", () => {
     it("handles empty config", async () => {
       await manager.connectAll({ mcpServers: {} });
       expect(manager.getConnectedServers()).toEqual([]);
+    });
+
+    it("skips failing servers while keeping successful ones", async () => {
+      // Fail the 2nd connect() call (the "broken" server)
+      failOnConnect = 2;
+
+      await manager.connectAll({
+        mcpServers: {
+          good: {
+            transport: "stdio",
+            command: "npx",
+            args: ["-y", "good-server"],
+          },
+          broken: {
+            transport: "stdio",
+            command: "npx",
+            args: ["-y", "broken-server"],
+          },
+        },
+      });
+
+      const connected = manager.getConnectedServers();
+      expect(connected).toContain("good");
+      expect(connected).not.toContain("broken");
+      expect(connected).toHaveLength(1);
+
+      // Tools from the good server should still be available
+      expect(manager.getToolDefinitions().length).toBeGreaterThan(0);
     });
   });
 

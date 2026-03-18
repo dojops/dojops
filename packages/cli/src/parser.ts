@@ -180,6 +180,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "debug",
     "analyze",
     "review",
+    "serve",
     "inspect",
     "agents",
     "history",
@@ -208,6 +209,8 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "tokens",
     "insights",
     "memory",
+    "runs",
+    "mcp",
     "version",
   ]);
 
@@ -258,6 +261,8 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "backup",
     "restore",
     "apply",
+    "auto",
+    "errors",
   ]);
 
   const command: string[] = [];

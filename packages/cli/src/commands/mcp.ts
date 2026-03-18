@@ -58,9 +58,10 @@ async function mcpList(ctx: CLIContext): Promise<void> {
     p.log.success(
       `${connected.length}/${entries.length} connected, ${tools.length} tools available`,
     );
-    await manager.disconnectAll();
   } catch {
     p.log.warn("Could not test server connections.");
+  } finally {
+    await manager.disconnectAll();
   }
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "@dojops/scanner",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Security scanning engine for DojOps — vulnerability, dependency, IaC, and secret scanning",
   "license": "MIT",
   "repository": {

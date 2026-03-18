@@ -4,6 +4,9 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { ToolDefinition } from "@dojops/core";
 import type { McpConfig, McpServerConfig } from "./types";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PKG_VERSION: string = (require("../package.json") as { version: string }).version;
+
 interface ConnectedServer {
   name: string;
   client: Client;
@@ -85,7 +88,7 @@ export class McpClientManager {
 
   private async connectServer(name: string, config: McpServerConfig): Promise<void> {
     const transport = this.createTransport(config);
-    const client = new Client({ name: `dojops-${name}`, version: "1.0.0" });
+    const client = new Client({ name: `dojops-${name}`, version: PKG_VERSION });
 
     await client.connect(transport);
 
