@@ -81,8 +81,8 @@ function formatFinding(finding: {
   severity: string;
   category: string;
   file: string;
-  line?: number;
-  toolSource?: string;
+  line?: number | null;
+  toolSource?: string | null;
   message: string;
   recommendation: string;
 }): string[] {
@@ -105,8 +105,8 @@ function formatFindingsSection(
     severity: string;
     category: string;
     file: string;
-    line?: number;
-    toolSource?: string;
+    line?: number | null;
+    toolSource?: string | null;
     message: string;
     recommendation: string;
   }>,

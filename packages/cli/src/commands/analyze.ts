@@ -8,9 +8,20 @@ import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { readStdin } from "../stdin";
 
-/** Resolve diff content from --file, stdin, or positional args. */
+/** Known CLI flags that can appear in analyze diff args. */
+const ANALYZE_FLAGS = new Set([
+  "--non-interactive",
+  "--quiet",
+  "--verbose",
+  "--debug",
+  "--no-color",
+  "--output",
+]);
+
+/** Resolve diff content from --diff-file, stdin, or positional args. */
 function resolveDiffContent(args: string[]): string | undefined {
-  const filePath = extractFlagValue(args, "--file");
+  // Use --diff-file instead of --file (which is a global option for prompt input)
+  const filePath = extractFlagValue(args, "--diff-file") ?? extractFlagValue(args, "--file");
   if (filePath) {
     try {
       return fs.readFileSync(filePath, "utf-8");
@@ -20,7 +31,12 @@ function resolveDiffContent(args: string[]): string | undefined {
   }
   const stdinContent = readStdin();
   if (stdinContent?.trim()) return stdinContent;
-  return args.filter((a) => !a.startsWith("-")).join(" ") || undefined;
+  // Filter only known flags — diff content legitimately starts with "-" / "---"
+  const positional = args.filter((a) => {
+    if (!a.startsWith("-")) return true;
+    return !ANALYZE_FLAGS.has(a) && !a.startsWith("--output=");
+  });
+  return positional.join(" ") || undefined;
 }
 
 /** Format diff analysis into display lines. */
@@ -70,7 +86,7 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
   const content = resolveDiffContent(args);
   if (!content?.trim()) {
     p.log.info(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
-    p.log.info(`  ${pc.dim("$")} dojops analyze diff --file <path>`);
+    p.log.info(`  ${pc.dim("$")} dojops analyze diff --diff-file <path>`);
     p.log.info(`  ${pc.dim("$")} cat diff.txt | dojops analyze diff`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No diff content provided.");
   }

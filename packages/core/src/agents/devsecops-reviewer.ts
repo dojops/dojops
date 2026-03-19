@@ -11,8 +11,8 @@ export const ReviewFindingSchema = z.object({
   category: z.enum(["security", "version", "deprecated", "best-practice", "syntax", "performance"]),
   message: z.string(),
   recommendation: z.string(),
-  line: z.number().optional(),
-  toolSource: z.string().optional(),
+  line: z.number().nullable().optional(),
+  toolSource: z.string().nullable().optional(),
 });
 
 export const ReviewReportSchema = z.object({

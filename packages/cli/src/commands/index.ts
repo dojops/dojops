@@ -60,6 +60,12 @@ export function resolveCommand(commandPath: string[], remaining: string[]): Reso
     }
   }
 
+  // Fall back to default handler (parent command registered before subcommands)
+  const defaultHandler = entry.get("");
+  if (defaultHandler) {
+    return { handler: defaultHandler, remaining: [...commandPath.slice(1), ...remaining] };
+  }
+
   // No matching subcommand found — return null so the caller can show a proper error
   return null;
 }
@@ -77,7 +83,11 @@ export function registerCommand(path: string, handler: CommandHandler): void {
 export function registerSubcommand(parent: string, sub: string, handler: CommandHandler): void {
   let entry = registry.get(parent);
   if (!entry || typeof entry === "function") {
-    entry = new Map<string, CommandHandler>();
+    const subs = new Map<string, CommandHandler>();
+    if (typeof entry === "function") {
+      subs.set("", entry); // preserve parent as default fallback
+    }
+    entry = subs;
     registry.set(parent, entry);
   }
   (entry as Map<string, CommandHandler>).set(sub, handler);

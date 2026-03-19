@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-03-19
+
+### Fixed
+
+- **`memory` command routing broken by subcommand registration**: `registerSubcommand()` replaced the parent function handler with a Map, discarding the fallback. Commands like `dojops memory list` returned "Unknown command" because the Map had no `"list"` key. The parent handler is now preserved under the `""` key and `resolveCommand()` falls back to it for unregistered subcommands
+- **`review` rejects null values in Zod schema**: DeepSeek (and potentially other providers) returns `"line": null` in review findings, but `z.number().optional()` only accepts `number | undefined`. Added `.nullable()` to `line` and `toolSource` fields in `ReviewFindingSchema` and the CLI formatter types
+- **`analyze diff` strips inline diff content**: The argument filter `!a.startsWith("-")` removed diff content starting with `---`/`-` (valid unified diff syntax). Switched to a whitelist approach that only filters known CLI flags. Renamed `--file` to `--diff-file` to avoid conflict with the global `--file` option
+
+### Added
+
+- **Command registry test coverage**: New `command-registry.test.ts` verifying that `registerSubcommand` preserves parent handler fallback behavior
+
 ## [1.1.3] - 2026-03-18
 
 ### Added
