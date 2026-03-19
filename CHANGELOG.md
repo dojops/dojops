@@ -45,7 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Skill keyword routing expanded**: `SKILL_KEYWORDS` map in `generate.ts` and `TOOL_LIBRARY_MAP` in Context7 now include all 5 new skills
 - **Generic error responses**: Chat API returns `"Internal server error"` instead of leaking internal error details to clients
 - **Background child env filtering**: `dojops auto --background` filters sensitive environment variables before spawning child processes
-- **GitLab CI review artifact type**: Changed from `codequality` to generic `report` in `.gitlab/dojops-review.yml`
 - **CloudFormation skill**: Set `child_process: none` (generation only, no execution)
 - **OTel Collector skill**: Narrowed detection paths to reduce false positives
 - **Drift audit status**: Uses descriptive `"drift-detected"` / `"no-drift"` status instead of generic `"success"`
