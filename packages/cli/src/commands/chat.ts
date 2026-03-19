@@ -625,6 +625,9 @@ const HELP_ENTRIES: Array<{ cmd: string; args?: string; desc: string }> = [
   { cmd: "/apply", args: "[plan-id]", desc: "Execute a saved plan" },
   { cmd: "/scan", args: "[type]", desc: "Run security/dependency scanners" },
   { cmd: "/auto", args: "<prompt>", desc: "Run autonomous agent (iterative tool-use)" },
+  { cmd: "/checkpoint", args: "[name]", desc: "Create a git-based checkpoint of current state" },
+  { cmd: "/restore", args: "<id|name>", desc: "Restore files from a checkpoint" },
+  { cmd: "/rewind", args: "[n] [--code]", desc: "Undo last n turns (--code also restores files)" },
   { cmd: "/voice", desc: "Push-to-talk voice input (requires whisper.cpp + sox)" },
   { cmd: "!", args: "<command>", desc: "Run a shell command (e.g. !git status)" },
 ];
@@ -729,6 +732,77 @@ async function handleSlashCommand(
   }
   if (trimmed.startsWith("/auto ")) {
     await handleAutoCommand(trimmed, rootDir, session, ctx);
+    return true;
+  }
+  if (trimmed === "/checkpoint" || trimmed.startsWith("/checkpoint ")) {
+    const name = trimmed.slice(12).trim() || undefined;
+    try {
+      const { createCheckpoint } = await import("@dojops/executor");
+      const entry = createCheckpoint(rootDir, name);
+      if (entry) {
+        p.log.success(
+          `Checkpoint ${pc.cyan(entry.id)}${name ? ` (${pc.bold(name)})` : ""} created`,
+        );
+        if (entry.filesTracked.length > 0) {
+          p.log.info(pc.dim(`Files: ${entry.filesTracked.join(", ")}`));
+        }
+      } else {
+        p.log.info("No changes to checkpoint.");
+      }
+    } catch (err) {
+      p.log.error(`Checkpoint failed: ${formatError(err)}`);
+    }
+    return true;
+  }
+  if (trimmed.startsWith("/restore ")) {
+    const idOrName = trimmed.slice(9).trim();
+    if (!idOrName) {
+      p.log.warn("Usage: /restore <id|name>");
+      return true;
+    }
+    try {
+      const { restoreCheckpoint } = await import("@dojops/executor");
+      const entry = restoreCheckpoint(rootDir, idOrName);
+      if (entry) {
+        p.log.success(
+          `Restored checkpoint ${pc.cyan(entry.id)}${entry.name ? ` (${entry.name})` : ""}`,
+        );
+      } else {
+        p.log.warn(`Checkpoint "${idOrName}" not found.`);
+      }
+    } catch (err) {
+      p.log.error(`Restore failed: ${formatError(err)}`);
+    }
+    return true;
+  }
+  if (trimmed === "/rewind" || trimmed.startsWith("/rewind ")) {
+    const parts = trimmed.slice(7).trim().split(/\s+/);
+    const withCode = parts.includes("--code");
+    const nStr = parts.find((p) => /^\d+$/.test(p));
+    const n = nStr ? parseInt(nStr, 10) : 1;
+    const result = session.rewind(n);
+    if (result.removedTurns === 0) {
+      p.log.info("Nothing to rewind.");
+    } else {
+      p.log.success(
+        `Rewound ${result.removedTurns} turn${result.removedTurns > 1 ? "s" : ""} (${result.removedMessages.length} messages removed)`,
+      );
+    }
+    if (withCode) {
+      try {
+        const { listCheckpoints, restoreCheckpoint } = await import("@dojops/executor");
+        const checkpoints = listCheckpoints(rootDir);
+        if (checkpoints.length > 0) {
+          const latest = checkpoints[0];
+          restoreCheckpoint(rootDir, latest.id);
+          p.log.success(`Files restored from checkpoint ${pc.cyan(latest.id)}`);
+        } else {
+          p.log.info(pc.dim("No checkpoints available for file restoration."));
+        }
+      } catch (err) {
+        p.log.warn(`File restore failed: ${formatError(err)}`);
+      }
+    }
     return true;
   }
   if (trimmed === "/voice") {
@@ -977,9 +1051,43 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     p.log.info(`${pc.cyan("Voice mode enabled")} — use /voice for push-to-talk`);
   }
 
+  // ── Model routing: log if enabled (per-message routing in chat) ─
+  if (!ctx.globalOpts.model) {
+    const { loadConfig } = await import("../config");
+    const config = loadConfig();
+    if (config.modelRouting?.enabled && ctx.globalOpts.verbose) {
+      p.log.info(pc.dim("Model routing enabled — model may vary per message complexity."));
+    }
+  }
+
   const provider = ctx.getProvider();
   const docAugmenter = await loadDocAugmenter();
-  const { router } = createRouter(provider, rootDir, docAugmenter);
+
+  // ── Trust check: gate custom agents/MCP/skills ─────────────────
+  const { isFolderTrusted, trustFolder } = await import("../trust");
+  const trustCheck = isFolderTrusted(rootDir);
+  let skipCustomConfigs = false;
+  if (!trustCheck.trusted) {
+    const cfgs = trustCheck.configs;
+    const hasConfigs =
+      cfgs.agents.length > 0 || cfgs.mcpServers.length > 0 || cfgs.skills.length > 0;
+    if (hasConfigs && !ctx.globalOpts.nonInteractive) {
+      p.log.warn("This workspace has custom configs that haven't been trusted:");
+      if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
+      if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
+      if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
+      const trustDecision = await p.confirm({ message: "Trust this workspace?" });
+      if (p.isCancel(trustDecision) || !trustDecision) {
+        skipCustomConfigs = true;
+        p.log.info(pc.dim("Skipping custom agents/MCP/skills for this session."));
+      } else {
+        trustFolder(rootDir);
+        p.log.success("Workspace trusted.");
+      }
+    }
+  }
+
+  const { router } = createRouter(provider, rootDir, docAugmenter, skipCustomConfigs);
 
   const state = resolveSessionState(rootDir, resumeFlag, sessionName, deterministic);
   const mode: SessionMode = deterministic ? "DETERMINISTIC" : "INTERACTIVE";

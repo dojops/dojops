@@ -214,6 +214,7 @@ export function initProject(rootDir: string): string[] {
     path.join(base, "sbom"),
     path.join(base, "memory"),
     path.join(base, "debug"),
+    path.join(base, "checkpoints"),
   ];
 
   const created: string[] = [];
@@ -243,7 +244,7 @@ export function initProject(rootDir: string): string[] {
   if (!fs.existsSync(gitignore)) {
     fs.writeFileSync(
       gitignore,
-      "# DojOps project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\nmemory/\naudit-key\n",
+      "# DojOps project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\nmemory/\naudit-key\ncheckpoints/\n",
     );
     created.push(".dojops/.gitignore");
   }

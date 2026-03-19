@@ -142,8 +142,9 @@ export function createRouter(
   provider: LLMProvider,
   projectPath?: string,
   docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> },
+  skipCustomConfigs?: boolean,
 ): CreateRouterResult {
-  const customAgents = discoverCustomAgents(projectPath);
+  const customAgents = skipCustomConfigs ? [] : discoverCustomAgents(projectPath);
   const customConfigs: SpecialistConfig[] = customAgents.map((entry) => ({
     name: entry.config.name,
     domain: entry.config.domain,

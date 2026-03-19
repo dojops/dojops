@@ -24,6 +24,8 @@ export interface ToolExecutorOptions {
   mcpDispatcher?: McpToolDispatcher;
   onToolStart?: (call: ToolCall) => void;
   onToolEnd?: (call: ToolCall, result: ToolResult) => void;
+  /** Called before any file write/edit — use for checkpointing. */
+  onBeforeWrite?: (filePath: string) => void;
 }
 
 /** Truncate output to fit within the context budget. */
@@ -247,6 +249,7 @@ export class ToolExecutor {
 
     checkWriteAllowed(filePath, this.opts.policy);
     checkFileSize(Buffer.byteLength(content, "utf-8"), this.opts.policy);
+    this.opts.onBeforeWrite?.(filePath);
 
     const existed = fs.existsSync(filePath);
     const dir = path.dirname(filePath);
@@ -274,6 +277,7 @@ export class ToolExecutor {
     }
 
     checkWriteAllowed(filePath, this.opts.policy);
+    this.opts.onBeforeWrite?.(filePath);
 
     const content = fs.readFileSync(filePath, "utf-8");
     const occurrences = content.split(oldString).length - 1;

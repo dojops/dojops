@@ -5,7 +5,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { AGENT_TOOLS } from "@dojops/core";
 import type { ToolCall, ToolDefinition } from "@dojops/core";
-import { ToolExecutor } from "@dojops/executor";
+import { ToolExecutor, createCheckpoint } from "@dojops/executor";
 import type { McpToolDispatcher as McpToolDispatcherType } from "@dojops/executor";
 import { AgentLoop } from "@dojops/session";
 import { createTools } from "@dojops/api";
@@ -285,11 +285,52 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     `${pc.bold(pc.cyan("Autonomous agent mode"))} — iterative tool-use (max ${maxIterations} iterations)`,
   );
 
+  // ── Model routing: override model for simple/complex prompts ───
+  if (!ctx.globalOpts.model) {
+    const { loadConfig } = await import("../config");
+    const config = loadConfig();
+    if (config.modelRouting?.enabled) {
+      const { resolveModelForPrompt } = await import("@dojops/core");
+      const override = resolveModelForPrompt(prompt, config.modelRouting);
+      if (override) {
+        ctx.globalOpts.model = override.model;
+        if (ctx.globalOpts.verbose) {
+          p.log.info(pc.dim(`Model routing: ${override.reason} → ${override.model}`));
+        }
+      }
+    }
+  }
+
   const provider = ctx.getProvider();
   const cwd = ctx.cwd;
 
   // Load skills for the run_skill tool
   const rootDir = findProjectRoot(cwd);
+
+  // ── Trust check: gate custom agents/MCP/skills ─────────────────
+  let skipCustomConfigs = false;
+  if (rootDir) {
+    const { isFolderTrusted, trustFolder } = await import("../trust");
+    const trustCheck = isFolderTrusted(rootDir);
+    const cfgs = trustCheck.configs;
+    const hasConfigs =
+      cfgs.agents.length > 0 || cfgs.mcpServers.length > 0 || cfgs.skills.length > 0;
+    if (!trustCheck.trusted && hasConfigs && !ctx.globalOpts.nonInteractive) {
+      p.log.warn("This workspace has custom configs that haven't been trusted:");
+      if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
+      if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
+      if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
+      const trustDecision = await p.confirm({ message: "Trust this workspace?" });
+      if (p.isCancel(trustDecision) || !trustDecision) {
+        skipCustomConfigs = true;
+        p.log.info(pc.dim("Skipping custom agents/MCP/skills for this session."));
+      } else {
+        trustFolder(rootDir);
+        p.log.success("Workspace trusted.");
+      }
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let skillsMap = new Map<string, any>();
   try {
@@ -302,32 +343,33 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     // Skills loading is optional — agent can still read/write/run commands
   }
 
-  // Load MCP tools (optional — external tool servers)
+  // Load MCP tools (optional — external tool servers, skipped if untrusted)
   let mcpDispatcher: McpToolDispatcherType | undefined;
   let mcpDisconnect: (() => Promise<void>) | undefined;
   let mcpTools: ToolDefinition[] = [];
-  try {
-    const { loadMcpConfig, McpClientManager, McpToolDispatcher } = await import("@dojops/mcp");
-    const mcpConfig = loadMcpConfig(rootDir ?? cwd);
-    if (Object.keys(mcpConfig.mcpServers).length > 0) {
-      const mcpManager = new McpClientManager();
-      await mcpManager.connectAll(mcpConfig);
-      const connected = mcpManager.getConnectedServers();
-      if (connected.length > 0) {
-        const dispatcher = new McpToolDispatcher(mcpManager);
-        mcpDispatcher = dispatcher;
-        mcpTools = dispatcher.getToolDefinitions();
-        mcpDisconnect = () => mcpManager.disconnectAll();
-        p.log.info(
-          pc.dim(
-            `Connected ${connected.length} MCP server${connected.length > 1 ? "s" : ""} (${mcpTools.length} tools)`,
-          ),
-        );
+  if (!skipCustomConfigs)
+    try {
+      const { loadMcpConfig, McpClientManager, McpToolDispatcher } = await import("@dojops/mcp");
+      const mcpConfig = loadMcpConfig(rootDir ?? cwd);
+      if (Object.keys(mcpConfig.mcpServers).length > 0) {
+        const mcpManager = new McpClientManager();
+        await mcpManager.connectAll(mcpConfig);
+        const connected = mcpManager.getConnectedServers();
+        if (connected.length > 0) {
+          const dispatcher = new McpToolDispatcher(mcpManager);
+          mcpDispatcher = dispatcher;
+          mcpTools = dispatcher.getToolDefinitions();
+          mcpDisconnect = () => mcpManager.disconnectAll();
+          p.log.info(
+            pc.dim(
+              `Connected ${connected.length} MCP server${connected.length > 1 ? "s" : ""} (${mcpTools.length} tools)`,
+            ),
+          );
+        }
       }
+    } catch {
+      // MCP is optional — @dojops/mcp may not be installed or config may not exist
     }
-  } catch {
-    // MCP is optional — @dojops/mcp may not be installed or config may not exist
-  }
 
   const isStreamJson = ctx.globalOpts.output === "stream-json";
 
@@ -351,6 +393,22 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     cwd,
     skills: skillsMap,
     mcpDispatcher,
+    onBeforeWrite: (() => {
+      let checkpointed = false;
+      return () => {
+        if (checkpointed) return;
+        checkpointed = true;
+        try {
+          const cpRoot = rootDir ?? cwd;
+          const entry = createCheckpoint(cpRoot, `auto-${Date.now()}`);
+          if (entry) {
+            p.log.info(pc.dim(`Checkpoint ${entry.id} created before first write`));
+          }
+        } catch {
+          // Checkpointing is best-effort — don't block the agent
+        }
+      };
+    })(),
     onToolStart: (call) => {
       if (isStreamJson) {
         emitStreamEvent({

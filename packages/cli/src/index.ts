@@ -76,6 +76,8 @@ import { insightsCommand } from "./commands/insights";
 import { memoryCommand } from "./commands/memory";
 import { runsCommand } from "./commands/runs";
 import { mcpCommand } from "./commands/mcp";
+import { checkpointCommand } from "./commands/checkpoint";
+import { trustCommand, untrustCommand } from "./commands/trust";
 import { recordCommandError } from "./memory";
 import { prependToolchainBinToPath, projectToolchainCtx } from "./toolchain-sandbox";
 import { withTracking } from "./tracking-provider";
@@ -99,6 +101,24 @@ registerCommand("tokens", tokensCommand);
 registerCommand("insights", insightsCommand);
 registerCommand("memory", memoryCommand);
 registerCommand("runs", runsCommand);
+registerCommand("checkpoint", checkpointCommand);
+registerCommand("trust", trustCommand);
+registerCommand("untrust", untrustCommand);
+
+// Nested: checkpoint <sub>
+registerSubcommand("checkpoint", "create", (args, ctx) =>
+  checkpointCommand(["create", ...args], ctx),
+);
+registerSubcommand("checkpoint", "list", (args, ctx) => checkpointCommand(["list", ...args], ctx));
+registerSubcommand("checkpoint", "restore", (args, ctx) =>
+  checkpointCommand(["restore", ...args], ctx),
+);
+registerSubcommand("checkpoint", "clean", (args, ctx) =>
+  checkpointCommand(["clean", ...args], ctx),
+);
+
+// Nested: trust <sub>
+registerSubcommand("trust", "list", (args, ctx) => trustCommand(["list", ...args], ctx));
 
 // Nested: runs <sub> (background run management)
 registerSubcommand("runs", "list", (args, ctx) => runsCommand(["list", ...args], ctx));
@@ -302,6 +322,9 @@ const QUIET_COMMANDS = new Set([
   "memory",
   "runs",
   "mcp",
+  "checkpoint",
+  "trust",
+  "untrust",
 ]);
 
 const NESTED_COMMAND_PARENTS = new Set([
@@ -316,6 +339,8 @@ const NESTED_COMMAND_PARENTS = new Set([
   "completion",
   "runs",
   "mcp",
+  "checkpoint",
+  "trust",
 ]);
 
 /** Route the resolved command or fall back to generate. */

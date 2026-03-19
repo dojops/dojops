@@ -1,0 +1,116 @@
+name: "DojOps PR Review"
+description: "AI-powered DevSecOps review on pull request changes"
+inputs:
+  provider:
+    description: "LLM provider (openai, anthropic, deepseek, gemini)"
+    required: false
+    default: "openai"
+  model:
+    description: "LLM model override"
+    required: false
+  api-key:
+    description: "LLM provider API key"
+    required: true
+  fail-on:
+    description: "Fail on severity: critical, high, medium, low, none"
+    required: false
+    default: "none"
+  comment:
+    description: "Post findings as PR comment"
+    required: false
+    default: "true"
+  version:
+    description: "DojOps CLI version to install"
+    required: false
+    default: "latest"
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    - name: Install DojOps
+      shell: bash
+      run: npm install -g @dojops/cli@${{ inputs.version }}
+
+    - name: Get changed files
+      id: changed
+      shell: bash
+      run: |
+        FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only | tr '\n' ' ')
+        echo "files=$FILES" >> $GITHUB_OUTPUT
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Run DojOps review
+      id: review
+      shell: bash
+      run: |
+        dojops init --non-interactive --skip-scan --skip-tools --skip-review 2>/dev/null || true
+        REVIEW_OUTPUT=$(dojops review ${{ steps.changed.outputs.files }} --output json --non-interactive 2>/dev/null || echo "")
+        if [ -n "$REVIEW_OUTPUT" ]; then
+          # Write to file to avoid shell escaping issues
+          echo "$REVIEW_OUTPUT" > /tmp/review.json
+          echo "has_review=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_review=false" >> $GITHUB_OUTPUT
+        fi
+      env:
+        DOJOPS_PROVIDER: ${{ inputs.provider }}
+        DOJOPS_MODEL: ${{ inputs.model }}
+        OPENAI_API_KEY: ${{ inputs.api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.api-key }}
+        DEEPSEEK_API_KEY: ${{ inputs.api-key }}
+        GEMINI_API_KEY: ${{ inputs.api-key }}
+
+    - name: Post PR comment
+      if: inputs.comment == 'true' && steps.review.outputs.has_review == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const raw = fs.readFileSync('/tmp/review.json', 'utf-8');
+          const node = require('./.github/actions/review/format-comment.js');
+          const body = node.formatComment(raw);
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body
+          });
+
+    - name: Check severity threshold
+      if: inputs.fail-on != 'none' && steps.review.outputs.has_review == 'true'
+      shell: bash
+      run: |
+        THRESHOLD="${{ inputs.fail-on }}"
+        REVIEW=$(cat /tmp/review.json)
+
+        # Map severity to numeric level for comparison
+        sev_level() {
+          case "$1" in
+            critical) echo 4 ;;
+            high) echo 3 ;;
+            medium) echo 2 ;;
+            low) echo 1 ;;
+            *) echo 0 ;;
+          esac
+        }
+
+        THRESHOLD_LEVEL=$(sev_level "$THRESHOLD")
+
+        # Check if any finding meets or exceeds the threshold
+        FOUND=$(echo "$REVIEW" | node -e "
+          const data = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
+          const findings = data.findings || [];
+          const levels = { critical: 4, high: 3, medium: 2, low: 1 };
+          const threshold = ${THRESHOLD_LEVEL};
+          const hit = findings.some(f => (levels[f.severity?.toLowerCase()] || 0) >= threshold);
+          console.log(hit ? 'true' : 'false');
+        ")
+
+        if [ "$FOUND" = "true" ]; then
+          echo "::error::DojOps review found findings at or above '${THRESHOLD}' severity"
+          exit 1
+        fi

@@ -13,6 +13,8 @@ export {
   cleanExpiredSessions,
 } from "./serializer";
 export { buildSessionContext, buildFileTree } from "./context-injector";
+export { rewindMessages, getTurnCount } from "./rewind";
+export type { RewindResult } from "./rewind";
 export type {
   ChatMessage,
   ChatSessionState,

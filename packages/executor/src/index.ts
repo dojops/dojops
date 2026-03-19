@@ -3,5 +3,6 @@ export * from "./policy";
 export * from "./sandbox";
 export * from "./approval";
 export * from "./safe-executor";
+export * from "./checkpoint";
 export { ToolExecutor } from "./tool-executor";
 export type { ToolExecutorOptions, McpToolDispatcher } from "./tool-executor";

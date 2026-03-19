@@ -5,6 +5,17 @@ import { isCopilotAuthenticated } from "@dojops/core";
 import { mkdirOwnerOnly, writeFileOwnerOnly } from "./secure-fs";
 import { encryptTokens, decryptTokens } from "./vault";
 
+export interface ModelRoutingRule {
+  match: "simple" | "complex" | "code" | "review" | "analysis";
+  model: string;
+  provider?: string;
+}
+
+export interface ModelRoutingConfig {
+  enabled: boolean;
+  rules: ModelRoutingRule[];
+}
+
 export interface DojOpsConfig {
   defaultProvider?: string;
   defaultModel?: string;
@@ -14,6 +25,8 @@ export interface DojOpsConfig {
   aliases?: Record<string, string>;
   ollamaHost?: string;
   ollamaTlsRejectUnauthorized?: boolean;
+  /** Auto model routing: route prompts to different models by complexity. */
+  modelRouting?: ModelRoutingConfig;
 }
 
 export const VALID_PROVIDERS = [

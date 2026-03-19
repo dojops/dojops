@@ -55,6 +55,9 @@ export function printHelp(): void {
   );
   console.log(`  ${pc.cyan("runs")}               Manage background agent runs (list/show/clean)`);
   console.log(`  ${pc.cyan("mcp")}                Manage MCP servers (list/add/remove)`);
+  console.log(`  ${pc.cyan("checkpoint")}         Create/manage project checkpoints`);
+  console.log(`  ${pc.cyan("trust")}              Trust workspace configs (agents/MCP/skills)`);
+  console.log(`  ${pc.cyan("untrust")}            Remove trust for current workspace`);
   console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
@@ -1244,6 +1247,53 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops memory list --category terraform`);
       console.log(`  ${pc.dim("$")} dojops memory search terraform`);
       console.log(`  ${pc.dim("$")} dojops memory remove 3`);
+      console.log();
+      break;
+
+    case "checkpoint":
+    case "checkpoint create":
+    case "checkpoint list":
+    case "checkpoint restore":
+    case "checkpoint clean":
+      console.log(`\n${pc.bold("dojops checkpoint")} — Create and manage project checkpoints`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops checkpoint [create|list|restore|clean]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(
+        `  ${pc.cyan("create [name]")}   Create a checkpoint (optional name) ${pc.dim("(default)")}`,
+      );
+      console.log(`  ${pc.cyan("list")}            List all checkpoints`);
+      console.log(`  ${pc.cyan("restore <id>")}   Restore files from a checkpoint`);
+      console.log(`  ${pc.cyan("clean")}           Remove all checkpoint metadata`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Checkpoints use git stash create to snapshot the working tree without`);
+      console.log(`  modifying the stash list. Metadata is stored in .dojops/checkpoints/.`);
+      console.log(`  Use in chat via /checkpoint and /restore slash commands.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops checkpoint create my-save`);
+      console.log(`  ${pc.dim("$")} dojops checkpoint list`);
+      console.log(`  ${pc.dim("$")} dojops checkpoint restore my-save`);
+      console.log(`  ${pc.dim("$")} dojops checkpoint clean`);
+      console.log();
+      break;
+
+    case "trust":
+    case "trust list":
+    case "untrust":
+      console.log(`\n${pc.bold("dojops trust")} — Manage workspace config trust`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops trust           Mark current workspace as trusted`);
+      console.log(`  ${pc.dim("$")} dojops trust list       List all trusted folders`);
+      console.log(`  ${pc.dim("$")} dojops untrust          Remove trust for current workspace`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Workspace configs (.dojops/agents/, .dojops/mcp.json, .dojops/skills/)`);
+      console.log(`  are loaded automatically. Trust decisions are stored globally in`);
+      console.log(`  ~/.dojops/trusted-folders.json with a content hash. If configs change,`);
+      console.log(`  you'll be re-prompted to trust the workspace.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops trust`);
+      console.log(`  ${pc.dim("$")} dojops trust list`);
+      console.log(`  ${pc.dim("$")} dojops untrust`);
       console.log();
       break;
 

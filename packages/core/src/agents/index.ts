@@ -11,3 +11,4 @@ export * from "./dojopsignore";
 export * from "./tool-deps";
 export * from "./system-tools";
 export * from "./critic";
+export * from "./model-router";

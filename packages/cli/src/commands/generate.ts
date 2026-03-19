@@ -892,6 +892,22 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const projectRoot = findProjectRoot() ?? undefined;
   runPreGenerateHook(projectRoot, prompt, ctx.globalOpts.verbose);
 
+  // ── Model routing: override model for simple/complex prompts ───
+  if (!ctx.globalOpts.model) {
+    const { loadConfig } = await import("../config");
+    const config = loadConfig();
+    if (config.modelRouting?.enabled) {
+      const { resolveModelForPrompt } = await import("@dojops/core");
+      const override = resolveModelForPrompt(prompt, config.modelRouting);
+      if (override) {
+        ctx.globalOpts.model = override.model;
+        if (ctx.globalOpts.verbose) {
+          p.log.info(pc.dim(`Model routing: ${override.reason} → ${override.model}`));
+        }
+      }
+    }
+  }
+
   const provider = ctx.getProvider();
   const { docAugmenter, context7Provider } = await initContext7();
   const projectContextStr = buildProjectContextString(projectRoot);

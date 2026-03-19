@@ -17,7 +17,7 @@ _dojops() {
   _init_completion || return
 
   # Top-level commands
-  local commands="plan generate apply validate explain debug analyze review auto inspect agents history modules tools toolchain scan chat check verify provider config auth serve status doctor init clean destroy rollback cron upgrade help completion"
+  local commands="plan generate apply validate explain debug analyze review auto inspect agents history modules tools toolchain scan chat check verify provider config auth serve status doctor init clean destroy rollback checkpoint trust untrust cron upgrade help completion"
 
   # Subcommand maps
   local sub_debug="ci"
@@ -35,6 +35,8 @@ _dojops() {
   local sub_inspect="config session"
   local sub_provider="list default add remove switch"
   local sub_cron="add list remove"
+  local sub_checkpoint="create list restore clean"
+  local sub_trust="list"
   local sub_completion="bash zsh fish install"
 
   # Global flags

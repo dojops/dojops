@@ -44,6 +44,9 @@ _dojops() {
     'rollback:Reverse an applied plan'
     'cron:Manage scheduled jobs'
     'upgrade:Check for and install CLI updates'
+    'checkpoint:Create and manage project checkpoints'
+    'trust:Trust workspace configs'
+    'untrust:Remove workspace trust'
     'help:Show help message'
     'completion:Generate shell completion scripts'
     'tools:Manage modules (deprecated alias)'
@@ -77,7 +80,7 @@ _dojops() {
   # Subcommand definitions
   local -a sub_debug sub_analyze sub_agents sub_history sub_modules sub_toolchain
   local -a sub_config sub_config_profile sub_auth sub_serve sub_chat sub_inspect
-  local -a sub_provider sub_cron sub_completion
+  local -a sub_provider sub_cron sub_completion sub_checkpoint sub_trust
 
   sub_debug=('ci:Diagnose CI/CD log failures')
   sub_analyze=('diff:Analyze infrastructure diff for risk')
@@ -93,6 +96,8 @@ _dojops() {
   sub_inspect=('config:Inspect configuration' 'session:Inspect session state')
   sub_provider=('list:List providers' 'default:Set default' 'add:Add provider' 'remove:Remove provider' 'switch:Switch provider')
   sub_cron=('add:Add scheduled job' 'list:List jobs' 'remove:Remove job')
+  sub_checkpoint=('create:Create checkpoint' 'list:List checkpoints' 'restore:Restore checkpoint' 'clean:Remove checkpoints')
+  sub_trust=('list:List trusted folders')
   sub_completion=('bash:Generate bash completions' 'zsh:Generate zsh completions' 'fish:Generate fish completions' 'install:Install completions')
 
   local curcontext="$curcontext" state line
@@ -124,6 +129,8 @@ _dojops() {
         inspect) _describe -t sub 'subcommand' sub_inspect ;;
         provider) _describe -t sub 'subcommand' sub_provider ;;
         cron) _describe -t sub 'subcommand' sub_cron ;;
+        checkpoint) _describe -t sub 'subcommand' sub_checkpoint ;;
+        trust) _describe -t sub 'subcommand' sub_trust ;;
         completion) _describe -t sub 'subcommand' sub_completion ;;
       esac
       ;;

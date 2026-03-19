@@ -3,6 +3,8 @@ import { ChatMessage, ChatSessionState, SessionMode, ChatProgressCallbacks } fro
 import { MemoryManager } from "./memory";
 import { SessionSummarizer } from "./summarizer";
 import { generateSessionId } from "./serializer";
+import { rewindMessages, getTurnCount } from "./rewind";
+import type { RewindResult } from "./rewind";
 
 export interface ChatSessionOptions {
   provider: LLMProvider;
@@ -344,6 +346,25 @@ export class ChatSession {
       messagesSummarized: totalBefore - keepCount,
       messagesRetained: keepCount,
     };
+  }
+
+  /**
+   * Rewind the last n conversation turns (user+assistant pairs).
+   * Returns details about what was removed.
+   */
+  rewind(n = 1): RewindResult {
+    const result = rewindMessages(this.state.messages, n);
+    this.state.metadata.messageCount = this.state.messages.length;
+    this.state.metadata.totalTokensEstimate = this.memoryManager.estimateTokens(
+      this.state.messages,
+    );
+    this.state.updatedAt = new Date().toISOString();
+    return result;
+  }
+
+  /** Return the number of user turns in this session. */
+  turnCount(): number {
+    return getTurnCount(this.state.messages);
   }
 
   clearMessages(): void {
