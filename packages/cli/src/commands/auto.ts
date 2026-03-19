@@ -1,5 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
@@ -309,24 +311,39 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
 
   // ── Trust check: gate custom agents/MCP/skills ─────────────────
   let skipCustomConfigs = false;
+  let requireApprovalForCommands = false;
   if (rootDir) {
     const { isFolderTrusted, trustFolder } = await import("../trust");
     const trustCheck = isFolderTrusted(rootDir);
     const cfgs = trustCheck.configs;
     const hasConfigs =
       cfgs.agents.length > 0 || cfgs.mcpServers.length > 0 || cfgs.skills.length > 0;
-    if (!trustCheck.trusted && hasConfigs && !ctx.globalOpts.nonInteractive) {
-      p.log.warn("This workspace has custom configs that haven't been trusted:");
-      if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
-      if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
-      if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
-      const trustDecision = await p.confirm({ message: "Trust this workspace?" });
-      if (p.isCancel(trustDecision) || !trustDecision) {
+    if (!trustCheck.trusted && hasConfigs) {
+      if (ctx.globalOpts.nonInteractive) {
+        // G-13: In non-interactive mode, warn but don't block CI/CD
+        p.log.warn(
+          "Untrusted workspace: custom agents/MCP/skills skipped. run_command requires approval.",
+        );
         skipCustomConfigs = true;
-        p.log.info(pc.dim("Skipping custom agents/MCP/skills for this session."));
+        requireApprovalForCommands = true;
       } else {
-        trustFolder(rootDir);
-        p.log.success("Workspace trusted.");
+        p.log.warn("This workspace has custom configs that haven't been trusted:");
+        if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
+        if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
+        if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
+        const trustDecision = await p.confirm({ message: "Trust this workspace?" });
+        if (p.isCancel(trustDecision) || !trustDecision) {
+          skipCustomConfigs = true;
+          requireApprovalForCommands = true;
+          p.log.info(
+            pc.dim(
+              "Skipping custom agents/MCP/skills for this session. run_command requires approval.",
+            ),
+          );
+        } else {
+          trustFolder(rootDir);
+          p.log.success("Workspace trusted.");
+        }
       }
     }
   }
@@ -373,20 +390,29 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
 
   const isStreamJson = ctx.globalOpts.output === "stream-json";
 
+  // G-14: Default to DevOps allowlist enforcement; only disable with explicit flag
+  const allowAllPaths = hasFlag(args, "--allow-all-paths");
+
+  // G-14: Denied write paths — protect sensitive directories
+  const sensitiveHomePaths = ["/.ssh", "/.gnupg", "/.aws", "/.config"].map(
+    (suffix) => os.homedir() + suffix,
+  );
+  const deniedPaths = [...sensitiveHomePaths, path.join(cwd, ".env")];
+
   const toolExecutor = new ToolExecutor({
     policy: {
       allowWrite: true,
       allowedWritePaths: [cwd],
-      deniedWritePaths: [],
-      enforceDevOpsAllowlist: false,
+      deniedWritePaths: deniedPaths,
+      enforceDevOpsAllowlist: !allowAllPaths,
       allowNetwork: false,
       allowEnvVars: [],
       timeoutMs: 30_000,
       maxFileSizeBytes: 1_048_576,
-      requireApproval: false,
+      requireApproval: requireApprovalForCommands,
       skipVerification: false,
       maxVerifyRetries: 0,
-      approvalMode: "never",
+      approvalMode: requireApprovalForCommands ? "always" : "never",
       autoApproveRiskLevel: "MEDIUM",
       maxRepairAttempts: 0,
     },

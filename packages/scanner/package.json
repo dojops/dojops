@@ -35,7 +35,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r src/compliance-frameworks dist/compliance-frameworks",
     "lint": "eslint src/",
     "test": "vitest run",
     "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"

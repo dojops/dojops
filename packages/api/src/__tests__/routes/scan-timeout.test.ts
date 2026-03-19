@@ -68,8 +68,8 @@ describe("T-7: Scan timeout (DOJOPS_SCAN_TIMEOUT_MS) functional tests", () => {
     // The error goes through next(err) -> errorHandler -> 500
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("Internal server error");
-    // In non-production mode, the error message is included
-    expect(res.body.message).toBe("Scan timed out");
+    // G-23: Error details are never exposed to clients (only logged server-side)
+    expect(res.body.message).toBeUndefined();
   });
 
   it("records failed scan with correct error in history after timeout", async () => {

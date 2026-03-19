@@ -57,9 +57,9 @@ export const ExecutionPolicySchema = z.object({
   allowedWritePaths: z.array(z.string()).default([]),
   deniedWritePaths: z.array(z.string()).default([]),
   enforceDevOpsAllowlist: z.boolean().default(true),
-  /** @advisory NOT enforced at runtime. Tool code has full network access. Reserved for future OS-level sandboxing. */
+  /** @advisory Partially enforced: emits warnings via `onPolicyWarning` when network commands are detected in `runCommand`. Not OS-level blocked. */
   allowNetwork: z.boolean().default(false),
-  /** @advisory NOT enforced at runtime. Tool code has full env access. Use `filterEnvVars(policy)` to apply manually. */
+  /** @advisory Partially enforced: when non-empty, `runCommand` filters env vars to this allowlist + PATH/HOME/USER/SHELL. */
   allowEnvVars: z.array(z.string()).default([]),
   timeoutMs: z.number().positive().default(30_000),
   generateTimeoutMs: z.number().positive().optional(),

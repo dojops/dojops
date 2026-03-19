@@ -1,0 +1,113 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: pulumi
+  version: 2.1.0
+  description: "Generate Pulumi infrastructure-as-code in TypeScript or Python"
+  author: dojops
+  license: MIT
+  tags: [pulumi, iac, cloud, aws, gcp, azure, typescript, python]
+
+context:
+  technology: Pulumi
+  fileFormat: raw
+  outputGuidance: |
+    Generate Pulumi infrastructure-as-code using TypeScript (preferred) or Python.
+    Output raw source code directly — do NOT wrap in JSON or code fences.
+    The output must be valid, runnable Pulumi code.
+
+    For TypeScript projects, generate:
+    - index.ts — Main Pulumi program with resource definitions
+    - Pulumi.yaml — Project configuration (name, runtime, description)
+    - Pulumi.dev.yaml — Stack configuration for development (optional)
+
+    For Python projects, generate:
+    - __main__.py — Main Pulumi program with resource definitions
+    - Pulumi.yaml — Project configuration (name, runtime: python, description)
+    - requirements.txt — Python dependencies
+
+    When generating multi-file output, use JSON wrapper format:
+    { "files": { "index.ts": "...", "Pulumi.yaml": "..." } }
+
+    Detect the cloud provider and use case from context:
+    - **AWS**: @pulumi/aws for EC2, S3, Lambda, RDS, ECS, etc.
+    - **GCP**: @pulumi/gcp for GCE, GCS, Cloud Functions, Cloud SQL
+    - **Azure**: @pulumi/azure-native for VMs, Storage, Functions, AKS
+    - **Kubernetes**: @pulumi/kubernetes for K8s resources
+    - **Multi-cloud**: Use appropriate provider packages
+  bestPractices:
+    - Use component resources to encapsulate related infrastructure
+    - Store secrets using Pulumi config with --secret flag (pulumi.Config)
+    - Use stack references for cross-stack dependencies
+    - Export important outputs (URLs, IDs, connection strings)
+    - Use meaningful resource names with project/stack prefixes
+    - Leverage Pulumi's type system for compile-time validation
+    - Use tags consistently across all resources (project, environment, managed-by)
+    - Prefer high-level components (e.g., awsx) over raw resources where available
+    - Never hardcode credentials — use Pulumi config or environment variables
+    - Use transformations for cross-cutting concerns (tagging, naming)
+    - "Set protect: true on stateful resources (databases, storage)"
+    - Use dependsOn only when implicit dependencies are insufficient
+  context7Libraries:
+    - name: pulumi
+      query: "Pulumi TypeScript Python resource definitions, component resources, stack references, config secrets, outputs exports, provider configuration"
+
+files:
+  - path: "{outputPath}/index.ts"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/__main__.py"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/Pulumi.yaml"
+    format: raw
+    conditional: true
+
+detection:
+  paths: ["Pulumi.yaml", "Pulumi.yml", "Pulumi.*.yaml"]
+  updateMode: true
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["*.ts", "*.py", "Pulumi.yaml", "Pulumi.*.yaml", "requirements.txt"]
+
+risk:
+  level: MEDIUM
+  rationale: "Infrastructure changes may affect cloud resources and incur costs"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Pulumi
+
+## Prompt
+
+You are a Pulumi expert specializing in infrastructure-as-code using TypeScript and Python. Generate production-ready Pulumi programs.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+pulumi, iac, infrastructure, cloud, aws, gcp, azure, kubernetes,
+stack, component, resource, config, output, secret, typescript,
+python, provider, state, preview, up, destroy

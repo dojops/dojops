@@ -1,0 +1,52 @@
+{
+  "framework": "SOC2",
+  "version": "2017",
+  "description": "SOC 2 Type II Trust Services Criteria",
+  "controls": [
+    {
+      "controlId": "CC6.1",
+      "description": "Logical and physical access controls: The entity implements logical access security software, infrastructure, and architectures over protected information assets.",
+      "checkovIds": ["CKV_AWS_40", "CKV_AWS_41", "CKV_AWS_49", "CKV_AWS_70", "CKV_AWS_145"]
+    },
+    {
+      "controlId": "CC6.3",
+      "description": "Role-based access and least privilege: The entity authorizes, modifies, or removes access to data based on roles.",
+      "checkovIds": ["CKV_AWS_40", "CKV_AWS_61", "CKV_AWS_62", "CKV_AWS_63"]
+    },
+    {
+      "controlId": "CC6.6",
+      "description": "Network security boundaries: The entity implements logical access security measures to protect against threats from outside its system boundaries.",
+      "checkovIds": ["CKV_AWS_23", "CKV_AWS_24", "CKV_AWS_25", "CKV_AWS_260"]
+    },
+    {
+      "controlId": "CC6.7",
+      "description": "Data transmission encryption: The entity restricts the transmission of data to authorized external parties.",
+      "checkovIds": ["CKV_AWS_19", "CKV_AWS_21", "CKV_AWS_44", "CKV_AWS_86"]
+    },
+    {
+      "controlId": "CC6.8",
+      "description": "Malicious software prevention: The entity implements controls to prevent or detect and act upon malicious software.",
+      "checkovIds": ["CKV_AWS_118", "CKV_AWS_162"]
+    },
+    {
+      "controlId": "CC7.1",
+      "description": "Infrastructure and software monitoring: The entity monitors system components for anomalies.",
+      "checkovIds": ["CKV_AWS_35", "CKV_AWS_36", "CKV_AWS_37", "CKV_AWS_76"]
+    },
+    {
+      "controlId": "CC7.2",
+      "description": "Anomaly detection and incident response: The entity monitors for anomalous activity.",
+      "checkovIds": ["CKV_AWS_48", "CKV_AWS_67"]
+    },
+    {
+      "controlId": "CC8.1",
+      "description": "Change management: The entity authorizes, designs, develops, configures, documents, tests, approves, and implements changes.",
+      "checkovIds": ["CKV_AWS_34"]
+    },
+    {
+      "controlId": "A1.2",
+      "description": "Environmental protections: The entity authorizes, designs, develops, or acquires, implements, operates, approves, maintains, and monitors environmental protections.",
+      "checkovIds": ["CKV_AWS_79", "CKV_AWS_118", "CKV_AWS_149"]
+    }
+  ]
+}

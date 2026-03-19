@@ -370,7 +370,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     return delegateToApply(planId, args, autoApprove, skipVerify, ctx);
   }
 
-  appendAudit(root, {
+  await appendAudit(root, {
     timestamp: new Date().toISOString(),
     user: getCurrentUser(),
     command: `plan "${prompt}"`,

@@ -68,12 +68,12 @@ function collectPlanFiles(root: string, planId: string): string[] {
 }
 
 /** Execute the clean operation under a lock: delete files, audit, report. */
-function executeClean(
+async function executeClean(
   root: string,
   planId: string,
   allFiles: string[],
   outputFormat: string | undefined,
-): void {
+): Promise<void> {
   if (!acquireLock(root, "clean")) {
     const { info } = isLocked(root);
     throw new CLIError(
@@ -85,7 +85,7 @@ function executeClean(
   const startTime = Date.now();
   try {
     const deleted = deleteProjectFiles(allFiles, root);
-    appendAudit(root, {
+    await appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: getCurrentUser(),
       command: `clean ${planId}`,
@@ -174,5 +174,5 @@ export async function cleanCommand(
     }
   }
 
-  executeClean(root, planId, allFiles, ctx.globalOpts.output);
+  await executeClean(root, planId, allFiles, ctx.globalOpts.output);
 }

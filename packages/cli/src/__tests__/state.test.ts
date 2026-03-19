@@ -181,9 +181,9 @@ describe("execution logs", () => {
 });
 
 describe("audit", () => {
-  it("appends and reads audit entries", () => {
+  it("appends and reads audit entries", async () => {
     initProject(tmpDir);
-    appendAudit(tmpDir, {
+    await appendAudit(tmpDir, {
       timestamp: new Date().toISOString(),
       user: "test",
       command: "plan Create CI",
@@ -192,7 +192,7 @@ describe("audit", () => {
       status: "success",
       durationMs: 500,
     });
-    appendAudit(tmpDir, {
+    await appendAudit(tmpDir, {
       timestamp: new Date().toISOString(),
       user: "test",
       command: "apply plan-test1234",
@@ -293,9 +293,9 @@ describe("findProjectRoot", () => {
 describe("audit hash chain", () => {
   const makeEntry = makeAuditEntry;
 
-  it("appends entry with seq, hash, previousHash fields", () => {
+  it("appends entry with seq, hash, previousHash fields", async () => {
     initProject(tmpDir);
-    appendAudit(tmpDir, makeEntry("cmd1"));
+    await appendAudit(tmpDir, makeEntry("cmd1"));
     const entries = readAudit(tmpDir);
     expect(entries).toHaveLength(1);
     expect(entries[0].seq).toBe(1);
@@ -303,31 +303,31 @@ describe("audit hash chain", () => {
     expect(entries[0].previousHash).toBe("genesis");
   });
 
-  it("chains hashes across entries", () => {
+  it("chains hashes across entries", async () => {
     initProject(tmpDir);
-    appendAudit(tmpDir, makeEntry("cmd1"));
-    appendAudit(tmpDir, makeEntry("cmd2"));
+    await appendAudit(tmpDir, makeEntry("cmd1"));
+    await appendAudit(tmpDir, makeEntry("cmd2"));
     const entries = readAudit(tmpDir);
     expect(entries).toHaveLength(2);
     expect(entries[1].seq).toBe(2);
     expect(entries[1].previousHash).toBe(entries[0].hash);
   });
 
-  it("verifyAuditIntegrity passes for valid chain", () => {
+  it("verifyAuditIntegrity passes for valid chain", async () => {
     initProject(tmpDir);
-    appendAudit(tmpDir, makeEntry("cmd1"));
-    appendAudit(tmpDir, makeEntry("cmd2"));
-    appendAudit(tmpDir, makeEntry("cmd3"));
+    await appendAudit(tmpDir, makeEntry("cmd1"));
+    await appendAudit(tmpDir, makeEntry("cmd2"));
+    await appendAudit(tmpDir, makeEntry("cmd3"));
     const result = verifyAuditIntegrity(tmpDir);
     expect(result.valid).toBe(true);
     expect(result.totalEntries).toBe(3);
     expect(result.errors).toHaveLength(0);
   });
 
-  it("verifyAuditIntegrity detects tampered entry", () => {
+  it("verifyAuditIntegrity detects tampered entry", async () => {
     initProject(tmpDir);
-    appendAudit(tmpDir, makeEntry("cmd1"));
-    appendAudit(tmpDir, makeEntry("cmd2"));
+    await appendAudit(tmpDir, makeEntry("cmd1"));
+    await appendAudit(tmpDir, makeEntry("cmd2"));
 
     // Tamper with the audit file — change command text in first entry
     const auditPath = path.join(tmpDir, ".dojops", "history", "audit.jsonl");
@@ -351,7 +351,7 @@ describe("audit hash chain", () => {
     expect(result.totalEntries).toBe(0);
   });
 
-  it("handles legacy entries without hash fields gracefully", () => {
+  it("handles legacy entries without hash fields gracefully", async () => {
     initProject(tmpDir);
 
     // Write a legacy entry directly (no hash fields)
@@ -367,19 +367,19 @@ describe("audit hash chain", () => {
     fs.writeFileSync(auditPath, JSON.stringify(legacyEntry) + "\n");
 
     // Now append a new-format entry
-    appendAudit(tmpDir, makeEntry("new-cmd"));
+    await appendAudit(tmpDir, makeEntry("new-cmd"));
 
     const result = verifyAuditIntegrity(tmpDir);
     expect(result.valid).toBe(true);
     expect(result.totalEntries).toBe(2);
   });
 
-  it("detects hash-less entry after chain has started (H2 fix)", () => {
+  it("detects hash-less entry after chain has started (H2 fix)", async () => {
     initProject(tmpDir);
 
     // Write two valid chained entries
-    appendAudit(tmpDir, makeEntry("cmd1"));
-    appendAudit(tmpDir, makeEntry("cmd2"));
+    await appendAudit(tmpDir, makeEntry("cmd1"));
+    await appendAudit(tmpDir, makeEntry("cmd2"));
 
     // Inject a hash-less entry mid-chain
     const auditPath = path.join(tmpDir, ".dojops", "history", "audit.jsonl");
@@ -473,17 +473,17 @@ describe("checkGitDirty", () => {
 describe("S4: corrupt audit entry recovery", () => {
   const makeEntry = makeAuditEntry;
 
-  it("recovers chain from corrupt last line by scanning backwards", () => {
+  it("recovers chain from corrupt last line by scanning backwards", async () => {
     initProject(tmpDir);
-    appendAudit(tmpDir, makeEntry("cmd1"));
-    appendAudit(tmpDir, makeEntry("cmd2"));
+    await appendAudit(tmpDir, makeEntry("cmd1"));
+    await appendAudit(tmpDir, makeEntry("cmd2"));
 
     // Corrupt the last line
     const auditPath = path.join(tmpDir, ".dojops", "history", "audit.jsonl");
     fs.appendFileSync(auditPath, "NOT VALID JSON\n");
 
     // Append a new entry — should recover from cmd2, not reset to genesis
-    appendAudit(tmpDir, makeEntry("cmd3"));
+    await appendAudit(tmpDir, makeEntry("cmd3"));
 
     const entries = readAudit(tmpDir);
     const validEntries = entries.filter((e) => e.seq != null);

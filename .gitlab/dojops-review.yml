@@ -1,0 +1,22 @@
+# DojOps Review — GitLab CI Component
+# Include in your .gitlab-ci.yml:
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/dojops/dojops/main/.gitlab/dojops-review.yml'
+
+dojops-review:
+  stage: test
+  image: node:20-slim
+  variables:
+    DOJOPS_PROVIDER: "${DOJOPS_PROVIDER}"
+  script:
+    - npm install -g @dojops/cli@${DOJOPS_VERSION:-latest}
+    - dojops init --non-interactive --skip-scan --skip-tools --skip-review 2>/dev/null || true
+    - CHANGED=$(git diff --name-only $CI_MERGE_REQUEST_DIFF_BASE_SHA...$CI_COMMIT_SHA | tr '\n' ' ')
+    - dojops review $CHANGED --output json --non-interactive > review.json || true
+    - cat review.json
+  artifacts:
+    reports:
+      codequality: review.json
+    when: always
+  rules:
+    - if: $CI_MERGE_REQUEST_IID

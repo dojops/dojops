@@ -1,0 +1,115 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: argocd
+  version: 2.1.0
+  description: "Generate ArgoCD Application and ApplicationSet manifests"
+  author: dojops
+  license: MIT
+  tags: [argocd, gitops, kubernetes, cd, deployment]
+
+context:
+  technology: ArgoCD
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid ArgoCD Application or ApplicationSet YAML manifests.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    Use multi-document YAML (--- separator) when generating multiple resources.
+    The output must be valid kubectl-compatible YAML for ArgoCD CRDs.
+
+    Generate appropriate ArgoCD resources based on the request:
+    - **Application**: Single app deployment from a Git repo or Helm chart
+    - **ApplicationSet**: Multi-cluster/multi-environment app generation
+    - **AppProject**: RBAC boundaries and source/destination restrictions
+
+    Structure each Application with:
+    - apiVersion: argoproj.io/v1alpha1, kind: Application
+    - metadata: name, namespace (argocd), labels, annotations, finalizers
+    - spec.project: Target AppProject (default or custom)
+    - spec.source: Git repo URL, path, targetRevision (or Helm chart)
+    - spec.destination: Cluster URL/name, namespace
+    - spec.syncPolicy: Automated sync, self-heal, prune, retry
+
+    For ApplicationSet, include appropriate generators:
+    - Git generator (directories or files)
+    - Cluster generator (multi-cluster)
+    - Matrix/Merge generators (combinations)
+    - List generator (explicit environments)
+  bestPractices:
+    - Use the app-of-apps pattern for managing multiple applications
+    - Enable automated sync with self-heal and prune for GitOps workflows
+    - Configure sync waves (argocd.argoproj.io/sync-wave annotation) for ordering
+    - Set ignoreDifferences for fields managed by controllers (e.g., replicas with HPA)
+    - Use server-side apply for large manifests (ServerSideApply=true)
+    - Configure retry strategy with backoff for transient failures
+    - Add resource health checks with custom health.lua scripts when needed
+    - Use AppProject to restrict source repos and destination clusters/namespaces
+    - Set finalizers for cascade deletion (resources.finalizer.argocd.argoproj.io)
+    - Use targetRevision with specific branches or tags, not HEAD in production
+    - Configure notification triggers for sync status changes
+    - Separate ArgoCD app definitions from application manifests in the repo
+  context7Libraries:
+    - name: argocd
+      query: "ArgoCD Application ApplicationSet manifest, sync policy automated self-heal prune, sync waves, ignoreDifferences, AppProject, generators cluster git matrix"
+
+files:
+  - path: "{outputPath}/application.yaml"
+    format: raw
+
+detection:
+  paths: ["**/argocd/*.yaml", "**/argocd/*.yml", "application.yaml", "applicationset.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "kind"
+      required: true
+      message: "ArgoCD manifest must have a kind (Application, ApplicationSet, or AppProject)"
+    - path: "apiVersion"
+      required: true
+      message: "ArgoCD manifest must have apiVersion: argoproj.io/v1alpha1"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml"]
+
+risk:
+  level: MEDIUM
+  rationale: "ArgoCD application changes affect Kubernetes deployment pipelines"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# ArgoCD
+
+## Prompt
+
+You are an ArgoCD and GitOps expert. Generate production-ready ArgoCD Application and ApplicationSet manifests.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+argocd, gitops, application, applicationset, sync, deploy,
+kubernetes, k8s, helm, kustomize, cd, continuous-delivery,
+app-of-apps, sync-wave, self-heal, prune, project

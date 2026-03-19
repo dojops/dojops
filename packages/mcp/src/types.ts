@@ -6,6 +6,8 @@ export interface StdioServerConfig {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  /** Env var names to explicitly pass through to the subprocess (bypasses sanitization). */
+  allowEnvPassthrough?: string[];
 }
 
 /** Configuration for an HTTP-based MCP server (Streamable HTTP). */
@@ -30,6 +32,7 @@ const StdioServerConfigSchema = z.object({
   command: z.string().min(1),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  allowEnvPassthrough: z.array(z.string()).optional(),
 });
 
 const HttpServerConfigSchema = z.object({

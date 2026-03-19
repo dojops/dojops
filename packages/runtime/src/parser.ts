@@ -4,10 +4,19 @@ import { DopsFrontmatterSchema, DopsSkill, DopsValidationResult, MarkdownSection
 
 const FRONTMATTER_DELIMITER = "---";
 
+/** Maximum .dops file size (1MB) to prevent YAML billion-laughs DoS. */
+const MAX_DOPS_FILE_SIZE = 1024 * 1024;
+
 /**
  * Parse a .dops file from disk.
  */
 export function parseDopsFile(filePath: string): DopsSkill {
+  const stat = fs.statSync(filePath);
+  if (stat.size > MAX_DOPS_FILE_SIZE) {
+    throw new Error(
+      `DOPS file exceeds maximum size (${stat.size} bytes > ${MAX_DOPS_FILE_SIZE} bytes): ${filePath}`,
+    );
+  }
   const content = fs.readFileSync(filePath, "utf-8");
   return parseDopsString(content);
 }
@@ -16,6 +25,11 @@ export function parseDopsFile(filePath: string): DopsSkill {
  * Parse a .dops file from a string. Only v2 format is supported.
  */
 export function parseDopsString(content: string): DopsSkill {
+  if (content.length > MAX_DOPS_FILE_SIZE) {
+    throw new Error(
+      `DOPS content exceeds maximum size (${content.length} bytes > ${MAX_DOPS_FILE_SIZE} bytes)`,
+    );
+  }
   const { frontmatterRaw, body } = splitFrontmatter(content);
   const frontmatterData = parseFrontmatterYaml(frontmatterRaw);
   const sections = parseMarkdownSections(body);
@@ -178,7 +192,7 @@ function parseMarkdownSections(body: string): MarkdownSections {
 /** Parse frontmatter YAML and throw on invalid YAML. */
 function parseFrontmatterYaml(raw: string): unknown {
   try {
-    return yaml.load(raw);
+    return yaml.load(raw, { maxAliasCount: 100 } as yaml.LoadOptions);
   } catch (err) {
     throw new Error(`Invalid YAML in frontmatter: ${(err as Error).message}`, { cause: err });
   }

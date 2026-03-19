@@ -3,6 +3,7 @@ import { parseDopsString, parseDopsFile, validateDopsSkill } from "../parser";
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
+  statSync: vi.fn(() => ({ size: 100 })),
 }));
 
 const MINIMAL_V2_DOPS = `---

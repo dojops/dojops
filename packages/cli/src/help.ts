@@ -58,6 +58,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("checkpoint")}         Create/manage project checkpoints`);
   console.log(`  ${pc.cyan("trust")}              Trust workspace configs (agents/MCP/skills)`);
   console.log(`  ${pc.cyan("untrust")}            Remove trust for current workspace`);
+  console.log(`  ${pc.cyan("cost")}               Estimate infrastructure costs (Infracost)`);
+  console.log(`  ${pc.cyan("drift")}              Detect infrastructure drift (Terraform/K8s)`);
+  console.log(`  ${pc.cyan("fix-deps")}           Auto-remediate dependency vulnerabilities`);
   console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
@@ -518,7 +521,9 @@ export function printCommandHelp(command: string): void {
     case "history":
       console.log(`\n${pc.bold("dojops history")} — View execution history and audit logs`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops history [list|show <plan-id>|verify|audit]`);
+      console.log(
+        `  ${pc.dim("$")} dojops history [list|show <plan-id>|verify|audit|export|repair]`,
+      );
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all plans with status ${pc.dim("(default)")}`,
@@ -527,11 +532,19 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("verify")}            Verify audit log hash chain integrity`);
       console.log(`  ${pc.cyan("audit")}             View audit log entries`);
       console.log(`  ${pc.cyan("repair")}            Repair broken audit log hash chain`);
+      console.log(`  ${pc.cyan("export")}            Export audit log (json, csv, syslog)`);
       console.log(`\n${pc.bold("AUDIT OPTIONS")}`);
       console.log(`  ${pc.cyan("--planId=ID")}       Filter audit entries by plan ID`);
       console.log(
         `  ${pc.cyan("--status=STATUS")}   Filter by status (success, failure, cancelled)`,
       );
+      console.log(`\n${pc.bold("EXPORT OPTIONS")}`);
+      console.log(
+        `  ${pc.cyan("--format=FORMAT")}   Export format: json ${pc.dim("(default)")}, csv, syslog`,
+      );
+      console.log(`  ${pc.cyan("--output=<file>")}   Write to file instead of stdout`);
+      console.log(`  ${pc.cyan("--since=<date>")}    Filter entries from date`);
+      console.log(`  ${pc.cyan("--until=<date>")}    Filter entries until date`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops history`);
       console.log(`  ${pc.dim("$")} dojops history list`);
@@ -904,10 +917,74 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
+    case "cost":
+      console.log(`\n${pc.bold("dojops cost")} — Estimate infrastructure costs via Infracost`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops cost [path]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--output=json")}   Machine-readable JSON output`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(
+        `  Runs ${pc.cyan("infracost breakdown")} on the given path (or current directory)`,
+      );
+      console.log(`  and displays a formatted cost summary table.`);
+      console.log(`  Requires Infracost to be installed and configured.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops cost`);
+      console.log(`  ${pc.dim("$")} dojops cost ./terraform/`);
+      console.log(`  ${pc.dim("$")} dojops cost --output json`);
+      console.log();
+      break;
+
+    case "drift":
+      console.log(`\n${pc.bold("dojops drift")} — Detect infrastructure configuration drift`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops drift [--terraform] [--kubernetes]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--terraform")}    Detect Terraform state drift (terraform plan)`);
+      console.log(`  ${pc.cyan("--kubernetes")}   Detect Kubernetes config drift (kubectl diff)`);
+      console.log(`  ${pc.cyan("--path=<dir>")}   Manifest path for kubectl diff`);
+      console.log(`  ${pc.cyan("--output=json")}  Machine-readable JSON output`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Detects drift between declared infrastructure and live state.`);
+      console.log(`  Without flags, tries both Terraform and Kubernetes detection.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops drift`);
+      console.log(`  ${pc.dim("$")} dojops drift --terraform`);
+      console.log(`  ${pc.dim("$")} dojops drift --kubernetes --path k8s/`);
+      console.log(`  ${pc.dim("$")} dojops drift --output json`);
+      console.log();
+      break;
+
+    case "fix-deps":
+      console.log(`\n${pc.bold("dojops fix-deps")} — Auto-remediate dependency vulnerabilities`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops fix-deps [--npm] [--pip]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--npm")}         Fix npm/pnpm dependency vulnerabilities`);
+      console.log(
+        `  ${pc.cyan("--pip")}         Fix pip dependency vulnerabilities (requires pip-audit)`,
+      );
+      console.log(`  ${pc.cyan("--dry-run")}     Preview fixes without applying`);
+      console.log(`  ${pc.cyan("--output=json")} Machine-readable JSON output`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Runs dependency audit and applies available fixes automatically.`);
+      console.log(`  Without flags, detects and fixes both npm and pip if available.`);
+      console.log(`  Shows a before/after vulnerability count summary.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops fix-deps`);
+      console.log(`  ${pc.dim("$")} dojops fix-deps --npm`);
+      console.log(`  ${pc.dim("$")} dojops fix-deps --pip`);
+      console.log(`  ${pc.dim("$")} dojops fix-deps --dry-run`);
+      console.log();
+      break;
+
     case "skills":
       console.log(`\n${pc.bold("dojops skills")} — Manage DevOps skills (custom + marketplace)`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops skills [list|init|validate|publish|install|search|dev]`);
+      console.log(
+        `  ${pc.dim("$")} dojops skills [list|init|validate|publish|install|search|dev|update|export|import]`,
+      );
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all custom skills ${pc.dim("(default)")}`,
@@ -922,6 +999,9 @@ export function printCommandHelp(command: string): void {
       console.log(
         `  ${pc.cyan("dev <file.dops>")}  Validate and watch a .dops file during development`,
       );
+      console.log(`  ${pc.cyan("update [name]")}   Check Hub for skill updates`);
+      console.log(`  ${pc.cyan("export <path>")}   Export skills bundle for air-gapped use`);
+      console.log(`  ${pc.cyan("import <path>")}   Import skills from a bundle directory`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
       console.log(`  ${pc.cyan("--changelog")}     Changelog message for publish`);
@@ -930,6 +1010,7 @@ export function printCommandHelp(command: string): void {
       console.log(
         `  ${pc.cyan("--watch")}         Watch mode: re-validate on file changes (dev only)`,
       );
+      console.log(`  ${pc.cyan("--yes")}           Auto-install updates (update only)`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Skills are v2 .dops files that define LLM-powered configuration generators.`);
       console.log(

@@ -135,7 +135,20 @@ export function authMiddleware(apiKey?: string | string[]) {
     }
 
     // Health check is always public (supports /api/health and /api/v1/health)
-    if (req.path === "/health" || req.path === "/api/health" || req.path === "/v1/health") {
+    // G-20: Still attempt to authenticate so res.locals.authenticated is set
+    // for the health handler to decide payload detail level
+    const isHealthCheck =
+      req.path === "/health" || req.path === "/api/health" || req.path === "/v1/health";
+
+    if (isHealthCheck) {
+      const bearer = req.headers.authorization?.startsWith("Bearer ")
+        ? req.headers.authorization.slice(7)
+        : undefined;
+      const headerKey = req.headers["x-api-key"] as string | undefined;
+      const provided = bearer ?? headerKey;
+      if (provided && matchesAnyKey(keys, provided)) {
+        res.locals.authenticated = true;
+      }
       next();
       return;
     }
@@ -215,6 +228,7 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
   const requestId = _req.headers["x-request-id"] as string | undefined;
 
   if (err instanceof ZodError) {
+    // Validation errors are user-facing — include Zod messages
     res.status(400).json({
       error: "Validation failed",
       ...(requestId ? { requestId } : {}),
@@ -226,11 +240,10 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
     return;
   }
 
+  // G-23: Always log full error details server-side, return generic message to clients
   console.error("[API]", err);
-  const isProduction = process.env.NODE_ENV === "production";
   res.status(500).json({
     error: "Internal server error",
     ...(requestId ? { requestId } : {}),
-    ...(isProduction ? {} : { message: err.message }),
   });
 }

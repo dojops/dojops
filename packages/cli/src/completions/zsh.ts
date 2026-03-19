@@ -47,6 +47,9 @@ _dojops() {
     'checkpoint:Create and manage project checkpoints'
     'trust:Trust workspace configs'
     'untrust:Remove workspace trust'
+    'cost:Estimate infrastructure costs'
+    'drift:Detect infrastructure drift'
+    'fix-deps:Auto-remediate dependency vulnerabilities'
     'help:Show help message'
     'completion:Generate shell completion scripts'
     'tools:Manage modules (deprecated alias)'
@@ -85,8 +88,8 @@ _dojops() {
   sub_debug=('ci:Diagnose CI/CD log failures')
   sub_analyze=('diff:Analyze infrastructure diff for risk')
   sub_agents=('list:List agents' 'info:Show agent details' 'create:Create custom agent' 'remove:Remove custom agent')
-  sub_history=('list:List execution history' 'show:Show execution detail' 'verify:Verify audit chain' 'audit:View audit entries' 'repair:Repair audit chain')
-  sub_modules=('list:List modules' 'init:Scaffold a module' 'validate:Validate module' 'publish:Publish to Hub' 'install:Install from Hub' 'search:Search Hub' 'dev:Live validation')
+  sub_history=('list:List execution history' 'show:Show execution detail' 'verify:Verify audit chain' 'audit:View audit entries' 'repair:Repair audit chain' 'export:Export audit log')
+  sub_modules=('list:List modules' 'init:Scaffold a module' 'validate:Validate module' 'publish:Publish to Hub' 'install:Install from Hub' 'search:Search Hub' 'dev:Live validation' 'update:Check for updates' 'export:Export skills bundle' 'import:Import skills bundle')
   sub_toolchain=('list:List toolchain binaries' 'load:Load tool versions' 'install:Install tool' 'remove:Remove tool' 'clean:Clean toolchain cache')
   sub_config=('show:Show config' 'get:Get config value' 'set:Set config value' 'delete:Delete config value' 'validate:Validate config' 'reset:Reset config' 'profile:Manage profiles')
   sub_config_profile=('create:Create profile' 'use:Switch profile' 'delete:Delete profile' 'list:List profiles')

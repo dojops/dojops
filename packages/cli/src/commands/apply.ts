@@ -972,7 +972,7 @@ interface SaveApplyContext {
   planSuccess: boolean;
 }
 
-function saveApplyResults(
+async function saveApplyResults(
   results: {
     newResults: TaskResultEntry[];
     allFilesCreated: string[];
@@ -980,7 +980,7 @@ function saveApplyResults(
     status: string;
   },
   ctx: SaveApplyContext,
-): void {
+): Promise<void> {
   saveExecution(ctx.root, {
     planId: ctx.plan.id,
     executedAt: new Date().toISOString(),
@@ -1015,7 +1015,7 @@ function saveApplyResults(
   session.mode = "IDLE";
   saveSession(ctx.root, session);
 
-  appendAudit(ctx.root, {
+  await appendAudit(ctx.root, {
     timestamp: new Date().toISOString(),
     user: getCurrentUser(),
     command: `apply${ctx.replay ? " --replay" : ""} ${ctx.plan.id}`,
@@ -1221,7 +1221,7 @@ async function executeApplyPlan(
   const durationMs = Date.now() - startTime;
   const status = computeExecutionStatus(newResults);
 
-  saveApplyResults(
+  await saveApplyResults(
     { newResults, allFilesCreated, allFilesModified, status },
     { root, plan, durationMs, replay: flags.replay, planSuccess: planResult.success },
   );

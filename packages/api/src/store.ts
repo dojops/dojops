@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 export interface HistoryEntry {
   id: string;
@@ -11,26 +13,125 @@ export interface HistoryEntry {
   error?: string;
 }
 
+// ── G-10: Secret redaction patterns ──────────────────────────────────
+
+const SECRET_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
+  { pattern: /AKIA[0-9A-Z]{16}/g, replacement: "AKIA***REDACTED***" },
+  { pattern: /ghp_[a-zA-Z0-9]+/g, replacement: "ghp_***REDACTED***" },
+  { pattern: /sk-[a-zA-Z0-9]{20,}/g, replacement: "sk-***REDACTED***" },
+  { pattern: /Bearer\s+[a-zA-Z0-9._-]+/gi, replacement: "Bearer ***REDACTED***" },
+];
+
 /**
- * In-memory operation history. Data is lost on server restart.
- * For persistent storage, see roadmap Phase 9 (Enterprise Readiness).
+ * Redact known secret patterns from a string.
+ * Masks AWS keys, GitHub tokens, OpenAI-style keys, and Bearer tokens.
+ */
+export function redactSecrets(text: string): string {
+  let result = text;
+  for (const { pattern, replacement } of SECRET_PATTERNS) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
+/** Deep-clone a value and redact secrets in all string fields. */
+function redactDeep(value: unknown): unknown {
+  if (typeof value === "string") {
+    return redactSecrets(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(redactDeep);
+  }
+  if (value !== null && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      result[k] = redactDeep(v);
+    }
+    return result;
+  }
+  return value;
+}
+
+/**
+ * Operation history store with optional file persistence.
+ * When persistDir is set, entries are appended to a JSONL file and
+ * loaded on construction.
  */
 export class HistoryStore {
   private entries: HistoryEntry[] = [];
   private readonly idIndex = new Map<string, HistoryEntry>();
   private readonly maxEntries: number;
+  private readonly persistPath: string | null;
 
-  constructor(maxEntries = 1000) {
+  constructor(maxEntries = 1000, persistDir?: string) {
     this.maxEntries = maxEntries;
+    this.persistPath = null;
+
+    if (persistDir) {
+      try {
+        fs.mkdirSync(persistDir, { recursive: true });
+        this.persistPath = path.join(persistDir, "history.jsonl");
+        this.loadFromDisk();
+      } catch (err) {
+        console.warn(`[HistoryStore] Failed to initialize persistence: ${err}`);
+        // Continue without persistence
+      }
+    }
   }
 
   private generateId(): string {
     return crypto.randomUUID().replaceAll("-", "").slice(0, 12);
   }
 
+  /** Load existing entries from JSONL file on disk. */
+  private loadFromDisk(): void {
+    if (!this.persistPath) return;
+    try {
+      if (!fs.existsSync(this.persistPath)) return;
+      const content = fs.readFileSync(this.persistPath, "utf-8");
+      const lines = content.split("\n").filter((line) => line.trim().length > 0);
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as HistoryEntry;
+          this.entries.push(entry);
+          this.idIndex.set(entry.id, entry);
+        } catch {
+          // Skip malformed lines
+        }
+      }
+      // Trim to maxEntries if file had more
+      if (this.entries.length > this.maxEntries) {
+        const evicted = this.entries.splice(0, this.entries.length - this.maxEntries);
+        for (const e of evicted) {
+          this.idIndex.delete(e.id);
+        }
+      }
+    } catch {
+      // File read failed — start fresh
+    }
+  }
+
+  /** Append a single entry to the JSONL file. */
+  private appendToDisk(entry: HistoryEntry): void {
+    if (!this.persistPath) return;
+    try {
+      fs.appendFileSync(this.persistPath, JSON.stringify(entry) + "\n");
+    } catch {
+      // Silently ignore write failures — in-memory store still works
+    }
+  }
+
   add(entry: Omit<HistoryEntry, "id" | "timestamp">): HistoryEntry {
-    const full: HistoryEntry = {
+    // G-10: Redact secrets from request and response before storing
+    const redactedEntry = {
       ...entry,
+      request: redactDeep(entry.request),
+      response: redactDeep(entry.response),
+      error: entry.error ? redactSecrets(entry.error) : entry.error,
+    };
+
+    const full: HistoryEntry = {
+      ...redactedEntry,
       id: this.generateId(),
       timestamp: new Date().toISOString(),
     };
@@ -43,6 +144,9 @@ export class HistoryStore {
         this.idIndex.delete(e.id);
       }
     }
+
+    this.appendToDisk(full);
+
     return full;
   }
 

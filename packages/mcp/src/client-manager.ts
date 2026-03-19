@@ -2,10 +2,56 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ToolDefinition } from "@dojops/core";
-import type { McpConfig, McpServerConfig } from "./types";
+import type { McpConfig, McpServerConfig, StdioServerConfig } from "./types";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PKG_VERSION: string = (require("../package.json") as { version: string }).version;
+
+/**
+ * Sensitive env var patterns stripped before passing to MCP subprocesses.
+ * Prevents credential exfiltration via malicious `.dojops/mcp.json` configs.
+ */
+const SENSITIVE_KEY_PATTERNS = [
+  /_API_KEY$/,
+  /_TOKEN$/,
+  /_SECRET$/,
+  /_PASSWORD$/,
+  /_CREDENTIAL$/,
+  /^ANTHROPIC_/,
+  /^OPENAI_/,
+  /^DEEPSEEK_/,
+  /^GEMINI_/,
+  /^GITHUB_COPILOT_/,
+];
+
+/**
+ * Strip sensitive environment variables before passing to MCP subprocesses.
+ * Allows explicit passthrough via `allowEnvPassthrough` for vars that MCP
+ * servers genuinely need.
+ */
+export function sanitizeEnvForMcp(
+  env: Record<string, string | undefined>,
+  allowPassthrough?: string[],
+): Record<string, string> {
+  const passthroughSet = new Set(allowPassthrough ?? []);
+  const sanitized: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) continue;
+    // Allow explicitly whitelisted keys
+    if (passthroughSet.has(key)) {
+      sanitized[key] = value;
+      continue;
+    }
+    // Strip keys matching sensitive patterns
+    const isSensitive = SENSITIVE_KEY_PATTERNS.some((pattern) => pattern.test(key));
+    if (!isSensitive) {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
 
 interface ConnectedServer {
   name: string;
@@ -107,15 +153,15 @@ export class McpClientManager {
     config: McpServerConfig,
   ): StdioClientTransport | StreamableHTTPClientTransport {
     if (config.transport === "stdio") {
-      // Build env: merge config.env over process.env, filtering undefined values
-      const baseEnv: Record<string, string> = {};
-      for (const [k, v] of Object.entries(process.env)) {
-        if (v !== undefined) baseEnv[k] = v;
-      }
+      // Sanitize env: strip sensitive vars, then merge config.env overrides
+      const sanitized = sanitizeEnvForMcp(
+        process.env,
+        (config as StdioServerConfig).allowEnvPassthrough,
+      );
       return new StdioClientTransport({
         command: config.command,
         args: config.args,
-        env: config.env ? { ...baseEnv, ...config.env } : baseEnv,
+        env: config.env ? { ...sanitized, ...config.env } : sanitized,
       });
     }
     return new StreamableHTTPClientTransport(new URL(config.url), {

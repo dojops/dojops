@@ -81,6 +81,57 @@ describe("TokenTracker (E-7)", () => {
       expect(tracker.getSummary().totalTokens).toBe(0);
       expect(warnSpy).not.toHaveBeenCalled();
     });
+
+    it("returns budgetExceeded: true when over budget (G-18)", () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const tracker = new TokenTracker(100);
+      const result = tracker.record(150);
+      expect(result.budgetExceeded).toBe(true);
+    });
+
+    it("returns budgetExceeded: false when under budget (G-18)", () => {
+      const tracker = new TokenTracker(1000);
+      const result = tracker.record(500);
+      expect(result.budgetExceeded).toBe(false);
+    });
+  });
+
+  describe("checkBudget() (G-18)", () => {
+    it("returns allowed: true when under budget", () => {
+      const tracker = new TokenTracker(1000);
+      tracker.record(500);
+      const budget = tracker.checkBudget();
+      expect(budget.allowed).toBe(true);
+      expect(budget.remaining).toBe(500);
+      expect(budget.used).toBe(500);
+    });
+
+    it("returns allowed: false when over budget", () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const tracker = new TokenTracker(100);
+      tracker.record(150);
+      const budget = tracker.checkBudget();
+      expect(budget.allowed).toBe(false);
+      expect(budget.remaining).toBe(0);
+      expect(budget.used).toBe(150);
+    });
+
+    it("returns allowed: true when exactly at budget", () => {
+      const tracker = new TokenTracker(100);
+      tracker.record(100);
+      const budget = tracker.checkBudget();
+      expect(budget.allowed).toBe(true);
+      expect(budget.remaining).toBe(0);
+      expect(budget.used).toBe(100);
+    });
+
+    it("returns full remaining when no tokens used", () => {
+      const tracker = new TokenTracker(1000);
+      const budget = tracker.checkBudget();
+      expect(budget.allowed).toBe(true);
+      expect(budget.remaining).toBe(1000);
+      expect(budget.used).toBe(0);
+    });
   });
 
   describe("getSummary()", () => {
@@ -111,7 +162,7 @@ describe("TokenTracker (E-7)", () => {
       expect(tracker.getSummary().percentUsed).toBe(0);
     });
 
-    it("returns all fields", () => {
+    it("returns all fields including budgetExceeded (G-18)", () => {
       const tracker = new TokenTracker(500);
       tracker.record(100);
       const summary = tracker.getSummary();
@@ -119,6 +170,15 @@ describe("TokenTracker (E-7)", () => {
       expect(summary).toHaveProperty("totalTokens", 100);
       expect(summary).toHaveProperty("budget", 500);
       expect(summary).toHaveProperty("percentUsed", 20);
+      expect(summary).toHaveProperty("budgetExceeded", false);
+    });
+
+    it("reports budgetExceeded: true in summary when over budget (G-18)", () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const tracker = new TokenTracker(100);
+      tracker.record(200);
+      const summary = tracker.getSummary();
+      expect(summary.budgetExceeded).toBe(true);
     });
   });
 

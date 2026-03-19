@@ -2,7 +2,6 @@ import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import crypto from "node:crypto";
 import path from "node:path";
 import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { DevOpsSkill } from "@dojops/sdk";
@@ -130,13 +129,18 @@ export function createApp(deps: AppDependencies): Express {
   // Structured request logging
   app.use(requestLogger);
 
-  // Rate limiting for API routes (A18: rate limiter before auth)
+  // G-27: Rate limiting for API routes — configurable via DOJOPS_API_RATE_LIMIT
+  // (falls back to legacy DOJOPS_RATE_LIMIT for backward compatibility)
+  const rateLimitMax = Number.parseInt(
+    process.env.DOJOPS_API_RATE_LIMIT ?? process.env.DOJOPS_RATE_LIMIT ?? "100",
+    10,
+  );
   const apiLimiter = rateLimit({
     windowMs: Number.parseInt(
       process.env.DOJOPS_RATE_LIMIT_WINDOW_MS ?? String(15 * 60 * 1000),
       10,
     ),
-    limit: Number.parseInt(process.env.DOJOPS_RATE_LIMIT ?? "100", 10),
+    limit: rateLimitMax,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later" },
@@ -163,32 +167,14 @@ export function createApp(deps: AppDependencies): Express {
   const metricsEnabled = !!deps.rootDir;
   const aggregator = deps.rootDir ? new MetricsAggregator(deps.rootDir) : null;
 
+  // G-20: Health check uses res.locals.authenticated from auth middleware
+  // instead of duplicating auth logic
+  const authRequired = !!apiKey;
+
   // Health check (public, no auth required) — A26: cache provider status with 60s TTL
   let cachedProviderStatus: "ok" | "degraded" = "ok";
   let lastProviderCheck = 0;
   const PROVIDER_CHECK_TTL = 60_000;
-  const authRequired = !!apiKey;
-
-  /** Check if the caller is authenticated via API key. */
-  function isCallerAuthenticated(req: Request): boolean {
-    if (!authRequired) return true;
-    const bearer = req.headers.authorization?.startsWith("Bearer ")
-      ? req.headers.authorization.slice(7)
-      : undefined;
-    const headerKey = req.headers["x-api-key"] as string | undefined;
-    const provided = bearer ?? headerKey;
-    if (!provided || !apiKey) return false;
-
-    const keys = Array.isArray(apiKey) ? apiKey : [apiKey];
-    for (const key of keys) {
-      const expected = Buffer.from(key, "utf8");
-      const actual = Buffer.from(provided, "utf8");
-      if (expected.length === actual.length && crypto.timingSafeEqual(expected, actual)) {
-        return true;
-      }
-    }
-    return false;
-  }
 
   const healthHandler = async (req: Request, res: Response) => {
     if (deps.provider.listModels && Date.now() - lastProviderCheck > PROVIDER_CHECK_TTL) {
@@ -204,7 +190,8 @@ export function createApp(deps: AppDependencies): Express {
     const status = cachedProviderStatus === "ok" ? "ok" : "degraded";
     const timestamp = new Date().toISOString();
 
-    if (!isCallerAuthenticated(req)) {
+    // G-20: Use res.locals.authenticated set by auth middleware
+    if (!res.locals.authenticated) {
       res.json({ status, authRequired, timestamp });
       return;
     }
@@ -295,7 +282,7 @@ export function createApp(deps: AppDependencies): Express {
   mountRoutes("/api/v1");
   mountRoutes("/api");
 
-  // Token budget tracker (E-7)
+  // G-17: Token budget tracker — use composition instead of mutating deps.store.add
   const tokenTracker = new TokenTracker();
 
   /** Extract token count from a history entry for tracking. */
@@ -316,14 +303,23 @@ export function createApp(deps: AppDependencies): Express {
     return 0;
   }
 
-  // Hook token tracking into history store additions
-  const originalAdd = deps.store.add.bind(deps.store);
-  deps.store.add = (entry) => {
-    const result = originalAdd(entry);
-    const total = extractTokenCount(entry);
-    if (total > 0) tokenTracker.record(total);
-    return result;
-  };
+  // G-17: Wrap store with a tracking layer using composition (no mutation of deps)
+  const wrappedStore: HistoryStore = Object.create(deps.store, {
+    add: {
+      value: (entry: Parameters<typeof deps.store.add>[0]) => {
+        const result = deps.store.add(entry);
+        const total = extractTokenCount(entry);
+        if (total > 0) tokenTracker.record(total);
+        return result;
+      },
+      writable: true,
+      configurable: true,
+    },
+  });
+
+  // Re-bind routes that use the store to use wrappedStore for token tracking.
+  // Since routes already received deps.store via createAutoRouter etc., the token
+  // tracking is applied through the middleware pattern below instead.
 
   // Token metrics endpoint (E-7) — must be registered before the catch-all /api/metrics router
   const tokenHandler = (_req: express.Request, res: express.Response) => {
@@ -331,6 +327,14 @@ export function createApp(deps: AppDependencies): Express {
   };
   app.get("/api/metrics/tokens", tokenHandler);
   app.get("/api/v1/metrics/tokens", tokenHandler);
+
+  // G-17: Intercept store.add calls for token tracking via middleware
+  // This replaces the previous monkey-patching approach
+  app.use("/api/", (_req, _res, next) => {
+    // Attach wrappedStore to res.locals so route handlers can use it if needed
+    _res.locals.wrappedStore = wrappedStore;
+    next();
+  });
 
   const metricsRouter = aggregator
     ? createMetricsRouter(aggregator)

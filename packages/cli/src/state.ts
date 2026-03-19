@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { runBin } from "./safe-exec";
 import { writeFileOwnerOnly } from "./secure-fs";
+import { encrypt as vaultEncrypt, decrypt as vaultDecrypt, isEncrypted } from "./vault";
 import { RepoContextSchemaV1, RepoContextSchemaV2, parseDojopsMdString } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 
@@ -471,22 +472,54 @@ export function auditFile(rootDir: string): string {
   return path.join(dojopsDir(rootDir), "history", "audit.jsonl");
 }
 
-/** Load or create the HMAC key for audit hash chain. */
+/**
+ * Load the HMAC key for audit hash chain.
+ * G-46: If the vault is available, the key is stored encrypted.
+ * Backward compatible: reads unencrypted keys and re-encrypts on next write.
+ */
 export function loadAuditKey(rootDir: string): string | null {
   const keyFile = path.join(dojopsDir(rootDir), "audit-key");
   try {
-    return fs.readFileSync(keyFile, "utf-8").trim();
+    const raw = fs.readFileSync(keyFile, "utf-8").trim();
+    if (isEncrypted(raw)) {
+      try {
+        const decrypted = vaultDecrypt(raw);
+        return decrypted;
+      } catch {
+        console.warn("[audit] Failed to decrypt audit key — vault key mismatch?");
+        return null;
+      }
+    }
+    // Plaintext key found — re-encrypt on next write for migration
+    try {
+      const encrypted = vaultEncrypt(raw);
+      writeFileOwnerOnly(keyFile, encrypted + "\n");
+    } catch {
+      // Vault not initialized yet — keep plaintext, warn
+      console.warn("[audit] Audit key stored as plaintext. Run `dojops init` to encrypt.");
+    }
+    return raw;
   } catch {
     return null;
   }
 }
 
-/** Create a new HMAC key for audit hash chain (called during init). */
+/**
+ * Create a new HMAC key for audit hash chain (called during init).
+ * G-46: Encrypts the key using the vault if available.
+ */
 export function createAuditKey(rootDir: string): void {
   const keyFile = path.join(dojopsDir(rootDir), "audit-key");
   if (fs.existsSync(keyFile)) return;
   const key = crypto.randomBytes(32).toString("hex");
-  writeFileOwnerOnly(keyFile, key + "\n");
+  try {
+    const encrypted = vaultEncrypt(key);
+    writeFileOwnerOnly(keyFile, encrypted + "\n");
+  } catch {
+    // Vault not available — store plaintext with restricted permissions
+    console.warn("[audit] Vault unavailable — storing audit key as plaintext.");
+    writeFileOwnerOnly(keyFile, key + "\n");
+  }
 }
 
 export function computeAuditHash(entry: AuditEntry, hmacKey?: string | null): string {
@@ -525,7 +558,7 @@ function tryRemoveStaleLock(lockPath: string): boolean {
   }
 }
 
-function acquireAuditLock(lockPath: string, maxRetries = 5, delayMs = 50): number {
+async function acquireAuditLock(lockPath: string, maxRetries = 5, delayMs = 50): Promise<number> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return fs.openSync(lockPath, "wx");
@@ -535,12 +568,9 @@ function acquireAuditLock(lockPath: string, maxRetries = 5, delayMs = 50): numbe
 
       if (tryRemoveStaleLock(lockPath)) continue;
 
-      // Active lock — busy-wait with exponential backoff
+      // Active lock — async wait with exponential backoff (non-blocking)
       const waitMs = delayMs * Math.pow(2, attempt);
-      const end = Date.now() + waitMs;
-      while (Date.now() < end) {
-        /* spin */
-      }
+      await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
     }
   }
   return -1;
@@ -617,7 +647,7 @@ function findLastValidAuditEntry(file: string): AuditEntry | null {
   return null;
 }
 
-export function appendAudit(rootDir: string, entry: AuditEntry): void {
+export async function appendAudit(rootDir: string, entry: AuditEntry): Promise<void> {
   const file = auditFile(rootDir);
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -635,7 +665,7 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
   }
 
   const lockPath = file + ".lock";
-  const lockFd = acquireAuditLock(lockPath);
+  const lockFd = await acquireAuditLock(lockPath);
 
   // If lock acquisition failed, skip the write to avoid chain corruption
   if (lockFd < 0) {

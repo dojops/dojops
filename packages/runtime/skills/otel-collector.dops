@@ -1,0 +1,113 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: otel-collector
+  version: 2.1.0
+  description: "Generate OpenTelemetry Collector configuration"
+  author: dojops
+  license: MIT
+  tags: [opentelemetry, otel, collector, observability, tracing, metrics]
+
+context:
+  technology: OpenTelemetry Collector
+  fileFormat: yaml
+  outputGuidance: |
+    Generate a valid OpenTelemetry Collector configuration YAML file.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid otelcol configuration parseable by the OpenTelemetry Collector.
+
+    Structure the configuration with these top-level keys:
+    - receivers: Data ingestion (OTLP, Prometheus, Jaeger, Zipkin, hostmetrics, filelog)
+    - processors: Data transformation (batch, memory_limiter, attributes, filter, resource)
+    - exporters: Data output (OTLP, Prometheus, Jaeger, Zipkin, logging, file)
+    - connectors: Pipeline-to-pipeline data flow (optional)
+    - extensions: Health check, pprof, zpages (optional)
+    - service: Pipeline definitions connecting receivers → processors → exporters
+
+    Detect the telemetry use case from context:
+    - **Traces**: OTLP receiver, tail_sampling processor, Jaeger/Tempo/Zipkin exporter
+    - **Metrics**: Prometheus receiver, batch processor, Prometheus/OTLP exporter
+    - **Logs**: Filelog receiver, attributes processor, Loki/Elasticsearch exporter
+    - **Infrastructure**: Hostmetrics receiver, resource processor, backend exporter
+    - **Kubernetes**: K8s attributes/events/cluster receivers, resource detection
+  bestPractices:
+    - "Always include memory_limiter processor to prevent OOM (check_interval: 1s, limit_mib: 512)"
+    - "Use batch processor for efficient data export (timeout: 5s, send_batch_size: 1024)"
+    - Enable health_check extension for liveness probes
+    - Configure OTLP receiver on both gRPC (4317) and HTTP (4318) protocols
+    - Use resource processor to add environment and service metadata
+    - Set appropriate retry_on_failure and sending_queue for exporters
+    - Separate traces, metrics, and logs into distinct pipelines
+    - Use filter processor to drop low-value telemetry and reduce costs
+    - Configure TLS for production deployments
+    - Use the contrib distribution for additional receivers/exporters
+    - Set reasonable queue sizes to handle traffic spikes without data loss
+    - Include zpages extension for debugging in development
+  context7Libraries:
+    - name: opentelemetry
+      query: "OpenTelemetry Collector configuration, receivers processors exporters pipelines, OTLP gRPC HTTP, batch memory_limiter, health_check extension"
+
+files:
+  - path: "{outputPath}/otel-collector-config.yaml"
+    format: raw
+
+detection:
+  paths: ["otel-collector-config.yaml", "otel-collector-config.yml", "**/otel*.yaml", "**/otel*.yml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "receivers"
+      required: true
+      message: "Collector config must define at least one receiver"
+    - path: "exporters"
+      required: true
+      message: "Collector config must define at least one exporter"
+    - path: "service"
+      required: true
+      message: "Collector config must define a service section with pipelines"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml"]
+
+risk:
+  level: LOW
+  rationale: "Collector configuration changes affect telemetry pipeline, not application behavior"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# OpenTelemetry Collector
+
+## Prompt
+
+You are an OpenTelemetry expert specializing in the OpenTelemetry Collector configuration, distributed tracing, metrics collection, and log aggregation.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+opentelemetry, otel, collector, tracing, metrics, logs, observability,
+otlp, jaeger, zipkin, prometheus, receiver, processor, exporter,
+pipeline, spans, instrumentation, tempo, loki

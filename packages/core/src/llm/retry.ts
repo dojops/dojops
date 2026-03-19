@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, StreamCallback } from "./provider";
+import type { LLMToolRequest, LLMToolResponse } from "./tool-types";
 import { JsonValidationError } from "./json-validator";
 import { redactSecrets } from "./redact";
 
@@ -102,6 +103,49 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
         return { ...req, system: stricterSystem };
       }
     },
+
+    generateStream: provider.generateStream
+      ? async (request: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> => {
+          let lastError: unknown;
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+              // Retry only on the initial call, not mid-stream
+              return await provider.generateStream!(request, onChunk);
+            } catch (err) {
+              lastError = err;
+              if (attempt < maxRetries && isRetryableError(err)) {
+                const jitter = crypto.randomInt(500);
+                const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + jitter, maxDelayMs);
+                await sleep(delay);
+                continue;
+              }
+              throwRedactedError(err);
+            }
+          }
+          throw lastError;
+        }
+      : undefined,
+
+    generateWithTools: provider.generateWithTools
+      ? async (request: LLMToolRequest): Promise<LLMToolResponse> => {
+          let lastError: unknown;
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+              return await provider.generateWithTools!(request);
+            } catch (err) {
+              lastError = err;
+              if (attempt < maxRetries && isRetryableError(err)) {
+                const jitter = crypto.randomInt(500);
+                const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + jitter, maxDelayMs);
+                await sleep(delay);
+                continue;
+              }
+              throwRedactedError(err);
+            }
+          }
+          throw lastError;
+        }
+      : undefined,
 
     listModels: provider.listModels ? () => provider.listModels!() : undefined,
   };

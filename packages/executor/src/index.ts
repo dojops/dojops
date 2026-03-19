@@ -4,5 +4,7 @@ export * from "./sandbox";
 export * from "./approval";
 export * from "./safe-executor";
 export * from "./checkpoint";
-export { ToolExecutor } from "./tool-executor";
+export { ToolExecutor, isDangerousCommand } from "./tool-executor";
 export type { ToolExecutorOptions, McpToolDispatcher } from "./tool-executor";
+export { scanForSecrets } from "./secret-scanner";
+export type { SecretMatch } from "./secret-scanner";

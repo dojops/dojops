@@ -19,18 +19,83 @@ function trustStorePath(): string {
   return path.join(os.homedir(), ".dojops", "trusted-folders.json");
 }
 
+/** Path to the vault key file (shared with vault.ts). */
+function vaultKeyPath(): string {
+  return path.join(os.homedir(), ".dojops", "vault-key");
+}
+
+/** Read the vault key for HMAC signing. Returns null if unavailable. */
+function getSigningKey(): string | null {
+  try {
+    const key = fs.readFileSync(vaultKeyPath(), "utf-8").trim();
+    return key.length >= 32 ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Compute HMAC-SHA256 of the trust store data. */
+function computeStoreHmac(data: string, key: string): string {
+  return crypto.createHmac("sha256", key).update(data).digest("hex");
+}
+
+/**
+ * G-47: Load trust store with signature verification.
+ * If the signature is invalid, treats the store as empty (untrusted) and warns.
+ * If no signing key is available, skips verification (graceful degradation).
+ */
 function loadTrustStore(): Record<string, TrustDecision> {
   try {
-    return JSON.parse(fs.readFileSync(trustStorePath(), "utf-8")) as Record<string, TrustDecision>;
+    const raw = fs.readFileSync(trustStorePath(), "utf-8");
+    const parsed = JSON.parse(raw);
+
+    // Check if this is a signed store (has _signature + data)
+    if (parsed._signature && parsed.data) {
+      const signingKey = getSigningKey();
+      if (signingKey) {
+        const dataStr = JSON.stringify(parsed.data);
+        const expectedHmac = computeStoreHmac(dataStr, signingKey);
+        if (
+          !crypto.timingSafeEqual(
+            Buffer.from(parsed._signature, "hex"),
+            Buffer.from(expectedHmac, "hex"),
+          )
+        ) {
+          console.warn(
+            "[trust] Trust store signature invalid — file may have been tampered with. Treating as empty.",
+          );
+          return {};
+        }
+      }
+      // Signature valid or no signing key — return data
+      return parsed.data as Record<string, TrustDecision>;
+    }
+
+    // Legacy unsigned store — migrate on next save
+    return parsed as Record<string, TrustDecision>;
   } catch {
     return {};
   }
 }
 
+/**
+ * G-47: Save trust store with HMAC signature.
+ * If vault key is available, signs the data. Otherwise saves unsigned.
+ */
 function saveTrustStore(store: Record<string, TrustDecision>): void {
   const dir = path.dirname(trustStorePath());
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(trustStorePath(), JSON.stringify(store, null, 2) + "\n");
+
+  const signingKey = getSigningKey();
+  if (signingKey) {
+    const dataStr = JSON.stringify(store);
+    const signature = computeStoreHmac(dataStr, signingKey);
+    const signed = { _signature: signature, data: store };
+    fs.writeFileSync(trustStorePath(), JSON.stringify(signed, null, 2) + "\n");
+  } else {
+    // No vault key — save unsigned (graceful degradation)
+    fs.writeFileSync(trustStorePath(), JSON.stringify(store, null, 2) + "\n");
+  }
 }
 
 function listFiles(dir: string): string[] {

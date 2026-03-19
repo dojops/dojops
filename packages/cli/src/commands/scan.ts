@@ -3,8 +3,22 @@ import path from "node:path";
 import crypto from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { runScan, planRemediation, applyFixes, compareScanReports } from "@dojops/scanner";
-import type { ScanType, ScanReport, ScanFinding, RemediationPlan } from "@dojops/scanner";
+import {
+  runScan,
+  planRemediation,
+  applyFixes,
+  compareScanReports,
+  toSarif,
+  mapFindingsToCompliance,
+  getSupportedFrameworks,
+} from "@dojops/scanner";
+import type {
+  ScanType,
+  ScanReport,
+  ScanFinding,
+  RemediationPlan,
+  ComplianceReport,
+} from "@dojops/scanner";
 import type { RepoContext } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { CLIContext } from "../types";
@@ -41,13 +55,31 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   const report = await executeScan(scanRoot, flags.scanType, context, ctx);
 
   if (ctx.globalOpts.output === "json") {
-    console.log(JSON.stringify(report, null, 2));
+    const output = flags.complianceFramework
+      ? {
+          ...report,
+          compliance: mapFindingsToCompliance(report.findings, flags.complianceFramework),
+        }
+      : report;
+    console.log(JSON.stringify(output, null, 2));
     throwOnSeverity(report, flags.failOnSeverity);
     return;
   }
 
   if (ctx.globalOpts.output === "yaml") {
-    console.log(yaml.dump(report, { lineWidth: 120, noRefs: true }));
+    const output = flags.complianceFramework
+      ? {
+          ...report,
+          compliance: mapFindingsToCompliance(report.findings, flags.complianceFramework),
+        }
+      : report;
+    console.log(yaml.dump(output, { lineWidth: 120, noRefs: true }));
+    throwOnSeverity(report, flags.failOnSeverity);
+    return;
+  }
+
+  if (ctx.globalOpts.output === "sarif") {
+    console.log(JSON.stringify(toSarif(report), null, 2));
     throwOnSeverity(report, flags.failOnSeverity);
     return;
   }
@@ -55,6 +87,10 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   displayScannerStatus(report);
   displaySummary(report.summary);
   displayFindings(report.findings);
+
+  if (flags.complianceFramework) {
+    displayComplianceReport(report.findings, flags.complianceFramework);
+  }
 
   if (report.findings.length > 0) {
     emitGitHubAnnotations(report.findings);
@@ -68,7 +104,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
 
   handleSbomOutputs(report, root);
 
-  appendAudit(root, {
+  await appendAudit(root, {
     timestamp: new Date().toISOString(),
     user: getCurrentUser(),
     command: "scan",
@@ -124,6 +160,7 @@ interface ScanFlags {
   targetDir: string | undefined;
   compareMode: boolean;
   failOnSeverity: SeverityThreshold | undefined;
+  complianceFramework: string | undefined;
 }
 
 function parseScanFlags(args: string[], ctx: CLIContext): ScanFlags {
@@ -145,6 +182,17 @@ function parseScanFlags(args: string[], ctx: CLIContext): ScanFlags {
     );
   }
 
+  const complianceFramework = extractFlagValue(args, "--compliance");
+  if (complianceFramework) {
+    const supported = getSupportedFrameworks();
+    if (!supported.includes(complianceFramework.toLowerCase())) {
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Unsupported compliance framework: "${complianceFramework}". Supported: ${supported.join(", ")}`,
+      );
+    }
+  }
+
   let scanType: ScanType = "all";
   if (securityOnly) scanType = "security";
   else if (depsOnly) scanType = "deps";
@@ -152,7 +200,15 @@ function parseScanFlags(args: string[], ctx: CLIContext): ScanFlags {
   else if (sbomMode) scanType = "sbom";
   else if (licenseOnly) scanType = "license";
 
-  return { scanType, fixMode, autoApprove, targetDir, compareMode, failOnSeverity };
+  return {
+    scanType,
+    fixMode,
+    autoApprove,
+    targetDir,
+    compareMode,
+    failOnSeverity,
+    complianceFramework,
+  };
 }
 
 function resolveScanRoot(
@@ -290,6 +346,49 @@ function displayFindings(findings: ScanFinding[]): void {
     }
   }
   console.log();
+}
+
+function displayComplianceReport(findings: ScanFinding[], framework: string): void {
+  const report: ComplianceReport = mapFindingsToCompliance(findings, framework);
+
+  const lines: string[] = [];
+  lines.push(`${pc.bold("Framework:")}  ${report.framework} ${pc.dim(`v${report.version}`)}`);
+  lines.push(
+    `${pc.bold("Score:")}      ${complianceScoreLabel(report.summary.compliancePercentage)}`,
+  );
+  lines.push("");
+
+  for (const control of report.controls) {
+    const icon =
+      control.status === "pass"
+        ? pc.green("PASS")
+        : control.status === "fail"
+          ? pc.red("FAIL")
+          : pc.yellow("WARN");
+    lines.push(`  ${icon}  ${control.controlId}  ${pc.dim(control.description)}`);
+    if (control.findings.length > 0) {
+      for (const f of control.findings.slice(0, 3)) {
+        lines.push(`         ${pc.dim("→")} ${f.message}`);
+      }
+      if (control.findings.length > 3) {
+        lines.push(`         ${pc.dim(`… and ${control.findings.length - 3} more`)}`);
+      }
+    }
+  }
+
+  const { passing, failing, partial, totalControls } = report.summary;
+  lines.push("");
+  lines.push(
+    `${pc.green(`${passing} pass`)}, ${pc.red(`${failing} fail`)}, ${pc.yellow(`${partial} partial`)} — ${totalControls} controls total`,
+  );
+
+  p.note(lines.join("\n"), `Compliance: ${report.framework}`);
+}
+
+function complianceScoreLabel(percentage: number): string {
+  if (percentage >= 90) return pc.green(`${percentage}%`);
+  if (percentage >= 70) return pc.yellow(`${percentage}%`);
+  return pc.red(`${percentage}%`);
 }
 
 function saveReport(root: string, report: ScanReport): void {

@@ -234,7 +234,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
 
     if (cliCtx.globalOpts.output === "json") {
       console.log(JSON.stringify(report, null, 2));
-      appendAudit(root, makeCheckAuditEntry("success", durationMs));
+      await appendAudit(root, makeCheckAuditEntry("success", durationMs));
       return;
     }
 
@@ -261,10 +261,10 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
       await handleFixMode(report, fileContents, provider, root, autoApprove);
     }
 
-    appendAudit(root, makeCheckAuditEntry("success", durationMs));
+    await appendAudit(root, makeCheckAuditEntry("success", durationMs));
   } catch (err) {
     if (!isStructured) s.stop("Analysis failed.");
-    appendAudit(root, makeCheckAuditEntry("failure", Date.now() - start));
+    await appendAudit(root, makeCheckAuditEntry("failure", Date.now() - start));
     throw new CLIError(ExitCode.VALIDATION_ERROR, `Check failed: ${toErrorMessage(err)}`);
   }
 };

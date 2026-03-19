@@ -663,11 +663,11 @@ describe("DopsRuntimeV2.verify with Context7 doc audit", () => {
       context7Provider: mockDocProvider,
     });
 
-    // generate() fetches docs and caches them
-    await runtime.generate({ prompt: "Create CI workflow" });
+    // generate() returns docs in output data for verify()
+    const genResult = await runtime.generate({ prompt: "Create CI workflow" });
 
-    // verify() uses cached docs for audit
-    const result = await runtime.verify({ generated, isUpdate: false });
+    // verify() reads docs from the generate() output data
+    const result = await runtime.verify(genResult.data);
 
     const versionWarnings = result.issues.filter((i) => i.rule === "context7-version-check");
     expect(versionWarnings).toHaveLength(1);

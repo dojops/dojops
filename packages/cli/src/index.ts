@@ -78,6 +78,15 @@ import { runsCommand } from "./commands/runs";
 import { mcpCommand } from "./commands/mcp";
 import { checkpointCommand } from "./commands/checkpoint";
 import { trustCommand, untrustCommand } from "./commands/trust";
+import { costCommand } from "./commands/cost";
+import { driftCommand } from "./commands/drift";
+import { fixDepsCommand } from "./commands/fix-deps";
+import { auditExportCommand } from "./commands/audit-export";
+import {
+  skillsUpdateCommand,
+  skillsExportCommand,
+  skillsImportCommand,
+} from "./commands/skills-extra";
 import { recordCommandError } from "./memory";
 import { prependToolchainBinToPath, projectToolchainCtx } from "./toolchain-sandbox";
 import { withTracking } from "./tracking-provider";
@@ -104,6 +113,9 @@ registerCommand("runs", runsCommand);
 registerCommand("checkpoint", checkpointCommand);
 registerCommand("trust", trustCommand);
 registerCommand("untrust", untrustCommand);
+registerCommand("cost", costCommand);
+registerCommand("drift", driftCommand);
+registerCommand("fix-deps", fixDepsCommand);
 
 // Nested: checkpoint <sub>
 registerSubcommand("checkpoint", "create", (args, ctx) =>
@@ -162,6 +174,7 @@ registerSubcommand("history", "show", (args, ctx) => historyCommand(["show", ...
 registerSubcommand("history", "verify", (args, ctx) => historyCommand(["verify", ...args], ctx));
 registerSubcommand("history", "audit", (args, ctx) => historyCommand(["audit", ...args], ctx));
 registerSubcommand("history", "repair", (args, ctx) => historyCommand(["repair", ...args], ctx));
+registerSubcommand("history", "export", (args, ctx) => auditExportCommand(args, ctx));
 registerCommand("provider", providerCommand);
 
 // Nested: skills <sub> (.dops skills)
@@ -172,6 +185,9 @@ registerSubcommand("skills", "publish", skillsPublishCommand);
 registerSubcommand("skills", "install", skillsInstallCommand);
 registerSubcommand("skills", "search", skillsSearchCommand);
 registerSubcommand("skills", "dev", skillsDevCommand);
+registerSubcommand("skills", "update", skillsUpdateCommand);
+registerSubcommand("skills", "export", skillsExportCommand);
+registerSubcommand("skills", "import", skillsImportCommand);
 
 // Nested: toolchain <sub> (system binaries)
 registerSubcommand("toolchain", "list", toolchainListCommand);
@@ -325,6 +341,9 @@ const QUIET_COMMANDS = new Set([
   "checkpoint",
   "trust",
   "untrust",
+  "cost",
+  "drift",
+  "fix-deps",
 ]);
 
 const NESTED_COMMAND_PARENTS = new Set([

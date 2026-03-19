@@ -349,7 +349,7 @@ export function validateGeneratedContent(
 
   if (format === "yaml") {
     try {
-      yaml.loadAll(content);
+      yaml.loadAll(content, undefined, { maxAliasCount: 100 } as yaml.LoadOptions);
     } catch (err) {
       errors.push(
         `Invalid YAML in ${filename}: ${err instanceof Error ? err.message : String(err)}`,
@@ -375,7 +375,7 @@ export function validateGeneratedContent(
 export function parseRawContent(raw: string, format: string): unknown {
   try {
     if (format === "yaml") {
-      return yaml.load(raw);
+      return yaml.load(raw, { maxAliasCount: 100 } as yaml.LoadOptions);
     }
     if (format === "json") {
       return JSON.parse(raw);
@@ -536,9 +536,6 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
   private readonly options: DopsRuntimeV2Options;
   private readonly _systemPromptHash: string;
   private readonly _skillHash: string;
-  /** Cache of Context7 docs fetched during generate(), reused by verify(). */
-  private _lastDocsCache: string = "";
-
   constructor(module: DopsSkill, provider: LLMProvider, options?: DopsRuntimeV2Options) {
     this.skill = module;
     this.provider = provider;
@@ -580,8 +577,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
           this.skill.frontmatter.context.context7Libraries,
         );
       }
-      // Cache docs for post-generation audit in verify()
-      this._lastDocsCache = context7Docs;
+      // Pass docs through output data for verify() — avoids instance-level cache race
 
       // 3. Compile prompt with v2 variables
       const promptContext: PromptContextV2 = {
@@ -634,7 +630,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
 
       return {
         success: true,
-        data: { generated: rawContent, isUpdate },
+        data: { generated: rawContent, isUpdate, _context7Docs: context7Docs },
         usage: response.usage,
       };
     } catch (err) {
@@ -985,7 +981,12 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       onBinaryMissing: this.options?.onBinaryMissing,
     });
 
-    this.appendDocAuditIssues(rawContent, verificationResult);
+    // Extract Context7 docs passed through from generate() output data
+    const context7Docs =
+      data && typeof data === "object" && "_context7Docs" in data
+        ? String((data as Record<string, unknown>)._context7Docs)
+        : undefined;
+    this.appendDocAuditIssues(rawContent, verificationResult, context7Docs);
 
     return verificationResult;
   }
@@ -1015,13 +1016,17 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     }
   }
 
-  /** Append Context7 doc audit issues to verification result if docs are cached. */
-  private appendDocAuditIssues(rawContent: string, verificationResult: VerificationResult): void {
-    if (!this._lastDocsCache) return;
+  /** Append Context7 doc audit issues to verification result if docs are available. */
+  private appendDocAuditIssues(
+    rawContent: string,
+    verificationResult: VerificationResult,
+    context7Docs?: string,
+  ): void {
+    if (!context7Docs) return;
 
     const auditResult = auditAgainstDocs(
       rawContent,
-      this._lastDocsCache,
+      context7Docs,
       this.skill.frontmatter.context.technology,
     );
     if (auditResult.issues.length > 0) {

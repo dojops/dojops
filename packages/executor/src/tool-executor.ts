@@ -3,7 +3,9 @@ import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { ExecutionPolicy } from "./types";
 import { checkWriteAllowed, checkFileSize } from "./policy";
+import { scanForSecrets } from "./secret-scanner";
 import type { ToolCall, ToolResult, ToolDefinition } from "@dojops/core";
+import { resolveToolName } from "@dojops/sdk";
 import type { DevOpsSkill } from "@dojops/sdk";
 
 /** Interface for an MCP tool dispatcher that can handle mcp__-prefixed tool calls. */
@@ -17,6 +19,52 @@ export interface McpToolDispatcher {
 /** Maximum tool output size before truncation (32KB). */
 const MAX_OUTPUT_BYTES = 32_768;
 
+/** Maximum allowed search pattern length. */
+const MAX_PATTERN_LENGTH = 200;
+
+/** Maximum search results from find/grep commands. */
+const MAX_SEARCH_RESULTS = 1000;
+
+/** Standard env vars always passed through regardless of allowEnvVars policy. */
+const STANDARD_ENV_VARS = new Set(["PATH", "HOME", "USER", "SHELL"]);
+
+/** Network-related commands that trigger policy warnings. */
+const NETWORK_COMMANDS = ["curl", "wget", "fetch", "ssh", "scp", "nc", "telnet"];
+
+/**
+ * Dangerous command patterns that indicate potential command injection / RCE.
+ * Each entry has a regex pattern and a human-readable reason.
+ */
+const DANGEROUS_PATTERNS: { pattern: RegExp; reason: string }[] = [
+  // More specific patterns first to ensure correct match priority
+  {
+    pattern: /\b(curl|wget)\b.*\|\s*(sh|bash|zsh|dash|ksh|python[23]?|node|perl|ruby)\b/,
+    reason: "Remote code download piped to interpreter",
+  },
+  { pattern: /\|\s*(sh|bash|zsh|dash|ksh)\b/, reason: "Pipe to shell interpreter" },
+  { pattern: /\|\s*python[23]?\b/, reason: "Pipe to Python interpreter" },
+  { pattern: /\|\s*node\b/, reason: "Pipe to Node.js interpreter" },
+  { pattern: /\|\s*perl\b/, reason: "Pipe to Perl interpreter" },
+  { pattern: /\|\s*ruby\b/, reason: "Pipe to Ruby interpreter" },
+  { pattern: /\beval\s+/, reason: "eval command execution" },
+  { pattern: /\bexec\s+/, reason: "exec command execution" },
+  { pattern: /`[^`]+`/, reason: "Backtick subshell execution" },
+  { pattern: /\$\([^)]+\)/, reason: "Command substitution" },
+];
+
+/**
+ * Check if a command contains dangerous patterns that could enable RCE.
+ * Returns an object indicating whether the command is dangerous and why.
+ */
+export function isDangerousCommand(cmd: string): { dangerous: boolean; reason: string } {
+  for (const { pattern, reason } of DANGEROUS_PATTERNS) {
+    if (pattern.test(cmd)) {
+      return { dangerous: true, reason };
+    }
+  }
+  return { dangerous: false, reason: "" };
+}
+
 export interface ToolExecutorOptions {
   policy: ExecutionPolicy;
   cwd: string;
@@ -26,6 +74,10 @@ export interface ToolExecutorOptions {
   onToolEnd?: (call: ToolCall, result: ToolResult) => void;
   /** Called before any file write/edit — use for checkpointing. */
   onBeforeWrite?: (filePath: string) => void;
+  /** Called when a policy violation is detected but not blocking (advisory warnings). */
+  onPolicyWarning?: (message: string) => void;
+  /** Skip secret scanning on write/edit operations. Default false. */
+  skipSecretScan?: boolean;
 }
 
 /** Truncate output to fit within the context budget. */
@@ -82,7 +134,7 @@ function searchByFilePattern(pattern: string, searchPath: string): string[] {
       "/bin/sh",
       [
         "-c",
-        `find ${JSON.stringify(searchPath)} -type f -name ${JSON.stringify(pattern)} 2>/dev/null | head -50`,
+        `find ${JSON.stringify(searchPath)} -type f -name ${JSON.stringify(pattern)} 2>/dev/null | head -${MAX_SEARCH_RESULTS}`,
       ],
       { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
     );
@@ -100,7 +152,7 @@ function searchByPathPattern(pattern: string, searchPath: string): string[] {
       "/bin/sh",
       [
         "-c",
-        `find ${JSON.stringify(searchPath)} -type f -path ${JSON.stringify(pattern)} 2>/dev/null | head -50`,
+        `find ${JSON.stringify(searchPath)} -type f -path ${JSON.stringify(pattern)} 2>/dev/null | head -${MAX_SEARCH_RESULTS}`,
       ],
       { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
     );
@@ -118,7 +170,7 @@ function searchByContent(contentPattern: string, searchPath: string): string[] {
       "/bin/sh",
       [
         "-c",
-        `grep -rl ${JSON.stringify(contentPattern)} ${JSON.stringify(searchPath)} 2>/dev/null | head -30`,
+        `grep -rl ${JSON.stringify(contentPattern)} ${JSON.stringify(searchPath)} 2>/dev/null | head -${MAX_SEARCH_RESULTS}`,
       ],
       { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
     );
@@ -249,6 +301,20 @@ export class ToolExecutor {
 
     checkWriteAllowed(filePath, this.opts.policy);
     checkFileSize(Buffer.byteLength(content, "utf-8"), this.opts.policy);
+
+    // G-09: Scan for secrets before writing
+    if (!this.opts.skipSecretScan) {
+      const secrets = scanForSecrets(content);
+      if (secrets.length > 0) {
+        const details = secrets.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
+        return {
+          callId: call.id,
+          output: `Blocked write to ${filePath} — potential secrets detected:\n${details}`,
+          isError: true,
+        };
+      }
+    }
+
     this.opts.onBeforeWrite?.(filePath);
 
     const existed = fs.existsSync(filePath);
@@ -295,6 +361,20 @@ export class ToolExecutor {
 
     const updated = content.replace(oldString, newString);
     checkFileSize(Buffer.byteLength(updated, "utf-8"), this.opts.policy);
+
+    // G-09: Scan for secrets before writing
+    if (!this.opts.skipSecretScan) {
+      const secrets = scanForSecrets(updated);
+      if (secrets.length > 0) {
+        const details = secrets.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
+        return {
+          callId: call.id,
+          output: `Blocked edit to ${filePath} — potential secrets detected:\n${details}`,
+          isError: true,
+        };
+      }
+    }
+
     fs.writeFileSync(filePath, updated, "utf-8");
     this.filesModified.add(filePath);
 
@@ -306,14 +386,49 @@ export class ToolExecutor {
     const cwd = call.arguments.cwd ? this.resolvePath(call.arguments.cwd as string) : this.opts.cwd;
     const timeout = (call.arguments.timeout as number) ?? this.opts.policy.timeoutMs;
 
+    // G-01: Block dangerous command patterns
+    const dangerCheck = isDangerousCommand(command);
+    if (dangerCheck.dangerous) {
+      return {
+        callId: call.id,
+        output: `Command blocked: ${dangerCheck.reason}`,
+        isError: true,
+      };
+    }
+
+    // G-06: Emit policy warning for network commands when allowNetwork is false
+    if (!this.opts.policy.allowNetwork) {
+      for (const netCmd of NETWORK_COMMANDS) {
+        // Match as a word boundary to avoid false positives (e.g. "curling")
+        if (new RegExp(`\\b${netCmd}\\b`).test(command)) {
+          this.opts.onPolicyWarning?.(
+            `Network command "${netCmd}" detected but allowNetwork is false`,
+          );
+          break;
+        }
+      }
+    }
+
+    // G-06: Filter env vars when allowEnvVars is set
+    let env: Record<string, string> | undefined;
+    if (this.opts.policy.allowEnvVars.length > 0) {
+      env = {};
+      const allowed = new Set([...this.opts.policy.allowEnvVars, ...STANDARD_ENV_VARS]);
+      for (const key of allowed) {
+        if (process.env[key] !== undefined) {
+          env[key] = process.env[key]!;
+        }
+      }
+    }
+
     try {
-      // Use execFileSync with shell to execute the command safely
       const output = execFileSync("/bin/sh", ["-c", command], {
         cwd,
         encoding: "utf-8",
         timeout,
         maxBuffer: MAX_OUTPUT_BYTES * 2,
         stdio: ["pipe", "pipe", "pipe"],
+        ...(env !== undefined ? { env } : {}),
       });
       return { callId: call.id, output: truncateOutput(output) };
     } catch (err) {
@@ -333,41 +448,12 @@ export class ToolExecutor {
 
   /**
    * Resolve a possibly-hallucinated skill name to a valid one.
-   * Tries exact match, then strips common LLM-hallucinated suffixes.
+   * Delegates to the shared `resolveToolName` from @dojops/sdk.
    */
   private resolveSkill(name: string): DevOpsSkill | undefined {
     const skills = this.opts.skills;
     if (!skills) return undefined;
-
-    // Exact match
-    const exact = skills.get(name);
-    if (exact) return exact;
-
-    // Strip common suffixes (e.g. "helm-chart" → "helm")
-    const suffixes = [
-      "-chart",
-      "-config",
-      "-file",
-      "-template",
-      "-manifest",
-      "-setup",
-      "-yaml",
-      "-yml",
-    ];
-    for (const suffix of suffixes) {
-      if (name.endsWith(suffix)) {
-        const match = skills.get(name.slice(0, -suffix.length));
-        if (match) return match;
-      }
-    }
-
-    // Prefix matching
-    const lower = name.toLowerCase();
-    for (const [key, skill] of skills) {
-      if (lower.startsWith(key) || key.startsWith(lower)) return skill;
-    }
-
-    return undefined;
+    return resolveToolName(name, skills);
   }
 
   private async runSkill(call: ToolCall): Promise<ToolResult> {
@@ -420,6 +506,31 @@ export class ToolExecutor {
         callId: call.id,
         output:
           "No search criteria provided. Use 'pattern' for file name matching and/or 'content_pattern' for content search.",
+        isError: true,
+      };
+    }
+
+    // G-24: Cap pattern length
+    if (rawPattern && rawPattern.length > MAX_PATTERN_LENGTH) {
+      return {
+        callId: call.id,
+        output: `File pattern too long (${rawPattern.length} chars, max ${MAX_PATTERN_LENGTH}). Provide a more specific pattern.`,
+        isError: true,
+      };
+    }
+    if (contentPattern && contentPattern.length > MAX_PATTERN_LENGTH) {
+      return {
+        callId: call.id,
+        output: `Content pattern too long (${contentPattern.length} chars, max ${MAX_PATTERN_LENGTH}). Provide a more specific pattern.`,
+        isError: true,
+      };
+    }
+
+    // G-24: Block bare wildcard patterns that can cause DoS
+    if (contentPattern && /^(\.\*|\.\+)$/.test(contentPattern.trim())) {
+      return {
+        callId: call.id,
+        output: `Content pattern "${contentPattern}" is too broad. Provide a more specific pattern.`,
         isError: true,
       };
     }

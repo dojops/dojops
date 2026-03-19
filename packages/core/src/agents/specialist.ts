@@ -229,15 +229,16 @@ export class SpecialistAgent {
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
   ): Promise<LLMResponse> {
     const callWithTimeout = (): Promise<LLMResponse> => {
-      return Promise.race([
-        fn(),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Agent ${this.config.name} timed out after ${timeoutMs}ms`)),
-            timeoutMs,
-          ),
-        ),
-      ]);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Agent ${this.config.name} timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      });
+      return Promise.race([fn(), timeoutPromise]).finally(() => {
+        if (timer !== undefined) clearTimeout(timer);
+      });
     };
 
     try {

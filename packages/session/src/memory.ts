@@ -4,6 +4,11 @@ import { ChatMessage as CoreChatMessage } from "@dojops/core";
 export class MemoryManager {
   constructor(private readonly maxMessages: number = 20) {}
 
+  /** The configured message window size for context and summarization. */
+  get windowSize(): number {
+    return this.maxMessages;
+  }
+
   getContextMessages(
     allMessages: ChatMessage[],
     summary?: string,

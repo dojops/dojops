@@ -1,0 +1,110 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: grafana
+  version: 2.1.0
+  description: "Generate Grafana dashboard JSON configurations"
+  author: dojops
+  license: MIT
+  tags: [grafana, dashboard, monitoring, observability, visualization]
+
+context:
+  technology: Grafana
+  fileFormat: json
+  outputGuidance: |
+    Generate a complete Grafana dashboard JSON model.
+    Output raw JSON content directly — do NOT wrap in code fences or additional JSON layers.
+    The output must be valid Grafana dashboard JSON importable via Grafana UI or provisioning API.
+
+    Structure the dashboard with:
+    - Dashboard metadata: title, description, tags, timezone, time range
+    - Templating variables: datasource, namespace, instance, interval
+    - Rows organized by logical grouping (overview, resources, errors, latency)
+    - Panels with appropriate visualization types (time series, stat, gauge, table, heatmap)
+    - Proper PromQL/Loki/InfluxQL queries matching the data source
+
+    Detect the monitoring target from context:
+    - **Application monitoring**: Request rate, error rate, latency percentiles (RED method)
+    - **Infrastructure**: CPU, memory, disk, network utilization (USE method)
+    - **Kubernetes**: Pod resource usage, node capacity, deployment health
+    - **Database**: Query latency, connections, cache hit ratio, replication lag
+    - **Business metrics**: Custom application KPIs with stat panels
+  bestPractices:
+    - Organize panels into logical rows with descriptive titles
+    - Use template variables for datasource, namespace, and instance selection
+    - Set appropriate panel widths (24-column grid) and heights
+    - Use $__interval for auto-adjusting query resolution
+    - Include null value handling (connect null values, show zero)
+    - Set meaningful color thresholds for gauge and stat panels
+    - Use legends with relevant label values, not raw metric names
+    - Add panel descriptions explaining what each metric represents
+    - Use dashboard links for cross-referencing related dashboards
+    - Set refresh interval appropriate to the monitoring use case (5s-5m)
+    - Apply consistent color schemes across related panels
+    - Use overrides for per-series styling when needed
+    - Include annotations for deployment markers when applicable
+  context7Libraries:
+    - name: grafana
+      query: "Grafana dashboard JSON model, panel types time series stat gauge table, templating variables, PromQL queries, datasource configuration"
+
+files:
+  - path: "{outputPath}/dashboard.json"
+    format: raw
+
+detection:
+  paths: ["**/dashboards/*.json", "**/grafana/*.json", "dashboard.json"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "title"
+      required: true
+      message: "Grafana dashboard must have a title"
+    - path: "panels"
+      required: true
+      message: "Grafana dashboard must have panels"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.json"]
+
+risk:
+  level: LOW
+  rationale: "Dashboard configurations do not affect application behavior"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Grafana
+
+## Prompt
+
+You are a Grafana dashboard expert specializing in observability, monitoring visualization, and PromQL.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+grafana, dashboard, panel, visualization, monitoring, observability,
+prometheus, loki, influxdb, datasource, template, variable, graph,
+time-series, stat, gauge, heatmap, table, alert, annotation

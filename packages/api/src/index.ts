@@ -1,7 +1,8 @@
 export { createApp } from "./app";
 export type { AppDependencies } from "./app";
-export { HistoryStore } from "./store";
+export { HistoryStore, redactSecrets } from "./store";
 export type { HistoryEntry } from "./store";
+export { TokenTracker } from "./token-tracker";
 export {
   GenerateRequestSchema,
   PlanRequestSchema,

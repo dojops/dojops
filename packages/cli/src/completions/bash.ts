@@ -17,14 +17,14 @@ _dojops() {
   _init_completion || return
 
   # Top-level commands
-  local commands="plan generate apply validate explain debug analyze review auto inspect agents history modules tools toolchain scan chat check verify provider config auth serve status doctor init clean destroy rollback checkpoint trust untrust cron upgrade help completion"
+  local commands="plan generate apply validate explain debug analyze review auto inspect agents history modules tools toolchain scan chat check verify provider config auth serve status doctor init clean destroy rollback checkpoint trust untrust cron upgrade cost drift fix-deps help completion"
 
   # Subcommand maps
   local sub_debug="ci"
   local sub_analyze="diff"
   local sub_agents="list info create remove"
-  local sub_history="list show verify audit repair"
-  local sub_modules="list init validate publish install search dev"
+  local sub_history="list show verify audit repair export"
+  local sub_modules="list init validate publish install search dev update export import"
   local sub_tools="list init validate publish install search dev"
   local sub_toolchain="list load install remove clean"
   local sub_config="show get set delete validate reset profile"
@@ -45,7 +45,9 @@ _dojops() {
   # Command-specific flags
   local flags_plan="--execute --yes --skip-verify"
   local flags_apply="--resume --yes --skip-verify --force --allow-all-paths --install-packages --replay --task --timeout --repair-attempts"
-  local flags_scan="--security --deps --iac --sbom --license --fix --compare --target --fail-on"
+  local flags_scan="--security --deps --iac --sbom --license --fix --compare --target --fail-on --compliance"
+  local flags_drift="--terraform --kubernetes --path"
+  local flags_fixdeps="--npm --pip --dry-run"
   local flags_serve="--port --no-auth --tls-cert --tls-key"
   local flags_chat="--session --resume --agent --message"
   local flags_auto="--skip-verify --force --allow-all-paths --repair-attempts --commit"

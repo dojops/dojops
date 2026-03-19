@@ -101,7 +101,7 @@ export class ChatSession {
     ) {
       progress?.onPhase?.("compacting");
       try {
-        const keepCount = this.memoryManager["maxMessages"];
+        const keepCount = this.memoryManager.windowSize;
         const totalBefore = this.state.messages.length;
         const oldMessages = this.state.messages.slice(0, totalBefore - keepCount);
         this.state.summary = await this.summarizer.summarize(oldMessages);
@@ -119,17 +119,24 @@ export class ChatSession {
       }
     }
 
-    // Route to agent (LLM-based for natural language understanding)
+    // Route to agent: try keyword routing first, only use LLM when confidence is low
     progress?.onPhase?.("routing");
     const agentName = this.state.pinnedAgent;
     const agents = this.router.getAgents();
     let agent = agentName ? agents.find((a) => a.name === agentName) : undefined;
 
     if (!agent) {
-      const route = await this.router.routeWithLLM(userMessage, {
+      const keywordRoute = this.router.route(userMessage, {
         projectDomains: this.projectDomains,
       });
-      agent = route.agent;
+      if (keywordRoute.confidence >= 0.4) {
+        agent = keywordRoute.agent;
+      } else {
+        const llmRoute = await this.router.routeWithLLM(userMessage, {
+          projectDomains: this.projectDomains,
+        });
+        agent = llmRoute.agent;
+      }
     }
 
     progress?.onPhase?.("generating", agent.name);
@@ -217,7 +224,7 @@ export class ChatSession {
     ) {
       progress?.onPhase?.("compacting");
       try {
-        const keepCount = this.memoryManager["maxMessages"];
+        const keepCount = this.memoryManager.windowSize;
         const totalBefore = this.state.messages.length;
         const oldMessages = this.state.messages.slice(0, totalBefore - keepCount);
         this.state.summary = await this.summarizer.summarize(oldMessages);
@@ -231,16 +238,23 @@ export class ChatSession {
       }
     }
 
-    // Route to agent (LLM-based for natural language understanding)
+    // Route to agent: try keyword routing first, only use LLM when confidence is low
     progress?.onPhase?.("routing");
     const agentName = this.state.pinnedAgent;
     const agents = this.router.getAgents();
     let agent = agentName ? agents.find((a) => a.name === agentName) : undefined;
     if (!agent) {
-      const route = await this.router.routeWithLLM(userMessage, {
+      const keywordRoute = this.router.route(userMessage, {
         projectDomains: this.projectDomains,
       });
-      agent = route.agent;
+      if (keywordRoute.confidence >= 0.4) {
+        agent = keywordRoute.agent;
+      } else {
+        const llmRoute = await this.router.routeWithLLM(userMessage, {
+          projectDomains: this.projectDomains,
+        });
+        agent = llmRoute.agent;
+      }
     }
 
     progress?.onPhase?.("generating", agent.name);

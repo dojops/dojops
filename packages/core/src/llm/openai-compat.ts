@@ -5,6 +5,17 @@ import { parseAndValidate } from "./json-validator";
 import { redactSecrets } from "./redact";
 import { augmentSystemPrompt } from "./schema-prompt";
 
+/**
+ * Build a brief schema instruction for providers using response_format: json_object.
+ * Avoids embedding the full JSON Schema text in the system prompt (saves tokens).
+ */
+function briefSchemaPrompt(system: string | undefined): string {
+  const instruction =
+    "\n\nRespond with valid JSON matching the provided schema. " +
+    "No markdown, no extra text outside JSON.";
+  return ((system ?? "") + instruction).trim();
+}
+
 /** Build final LLM response, parsing structured output if schema was requested. */
 export function buildLLMResponse(
   content: string,
@@ -25,7 +36,12 @@ export async function openaiCompatGenerate(
   providerName: string,
   req: LLMRequest,
 ): Promise<LLMResponse> {
-  const systemContent = augmentSystemPrompt(req.system, req.schema);
+  // When response_format: json_object is set, skip embedding the full JSON Schema
+  // in the system prompt to reduce token usage — the schema is already enforced.
+  // Use a brief instruction instead.
+  const systemContent = req.schema
+    ? briefSchemaPrompt(req.system)
+    : augmentSystemPrompt(req.system, req.schema);
 
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = req.messages
     ?.length

@@ -5,6 +5,7 @@ export type { ScanPolicy, ScanPolicyThresholds, PolicyResult } from "./scan-poli
 export { planRemediation } from "./remediation/planner";
 export { applyFixes } from "./remediation/patcher";
 export { discoverProjectDirs, listSubDirs } from "./discovery";
+export { toSarif } from "./sarif";
 export {
   scanNpm,
   scanPip,
@@ -17,3 +18,10 @@ export {
   scanTrivyImage,
   scanTrivyLicense,
 } from "./scanners";
+export { mapFindingsToCompliance, getSupportedFrameworks } from "./compliance";
+export type {
+  ComplianceReport,
+  ComplianceControlResult,
+  ComplianceControl,
+  ComplianceFrameworkDef,
+} from "./compliance";

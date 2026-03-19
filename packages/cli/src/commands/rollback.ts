@@ -128,13 +128,13 @@ function buildRollbackPreviewLines(filesToDelete: string[], filesToRestore: stri
 }
 
 /** Execute the rollback under a lock: delete, restore, audit, report. */
-function executeRollback(
+async function executeRollback(
   root: string,
   planId: string,
   filesToDelete: string[],
   filesToRestore: string[],
   outputFormat: string | undefined,
-): void {
+): Promise<void> {
   if (!acquireLock(root, "rollback")) {
     const { info } = isLocked(root);
     throw new CLIError(
@@ -147,7 +147,7 @@ function executeRollback(
   try {
     const deleted = deleteProjectFiles(filesToDelete, root);
     const restored = restoreProjectFiles(filesToRestore, root);
-    appendAudit(root, {
+    await appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: getCurrentUser(),
       command: `rollback ${planId}`,
@@ -221,5 +221,5 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
     }
   }
 
-  executeRollback(root, planId, filesToDelete, filesToRestore, ctx.globalOpts.output);
+  await executeRollback(root, planId, filesToDelete, filesToRestore, ctx.globalOpts.output);
 }

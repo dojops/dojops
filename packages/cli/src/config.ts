@@ -120,6 +120,14 @@ export function readConfigFile(filePath: string): DojOpsConfig {
     // Decrypt tokens transparently on read
     if (config.tokens) {
       config.tokens = decryptTokens(config.tokens);
+      // G-03: Re-encrypt tokens migrated from legacy machine-derived key
+      if (Object.getOwnPropertyDescriptor(config.tokens, "_needsReEncrypt")?.value === true) {
+        try {
+          saveConfig({ ...config }, filePath);
+        } catch {
+          // Re-encryption is best-effort — don't block startup
+        }
+      }
     }
     return config;
   } catch {
@@ -255,13 +263,51 @@ export function resolveOllamaHost(cliFlag: string | undefined, config: DojOpsCon
 
 /**
  * Resolves the Ollama TLS certificate verification setting.
- * Priority: CLI flag > OLLAMA_TLS_REJECT_UNAUTHORIZED env > config > true
+ * Priority: CLI flag > DOJOPS_DANGER_DISABLE_TLS_VERIFY env > OLLAMA_TLS_REJECT_UNAUTHORIZED env > config > true
+ *
+ * G-22: Accepts both DOJOPS_DANGER_DISABLE_TLS_VERIFY (new, recommended) and
+ * OLLAMA_TLS_REJECT_UNAUTHORIZED (legacy, backward compatible).
+ * Logs a prominent warning when TLS verification is disabled.
  */
 export function resolveOllamaTls(cliFlag: boolean | undefined, config: DojOpsConfig): boolean {
-  if (cliFlag !== undefined) return cliFlag;
+  if (cliFlag !== undefined) {
+    if (!cliFlag) warnTlsDisabled("CLI flag");
+    return cliFlag;
+  }
+
+  // New env var (takes precedence): DOJOPS_DANGER_DISABLE_TLS_VERIFY
+  const dangerEnv = process.env.DOJOPS_DANGER_DISABLE_TLS_VERIFY;
+  if (dangerEnv !== undefined) {
+    const disabled = dangerEnv === "1" || dangerEnv.toLowerCase() === "true";
+    if (disabled) {
+      warnTlsDisabled("DOJOPS_DANGER_DISABLE_TLS_VERIFY");
+      return false;
+    }
+    return true;
+  }
+
+  // Legacy env var: OLLAMA_TLS_REJECT_UNAUTHORIZED
   const envVal = process.env.OLLAMA_TLS_REJECT_UNAUTHORIZED;
-  if (envVal !== undefined) return envVal !== "0" && envVal.toLowerCase() !== "false";
-  return config.ollamaTlsRejectUnauthorized ?? true;
+  if (envVal !== undefined) {
+    const rejectUnauthorized = envVal !== "0" && envVal.toLowerCase() !== "false";
+    if (!rejectUnauthorized) warnTlsDisabled("OLLAMA_TLS_REJECT_UNAUTHORIZED");
+    return rejectUnauthorized;
+  }
+
+  const configVal = config.ollamaTlsRejectUnauthorized ?? true;
+  if (!configVal) warnTlsDisabled("config.ollamaTlsRejectUnauthorized");
+  return configVal;
+}
+
+let tlsWarningShown = false;
+function warnTlsDisabled(source: string): void {
+  if (tlsWarningShown) return;
+  tlsWarningShown = true;
+  console.warn(
+    `\x1b[33m[SECURITY WARNING]\x1b[0m TLS certificate verification disabled via ${source}. ` +
+      "LLM traffic is vulnerable to man-in-the-middle attacks. " +
+      "Only use this for local development with self-signed certificates.",
+  );
 }
 
 /**

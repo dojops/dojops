@@ -13,6 +13,7 @@ import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { extractFlagValue, hasFlag } from "../parser";
 import { findProjectRoot } from "../state";
 import { truncateNoteTitle } from "../formatter";
+import { isOfflineMode, findCachedSkill, ensureSkillCache } from "../offline";
 
 type SkillScope = "global" | "project";
 
@@ -1002,6 +1003,25 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
     const { scope, baseDir } = await selectSkillScope(false);
     destDir = baseDir;
     loc = scope;
+  }
+
+  // Offline mode: check cache before reaching out to hub
+  if (isOfflineMode()) {
+    const projectRoot = findProjectRoot() ?? process.cwd();
+    ensureSkillCache(projectRoot);
+    const cachedPath = findCachedSkill(projectRoot, skillName);
+    if (cachedPath) {
+      fs.mkdirSync(destDir, { recursive: true });
+      const destPath = path.join(destDir, `${skillName}.dops`);
+      fs.copyFileSync(cachedPath, destPath);
+      p.log.success(`Installed ${pc.cyan(skillName)} from offline cache`);
+      p.log.info(`${pc.dim("Path:")} ${pc.underline(destPath)}`);
+      return;
+    }
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `Skill "${skillName}" not found in offline cache. Cache skills first with: dojops skills export <path>`,
+    );
   }
 
   const spinner = p.spinner();

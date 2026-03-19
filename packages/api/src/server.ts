@@ -30,10 +30,31 @@ const tools = createTools(provider);
 const { router, customAgentNames } = createRouter(provider);
 const debugger_ = createDebugger(provider);
 const diffAnalyzer = createDiffAnalyzer(provider);
-const store = new HistoryStore();
+
+// G-10: Persist history to ~/.dojops/history/
+const persistDir = path.join(os.homedir(), ".dojops", "history");
+const store = new HistoryStore(1000, persistDir);
 
 const port = Number.parseInt(process.env.DOJOPS_API_PORT ?? "3000", 10);
 const apiKey = loadServerApiKey();
+
+// G-02: Refuse to start without authentication unless --unsafe-no-auth is passed
+if (!apiKey) {
+  const unsafeNoAuth = process.argv.includes("--unsafe-no-auth");
+  if (!unsafeNoAuth) {
+    console.error(
+      "ERROR: No API key configured. Refusing to start.\n" +
+        "Set DOJOPS_API_KEY env var, run: dojops serve credentials,\n" +
+        "or pass --unsafe-no-auth to start without authentication (NOT recommended).",
+    );
+    process.exit(1);
+  }
+  console.warn(
+    "WARNING: Starting without authentication (--unsafe-no-auth). " +
+      "All endpoints except /api/auto are unauthenticated.\n" +
+      "Set DOJOPS_API_KEY env var or run: dojops serve credentials",
+  );
+}
 
 const app = createApp({
   provider,
@@ -46,13 +67,6 @@ const app = createApp({
   corsOrigin: `http://localhost:${port}`,
   apiKey,
 });
-
-if (!apiKey) {
-  console.warn(
-    "WARNING: No API key configured. All endpoints are unauthenticated.\n" +
-      "Set DOJOPS_API_KEY env var or run: dojops serve credentials",
-  );
-}
 
 const server = app.listen(port, () => {
   console.log(`\n  🥷 DojOps API server running on http://localhost:${port}`);

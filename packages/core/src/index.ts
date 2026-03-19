@@ -20,4 +20,5 @@ export * from "./agents";
 export * from "./scanner";
 export * from "./context";
 export * from "./llm/input-validator";
+export * from "./llm/proxy";
 export * from "./compression";

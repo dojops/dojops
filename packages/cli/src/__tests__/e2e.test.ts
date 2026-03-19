@@ -58,7 +58,7 @@ function seedPlan(tmpDir: string): PlanState {
   return plan;
 }
 
-function seedAudit(tmpDir: string, planId: string): void {
+async function seedAudit(tmpDir: string, planId: string): Promise<void> {
   const entry: AuditEntry = {
     timestamp: new Date().toISOString(),
     user: process.env.USER ?? "test",
@@ -68,7 +68,7 @@ function seedAudit(tmpDir: string, planId: string): void {
     status: "success",
     durationMs: 1234,
   };
-  appendAudit(tmpDir, entry);
+  await appendAudit(tmpDir, entry);
 }
 
 // ── LLM-free tests (always run) ─────────────────────────────────────
@@ -136,9 +136,9 @@ describe("CLI E2E — LLM-free", () => {
     expect(lower.includes("dry") || lower.includes("plan") || lower.includes("task")).toBe(true);
   });
 
-  it("dojops history list shows seeded plans", () => {
+  it("dojops history list shows seeded plans", async () => {
     const plan = seedPlan(tmpDir);
-    seedAudit(tmpDir, plan.id);
+    await seedAudit(tmpDir, plan.id);
     const output = run("history list", { cwd: tmpDir });
     expect(output).toContain(plan.id);
   });
@@ -150,9 +150,9 @@ describe("CLI E2E — LLM-free", () => {
     expect(output).toContain(plan.goal);
   });
 
-  it("audit integrity verification passes on valid audit log", () => {
+  it("audit integrity verification passes on valid audit log", async () => {
     const plan = seedPlan(tmpDir);
-    seedAudit(tmpDir, plan.id);
+    await seedAudit(tmpDir, plan.id);
     const result = verifyAuditIntegrity(tmpDir);
     expect(result.valid).toBe(true);
     expect(result.totalEntries).toBe(1);

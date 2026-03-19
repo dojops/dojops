@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { HistoryStore } from "../store";
+import { HistoryStore, redactSecrets } from "../store";
 
 describe("HistoryStore", () => {
   let store: HistoryStore;
@@ -352,5 +352,115 @@ describe("HistoryStore", () => {
       expect(all[1].id).toBe(allAdded[5].id);
       expect(all[2].id).toBe(allAdded[4].id);
     });
+  });
+
+  describe("G-10: secret redaction", () => {
+    it("redacts AWS access key IDs", () => {
+      const entry = store.add({
+        type: "generate",
+        request: { prompt: "key is AKIAIOSFODNN7EXAMPLE" },
+        response: {},
+        durationMs: 10,
+        success: true,
+      });
+      expect((entry.request as { prompt: string }).prompt).toBe("key is AKIA***REDACTED***");
+    });
+
+    it("redacts GitHub personal access tokens", () => {
+      const entry = store.add({
+        type: "generate",
+        request: { prompt: "token: ghp_abc123XYZ456" },
+        response: {},
+        durationMs: 10,
+        success: true,
+      });
+      expect((entry.request as { prompt: string }).prompt).toBe("token: ghp_***REDACTED***");
+    });
+
+    it("redacts OpenAI-style API keys", () => {
+      const entry = store.add({
+        type: "generate",
+        request: { prompt: "api key sk-abcdefghijklmnopqrstuvwxyz" },
+        response: {},
+        durationMs: 10,
+        success: true,
+      });
+      expect((entry.request as { prompt: string }).prompt).toBe("api key sk-***REDACTED***");
+    });
+
+    it("redacts Bearer tokens", () => {
+      const entry = store.add({
+        type: "generate",
+        request: { prompt: "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.test" },
+        response: {},
+        durationMs: 10,
+        success: true,
+      });
+      expect((entry.request as { prompt: string }).prompt).toContain("Bearer ***REDACTED***");
+    });
+
+    it("redacts secrets in response content", () => {
+      const entry = store.add({
+        type: "generate",
+        request: {},
+        response: { content: "use AKIAIOSFODNN7EXAMPLE as key" },
+        durationMs: 10,
+        success: true,
+      });
+      expect((entry.response as { content: string }).content).toBe("use AKIA***REDACTED*** as key");
+    });
+
+    it("redacts secrets in error field", () => {
+      const entry = store.add({
+        type: "generate",
+        request: {},
+        response: null,
+        durationMs: 10,
+        success: false,
+        error: "failed with ghp_secrettoken123",
+      });
+      expect(entry.error).toBe("failed with ghp_***REDACTED***");
+    });
+
+    it("handles nested objects", () => {
+      const entry = store.add({
+        type: "generate",
+        request: { headers: { authorization: "Bearer mytoken123" } },
+        response: {},
+        durationMs: 10,
+        success: true,
+      });
+      const req = entry.request as { headers: { authorization: string } };
+      expect(req.headers.authorization).toBe("Bearer ***REDACTED***");
+    });
+  });
+});
+
+describe("redactSecrets", () => {
+  it("redacts AWS key pattern", () => {
+    expect(redactSecrets("AKIAIOSFODNN7EXAMPLE")).toBe("AKIA***REDACTED***");
+  });
+
+  it("redacts GitHub token pattern", () => {
+    expect(redactSecrets("ghp_abcdef123456")).toBe("ghp_***REDACTED***");
+  });
+
+  it("redacts sk- pattern with 20+ chars", () => {
+    expect(redactSecrets("sk-12345678901234567890")).toBe("sk-***REDACTED***");
+  });
+
+  it("does not redact short sk- patterns", () => {
+    expect(redactSecrets("sk-short")).toBe("sk-short");
+  });
+
+  it("returns unchanged text with no secrets", () => {
+    const text = "This is a normal message with no secrets.";
+    expect(redactSecrets(text)).toBe(text);
+  });
+
+  it("redacts multiple secrets in one string", () => {
+    const text = "aws=AKIAIOSFODNN7EXAMPLE gh=ghp_token123456";
+    const result = redactSecrets(text);
+    expect(result).toBe("aws=AKIA***REDACTED*** gh=ghp_***REDACTED***");
   });
 });

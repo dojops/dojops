@@ -1,0 +1,110 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: cloudformation
+  version: 2.1.0
+  description: "Generate AWS CloudFormation YAML templates"
+  author: dojops
+  license: MIT
+  tags: [cloudformation, aws, iac, cloud, cfn]
+
+context:
+  technology: AWS CloudFormation
+  fileFormat: yaml
+  outputGuidance: |
+    Generate a valid AWS CloudFormation YAML template.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid CloudFormation template deployable via AWS CLI or console.
+
+    Structure the template with standard sections:
+    - AWSTemplateFormatVersion: '2010-09-09'
+    - Description: Clear description of what the stack creates
+    - Parameters: Input values with Type, Default, AllowedValues, ConstraintDescription
+    - Conditions: Conditional resource creation (optional)
+    - Resources: AWS resource definitions (required)
+    - Outputs: Stack outputs with Export for cross-stack references
+
+    Detect the AWS service and use case from context:
+    - **Compute**: EC2 instances, Auto Scaling, ECS, Lambda, Fargate
+    - **Storage**: S3 buckets, EBS volumes, EFS file systems
+    - **Database**: RDS, DynamoDB, ElastiCache, Aurora
+    - **Networking**: VPC, subnets, security groups, ALB, CloudFront
+    - **Serverless**: Lambda, API Gateway, Step Functions, EventBridge
+  bestPractices:
+    - Use Parameters with constraints for environment-specific values
+    - Set DeletionPolicy to Retain or Snapshot for stateful resources (RDS, S3)
+    - Use Conditions for multi-environment templates (dev/staging/prod)
+    - Leverage pseudo parameters (!Ref AWS::StackName, AWS::Region, AWS::AccountId)
+    - Use intrinsic functions (!Sub, !Join, !Select, !GetAtt) for dynamic values
+    - Export outputs for cross-stack references with !ImportValue
+    - Add UpdateReplacePolicy to prevent accidental data loss
+    - Use AWS::CloudFormation::Init for EC2 instance bootstrapping
+    - Tag all resources with standard metadata (Project, Environment, ManagedBy)
+    - Use nested stacks or StackSets for large, reusable templates
+    - Never hardcode account IDs, regions, or credentials
+    - Set appropriate timeouts with CreationPolicy and UpdatePolicy
+  context7Libraries:
+    - name: aws-cloudformation
+      query: "AWS CloudFormation template syntax, Parameters Resources Outputs, intrinsic functions Ref GetAtt Sub, DeletionPolicy, Conditions, nested stacks"
+
+files:
+  - path: "{outputPath}/template.yaml"
+    format: raw
+
+detection:
+  paths: ["template.yaml", "template.yml", "cfn-*.yaml", "cloudformation/*.yaml", "*.cfn.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "AWSTemplateFormatVersion"
+      required: true
+      message: "CloudFormation template must specify AWSTemplateFormatVersion"
+    - path: "Resources"
+      required: true
+      message: "CloudFormation template must define at least one resource"
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml", "**/*.json"]
+
+risk:
+  level: MEDIUM
+  rationale: "CloudFormation changes affect AWS infrastructure and may incur costs"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# CloudFormation
+
+## Prompt
+
+You are an AWS CloudFormation expert. Generate production-ready CloudFormation YAML templates following AWS best practices.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+cloudformation, cfn, aws, template, stack, parameter, resource,
+output, condition, lambda, ec2, s3, rds, vpc, ecs, fargate,
+iam, security-group, alb, api-gateway, dynamodb

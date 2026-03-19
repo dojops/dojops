@@ -85,11 +85,11 @@ describe("factory", () => {
   });
 
   describe("createTools", () => {
-    it("creates all 13 built-in tools", () => {
+    it("creates all 18 built-in tools", () => {
       process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const tools = createTools(provider);
-      expect(tools).toHaveLength(13);
+      expect(tools).toHaveLength(18);
       const names = tools.map((t) => t.name);
       expect(names).toContain("github-actions");
       expect(names).toContain("terraform");
@@ -104,6 +104,11 @@ describe("factory", () => {
       expect(names).toContain("gitlab-ci");
       expect(names).toContain("prometheus");
       expect(names).toContain("systemd");
+      expect(names).toContain("grafana");
+      expect(names).toContain("otel-collector");
+      expect(names).toContain("pulumi");
+      expect(names).toContain("argocd");
+      expect(names).toContain("cloudformation");
     });
   });
 

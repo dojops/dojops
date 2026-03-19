@@ -44,14 +44,15 @@ describe("errorHandler", () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "Validation failed" }));
   });
 
-  it("returns 500 with message in development", () => {
+  it("returns 500 with generic message regardless of NODE_ENV (G-23)", () => {
     delete process.env.NODE_ENV;
     const { req, res, next } = mockReqRes({});
     errorHandler(new Error("boom"), req, res, next);
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: "Internal server error", message: "boom" }),
-    );
+    const payload = vi.mocked(res.json).mock.calls[0][0];
+    expect(payload.error).toBe("Internal server error");
+    // G-23: Never leak error details to clients
+    expect(payload.message).toBeUndefined();
   });
 
   it("hides message in production", () => {
