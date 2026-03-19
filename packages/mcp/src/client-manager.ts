@@ -7,6 +7,9 @@ import type { McpConfig, McpServerConfig, StdioServerConfig } from "./types";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PKG_VERSION: string = (require("../package.json") as { version: string }).version;
 
+/** Maximum time to wait for an MCP server connection (30 seconds). */
+const CONNECTION_TIMEOUT_MS = 30_000;
+
 /**
  * Sensitive env var patterns stripped before passing to MCP subprocesses.
  * Prevents credential exfiltration via malicious `.dojops/mcp.json` configs.
@@ -136,7 +139,15 @@ export class McpClientManager {
     const transport = this.createTransport(config);
     const client = new Client({ name: `dojops-${name}`, version: PKG_VERSION });
 
-    await client.connect(transport);
+    await Promise.race([
+      client.connect(transport),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`MCP server "${name}" connection timed out after 30s`)),
+          CONNECTION_TIMEOUT_MS,
+        ),
+      ),
+    ]);
 
     // Discover tools
     const toolsResult = await client.listTools();

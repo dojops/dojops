@@ -425,7 +425,10 @@ function verifyGitHubActions(yamlContent: string): VerificationResult {
   const issues: VerificationResult["issues"] = [];
 
   try {
-    const doc = yaml.load(yamlContent) as Record<string, unknown>;
+    const doc = yaml.load(yamlContent, { maxAliasCount: 100 } as yaml.LoadOptions) as Record<
+      string,
+      unknown
+    >;
 
     if (!doc || typeof doc !== "object") {
       issues.push({ severity: "error", message: "Invalid YAML structure" });
@@ -510,7 +513,10 @@ function verifyGitLabCI(yamlContent: string): VerificationResult {
   const issues: VerificationResult["issues"] = [];
 
   try {
-    const doc = yaml.load(yamlContent) as Record<string, unknown>;
+    const doc = yaml.load(yamlContent, { maxAliasCount: 100 } as yaml.LoadOptions) as Record<
+      string,
+      unknown
+    >;
 
     if (!doc || typeof doc !== "object") {
       issues.push({ severity: "error", message: "Invalid YAML structure" });

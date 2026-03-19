@@ -264,11 +264,32 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     const childArgs = process.argv.slice(1).filter((a) => a !== "--background");
     childArgs.push("--_background-child", `--run-id=${runId}`);
 
+    // CS-03: Filter sensitive env vars from background child (same principle as MCP sanitization)
+    const SENSITIVE_ENV_PATTERNS = [/_API_KEY$/, /_TOKEN$/, /_SECRET$/, /_PASSWORD$/];
+    const SAFE_ENV_PREFIXES = [
+      "PATH",
+      "HOME",
+      "USER",
+      "SHELL",
+      "NODE_",
+      "DOJOPS_PROVIDER",
+      "DOJOPS_MODEL",
+    ];
+    const filteredEnv: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value === undefined) continue;
+      const isSensitive = SENSITIVE_ENV_PATTERNS.some((p) => p.test(key));
+      const isSafe = SAFE_ENV_PREFIXES.some((prefix) => key === prefix || key.startsWith(prefix));
+      if (!isSensitive || isSafe) {
+        filteredEnv[key] = value;
+      }
+    }
+
     const child = spawn(process.execPath, childArgs, {
       detached: true,
       stdio: ["ignore", logStream, logStream],
       cwd: ctx.cwd,
-      env: process.env,
+      env: filteredEnv,
     });
 
     meta.pid = child.pid ?? 0;
@@ -331,6 +352,8 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
         if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
         if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
         if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
+        if (cfgs.envPassthrough.length > 0)
+          p.log.info(`  MCP servers request access to env vars: ${cfgs.envPassthrough.join(", ")}`);
         const trustDecision = await p.confirm({ message: "Trust this workspace?" });
         if (p.isCancel(trustDecision) || !trustDecision) {
           skipCustomConfigs = true;

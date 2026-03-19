@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **5 new built-in skills**: Pulumi (`pulumi.dops`), ArgoCD (`argocd.dops`), CloudFormation (`cloudformation.dops`), Grafana (`grafana.dops`), OpenTelemetry Collector (`otel-collector.dops`) — total built-in skills now 18
+- **Secret scanning before file writes**: `scanForSecrets()` detects 9 secret patterns (AWS keys, GitHub tokens, API keys, private keys, passwords) with severity levels (error/warning) and placeholder awareness. Integrated into `ToolExecutor` to block accidental secret leaks
+- **SARIF 2.1.0 output format**: `packages/scanner/src/sarif.ts` converts scan findings to SARIF for integration with GitHub Code Scanning, VS Code, and other SARIF-compatible tools
+- **Compliance scanning**: `packages/scanner/src/compliance.ts` checks for SOC2, HIPAA, and PCI-DSS compliance patterns across IaC and CI/CD configurations
+- **Infrastructure cost estimation**: `dojops cost` command estimates cloud resource costs from Terraform/Kubernetes/Docker Compose configs using provider pricing data
+- **Infrastructure drift detection**: `dojops drift` command detects configuration drift via `terraform plan` and `kubectl diff` with auto-detection, JSON output, and audit logging
+- **Dependency auto-remediation**: `dojops fix-deps` command runs `npm audit fix`, handles breaking changes with `--force` flag, pnpm lockfile conflict warnings, and detailed reporting
+- **Audit log export**: `dojops history export` exports audit logs in JSON, CSV, or syslog format with date range filtering
+- **Skills management commands**: `dojops skills update`, `dojops skills export`, `dojops skills import` for skill lifecycle management with SHA-256 integrity verification on download
+- **Offline mode support**: `packages/cli/src/offline.ts` enables graceful degradation when no network connectivity is available
+- **HTTP(S) proxy support**: `packages/core/src/llm/proxy.ts` adds proxy configuration via `HTTPS_PROXY`/`HTTP_PROXY` environment variables for LLM provider connections
+- **Shared `resolveToolName()` utility**: `packages/sdk/src/resolve-tool-name.ts` extracts duplicated skill name resolution logic into a single shared function
+- **Test coverage for new commands**: 57 new tests across 6 test files covering cost, drift, fix-deps, audit-export, skills-extra, and offline commands
+- **Dockerfile health check**: Added `HEALTHCHECK` instruction to production Docker image
+- **SIGTERM handler**: CLI now handles SIGTERM for graceful shutdown in containerized environments
+
+### Changed
+
+- **Command injection blocklist hardened**: `isDangerousCommand()` in `ToolExecutor` now blocks PowerShell patterns (`Invoke-Expression`, `Start-Process`), environment/interpreter manipulation (`env`, `export`, `source`, `eval`), base64 pipe patterns, and process substitution. Network commands (curl, wget, nc) now blocked outright instead of warned
+- **History store secret redaction**: `HistoryStore` now redacts secrets from stored data via `redactSecrets()` and `redactDeep()` before persisting to JSONL
+- **Background auto runs hardened**: Background runs enforce 1-hour TTL, 100-run cap, and apply `deniedWritePaths` matching CLI restrictions (`.ssh`, `.gnupg`, `.aws`, `.config`, `.env`)
+- **API server auth enforcement**: `dojops serve` now refuses to start without API key authentication (matching `server.ts` behavior), supports both `--no-auth` and `--unsafe-no-auth` flags
+- **Vault key security**: Random 32-byte vault key generated at `~/.dojops/vault-key` with `0o600` permissions, legacy key migration supported
+- **Async audit logging**: `appendAudit()` in `state.ts` now uses async I/O instead of synchronous spin-wait
+- **Chat session optimization**: `ChatSession` refactored to extract `prepareRequest()` and `finalize()` from duplicated `send()`/`sendStream()` logic. Agent routing uses keyword-first matching with LLM fallback only below 0.4 confidence
+- **Prompt validation middleware**: API routes now validate prompts for injection patterns before processing
+- **Token budget middleware**: API returns HTTP 429 when estimated token usage exceeds configured budget
+- **Trust store integrity**: Trust store written with `0o600` permissions and HMAC-SHA256 signatures. `discoverWorkspaceConfigs()` now extracts `envPassthrough` from MCP config and displays in trust prompt
+- **MCP connection timeout**: MCP client connections now have a 30-second timeout via `Promise.race`
+- **YAML DoS protection**: All `yaml.load()` calls now use `{ maxAliasCount: 100 }` to prevent billion laughs attacks (verify, dojops-md-parser, policy)
+- **`@file` expansion hardened**: Path traversal guard limits `../` to 3 levels and blocks sensitive directories (`.ssh`, `.gnupg`, `.aws`, `.config/gcloud`)
+- **Run ID validation**: `isValidRunId()` rejects path traversal characters (`/`, `\`, `..`) to prevent directory traversal via run IDs
+- **Shell completions updated**: Fish completions fully rewritten with all new commands. Zsh and Bash completions updated with skills as primary terminology
+- **Skill keyword routing expanded**: `SKILL_KEYWORDS` map in `generate.ts` and `TOOL_LIBRARY_MAP` in Context7 now include all 5 new skills
+- **Generic error responses**: Chat API returns `"Internal server error"` instead of leaking internal error details to clients
+- **Background child env filtering**: `dojops auto --background` filters sensitive environment variables before spawning child processes
+- **GitLab CI review artifact type**: Changed from `codequality` to generic `report` in `.gitlab/dojops-review.yml`
+- **CloudFormation skill**: Set `child_process: none` (generation only, no execution)
+- **OTel Collector skill**: Narrowed detection paths to reduce false positives
+- **Drift audit status**: Uses descriptive `"drift-detected"` / `"no-drift"` status instead of generic `"success"`
+- **Documentation**: Updated all references from "13 built-in skills" to "18 built-in skills" across docs, READMEs, and package descriptions. Added CLI reference entries for all new commands
+
 ## [1.1.4] - 2026-03-19
 
 ### Fixed

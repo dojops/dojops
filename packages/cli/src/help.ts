@@ -30,6 +30,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("history")}            View execution history`);
   console.log(`  ${pc.cyan("history verify")}     Verify audit log hash chain integrity`);
   console.log(`  ${pc.cyan("history audit")}      View audit log entries`);
+  console.log(`  ${pc.cyan("history export")}     Export audit log (json, csv, syslog)`);
   console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
   console.log(`  ${pc.cyan("provider")}           Manage LLM providers (list/add/remove/default)`);
   console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
@@ -38,6 +39,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("check")}              LLM-powered DevOps config quality check`);
   console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
   console.log(`  ${pc.cyan("skills")}             Manage DevOps skills (custom + marketplace)`);
+  console.log(`  ${pc.cyan("skills update")}      Update installed skills from Hub`);
+  console.log(`  ${pc.cyan("skills export")}      Export skills to offline bundle`);
+  console.log(`  ${pc.cyan("skills import")}      Import skills from offline bundle`);
   console.log(`  ${pc.cyan("toolchain")}          Manage system toolchain (~/.dojops/toolchain/)`);
   console.log(
     `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,

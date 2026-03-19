@@ -1,6 +1,6 @@
 # DevOps Skills
 
-DojOps includes 13 built-in DevOps skills covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All skills follow a consistent pattern built on the `BaseSkill<T>` abstract class. Additionally, a **custom skill system** lets you extend DojOps with custom `.dops v2` skills.
+DojOps includes 18 built-in DevOps skills covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All skills follow a consistent pattern built on the `BaseSkill<T>` abstract class. Additionally, a **custom skill system** lets you extend DojOps with custom `.dops v2` skills.
 
 > **As of v2.0.0, only `.dops v2` format is supported.** The legacy v1 format and `tool.yaml` manifests have been removed.
 
@@ -8,27 +8,32 @@ DojOps includes 13 built-in DevOps skills covering CI/CD, infrastructure-as-code
 
 ## Skill Overview
 
-| Skill          | Output Format     | Output Files                        | Detector | Verifier             |
-| -------------- | ----------------- | ----------------------------------- | -------- | -------------------- |
-| GitHub Actions | YAML (raw)        | `.github/workflows/ci.yml`          | Yes      | Structure lint       |
-| Terraform      | HCL (raw)         | `main.tf`, `variables.tf`           | Yes      | `terraform validate` |
-| Kubernetes     | YAML (raw)        | K8s manifests                       | --       | `kubectl --dry-run`  |
-| Helm           | YAML (raw)        | `Chart.yaml`, `values.yaml`         | --       | --                   |
-| Ansible        | YAML (raw)        | `{name}.yml`                        | --       | --                   |
-| Docker Compose | YAML (raw)        | `docker-compose.yml`                | Yes      | --                   |
-| Dockerfile     | Dockerfile (raw)  | `Dockerfile`, `.dockerignore`       | Yes      | `hadolint`           |
-| Nginx          | Nginx conf (raw)  | `nginx.conf`                        | --       | --                   |
-| Makefile       | Make syntax (raw) | `Makefile`                          | Yes      | --                   |
-| GitLab CI      | YAML (raw)        | `.gitlab-ci.yml`                    | Yes      | Structure lint       |
-| Prometheus     | YAML (raw)        | `prometheus.yml`, `alert-rules.yml` | --       | --                   |
-| Systemd        | INI (raw)         | `{name}.service`                    | --       | --                   |
-| Jenkinsfile    | Groovy (raw)      | `Jenkinsfile`                       | Yes      | --                   |
+| Skill          | Output Format         | Output Files                        | Detector | Verifier             |
+| -------------- | --------------------- | ----------------------------------- | -------- | -------------------- |
+| GitHub Actions | YAML (raw)            | `.github/workflows/ci.yml`          | Yes      | Structure lint       |
+| Terraform      | HCL (raw)             | `main.tf`, `variables.tf`           | Yes      | `terraform validate` |
+| Kubernetes     | YAML (raw)            | K8s manifests                       | --       | `kubectl --dry-run`  |
+| Helm           | YAML (raw)            | `Chart.yaml`, `values.yaml`         | --       | --                   |
+| Ansible        | YAML (raw)            | `{name}.yml`                        | --       | --                   |
+| Docker Compose | YAML (raw)            | `docker-compose.yml`                | Yes      | --                   |
+| Dockerfile     | Dockerfile (raw)      | `Dockerfile`, `.dockerignore`       | Yes      | `hadolint`           |
+| Nginx          | Nginx conf (raw)      | `nginx.conf`                        | --       | --                   |
+| Makefile       | Make syntax (raw)     | `Makefile`                          | Yes      | --                   |
+| GitLab CI      | YAML (raw)            | `.gitlab-ci.yml`                    | Yes      | Structure lint       |
+| Prometheus     | YAML (raw)            | `prometheus.yml`, `alert-rules.yml` | --       | --                   |
+| Systemd        | INI (raw)             | `{name}.service`                    | --       | --                   |
+| Jenkinsfile    | Groovy (raw)          | `Jenkinsfile`                       | Yes      | --                   |
+| Grafana        | JSON (raw)            | Grafana dashboard JSON              | --       | --                   |
+| CloudFormation | YAML (raw)            | `template.yaml`                     | --       | Structure lint       |
+| ArgoCD         | YAML (raw)            | ArgoCD Application manifests        | --       | --                   |
+| Pulumi         | YAML/TypeScript (raw) | Pulumi IaC files                    | --       | --                   |
+| OTel Collector | YAML (raw)            | `otel-collector-config.yaml`        | --       | Structure lint       |
 
 ---
 
 ## Skill Pattern
 
-All 13 built-in skills are defined as `.dops v2` skill files in `packages/runtime/skills/`. Each skill is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
+All 18 built-in skills are defined as `.dops v2` skill files in `packages/runtime/skills/`. Each skill is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
 
 ```
 packages/runtime/skills/
@@ -45,6 +50,11 @@ packages/runtime/skills/
   prometheus.dops        Prometheus monitoring generator
   systemd.dops           Systemd service unit generator
   jenkinsfile.dops       Jenkinsfile pipeline generator
+  grafana.dops           Grafana dashboard JSON generator
+  cloudformation.dops    AWS CloudFormation template generator
+  argocd.dops            ArgoCD Application manifest generator
+  pulumi.dops            Pulumi infrastructure as code generator
+  otel-collector.dops    OpenTelemetry Collector config generator
 ```
 
 ### BaseSkill Abstract Class
@@ -99,7 +109,7 @@ Verification runs by default in CLI commands. Use `--skip-verify` to disable. Bu
 
 ### Existing Config Auto-Detection
 
-All 13 skills auto-detect existing config files and switch to update mode when found. Each skill knows its output file path and reads existing content automatically:
+All 18 skills auto-detect existing config files and switch to update mode when found. Each skill knows its output file path and reads existing content automatically:
 
 | Skill          | Auto-Detect Path                                                       |
 | -------------- | ---------------------------------------------------------------------- |
@@ -424,6 +434,11 @@ After the closing `---` delimiter, markdown sections define prompts:
 | gitlab-ci      | LOW    | CI/CD pipeline changes require MR review              |
 | makefile       | LOW    | Build automation changes are local                    |
 | prometheus     | LOW    | Monitoring config changes are observable              |
+| grafana        | LOW    | Dashboard JSON changes are observable                 |
+| cloudformation | MEDIUM | CloudFormation changes affect AWS infrastructure      |
+| argocd         | MEDIUM | ArgoCD changes affect Kubernetes deployments          |
+| pulumi         | MEDIUM | Infrastructure changes may affect cloud resources     |
+| otel-collector | LOW    | Collector config changes affect telemetry pipeline    |
 
 ---
 

@@ -12,7 +12,7 @@ export interface TrustDecision {
 export interface TrustCheck {
   trusted: boolean;
   hashChanged: boolean;
-  configs: { agents: string[]; mcpServers: string[]; skills: string[] };
+  configs: { agents: string[]; mcpServers: string[]; skills: string[]; envPassthrough: string[] };
 }
 
 function trustStorePath(): string {
@@ -91,10 +91,10 @@ function saveTrustStore(store: Record<string, TrustDecision>): void {
     const dataStr = JSON.stringify(store);
     const signature = computeStoreHmac(dataStr, signingKey);
     const signed = { _signature: signature, data: store };
-    fs.writeFileSync(trustStorePath(), JSON.stringify(signed, null, 2) + "\n");
+    fs.writeFileSync(trustStorePath(), JSON.stringify(signed, null, 2) + "\n", { mode: 0o600 });
   } else {
     // No vault key — save unsigned (graceful degradation)
-    fs.writeFileSync(trustStorePath(), JSON.stringify(store, null, 2) + "\n");
+    fs.writeFileSync(trustStorePath(), JSON.stringify(store, null, 2) + "\n", { mode: 0o600 });
   }
 }
 
@@ -112,13 +112,40 @@ function listFiles(dir: string): string[] {
 
 /**
  * Discover workspace configs: custom agents, MCP servers, custom skills.
+ * Also extracts allowEnvPassthrough entries from mcp.json so the trust
+ * prompt can show which env vars MCP servers request access to.
  */
 export function discoverWorkspaceConfigs(projectDir: string): TrustCheck["configs"] {
   const dojopsDir = path.join(projectDir, ".dojops");
+  const mcpPath = path.join(dojopsDir, "mcp.json");
+  const hasMcp = fs.existsSync(mcpPath);
+
+  // CS-05: Extract allowEnvPassthrough from mcp.json
+  const envPassthrough: string[] = [];
+  if (hasMcp) {
+    try {
+      const mcpRaw = JSON.parse(fs.readFileSync(mcpPath, "utf-8"));
+      const servers = mcpRaw?.mcpServers ?? {};
+      for (const serverConfig of Object.values(servers)) {
+        const cfg = serverConfig as Record<string, unknown>;
+        if (Array.isArray(cfg.allowEnvPassthrough)) {
+          for (const v of cfg.allowEnvPassthrough) {
+            if (typeof v === "string" && !envPassthrough.includes(v)) {
+              envPassthrough.push(v);
+            }
+          }
+        }
+      }
+    } catch {
+      // Invalid JSON — skip env extraction
+    }
+  }
+
   return {
     agents: listFiles(path.join(dojopsDir, "agents")),
-    mcpServers: fs.existsSync(path.join(dojopsDir, "mcp.json")) ? ["mcp.json"] : [],
+    mcpServers: hasMcp ? ["mcp.json"] : [],
     skills: listFiles(path.join(dojopsDir, "skills")),
+    envPassthrough,
   };
 }
 

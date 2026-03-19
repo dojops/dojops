@@ -202,6 +202,11 @@ const SKILL_KEYWORDS: Record<string, string[]> = {
   prometheus: ["prometheus", "alerting rules", "prom"],
   systemd: ["systemd", "service unit", "systemctl"],
   makefile: ["makefile", "make target"],
+  grafana: ["grafana", "dashboard", "visualization", "panel"],
+  cloudformation: ["cloudformation", "cfn", "aws template", "aws stack"],
+  argocd: ["argocd", "argo cd", "gitops", "argo"],
+  pulumi: ["pulumi"],
+  "otel-collector": ["opentelemetry", "otel", "collector", "telemetry"],
 };
 
 /**

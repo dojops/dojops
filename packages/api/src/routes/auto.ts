@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
+import os from "node:os";
+import path from "node:path";
 import type { LLMProvider } from "@dojops/core";
 import { AGENT_TOOLS } from "@dojops/core";
 import type { DevOpsSkill } from "@dojops/sdk";
@@ -68,12 +70,22 @@ export function createAutoRouter(
 
     const skillsMap = new Map(skills.map((s) => [s.name, s]));
 
+    // CS-01: Mirror CLI auto command's denied paths for sensitive directories
+    const home = os.homedir();
+    const deniedWritePaths = [
+      path.join(home, ".ssh"),
+      path.join(home, ".gnupg"),
+      path.join(home, ".aws"),
+      path.join(home, ".config"),
+      path.join(cwd, ".env"),
+    ];
+
     const toolExecutor = new ToolExecutor({
       policy: {
         allowWrite: true,
         // G-02: Never allow all paths — always enforce DevOps allowlist
-        allowedWritePaths: [],
-        deniedWritePaths: [],
+        allowedWritePaths: [cwd],
+        deniedWritePaths,
         enforceDevOpsAllowlist: true,
         allowNetwork: false,
         allowEnvVars: [],

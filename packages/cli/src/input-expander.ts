@@ -14,7 +14,19 @@ const FILE_REF_RE = /(?<![\\@\w])@((?:\.\.?\/)?[\w./-]+\.\w+)/g;
  */
 export function expandFileReferences(input: string, cwd: string): string {
   return input.replace(FILE_REF_RE, (match, filePath: string) => {
+    // Block paths with excessive traversal (more than 3 levels up)
+    const traversalCount = (filePath.match(/\.\.\//g) || []).length;
+    if (traversalCount > 3) return match;
     const absPath = path.resolve(cwd, filePath);
+    // Block absolute paths and paths reaching sensitive directories
+    const sensitive = [".ssh", ".gnupg", ".aws", ".config/gcloud"];
+    if (
+      sensitive.some(
+        (s) => absPath.includes(path.sep + s + path.sep) || absPath.endsWith(path.sep + s),
+      )
+    ) {
+      return match;
+    }
     try {
       const stat = fs.statSync(absPath);
       if (!stat.isFile() || stat.size > 256 * 1024) return match;

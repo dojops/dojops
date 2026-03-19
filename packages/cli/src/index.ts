@@ -443,6 +443,11 @@ async function main() {
     process.exit(130);
   });
 
+  process.on("SIGTERM", () => {
+    process.stdout.write("\x1B[?25h"); // restore cursor
+    process.exit(0);
+  });
+
   // Prepend both project and global toolchain bin dirs to PATH
   const projectRoot = findProjectRoot();
   prependToolchainBinToPath(projectRoot ? projectToolchainCtx(projectRoot) : undefined);

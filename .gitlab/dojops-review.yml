@@ -15,8 +15,8 @@ dojops-review:
     - dojops review $CHANGED --output json --non-interactive > review.json || true
     - cat review.json
   artifacts:
-    reports:
-      codequality: review.json
+    paths:
+      - review.json
     when: always
   rules:
     - if: $CI_MERGE_REQUEST_IID

@@ -4,7 +4,7 @@ Skill registry for [DojOps](https://github.com/dojops/dojops) — discovers, loa
 
 ## Features
 
-- **Unified registry**: Combines 13 built-in skills + custom skills via `getAll()` / `get(name)` / `has()`
+- **Unified registry**: Combines 18 built-in skills + custom skills via `getAll()` / `get(name)` / `has()`
 - **Custom skill discovery**: Loads from `~/.dojops/skills/` (global) and `.dojops/skills/` (project)
 - **Skill policy**: `.dojops/policy.yaml` allowlist/blocklist enforcement
 - **Custom agent discovery**: Parses `.dojops/agents/*.yaml` into specialist agents

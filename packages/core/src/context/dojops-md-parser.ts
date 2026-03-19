@@ -38,7 +38,8 @@ export function parseDojopsMdString(content: string, rootPath?: string): DojopsM
 
   let raw: Record<string, unknown>;
   try {
-    const parsed = yaml.load(yamlStr);
+    // SA-03: Limit YAML alias expansion to prevent billion-laughs DoS
+    const parsed = yaml.load(yamlStr, { maxAliasCount: 100 } as yaml.LoadOptions);
     if (!parsed || typeof parsed !== "object") {
       return { context: null, body, formatVersion: null, rawFrontmatter: null };
     }

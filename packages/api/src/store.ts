@@ -20,6 +20,15 @@ const SECRET_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
   { pattern: /ghp_[a-zA-Z0-9]+/g, replacement: "ghp_***REDACTED***" },
   { pattern: /sk-[a-zA-Z0-9]{20,}/g, replacement: "sk-***REDACTED***" },
   { pattern: /Bearer\s+[a-zA-Z0-9._-]+/gi, replacement: "Bearer ***REDACTED***" },
+  // CS-07: Additional patterns matching executor's secret-scanner coverage
+  { pattern: /sk-ant-[a-zA-Z0-9_-]+/g, replacement: "sk-ant-***REDACTED***" },
+  { pattern: /-----BEGIN[A-Z ]*PRIVATE KEY-----/g, replacement: "***REDACTED_PRIVATE_KEY***" },
+  { pattern: /password\s*=\s*['"][^'"]+['"]/gi, replacement: "password=***REDACTED***" },
+  { pattern: /secret\s*=\s*['"][^'"]+['"]/gi, replacement: "secret=***REDACTED***" },
+  {
+    pattern: /api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_-]{8,}['"]?/gi,
+    replacement: "api_key=***REDACTED***",
+  },
 ];
 
 /**
@@ -168,6 +177,14 @@ export class HistoryStore {
   clear(): void {
     this.entries = [];
     this.idIndex.clear();
+    // SA-14: Truncate persisted JSONL file on clear
+    if (this.persistPath) {
+      try {
+        fs.writeFileSync(this.persistPath, "", "utf-8");
+      } catch {
+        // Best-effort — in-memory store is already cleared
+      }
+    }
   }
 }
 

@@ -6,7 +6,14 @@ import path from "node:path";
 import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { DevOpsSkill } from "@dojops/sdk";
 import { HistoryStore } from "./store";
-import { errorHandler, authMiddleware, requestIdMiddleware, requestLogger } from "./middleware";
+import {
+  errorHandler,
+  authMiddleware,
+  requestIdMiddleware,
+  requestLogger,
+  promptValidation,
+  tokenBudgetMiddleware,
+} from "./middleware";
 import {
   createGenerateRouter,
   createPlanRouter,
@@ -221,11 +228,46 @@ export function createApp(deps: AppDependencies): Express {
   app.get("/api/health", healthHandler);
   app.get("/api/v1/health", healthHandler);
 
+  // SA-01: Token budget tracker — intercept store.add directly so all route handlers
+  // that received deps.store benefit from token tracking automatically.
+  const tokenTracker = new TokenTracker();
+
+  /** Extract token count from a history entry for tracking. */
+  function extractTokenCount(entry: Parameters<typeof deps.store.add>[0]): number {
+    const rec = entry as Record<string, unknown>;
+    if (rec.tokens && typeof rec.tokens === "object") {
+      const tokens = rec.tokens as Record<string, unknown>;
+      return typeof tokens.total === "number" ? tokens.total : 0;
+    }
+    if (!entry.response || typeof entry.response !== "object") return 0;
+    const resp = entry.response as Record<string, unknown>;
+    if (typeof resp.totalTokens === "number") return resp.totalTokens;
+    if (typeof resp.usage === "object" && resp.usage !== null) {
+      const usage = resp.usage as Record<string, unknown>;
+      if (typeof usage.totalTokens === "number") return usage.totalTokens;
+      if (typeof usage.total_tokens === "number") return usage.total_tokens;
+    }
+    return 0;
+  }
+
+  // Intercept deps.store.add so every route handler's store.add call triggers token tracking
+  const originalAdd = deps.store.add.bind(deps.store);
+  deps.store.add = (entry: Parameters<typeof deps.store.add>[0]) => {
+    const result = originalAdd(entry);
+    const total = extractTokenCount(entry);
+    if (total > 0) tokenTracker.record(total);
+    return result;
+  };
+
   // Per-route rate limiters (E-6) — more restrictive limits for expensive endpoints
   const FIFTEEN_MIN = 15 * 60 * 1000;
   const llmLimiter = createRateLimiter(FIFTEEN_MIN, 20); // generate, chat, diff, debug-ci
   const planLimiter = createRateLimiter(FIFTEEN_MIN, 10); // most expensive
   const scanLimiter = createRateLimiter(FIFTEEN_MIN, 5); // scanner invocations
+
+  // SA-05: Prompt injection detection for LLM routes
+  // SA-06: Token budget enforcement for LLM routes
+  const budgetMiddleware = tokenBudgetMiddleware(tokenTracker);
 
   // Create route handler instances once (shared between /api/ and /api/v1/)
   const generateRouter = createGenerateRouter(
@@ -265,61 +307,23 @@ export function createApp(deps: AppDependencies): Express {
   const autoRouter = createAutoRouter(deps.provider, deps.tools, deps.store, deps.rootDir);
 
   // Mount routes at both /api/ (backward compat) and /api/v1/ (versioned)
+  // SA-05: promptValidation on LLM routes; SA-06: budgetMiddleware on LLM routes
   const mountRoutes = (prefix: string) => {
-    app.use(`${prefix}/generate`, llmLimiter, generateRouter);
-    app.use(`${prefix}/plan`, planLimiter, planRouter);
-    app.use(`${prefix}/debug-ci`, llmLimiter, debugCIRouter);
-    app.use(`${prefix}/diff`, llmLimiter, diffRouter);
+    app.use(`${prefix}/generate`, llmLimiter, promptValidation, budgetMiddleware, generateRouter);
+    app.use(`${prefix}/plan`, planLimiter, promptValidation, budgetMiddleware, planRouter);
+    app.use(`${prefix}/debug-ci`, llmLimiter, promptValidation, budgetMiddleware, debugCIRouter);
+    app.use(`${prefix}/diff`, llmLimiter, promptValidation, budgetMiddleware, diffRouter);
     app.use(`${prefix}/agents`, agentsRouter);
     app.use(`${prefix}/history`, historyRouter);
     app.use(`${prefix}/scan`, scanLimiter, scanRouter);
-    app.use(`${prefix}/chat`, llmLimiter, chatRouter);
-    app.use(`${prefix}/review`, llmLimiter, reviewRouter);
-    app.use(`${prefix}/auto`, planLimiter, autoRouter);
+    app.use(`${prefix}/chat`, llmLimiter, promptValidation, budgetMiddleware, chatRouter);
+    app.use(`${prefix}/review`, llmLimiter, budgetMiddleware, reviewRouter);
+    app.use(`${prefix}/auto`, planLimiter, promptValidation, budgetMiddleware, autoRouter);
   };
 
   // #27: API versioning — /api/v1/ is the canonical prefix (middleware registered above health routes)
   mountRoutes("/api/v1");
   mountRoutes("/api");
-
-  // G-17: Token budget tracker — use composition instead of mutating deps.store.add
-  const tokenTracker = new TokenTracker();
-
-  /** Extract token count from a history entry for tracking. */
-  function extractTokenCount(entry: Parameters<typeof deps.store.add>[0]): number {
-    const rec = entry as Record<string, unknown>;
-    if (rec.tokens && typeof rec.tokens === "object") {
-      const tokens = rec.tokens as Record<string, unknown>;
-      return typeof tokens.total === "number" ? tokens.total : 0;
-    }
-    if (!entry.response || typeof entry.response !== "object") return 0;
-    const resp = entry.response as Record<string, unknown>;
-    if (typeof resp.totalTokens === "number") return resp.totalTokens;
-    if (typeof resp.usage === "object" && resp.usage !== null) {
-      const usage = resp.usage as Record<string, unknown>;
-      if (typeof usage.totalTokens === "number") return usage.totalTokens;
-      if (typeof usage.total_tokens === "number") return usage.total_tokens;
-    }
-    return 0;
-  }
-
-  // G-17: Wrap store with a tracking layer using composition (no mutation of deps)
-  const wrappedStore: HistoryStore = Object.create(deps.store, {
-    add: {
-      value: (entry: Parameters<typeof deps.store.add>[0]) => {
-        const result = deps.store.add(entry);
-        const total = extractTokenCount(entry);
-        if (total > 0) tokenTracker.record(total);
-        return result;
-      },
-      writable: true,
-      configurable: true,
-    },
-  });
-
-  // Re-bind routes that use the store to use wrappedStore for token tracking.
-  // Since routes already received deps.store via createAutoRouter etc., the token
-  // tracking is applied through the middleware pattern below instead.
 
   // Token metrics endpoint (E-7) — must be registered before the catch-all /api/metrics router
   const tokenHandler = (_req: express.Request, res: express.Response) => {
@@ -327,14 +331,6 @@ export function createApp(deps: AppDependencies): Express {
   };
   app.get("/api/metrics/tokens", tokenHandler);
   app.get("/api/v1/metrics/tokens", tokenHandler);
-
-  // G-17: Intercept store.add calls for token tracking via middleware
-  // This replaces the previous monkey-patching approach
-  app.use("/api/", (_req, _res, next) => {
-    // Attach wrappedStore to res.locals so route handlers can use it if needed
-    _res.locals.wrappedStore = wrappedStore;
-    next();
-  });
 
   const metricsRouter = aggregator
     ? createMetricsRouter(aggregator)

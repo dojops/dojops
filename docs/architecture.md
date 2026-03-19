@@ -1,6 +1,6 @@
 # Architecture
 
-DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 13 built-in DevOps skills, a custom skill system for extending with additional skills, 17 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
+DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 18 built-in DevOps skills, a custom skill system for extending with additional skills, 17 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 
@@ -19,7 +19,7 @@ Agent Router (17 specialist agents, keyword confidence scoring)
 Planner Engine (LLM -> TaskGraph -> topological execution)
  |
  v
-Skill Registry (13 built-in skills + custom skills, unified discovery)
+Skill Registry (18 built-in skills + custom skills, unified discovery)
  |
  v
 Skill SDK Layer (BaseSkill<T>, Zod validation)
@@ -43,7 +43,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
 @dojops/mcp            MCP (Model Context Protocol) client — server lifecycle, tool discovery, dispatcher
-@dojops/runtime        13 built-in DevOps skills as .dops v2 files (DopsRuntime)
+@dojops/runtime        18 built-in DevOps skills as .dops v2 files (DopsRuntime)
 @dojops/scanner        10 security scanners + remediation engine
 @dojops/session        Chat session management + autonomous agent loop (AgentLoop) + memory + context injection
 @dojops/context        Context7 documentation augmentation for v2 skills
@@ -179,13 +179,13 @@ The DOPS runtime processes `.dops v2` skill files — a declarative format combi
 
 ### 5. DevOps Skills (`@dojops/runtime`)
 
-13 built-in skills covering CI/CD, IaC, containers, monitoring, and system services. All 13 are now `.dops v2` skills in `packages/runtime/skills/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All skills support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
+18 built-in skills covering CI/CD, IaC, containers, monitoring, and system services. All 18 are `.dops v2` skills in `packages/runtime/skills/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All skills support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
 
 See [DevOps Skills](skills.md) for the full skill list.
 
 ### 5b. Skill Registry (`@dojops/skill-registry`)
 
-Unified registry layer between consumers (Planner, Executor, CLI, API) and skill implementations. Combines all 13 built-in skills with custom skills discovered from disk:
+Unified registry layer between consumers (Planner, Executor, CLI, API) and skill implementations. Combines all 18 built-in skills with custom skills discovered from disk:
 
 - **`.dops` skill discovery** — Discovers `.dops v2` skills from `~/.dojops/skills/` (global) and `.dojops/skills/` (project)
 - **Skill validation** — Zod schema validates `.dops` frontmatter

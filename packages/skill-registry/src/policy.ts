@@ -21,7 +21,11 @@ export function loadSkillPolicy(projectPath?: string): SkillPolicy {
 
   try {
     const content = fs.readFileSync(policyPath, "utf-8");
-    const data = yaml.load(content) as Record<string, unknown> | null;
+    // SA-03: Limit YAML alias expansion to prevent billion-laughs DoS
+    const data = yaml.load(content, { maxAliasCount: 100 } as yaml.LoadOptions) as Record<
+      string,
+      unknown
+    > | null;
     if (!data) return {};
 
     const policy: SkillPolicy = {};

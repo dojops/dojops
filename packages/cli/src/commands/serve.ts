@@ -94,28 +94,22 @@ function populateProviderEnvVars(
   }
 }
 
-function resolveServerApiKey(noAuth: boolean, providerName: string): string | string[] | undefined {
+function resolveServerApiKey(noAuth: boolean): string | string[] | undefined {
   const serverApiKey = noAuth ? undefined : (process.env.DOJOPS_API_KEY ?? loadServerApiKey());
 
   if (noAuth) {
     p.log.warn(
       pc.bold(pc.yellow("WARNING:")) +
-        " API authentication disabled (--no-auth). Do not expose to untrusted networks.",
+        " API authentication disabled (--unsafe-no-auth). Do not expose to untrusted networks.",
     );
   } else if (!serverApiKey) {
-    if (providerName === "ollama" || providerName === "github-copilot") {
-      p.log.warn(
-        `No API key configured (DOJOPS_API_KEY). The API is unprotected. ` +
-          `Set DOJOPS_API_KEY or use ${pc.bold("--no-auth")} to suppress this warning.`,
-      );
-    } else {
-      p.log.error(
-        `No API key configured (DOJOPS_API_KEY). ` +
-          `For cloud providers, authentication is required. ` +
-          `Set DOJOPS_API_KEY or use ${pc.bold("--no-auth")} to allow unauthenticated access.`,
-      );
-      process.exit(ExitCode.VALIDATION_ERROR);
-    }
+    // SA-11: Refuse to start without auth for all providers (matching server.ts behavior)
+    p.log.error(
+      `No API key configured. Refusing to start.\n` +
+        `Set DOJOPS_API_KEY env var, run: ${pc.bold("dojops serve credentials")},\n` +
+        `or pass ${pc.bold("--unsafe-no-auth")} to start without authentication (NOT recommended).`,
+    );
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
   return serverApiKey;
@@ -150,7 +144,8 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     return serveCredentialsCommand();
   }
 
-  const noAuth = hasFlag(args, "--no-auth");
+  // SA-11: Support both --no-auth (legacy) and --unsafe-no-auth (matching server.ts)
+  const noAuth = hasFlag(args, "--no-auth") || hasFlag(args, "--unsafe-no-auth");
   const portArg = extractFlagValue(args, "--port");
   const port = portArg
     ? Number.parseInt(portArg, 10)
@@ -176,7 +171,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
 
   populateProviderEnvVars(providerName, model, apiKey, ollamaHost);
 
-  const serverApiKey = resolveServerApiKey(noAuth, providerName);
+  const serverApiKey = resolveServerApiKey(noAuth);
 
   if (providerName !== "ollama" && providerName !== "github-copilot" && !apiKey) {
     p.log.warn(
@@ -216,7 +211,9 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   const { router, customAgentNames } = createRouter(provider, projectRoot, docAugmenter);
   const debugger_ = createDebugger(provider);
   const diffAnalyzer = createDiffAnalyzer(provider);
-  const store = new HistoryStore();
+  // SA-02: Persist history to disk (matching server.ts behavior)
+  const historyPersistDir = path.join(os.homedir(), ".dojops", "history");
+  const store = new HistoryStore(1000, historyPersistDir);
 
   const app = createApp({
     provider,

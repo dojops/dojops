@@ -54,7 +54,7 @@ files:
     format: raw
 
 detection:
-  paths: ["otel-collector-config.yaml", "otel-collector-config.yml", "**/otel*.yaml", "**/otel*.yml"]
+  paths: ["otel-collector-config.yaml", "otel-collector-config.yml", "**/otel-collector*.yaml", "**/otel-collector*.yml", "**/opentelemetry-collector*.yaml"]
   updateMode: true
 
 verification:

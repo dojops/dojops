@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as crypto from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { discoverUserDopsFiles } from "@dojops/skill-registry";
@@ -155,6 +156,16 @@ export const skillsUpdateCommand: CommandHandler = async (args, ctx) => {
         const res = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${update.latestVersion}`);
         if (res.ok) {
           const fileBuffer = Buffer.from(await res.arrayBuffer());
+          const checksum = res.headers.get("x-checksum-sha256");
+          if (checksum) {
+            const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+            if (hash !== checksum) {
+              p.log.error(
+                `Integrity check failed for ${update.name}. Expected ${checksum}, got ${hash}`,
+              );
+              continue;
+            }
+          }
           fs.writeFileSync(update.filePath, fileBuffer);
           p.log.success(`Updated ${pc.cyan(update.name)} to v${update.latestVersion}`);
         }

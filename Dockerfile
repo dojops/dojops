@@ -61,5 +61,8 @@ EXPOSE 3000
 # Run as non-root user
 USER dojops
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "const http = require('http'); http.get('http://localhost:3000/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
 # Default command: start the API server
 CMD ["node", "packages/cli/dist/index.js", "serve", "--port=3000"]

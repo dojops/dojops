@@ -50,6 +50,18 @@ const DANGEROUS_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\bexec\s+/, reason: "exec command execution" },
   { pattern: /`[^`]+`/, reason: "Backtick subshell execution" },
   { pattern: /\$\([^)]+\)/, reason: "Command substitution" },
+  // CS-12: PowerShell patterns
+  { pattern: /\bpowershell\b/i, reason: "PowerShell execution" },
+  { pattern: /\bpwsh\b/i, reason: "PowerShell Core execution" },
+  { pattern: /Invoke-Expression/i, reason: "PowerShell Invoke-Expression" },
+  { pattern: /\bIEX\b/, reason: "PowerShell IEX (Invoke-Expression alias)" },
+  // SA-15: Additional injection patterns
+  {
+    pattern: /\benv\s+(sh|bash|zsh|dash|ksh|python[23]?|node|perl|ruby)\b/,
+    reason: "env interpreter execution",
+  },
+  { pattern: /base64.*\|\s*(sh|bash)/, reason: "Base64 decode piped to shell" },
+  { pattern: /<\(/, reason: "Process substitution" },
 ];
 
 /**
@@ -305,8 +317,14 @@ export class ToolExecutor {
     // G-09: Scan for secrets before writing
     if (!this.opts.skipSecretScan) {
       const secrets = scanForSecrets(content);
-      if (secrets.length > 0) {
-        const details = secrets.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
+      const errors = secrets.filter((s) => s.severity === "error");
+      const warnings = secrets.filter((s) => s.severity === "warning");
+      if (warnings.length > 0) {
+        const warnDetails = warnings.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
+        this.opts.onPolicyWarning?.(`Potential secrets in ${filePath} (warning):\n${warnDetails}`);
+      }
+      if (errors.length > 0) {
+        const details = errors.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
         return {
           callId: call.id,
           output: `Blocked write to ${filePath} — potential secrets detected:\n${details}`,
@@ -365,8 +383,14 @@ export class ToolExecutor {
     // G-09: Scan for secrets before writing
     if (!this.opts.skipSecretScan) {
       const secrets = scanForSecrets(updated);
-      if (secrets.length > 0) {
-        const details = secrets.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
+      const errors = secrets.filter((s) => s.severity === "error");
+      const warnings = secrets.filter((s) => s.severity === "warning");
+      if (warnings.length > 0) {
+        const warnDetails = warnings.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
+        this.opts.onPolicyWarning?.(`Potential secrets in ${filePath} (warning):\n${warnDetails}`);
+      }
+      if (errors.length > 0) {
+        const details = errors.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
         return {
           callId: call.id,
           output: `Blocked edit to ${filePath} — potential secrets detected:\n${details}`,
@@ -396,7 +420,7 @@ export class ToolExecutor {
       };
     }
 
-    // G-06: Emit policy warning for network commands when allowNetwork is false
+    // G-06: Block network commands when allowNetwork is false
     if (!this.opts.policy.allowNetwork) {
       for (const netCmd of NETWORK_COMMANDS) {
         // Match as a word boundary to avoid false positives (e.g. "curling")
@@ -404,7 +428,11 @@ export class ToolExecutor {
           this.opts.onPolicyWarning?.(
             `Network command "${netCmd}" detected but allowNetwork is false`,
           );
-          break;
+          return {
+            callId: call.id,
+            output: `Command blocked: network command "${netCmd}" is not allowed (allowNetwork is false)`,
+            isError: true,
+          };
         }
       }
     }

@@ -1,6 +1,6 @@
 # @dojops/runtime
 
-13 built-in DevOps tools for [DojOps](https://github.com/dojops/dojops) — AI DevOps Automation Engine.
+18 built-in DevOps tools for [DojOps](https://github.com/dojops/dojops) — AI DevOps Automation Engine.
 
 ## Built-in Tools
 
@@ -18,6 +18,12 @@
 | GitLab CI      | `.gitlab-ci.yml`                       |
 | Prometheus     | `prometheus.yml`, alert rules          |
 | Systemd        | `*.service` unit files                 |
+| Jenkinsfile    | `Jenkinsfile`                          |
+| Grafana        | Grafana dashboard JSON                 |
+| CloudFormation | `template.yaml` (AWS CFN)              |
+| ArgoCD         | ArgoCD Application manifests           |
+| Pulumi         | Pulumi IaC files                       |
+| OTel Collector | `otel-collector-config.yaml`           |
 
 ## Features
 

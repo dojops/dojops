@@ -86,7 +86,7 @@ export interface AuditEntry {
   command: string;
   action: string;
   planId?: string;
-  status: "success" | "failure" | "cancelled";
+  status: "success" | "failure" | "cancelled" | "drift-detected" | "no-drift";
   durationMs: number;
   seq?: number;
   hash?: string;

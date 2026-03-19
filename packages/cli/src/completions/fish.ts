@@ -62,8 +62,8 @@ end
 function __dojops_complete_agents
     dojops --get-completions agents 2>/dev/null; or true
 end
-function __dojops_complete_modules
-    dojops --get-completions modules 2>/dev/null; or true
+function __dojops_complete_skills
+    dojops --get-completions skills 2>/dev/null; or true
 end
 
 # Disable file completions by default
@@ -72,35 +72,47 @@ complete -c dojops -f
 # Top-level commands
 complete -c dojops -n '__dojops_no_subcommand' -a plan -d 'Decompose goal into task graph'
 complete -c dojops -n '__dojops_no_subcommand' -a generate -d 'Generate DevOps config'
+complete -c dojops -n '__dojops_no_subcommand' -a chat -d 'Interactive AI session'
+complete -c dojops -n '__dojops_no_subcommand' -a auto -d 'Autonomous mode with self-repair'
+complete -c dojops -n '__dojops_no_subcommand' -a review -d 'DevSecOps review'
+complete -c dojops -n '__dojops_no_subcommand' -a scan -d 'Security scan'
+complete -c dojops -n '__dojops_no_subcommand' -a serve -d 'Start API server'
+complete -c dojops -n '__dojops_no_subcommand' -a history -d 'View execution history'
+complete -c dojops -n '__dojops_no_subcommand' -a agents -d 'Manage specialist agents'
+complete -c dojops -n '__dojops_no_subcommand' -a skills -d 'Manage DevOps skills'
+complete -c dojops -n '__dojops_no_subcommand' -a toolchain -d 'Manage system toolchain'
+complete -c dojops -n '__dojops_no_subcommand' -a check -d 'Config quality check'
+complete -c dojops -n '__dojops_no_subcommand' -a init -d 'Initialize .dojops/'
+complete -c dojops -n '__dojops_no_subcommand' -a upgrade -d 'Check for CLI updates'
+complete -c dojops -n '__dojops_no_subcommand' -a cost -d 'Estimate infrastructure costs'
+complete -c dojops -n '__dojops_no_subcommand' -a drift -d 'Detect infrastructure drift'
+complete -c dojops -n '__dojops_no_subcommand' -a fix-deps -d 'Auto-remediate dependency vulnerabilities'
+complete -c dojops -n '__dojops_no_subcommand' -a checkpoint -d 'Create and manage project checkpoints'
+complete -c dojops -n '__dojops_no_subcommand' -a trust -d 'Trust workspace configs'
+complete -c dojops -n '__dojops_no_subcommand' -a untrust -d 'Remove workspace trust'
+complete -c dojops -n '__dojops_no_subcommand' -a runs -d 'Manage background runs'
+complete -c dojops -n '__dojops_no_subcommand' -a mcp -d 'MCP server management'
+complete -c dojops -n '__dojops_no_subcommand' -a memory -d 'Manage AI memory'
+complete -c dojops -n '__dojops_no_subcommand' -a tokens -d 'Manage API tokens'
+complete -c dojops -n '__dojops_no_subcommand' -a insights -d 'Usage insights and analytics'
 complete -c dojops -n '__dojops_no_subcommand' -a apply -d 'Execute a saved plan'
 complete -c dojops -n '__dojops_no_subcommand' -a validate -d 'Validate plan against schemas'
 complete -c dojops -n '__dojops_no_subcommand' -a explain -d 'LLM explains a plan'
 complete -c dojops -n '__dojops_no_subcommand' -a debug -d 'Debug tools'
 complete -c dojops -n '__dojops_no_subcommand' -a analyze -d 'Analysis tools'
-complete -c dojops -n '__dojops_no_subcommand' -a review -d 'DevSecOps review'
-complete -c dojops -n '__dojops_no_subcommand' -a auto -d 'Autonomous mode with self-repair'
 complete -c dojops -n '__dojops_no_subcommand' -a inspect -d 'Inspect config and session'
-complete -c dojops -n '__dojops_no_subcommand' -a agents -d 'Manage specialist agents'
-complete -c dojops -n '__dojops_no_subcommand' -a history -d 'View execution history'
-complete -c dojops -n '__dojops_no_subcommand' -a modules -d 'Manage DevOps modules'
-complete -c dojops -n '__dojops_no_subcommand' -a toolchain -d 'Manage system toolchain'
-complete -c dojops -n '__dojops_no_subcommand' -a scan -d 'Security scan'
-complete -c dojops -n '__dojops_no_subcommand' -a chat -d 'Interactive AI session'
-complete -c dojops -n '__dojops_no_subcommand' -a check -d 'Config quality check'
 complete -c dojops -n '__dojops_no_subcommand' -a verify -d 'Verify config file'
 complete -c dojops -n '__dojops_no_subcommand' -a provider -d 'Manage LLM providers'
 complete -c dojops -n '__dojops_no_subcommand' -a config -d 'Configure settings'
 complete -c dojops -n '__dojops_no_subcommand' -a auth -d 'Authenticate'
-complete -c dojops -n '__dojops_no_subcommand' -a serve -d 'Start API server'
 complete -c dojops -n '__dojops_no_subcommand' -a status -d 'System health diagnostics'
-complete -c dojops -n '__dojops_no_subcommand' -a init -d 'Initialize .dojops/'
 complete -c dojops -n '__dojops_no_subcommand' -a clean -d 'Remove generated artifacts'
 complete -c dojops -n '__dojops_no_subcommand' -a rollback -d 'Reverse an applied plan'
 complete -c dojops -n '__dojops_no_subcommand' -a cron -d 'Manage scheduled jobs'
-complete -c dojops -n '__dojops_no_subcommand' -a upgrade -d 'Check for CLI updates'
 complete -c dojops -n '__dojops_no_subcommand' -a help -d 'Show help'
 complete -c dojops -n '__dojops_no_subcommand' -a completion -d 'Generate shell completions'
-complete -c dojops -n '__dojops_no_subcommand' -a tools -d 'Manage modules (deprecated)'
+complete -c dojops -n '__dojops_no_subcommand' -a modules -d 'Manage skills (deprecated alias)'
+complete -c dojops -n '__dojops_no_subcommand' -a tools -d 'Manage skills (deprecated alias)'
 complete -c dojops -n '__dojops_no_subcommand' -a doctor -d 'System diagnostics (alias)'
 complete -c dojops -n '__dojops_no_subcommand' -a destroy -d 'Remove artifacts (deprecated)'
 
@@ -117,20 +129,35 @@ complete -c dojops -n '__dojops_using_command agents' -a remove -d 'Remove custo
 complete -c dojops -n '__dojops_using_command history' -a list -d 'List history'
 complete -c dojops -n '__dojops_using_command history' -a show -d 'Show detail'
 complete -c dojops -n '__dojops_using_command history' -a verify -d 'Verify audit chain'
+complete -c dojops -n '__dojops_using_command history' -a export -d 'Export audit log'
 complete -c dojops -n '__dojops_using_command history' -a audit -d 'View audit entries'
 complete -c dojops -n '__dojops_using_command history' -a repair -d 'Repair audit chain'
-# Subcommands: modules
-complete -c dojops -n '__dojops_using_command modules' -a list -d 'List modules'
-complete -c dojops -n '__dojops_using_command modules' -a init -d 'Scaffold module'
-complete -c dojops -n '__dojops_using_command modules' -a validate -d 'Validate module'
+# Subcommands: skills
+complete -c dojops -n '__dojops_using_command skills' -a list -d 'List skills'
+complete -c dojops -n '__dojops_using_command skills' -a validate -d 'Validate skill'
+complete -c dojops -n '__dojops_using_command skills' -a init -d 'Scaffold skill'
+complete -c dojops -n '__dojops_using_command skills' -a publish -d 'Publish to Hub'
+complete -c dojops -n '__dojops_using_command skills' -a install -d 'Install from Hub'
+complete -c dojops -n '__dojops_using_command skills' -a update -d 'Check for updates'
+complete -c dojops -n '__dojops_using_command skills' -a export -d 'Export skills bundle'
+complete -c dojops -n '__dojops_using_command skills' -a import -d 'Import skills bundle'
+complete -c dojops -n '__dojops_using_command skills' -a search -d 'Search Hub'
+complete -c dojops -n '__dojops_using_command skills' -a dev -d 'Live validation'
+# Subcommands: modules (deprecated alias for skills)
+complete -c dojops -n '__dojops_using_command modules' -a list -d 'List skills'
+complete -c dojops -n '__dojops_using_command modules' -a validate -d 'Validate skill'
+complete -c dojops -n '__dojops_using_command modules' -a init -d 'Scaffold skill'
 complete -c dojops -n '__dojops_using_command modules' -a publish -d 'Publish to Hub'
 complete -c dojops -n '__dojops_using_command modules' -a install -d 'Install from Hub'
+complete -c dojops -n '__dojops_using_command modules' -a update -d 'Check for updates'
+complete -c dojops -n '__dojops_using_command modules' -a export -d 'Export skills bundle'
+complete -c dojops -n '__dojops_using_command modules' -a import -d 'Import skills bundle'
 complete -c dojops -n '__dojops_using_command modules' -a search -d 'Search Hub'
 complete -c dojops -n '__dojops_using_command modules' -a dev -d 'Live validation'
-# Subcommands: tools (deprecated alias for modules)
-complete -c dojops -n '__dojops_using_command tools' -a list -d 'List modules'
-complete -c dojops -n '__dojops_using_command tools' -a init -d 'Scaffold module'
-complete -c dojops -n '__dojops_using_command tools' -a validate -d 'Validate module'
+# Subcommands: tools (deprecated alias for skills)
+complete -c dojops -n '__dojops_using_command tools' -a list -d 'List skills'
+complete -c dojops -n '__dojops_using_command tools' -a validate -d 'Validate skill'
+complete -c dojops -n '__dojops_using_command tools' -a init -d 'Scaffold skill'
 complete -c dojops -n '__dojops_using_command tools' -a publish -d 'Publish to Hub'
 complete -c dojops -n '__dojops_using_command tools' -a install -d 'Install from Hub'
 complete -c dojops -n '__dojops_using_command tools' -a search -d 'Search Hub'
@@ -141,6 +168,11 @@ complete -c dojops -n '__dojops_using_command toolchain' -a load -d 'Load versio
 complete -c dojops -n '__dojops_using_command toolchain' -a install -d 'Install tool'
 complete -c dojops -n '__dojops_using_command toolchain' -a remove -d 'Remove tool'
 complete -c dojops -n '__dojops_using_command toolchain' -a clean -d 'Clean cache'
+# Subcommands: checkpoint
+complete -c dojops -n '__dojops_using_command checkpoint' -a list -d 'List checkpoints'
+complete -c dojops -n '__dojops_using_command checkpoint' -a restore -d 'Restore checkpoint'
+complete -c dojops -n '__dojops_using_command checkpoint' -a clean -d 'Remove checkpoints'
+complete -c dojops -n '__dojops_using_command checkpoint' -a create -d 'Create checkpoint'
 # Subcommands: config
 complete -c dojops -n '__dojops_using_command config' -a show -d 'Show config'
 complete -c dojops -n '__dojops_using_command config' -a get -d 'Get value'
@@ -193,8 +225,9 @@ complete -c dojops -l provider -d 'LLM provider' -x -a '(__dojops_complete_provi
 complete -c dojops -l model -d 'LLM model' -x
 complete -c dojops -l fallback-provider -d 'Fallback provider chain' -x
 complete -c dojops -l agent -d 'Force specialist agent' -x -a '(__dojops_complete_agents)'
-complete -c dojops -l module -d 'Force module' -x -a '(__dojops_complete_modules)'
-complete -c dojops -l tool -d 'Force module (alias)' -x -a '(__dojops_complete_modules)'
+complete -c dojops -l skill -d 'Force skill' -x -a '(__dojops_complete_skills)'
+complete -c dojops -l module -d 'Force skill (deprecated alias)' -x -a '(__dojops_complete_skills)'
+complete -c dojops -l tool -d 'Force skill (deprecated alias)' -x -a '(__dojops_complete_skills)'
 complete -c dojops -l file -s f -d 'Read prompt from file' -r -F
 complete -c dojops -l profile -d 'Config profile' -x
 complete -c dojops -l temperature -d 'LLM temperature (0-2)' -x
@@ -244,4 +277,12 @@ complete -c dojops -n '__dojops_using_command auto' -l force -d 'Skip git dirty 
 complete -c dojops -n '__dojops_using_command auto' -l allow-all-paths -d 'Bypass write allowlist'
 complete -c dojops -n '__dojops_using_command auto' -l repair-attempts -d 'Max repair attempts' -x
 complete -c dojops -n '__dojops_using_command auto' -l commit -d 'Auto-commit changes'
+# Command-specific flags: drift
+complete -c dojops -n '__dojops_using_command drift' -l terraform -d 'Terraform drift only'
+complete -c dojops -n '__dojops_using_command drift' -l kubernetes -d 'Kubernetes drift only'
+complete -c dojops -n '__dojops_using_command drift' -l path -d 'Manifest path' -r -F
+# Command-specific flags: fix-deps
+complete -c dojops -n '__dojops_using_command fix-deps' -l npm -d 'Fix npm/pnpm only'
+complete -c dojops -n '__dojops_using_command fix-deps' -l pip -d 'Fix pip only'
+complete -c dojops -n '__dojops_using_command fix-deps' -l dry-run -d 'Preview fixes'
 `;

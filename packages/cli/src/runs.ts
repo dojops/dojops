@@ -46,6 +46,13 @@ export function outputLogPath(rootDir: string, id: string): string {
   return path.join(runDir(rootDir, id), "output.log");
 }
 
+// ── Validation ────────────────────────────────────────────────────
+
+/** Reject IDs containing path traversal characters. */
+function isValidRunId(id: string): boolean {
+  return id.length > 0 && !/[/\\]|\.\./.test(id);
+}
+
 // ── Write ──────────────────────────────────────────────────────────
 
 export function writeRunMeta(rootDir: string, meta: RunMeta): void {
@@ -55,10 +62,12 @@ export function writeRunMeta(rootDir: string, meta: RunMeta): void {
 }
 
 export function writeRunResult(rootDir: string, id: string, result: RunResult): void {
+  if (!isValidRunId(id)) return;
   fs.writeFileSync(resultPath(rootDir, id), JSON.stringify(result, null, 2));
 }
 
 export function updateRunStatus(rootDir: string, id: string, status: "completed" | "failed"): void {
+  if (!isValidRunId(id)) return;
   const meta = readRunMeta(rootDir, id);
   if (!meta) return;
   meta.status = status;
@@ -69,6 +78,7 @@ export function updateRunStatus(rootDir: string, id: string, status: "completed"
 // ── Read ───────────────────────────────────────────────────────────
 
 export function readRunMeta(rootDir: string, id: string): RunMeta | null {
+  if (!isValidRunId(id)) return null;
   try {
     const raw = fs.readFileSync(metaPath(rootDir, id), "utf8");
     return JSON.parse(raw) as RunMeta;
@@ -78,6 +88,7 @@ export function readRunMeta(rootDir: string, id: string): RunMeta | null {
 }
 
 export function readRunResult(rootDir: string, id: string): RunResult | null {
+  if (!isValidRunId(id)) return null;
   try {
     const raw = fs.readFileSync(resultPath(rootDir, id), "utf8");
     return JSON.parse(raw) as RunResult;

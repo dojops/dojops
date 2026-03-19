@@ -28,7 +28,8 @@ _dojops() {
     'inspect:Inspect config and session state'
     'agents:Manage specialist agents'
     'history:View execution history'
-    'modules:Manage DevOps modules'
+    'skills:Manage DevOps skills'
+    'modules:Manage skills (deprecated alias)'
     'toolchain:Manage system toolchain'
     'scan:Security scan'
     'chat:Interactive AI DevOps session'
@@ -52,7 +53,7 @@ _dojops() {
     'fix-deps:Auto-remediate dependency vulnerabilities'
     'help:Show help message'
     'completion:Generate shell completion scripts'
-    'tools:Manage modules (deprecated alias)'
+    'tools:Manage skills (deprecated alias)'
     'doctor:System diagnostics (alias for status)'
     'destroy:Remove artifacts (deprecated alias for clean)'
   )
@@ -69,8 +70,9 @@ _dojops() {
     '--model=[LLM model override]:model:'
     '--fallback-provider=[Fallback provider chain]:provider:'
     '--agent=[Force specialist agent]:agent:->agents'
-    '--module=[Force module]:module:->modules'
-    '--tool=[Force module (alias)]:module:->modules'
+    '--skill=[Force skill]:skill:->skills'
+    '--module=[Force skill (deprecated alias)]:skill:->skills'
+    '--tool=[Force skill (deprecated alias)]:skill:->skills'
     '--file=[Read prompt from file]:file:_files'
     '--profile=[Config profile]:profile:'
     '--temperature=[LLM temperature (0-2)]:temperature:'
@@ -81,7 +83,7 @@ _dojops() {
   )
 
   # Subcommand definitions
-  local -a sub_debug sub_analyze sub_agents sub_history sub_modules sub_toolchain
+  local -a sub_debug sub_analyze sub_agents sub_history sub_skills sub_toolchain
   local -a sub_config sub_config_profile sub_auth sub_serve sub_chat sub_inspect
   local -a sub_provider sub_cron sub_completion sub_checkpoint sub_trust
 
@@ -89,7 +91,7 @@ _dojops() {
   sub_analyze=('diff:Analyze infrastructure diff for risk')
   sub_agents=('list:List agents' 'info:Show agent details' 'create:Create custom agent' 'remove:Remove custom agent')
   sub_history=('list:List execution history' 'show:Show execution detail' 'verify:Verify audit chain' 'audit:View audit entries' 'repair:Repair audit chain' 'export:Export audit log')
-  sub_modules=('list:List modules' 'init:Scaffold a module' 'validate:Validate module' 'publish:Publish to Hub' 'install:Install from Hub' 'search:Search Hub' 'dev:Live validation' 'update:Check for updates' 'export:Export skills bundle' 'import:Import skills bundle')
+  sub_skills=('list:List skills' 'init:Scaffold a skill' 'validate:Validate skill' 'publish:Publish to Hub' 'install:Install from Hub' 'search:Search Hub' 'dev:Live validation' 'update:Check for updates' 'export:Export skills bundle' 'import:Import skills bundle')
   sub_toolchain=('list:List toolchain binaries' 'load:Load tool versions' 'install:Install tool' 'remove:Remove tool' 'clean:Clean toolchain cache')
   sub_config=('show:Show config' 'get:Get config value' 'set:Set config value' 'delete:Delete config value' 'validate:Validate config' 'reset:Reset config' 'profile:Manage profiles')
   sub_config_profile=('create:Create profile' 'use:Switch profile' 'delete:Delete profile' 'list:List profiles')
@@ -123,7 +125,7 @@ _dojops() {
         analyze) _describe -t sub 'subcommand' sub_analyze ;;
         agents) _describe -t sub 'subcommand' sub_agents ;;
         history) _describe -t sub 'subcommand' sub_history ;;
-        modules|tools) _describe -t sub 'subcommand' sub_modules ;;
+        skills|modules|tools) _describe -t sub 'subcommand' sub_skills ;;
         toolchain) _describe -t sub 'subcommand' sub_toolchain ;;
         config) _describe -t sub 'subcommand' sub_config ;;
         auth) _describe -t sub 'subcommand' sub_auth ;;
@@ -152,10 +154,10 @@ _dojops() {
       ags=(\${(f)"$(_dojops_get_dynamic agents)"})
       _describe -t agents 'agent' ags
       ;;
-    modules)
-      local -a mods
-      mods=(\${(f)"$(_dojops_get_dynamic modules)"})
-      _describe -t modules 'module' mods
+    skills)
+      local -a skls
+      skls=(\${(f)"$(_dojops_get_dynamic skills)"})
+      _describe -t skills 'skill' skls
       ;;
   esac
 }

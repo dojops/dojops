@@ -17,13 +17,14 @@ _dojops() {
   _init_completion || return
 
   # Top-level commands
-  local commands="plan generate apply validate explain debug analyze review auto inspect agents history modules tools toolchain scan chat check verify provider config auth serve status doctor init clean destroy rollback checkpoint trust untrust cron upgrade cost drift fix-deps help completion"
+  local commands="plan generate apply validate explain debug analyze review auto inspect agents history skills modules tools toolchain scan chat check verify provider config auth serve status doctor init clean destroy rollback checkpoint trust untrust cron upgrade cost drift fix-deps runs mcp memory tokens insights help completion"
 
   # Subcommand maps
   local sub_debug="ci"
   local sub_analyze="diff"
   local sub_agents="list info create remove"
   local sub_history="list show verify audit repair export"
+  local sub_skills="list init validate publish install search dev update export import"
   local sub_modules="list init validate publish install search dev update export import"
   local sub_tools="list init validate publish install search dev"
   local sub_toolchain="list load install remove clean"
@@ -40,7 +41,7 @@ _dojops() {
   local sub_completion="bash zsh fish install"
 
   # Global flags
-  local global_flags="--verbose --debug --quiet --no-color --raw --non-interactive --dry-run --provider --model --fallback-provider --agent --module --tool --file --profile --temperature --timeout --output --help --version"
+  local global_flags="--verbose --debug --quiet --no-color --raw --non-interactive --dry-run --provider --model --fallback-provider --agent --skill --module --tool --file --profile --temperature --timeout --output --help --version"
 
   # Command-specific flags
   local flags_plan="--execute --yes --skip-verify"
@@ -84,8 +85,8 @@ _dojops() {
       --agent)
         COMPREPLY=($(compgen -W "$(_dojops_get_dynamic agents)" -- "$cur"))
         return ;;
-      --module|--tool)
-        COMPREPLY=($(compgen -W "$(_dojops_get_dynamic modules)" -- "$cur"))
+      --skill|--module|--tool)
+        COMPREPLY=($(compgen -W "$(_dojops_get_dynamic skills)" -- "$cur"))
         return ;;
       --output)
         COMPREPLY=($(compgen -W "table json yaml stream-json" -- "$cur"))

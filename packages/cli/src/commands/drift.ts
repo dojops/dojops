@@ -322,7 +322,7 @@ export async function driftCommand(args: string[], ctx: CLIContext): Promise<voi
       user: getCurrentUser(),
       command: "drift",
       action: "detect",
-      status: hasDrift ? "success" : "success",
+      status: hasDrift ? "drift-detected" : "no-drift",
       durationMs: Date.now() - startTime,
     });
   }

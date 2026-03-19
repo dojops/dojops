@@ -110,7 +110,7 @@ interface DocProvider {
 }
 
 /**
- * Creates all DevOps skills. Uses module-registry to instantiate all 13 built-in skills
+ * Creates all DevOps skills. Uses skill-registry to instantiate all 18 built-in skills
  * plus any discovered custom skills.
  *
  * @param provider - LLM provider for tool generation

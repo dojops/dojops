@@ -3,22 +3,22 @@ import { join, basename, extname } from "node:path";
 
 const PROVIDERS = ["openai", "anthropic", "ollama", "deepseek", "gemini", "github-copilot"];
 
-/** Aliases: canonical module name → additional completion names. */
-const MODULE_ALIASES: Record<string, string[]> = {
+/** Aliases: canonical skill name → additional completion names. */
+const SKILL_ALIASES: Record<string, string[]> = {
   kubernetes: ["k8s"],
 };
 
-/** List built-in .dops module names from the runtime modules/ directory. */
-function getBuiltInModuleNames(): string[] {
+/** List built-in .dops skill names from the runtime skills/ directory. */
+function getBuiltInSkillNames(): string[] {
   try {
-    // require.resolve('@dojops/runtime') returns dist/index.js; go up to package root then into modules/
-    const modulesDir = join(require.resolve("@dojops/runtime"), "..", "..", "skills");
+    // require.resolve('@dojops/runtime') returns dist/index.js; go up to package root then into skills/
+    const skillsDir = join(require.resolve("@dojops/runtime"), "..", "..", "skills");
     const names: string[] = [];
-    for (const f of readdirSync(modulesDir)) {
+    for (const f of readdirSync(skillsDir)) {
       if (!f.endsWith(".dops")) continue;
       const name = basename(f, ".dops");
       names.push(name);
-      const aliases = MODULE_ALIASES[name];
+      const aliases = SKILL_ALIASES[name];
       if (aliases) names.push(...aliases);
     }
     return names;
@@ -27,16 +27,37 @@ function getBuiltInModuleNames(): string[] {
   }
 }
 
-/** List user-installed module names from .dojops/modules/ in cwd. */
-function getUserModuleNames(): string[] {
+/** List user-installed skill names from .dojops/skills/ in cwd and ~/.dojops/skills/ globally. */
+function getUserSkillNames(): string[] {
+  const names: string[] = [];
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+
+  // Project-local skills directory
+  const projectDir = join(process.cwd(), ".dojops", "skills");
   try {
-    const userDir = join(process.cwd(), ".dojops", "skills");
-    return readdirSync(userDir)
-      .filter((f) => f.endsWith(".dops"))
-      .map((f) => basename(f, ".dops"));
+    names.push(
+      ...readdirSync(projectDir)
+        .filter((f) => f.endsWith(".dops"))
+        .map((f) => basename(f, ".dops")),
+    );
   } catch {
-    return [];
+    // no project skills dir — expected
   }
+
+  // Global skills directory (~/.dojops/skills/)
+  if (home) {
+    const globalDir = join(home, ".dojops", "skills");
+    try {
+      const globalNames = readdirSync(globalDir)
+        .filter((f) => f.endsWith(".dops"))
+        .map((f) => basename(f, ".dops"));
+      names.push(...globalNames);
+    } catch {
+      // no global skills dir — expected
+    }
+  }
+
+  return [...new Set(names)];
 }
 
 /** List built-in specialist agent names. */
@@ -73,7 +94,8 @@ export function handleGetCompletions(type: string): never {
       values = PROVIDERS;
       break;
     case "skills":
-      values = [...getBuiltInModuleNames(), ...getUserModuleNames()];
+    case "modules": // deprecated alias
+      values = [...getBuiltInSkillNames(), ...getUserSkillNames()];
       break;
     case "agents":
       values = getAgentNames();

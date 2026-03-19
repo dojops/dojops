@@ -68,7 +68,7 @@ verification:
 
 permissions:
   filesystem: write
-  child_process: required
+  child_process: none
   network: none
 
 scope:

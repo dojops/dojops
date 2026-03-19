@@ -1076,6 +1076,8 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
       if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
       if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
       if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
+      if (cfgs.envPassthrough.length > 0)
+        p.log.info(`  MCP servers request access to env vars: ${cfgs.envPassthrough.join(", ")}`);
       const trustDecision = await p.confirm({ message: "Trust this workspace?" });
       if (p.isCancel(trustDecision) || !trustDecision) {
         skipCustomConfigs = true;

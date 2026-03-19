@@ -102,7 +102,7 @@ Your prompt gets routed to the right specialist agent. The LLM output is locked 
 
 **Agents and providers.** 17 specialist agents cover Terraform, Kubernetes, CI/CD, security, Docker, cloud architecture, and more. You can create custom agents with `dojops agents create`. Six LLM providers are supported: OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini, and GitHub Copilot. Switch providers mid-session with `/provider`.
 
-**Skills.** 13 built-in skills for GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, and Jenkinsfile. Write your own as `.dops v2` manifests and share them on the [DojOps Hub](https://hub.dojops.ai).
+**Skills.** 18 built-in skills for GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile, Grafana, CloudFormation, ArgoCD, Pulumi, and OpenTelemetry Collector. Write your own as `.dops v2` manifests and share them on the [DojOps Hub](https://hub.dojops.ai).
 
 **Autonomous agent.** `dojops auto` reads your project, plans changes, writes code, runs verification, and self-repairs on failure in an iterative tool-use loop. Run it in the background with `--background` and check results later with `dojops runs`.
 
@@ -134,7 +134,7 @@ Full details in the [documentation](https://doc.dojops.ai).
 @dojops/skill-registry Skill registry, custom skill/agent discovery
 @dojops/planner        Task graph decomposition, topological executor
 @dojops/executor       Sandbox, policy engine, approval, audit log
-@dojops/runtime        13 built-in DevOps skills (.dops v2)
+@dojops/runtime        18 built-in DevOps skills (.dops v2)
 @dojops/scanner        10 security scanners, remediation
 @dojops/mcp            MCP server connections, tool discovery
 @dojops/context        Context7 documentation augmentation

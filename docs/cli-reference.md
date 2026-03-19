@@ -54,6 +54,26 @@ Complete reference for the `dojops` command-line interface.
 | `dojops review --no-auto-discover` | Skip auto-discovery, review only explicitly listed files                                       |
 | `dojops review --context7`         | Enable Context7 documentation augmentation for review                                          |
 
+### Infrastructure Analysis
+
+| Command                                | Description                                    |
+| -------------------------------------- | ---------------------------------------------- |
+| `dojops cost [directory]`              | Estimate infrastructure costs using Infracost  |
+| `dojops cost --output json`            | Output cost estimate as JSON                   |
+| `dojops cost --currency USD\|EUR\|GBP` | Set currency for cost estimates (default: USD) |
+| `dojops drift`                         | Detect infrastructure drift                    |
+| `dojops drift --terraform`             | Check Terraform state drift                    |
+| `dojops drift --kubernetes`            | Check Kubernetes resource drift                |
+| `dojops drift --output json`           | Output drift report as JSON                    |
+| `dojops drift --terraform-dir <path>`  | Specify Terraform root module directory        |
+| `dojops drift --kube-context <ctx>`    | Specify Kubernetes context                     |
+| `dojops drift --namespace <ns>`        | Limit Kubernetes drift check to a namespace    |
+| `dojops fix-deps`                      | Auto-remediate vulnerable dependencies         |
+| `dojops fix-deps --dry-run`            | Preview dependency fixes without applying      |
+| `dojops fix-deps --npm`                | Fix npm dependencies only                      |
+| `dojops fix-deps --pip`                | Fix pip dependencies only                      |
+| `dojops fix-deps --output json`        | Output remediation report as JSON              |
+
 ### Autonomous Agent
 
 | Command                             | Description                                                     |
@@ -109,41 +129,51 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/model`, `/provider [na
 
 > **Note:** `dojops tools` and `dojops modules` are deprecated aliases for `dojops skills`. Use `dojops skills` instead.
 
-| Command                           | Description                                            |
-| --------------------------------- | ------------------------------------------------------ |
-| `dojops agents list`              | List all agents (built-in + custom)                    |
-| `dojops agents info <name>`       | Show agent details (supports partial names)            |
-| `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                  |
-| `dojops agents create --manual`   | Create a custom agent interactively                    |
-| `dojops agents remove <name>`     | Remove a custom agent                                  |
-| `dojops skills load <path>`       | Copy a local `.dops` skill into `.dojops/skills/`      |
-| `dojops skills list`              | List discovered custom skills (global + project)       |
-| `dojops skills validate <path>`   | Validate a custom skill manifest                       |
-| `dojops skills init <name>`       | Scaffold a `.dops` skill (with optional AI generation) |
-| `dojops skills publish <file>`    | Publish a .dops skill to the DojOps Hub                |
-| `dojops skills install <name>`    | Install a .dops skill from the DojOps Hub              |
-| `dojops skills search <query>`    | Search the DojOps Hub for skills                       |
-| `dojops skills dev <path.dops>`   | Validate a .dops file with live feedback               |
-| `dojops skills dev --watch`       | Watch mode — re-validate on file changes               |
-| `dojops toolchain list`           | List system toolchain binaries with install status     |
-| `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)  |
-| `dojops toolchain remove <name>`  | Remove a toolchain binary                              |
-| `dojops toolchain clean`          | Remove all toolchain binaries                          |
-| `dojops inspect [<target>]`       | Inspect config and/or session state (default: both)    |
-| `dojops verify`                   | Verify audit log hash chain integrity (standalone)     |
+| Command                              | Description                                            |
+| ------------------------------------ | ------------------------------------------------------ |
+| `dojops agents list`                 | List all agents (built-in + custom)                    |
+| `dojops agents info <name>`          | Show agent details (supports partial names)            |
+| `dojops agents create <desc>`        | Create a custom agent (LLM-generated)                  |
+| `dojops agents create --manual`      | Create a custom agent interactively                    |
+| `dojops agents remove <name>`        | Remove a custom agent                                  |
+| `dojops skills load <path>`          | Copy a local `.dops` skill into `.dojops/skills/`      |
+| `dojops skills list`                 | List discovered custom skills (global + project)       |
+| `dojops skills validate <path>`      | Validate a custom skill manifest                       |
+| `dojops skills init <name>`          | Scaffold a `.dops` skill (with optional AI generation) |
+| `dojops skills publish <file>`       | Publish a .dops skill to the DojOps Hub                |
+| `dojops skills install <name>`       | Install a .dops skill from the DojOps Hub              |
+| `dojops skills search <query>`       | Search the DojOps Hub for skills                       |
+| `dojops skills update`               | Update installed skills from Hub to latest versions    |
+| `dojops skills update --yes`         | Update without confirmation prompts                    |
+| `dojops skills export`               | Export installed skills to offline bundle              |
+| `dojops skills export --output FILE` | Write bundle to a specific file                        |
+| `dojops skills import <file>`        | Import skills from offline bundle                      |
+| `dojops skills dev <path.dops>`      | Validate a .dops file with live feedback               |
+| `dojops skills dev --watch`          | Watch mode — re-validate on file changes               |
+| `dojops toolchain list`              | List system toolchain binaries with install status     |
+| `dojops toolchain install <name>`    | Download binary into toolchain (~/.dojops/toolchain/)  |
+| `dojops toolchain remove <name>`     | Remove a toolchain binary                              |
+| `dojops toolchain clean`             | Remove all toolchain binaries                          |
+| `dojops inspect [<target>]`          | Inspect config and/or session state (default: both)    |
+| `dojops verify`                      | Verify audit log hash chain integrity (standalone)     |
 
 ### History & Audit
 
-| Command                         | Description                                                           |
-| ------------------------------- | --------------------------------------------------------------------- |
-| `dojops history list`           | View execution history                                                |
-| `dojops history show <plan-id>` | Show plan details and per-task results                                |
-| `dojops history verify`         | Verify audit log hash chain integrity                                 |
-| `dojops history audit`          | List audit log entries                                                |
-| `dojops history repair`         | Repair broken audit log hash chain                                    |
-| `dojops clean [<plan-id>]`      | Remove generated artifacts from a plan                                |
-| `dojops destroy <plan-id>`      | Deprecated alias for `clean`                                          |
-| `dojops rollback <plan-id>`     | Reverse an applied plan (delete created files + restore .bak backups) |
+| Command                                            | Description                                                           |
+| -------------------------------------------------- | --------------------------------------------------------------------- |
+| `dojops history list`                              | View execution history                                                |
+| `dojops history show <plan-id>`                    | Show plan details and per-task results                                |
+| `dojops history verify`                            | Verify audit log hash chain integrity                                 |
+| `dojops history audit`                             | List audit log entries                                                |
+| `dojops history repair`                            | Repair broken audit log hash chain                                    |
+| `dojops history export`                            | Export audit log (default: JSON to stdout)                            |
+| `dojops history export --format json\|csv\|syslog` | Set export format                                                     |
+| `dojops history export --since DATE`               | Export entries from this date onward                                  |
+| `dojops history export --until DATE`               | Export entries up to this date                                        |
+| `dojops history export --output FILE`              | Write export to a file instead of stdout                              |
+| `dojops clean [<plan-id>]`                         | Remove generated artifacts from a plan                                |
+| `dojops destroy <plan-id>`                         | Deprecated alias for `clean`                                          |
+| `dojops rollback <plan-id>`                        | Reverse an applied plan (delete created files + restore .bak backups) |
 
 ### Provider Management
 

@@ -3,8 +3,8 @@ import { resolveLibraryQuery, TOOL_LIBRARY_MAP, AGENT_LIBRARY_MAP } from "../lib
 
 describe("library-map", () => {
   describe("TOOL_LIBRARY_MAP", () => {
-    it("contains all 13 built-in tool domains", () => {
-      expect(Object.keys(TOOL_LIBRARY_MAP)).toHaveLength(13);
+    it("contains all 18 built-in tool domains", () => {
+      expect(Object.keys(TOOL_LIBRARY_MAP)).toHaveLength(18);
       expect(TOOL_LIBRARY_MAP["github-actions"]).toBe("github actions");
       expect(TOOL_LIBRARY_MAP["terraform"]).toBe("terraform");
       expect(TOOL_LIBRARY_MAP["kubernetes"]).toBe("kubernetes");

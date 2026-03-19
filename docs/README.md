@@ -37,7 +37,7 @@ Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps 
 | Document                                  | Description                                                                                            |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | [Specialist Agents](agents.md)            | 17 built-in + custom agents — routing, domains, keywords, confidence scoring, custom agent creation    |
-| [DevOps Skills](skills.md)                | All 13 built-in skills + custom skill system — schemas, detectors, verifiers, auto-detection           |
+| [DevOps Skills](skills.md)                | All 18 built-in skills + custom skill system — schemas, detectors, verifiers, auto-detection           |
 | [Security Scanning](security-scanning.md) | 10 scanners, scan types, remediation, SBOM, license compliance, scan comparison, dashboard integration |
 | [Execution Engine](execution-engine.md)   | SafeExecutor, policies, approval workflows, sandboxed fs, audit trail                                  |
 | [Task Planner](planner.md)                | Goal decomposition, task graphs, topological execution, resume                                         |

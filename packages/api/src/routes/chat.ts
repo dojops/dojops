@@ -4,7 +4,7 @@ import { Router } from "express";
 import { LLMProvider, AgentRouter } from "@dojops/core";
 import { ChatSession, cleanExpiredSessions } from "@dojops/session";
 import type { ChatSessionState } from "@dojops/session";
-import { HistoryStore, logRouteError, toErrorMessage } from "../store";
+import { HistoryStore, logRouteError } from "../store";
 import { ChatRequestSchema, ChatSessionRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
@@ -175,10 +175,11 @@ export function createChatRouter(
       try {
         result = await session.send(message);
       } catch (sendErr) {
-        // Return 500 with error message rather than crashing the route
+        // CS-09: Log full error details server-side, return generic message to client
+        console.error("[chat] session.send failed:", sendErr);
         logRouteError(store, "chat", { sessionId: session.id, message }, start, sendErr);
         res.status(500).json({
-          error: toErrorMessage(sendErr),
+          error: "Internal server error",
           sessionId: session.id,
         });
         return;

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ZodSchema, ZodError } from "zod";
 import crypto from "node:crypto";
+import { validateSystemPrompt } from "@dojops/skill-registry";
 
 // ── E-2: Brute-force protection ─────────────────────────────────
 
@@ -220,6 +221,47 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     }
   });
   next();
+}
+
+/**
+ * SA-05: Prompt injection detection middleware.
+ * Checks req.body.prompt (or .message for chat) using validateSystemPrompt().
+ * Returns 400 when injection confidence exceeds the blocking threshold.
+ */
+export function promptValidation(req: Request, res: Response, next: NextFunction): void {
+  const text =
+    req.body?.prompt ?? req.body?.message ?? req.body?.goal ?? req.body?.log ?? req.body?.diff;
+  if (typeof text !== "string" || text.length === 0) {
+    next();
+    return;
+  }
+  const result = validateSystemPrompt(text);
+  if (result.block) {
+    res.status(400).json({ error: "Request blocked: potential prompt injection detected" });
+    return;
+  }
+  next();
+}
+
+/**
+ * SA-06: Token budget enforcement middleware factory.
+ * Calls tokenTracker.checkBudget() before LLM routes; returns 429 when budget is exceeded.
+ */
+export function tokenBudgetMiddleware(
+  tokenTracker: { checkBudget(): { allowed: boolean; remaining: number } } | undefined,
+) {
+  return (_req: Request, res: Response, next: NextFunction): void => {
+    if (!tokenTracker) {
+      next();
+      return;
+    }
+    const budget = tokenTracker.checkBudget();
+    if (!budget.allowed) {
+      res.status(429).json({ error: "Token budget exceeded", remaining: 0 });
+      return;
+    }
+    next();
+  };
 }
 
 // Express error handlers must have 4 parameters

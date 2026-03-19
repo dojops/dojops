@@ -1,4 +1,11 @@
-import { LLMProvider, AgentRouter, StreamCallback } from "@dojops/core";
+import {
+  LLMProvider,
+  LLMResponse,
+  AgentRouter,
+  StreamCallback,
+  SpecialistAgent,
+  ChatMessage as CoreChatMessage,
+} from "@dojops/core";
 import { ChatMessage, ChatSessionState, SessionMode, ChatProgressCallbacks } from "./types";
 import { MemoryManager } from "./memory";
 import { SessionSummarizer } from "./summarizer";
@@ -30,6 +37,12 @@ export interface SendResult {
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
   /** Total estimated tokens across all session messages. */
   sessionTokens: number;
+}
+
+/** Internal result from prepareRequest — the routed agent and LLM context. */
+interface PreparedRequest {
+  agent: SpecialistAgent;
+  contextMessages: CoreChatMessage[];
 }
 
 export class ChatSession {
@@ -74,17 +87,15 @@ export class ChatSession {
     return this.state.mode;
   }
 
-  async send(userMessage: string, progress?: ChatProgressCallbacks): Promise<SendResult> {
-    // Check for bridge command
-    const bridge = this.isBridgeCommand(userMessage);
-    if (bridge) {
-      return {
-        content: `__bridge__:${bridge.command}:${bridge.args}`,
-        agent: "bridge",
-        sessionTokens: this.state.metadata.totalTokensEstimate,
-      };
-    }
-
+  /**
+   * SA-12: Shared logic for send() and sendStream().
+   * Pushes user message, runs summarization if needed, routes to agent,
+   * and builds context messages for the LLM call.
+   */
+  private async prepareRequest(
+    userMessage: string,
+    progress?: ChatProgressCallbacks,
+  ): Promise<PreparedRequest> {
     // Add user message to history
     const userMsg: ChatMessage = {
       role: "user",
@@ -148,17 +159,18 @@ export class ChatSession {
       this.projectContext,
     );
 
-    // UX #5: Call LLM with history — on failure, roll back user message to keep session clean
-    let response;
-    try {
-      response = await agent.runWithHistory(contextMessages);
-    } catch (err) {
-      // Remove the user message we just pushed so session state stays clean
-      this.state.messages.pop();
-      throw err;
-    }
+    return { agent, contextMessages };
+  }
 
-    // Add assistant response to history
+  /**
+   * Record the assistant response and update session metadata.
+   * Shared post-processing for both send() and sendStream().
+   */
+  private finalize(
+    response: LLMResponse,
+    agentName: string,
+    progress?: ChatProgressCallbacks,
+  ): void {
     const assistantMsg: ChatMessage = {
       role: "assistant",
       content: response.content,
@@ -166,12 +178,11 @@ export class ChatSession {
     };
     this.state.messages.push(assistantMsg);
 
-    // Update metadata
     this.state.metadata.messageCount = this.state.messages.length;
     this.state.metadata.totalTokensEstimate = this.memoryManager.estimateTokens(
       this.state.messages,
     );
-    this.state.metadata.lastAgentUsed = agent.name;
+    this.state.metadata.lastAgentUsed = agentName;
     this.state.updatedAt = new Date().toISOString();
 
     progress?.onPhase?.("done");
@@ -183,6 +194,31 @@ export class ChatSession {
         `Session approaching token limit: ~${this.state.metadata.totalTokensEstimate} tokens`,
       );
     }
+  }
+
+  async send(userMessage: string, progress?: ChatProgressCallbacks): Promise<SendResult> {
+    // Check for bridge command
+    const bridge = this.isBridgeCommand(userMessage);
+    if (bridge) {
+      return {
+        content: `__bridge__:${bridge.command}:${bridge.args}`,
+        agent: "bridge",
+        sessionTokens: this.state.metadata.totalTokensEstimate,
+      };
+    }
+
+    const { agent, contextMessages } = await this.prepareRequest(userMessage, progress);
+
+    // Call LLM with history — on failure, roll back user message to keep session clean
+    let response;
+    try {
+      response = await agent.runWithHistory(contextMessages);
+    } catch (err) {
+      this.state.messages.pop();
+      throw err;
+    }
+
+    this.finalize(response, agent.name, progress);
 
     return {
       content: response.content,
@@ -209,64 +245,9 @@ export class ChatSession {
       return { content, agent: "bridge", sessionTokens: this.state.metadata.totalTokensEstimate };
     }
 
-    // Add user message
-    const userMsg: ChatMessage = {
-      role: "user",
-      content: userMessage,
-      timestamp: new Date().toISOString(),
-    };
-    this.state.messages.push(userMsg);
+    const { agent, contextMessages } = await this.prepareRequest(userMessage, progress);
 
-    // Summarization check (same as send)
-    if (
-      this.state.mode === "INTERACTIVE" &&
-      this.memoryManager.needsSummarization(this.state.messages.length)
-    ) {
-      progress?.onPhase?.("compacting");
-      try {
-        const keepCount = this.memoryManager.windowSize;
-        const totalBefore = this.state.messages.length;
-        const oldMessages = this.state.messages.slice(0, totalBefore - keepCount);
-        this.state.summary = await this.summarizer.summarize(oldMessages);
-        this.state.messages = this.state.messages.slice(-keepCount);
-        progress?.onCompaction?.({
-          messagesSummarized: totalBefore - keepCount,
-          messagesRetained: keepCount,
-        });
-      } catch {
-        // Non-fatal
-      }
-    }
-
-    // Route to agent: try keyword routing first, only use LLM when confidence is low
-    progress?.onPhase?.("routing");
-    const agentName = this.state.pinnedAgent;
-    const agents = this.router.getAgents();
-    let agent = agentName ? agents.find((a) => a.name === agentName) : undefined;
-    if (!agent) {
-      const keywordRoute = this.router.route(userMessage, {
-        projectDomains: this.projectDomains,
-      });
-      if (keywordRoute.confidence >= 0.4) {
-        agent = keywordRoute.agent;
-      } else {
-        const llmRoute = await this.router.routeWithLLM(userMessage, {
-          projectDomains: this.projectDomains,
-        });
-        agent = llmRoute.agent;
-      }
-    }
-
-    progress?.onPhase?.("generating", agent.name);
-
-    // Build context
-    const contextMessages = this.memoryManager.getContextMessages(
-      this.state.messages,
-      this.state.summary,
-      this.projectContext,
-    );
-
-    // Stream response
+    // Stream response — on failure, roll back user message
     let response;
     try {
       response = await agent.streamWithHistory(contextMessages, onChunk);
@@ -275,23 +256,7 @@ export class ChatSession {
       throw err;
     }
 
-    // Record assistant message
-    const assistantMsg: ChatMessage = {
-      role: "assistant",
-      content: response.content,
-      timestamp: new Date().toISOString(),
-    };
-    this.state.messages.push(assistantMsg);
-
-    // Update metadata
-    this.state.metadata.messageCount = this.state.messages.length;
-    this.state.metadata.totalTokensEstimate = this.memoryManager.estimateTokens(
-      this.state.messages,
-    );
-    this.state.metadata.lastAgentUsed = agent.name;
-    this.state.updatedAt = new Date().toISOString();
-
-    progress?.onPhase?.("done");
+    this.finalize(response, agent.name, progress);
 
     return {
       content: response.content,

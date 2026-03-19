@@ -16,6 +16,11 @@ export const TOOL_LIBRARY_MAP: Record<string, string> = {
   jenkinsfile: "jenkins",
   prometheus: "prometheus",
   systemd: "systemd",
+  grafana: "grafana",
+  cloudformation: "aws-cloudformation",
+  argocd: "argo-cd",
+  pulumi: "pulumi",
+  "otel-collector": "opentelemetry",
 };
 
 /**

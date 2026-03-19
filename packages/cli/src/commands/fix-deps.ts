@@ -93,6 +93,9 @@ function runNpmFix(pm: "npm" | "pnpm", dryRun: boolean): string[] {
     }
   } else {
     // pnpm doesn't have a built-in audit fix, so we run npm audit fix in a compatibility mode
+    p.log.warn(
+      "pnpm does not have a native fix command. Running npm audit fix which may conflict with pnpm-lock.yaml. Consider running 'pnpm update' manually instead.",
+    );
     if (dryRun) {
       details.push("pnpm does not support --fix natively. Would run: npm audit fix");
     } else {
