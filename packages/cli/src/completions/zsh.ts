@@ -69,7 +69,7 @@ _dojops() {
     '--profile=[Config profile]:profile:'
     '--temperature=[LLM temperature (0-2)]:temperature:'
     '--timeout=[Timeout in milliseconds]:timeout:'
-    '--output=[Output format]:format:(table json yaml)'
+    '--output=[Output format]:format:(table json yaml stream-json)'
     '--help[Show help message]'
     '--version[Show version]'
   )

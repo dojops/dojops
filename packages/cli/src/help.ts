@@ -66,7 +66,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--thinking=LEVEL")}   Reasoning effort: none, low, medium, high`);
   console.log(`  ${pc.cyan("--profile=NAME")}     Use named config profile`);
   console.log(
-    `  ${pc.cyan("--output=FORMAT")}    Output: table ${pc.dim("(default)")}, json, yaml`,
+    `  ${pc.cyan("--output=FORMAT")}    Output: table ${pc.dim("(default)")}, json, yaml, stream-json`,
   );
   console.log(`  ${pc.cyan("--verbose")}          Verbose output`);
   console.log(`  ${pc.cyan("--debug")}            Debug-level output`);

@@ -8,6 +8,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { loadIgnorePatterns, isIgnored } from "./dojopsignore";
 
 /** Discovered DevOps config file with its path and content. */
 export interface DiscoveredFile {
@@ -72,13 +73,18 @@ const DISCOVERY_PATTERNS: { dir?: string; names?: string[]; extensions?: string[
 ];
 
 /** Collect named files from root for all patterns. */
-function collectNamedFiles(projectRoot: string, files: DiscoveredFile[], seen: Set<string>): void {
+function collectNamedFiles(
+  projectRoot: string,
+  files: DiscoveredFile[],
+  seen: Set<string>,
+  ignorePatterns: string[],
+): void {
   for (const pattern of DISCOVERY_PATTERNS) {
     if (files.length >= MAX_FILES) break;
     if (!pattern.names) continue;
     for (const name of pattern.names) {
       if (files.length >= MAX_FILES) break;
-      tryAddFile(path.join(projectRoot, name), name, files, seen);
+      tryAddFile(path.join(projectRoot, name), name, files, seen, ignorePatterns);
     }
   }
 }
@@ -88,12 +94,21 @@ function collectDirectoryFiles(
   projectRoot: string,
   files: DiscoveredFile[],
   seen: Set<string>,
+  ignorePatterns: string[],
 ): void {
   for (const pattern of DISCOVERY_PATTERNS) {
     if (files.length >= MAX_FILES) break;
     if (!pattern.dir) continue;
     const dirPath = path.join(projectRoot, pattern.dir);
-    scanDirectory(dirPath, pattern.dir, pattern.extensions, pattern.names, files, seen);
+    scanDirectory(
+      dirPath,
+      pattern.dir,
+      pattern.extensions,
+      pattern.names,
+      files,
+      seen,
+      ignorePatterns,
+    );
   }
 }
 
@@ -102,11 +117,12 @@ function collectRootExtensionFiles(
   projectRoot: string,
   files: DiscoveredFile[],
   seen: Set<string>,
+  ignorePatterns: string[],
 ): void {
   for (const pattern of DISCOVERY_PATTERNS) {
     if (files.length >= MAX_FILES) break;
     if (pattern.extensions && !pattern.dir) {
-      scanRootForExtensions(projectRoot, pattern.extensions, files, seen);
+      scanRootForExtensions(projectRoot, pattern.extensions, files, seen, ignorePatterns);
     }
   }
 }
@@ -120,11 +136,12 @@ function collectRootExtensionFiles(
 export function discoverDevOpsFiles(projectRoot: string): DiscoveredFile[] {
   const files: DiscoveredFile[] = [];
   const seen = new Set<string>();
+  const ignorePatterns = loadIgnorePatterns(projectRoot);
 
-  collectNamedFiles(projectRoot, files, seen);
-  collectDirectoryFiles(projectRoot, files, seen);
-  collectRootExtensionFiles(projectRoot, files, seen);
-  scanDockerfileVariants(projectRoot, files, seen);
+  collectNamedFiles(projectRoot, files, seen, ignorePatterns);
+  collectDirectoryFiles(projectRoot, files, seen, ignorePatterns);
+  collectRootExtensionFiles(projectRoot, files, seen, ignorePatterns);
+  scanDockerfileVariants(projectRoot, files, seen, ignorePatterns);
 
   return files;
 }
@@ -134,8 +151,10 @@ function tryAddFile(
   relativePath: string,
   files: DiscoveredFile[],
   seen: Set<string>,
+  ignorePatterns: string[] = [],
 ): void {
   if (seen.has(relativePath) || files.length >= MAX_FILES) return;
+  if (ignorePatterns.length > 0 && isIgnored(relativePath, ignorePatterns)) return;
   try {
     const stat = fs.statSync(absPath);
     if (!stat.isFile() || stat.size > MAX_FILE_SIZE || stat.size === 0) return;
@@ -155,14 +174,21 @@ function handleSubdirectory(
   names: string[] | undefined,
   files: DiscoveredFile[],
   seen: Set<string>,
+  ignorePatterns: string[],
 ): void {
   if (names) {
     for (const name of names) {
-      tryAddFile(path.join(entryAbsPath, name), `${entryRelPath}/${name}`, files, seen);
+      tryAddFile(
+        path.join(entryAbsPath, name),
+        `${entryRelPath}/${name}`,
+        files,
+        seen,
+        ignorePatterns,
+      );
     }
   }
   if (extensions) {
-    scanDirectory(entryAbsPath, entryRelPath, extensions, undefined, files, seen);
+    scanDirectory(entryAbsPath, entryRelPath, extensions, undefined, files, seen, ignorePatterns);
   }
 }
 
@@ -175,15 +201,16 @@ function handleFileEntry(
   names: string[] | undefined,
   files: DiscoveredFile[],
   seen: Set<string>,
+  ignorePatterns: string[],
 ): void {
   if (extensions) {
     const ext = path.extname(entryName).toLowerCase();
     if (extensions.includes(ext)) {
-      tryAddFile(entryAbsPath, entryRelPath, files, seen);
+      tryAddFile(entryAbsPath, entryRelPath, files, seen, ignorePatterns);
     }
   }
   if (names?.includes(entryName)) {
-    tryAddFile(entryAbsPath, entryRelPath, files, seen);
+    tryAddFile(entryAbsPath, entryRelPath, files, seen, ignorePatterns);
   }
 }
 
@@ -194,6 +221,7 @@ function scanDirectory(
   names: string[] | undefined,
   files: DiscoveredFile[],
   seen: Set<string>,
+  ignorePatterns: string[] = [],
 ): void {
   try {
     const entries = fs.readdirSync(dirAbsPath, { withFileTypes: true });
@@ -205,12 +233,29 @@ function scanDirectory(
 
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue;
-        handleSubdirectory(entryAbsPath, entryRelPath, extensions, names, files, seen);
+        handleSubdirectory(
+          entryAbsPath,
+          entryRelPath,
+          extensions,
+          names,
+          files,
+          seen,
+          ignorePatterns,
+        );
         continue;
       }
 
       if (!entry.isFile()) continue;
-      handleFileEntry(entryAbsPath, entryRelPath, entry.name, extensions, names, files, seen);
+      handleFileEntry(
+        entryAbsPath,
+        entryRelPath,
+        entry.name,
+        extensions,
+        names,
+        files,
+        seen,
+        ignorePatterns,
+      );
     }
   } catch {
     // Directory doesn't exist — skip
@@ -222,6 +267,7 @@ function scanRootForExtensions(
   extensions: string[],
   files: DiscoveredFile[],
   seen: Set<string>,
+  ignorePatterns: string[] = [],
 ): void {
   try {
     const entries = fs.readdirSync(projectRoot, { withFileTypes: true });
@@ -230,7 +276,7 @@ function scanRootForExtensions(
       if (!entry.isFile()) continue;
       const ext = path.extname(entry.name).toLowerCase();
       if (extensions.includes(ext)) {
-        tryAddFile(path.join(projectRoot, entry.name), entry.name, files, seen);
+        tryAddFile(path.join(projectRoot, entry.name), entry.name, files, seen, ignorePatterns);
       }
     }
   } catch {
@@ -242,6 +288,7 @@ function scanDockerfileVariants(
   projectRoot: string,
   files: DiscoveredFile[],
   seen: Set<string>,
+  ignorePatterns: string[] = [],
 ): void {
   try {
     const entries = fs.readdirSync(projectRoot, { withFileTypes: true });
@@ -249,7 +296,7 @@ function scanDockerfileVariants(
       if (files.length >= MAX_FILES) break;
       if (!entry.isFile()) continue;
       if (entry.name.startsWith("Dockerfile.")) {
-        tryAddFile(path.join(projectRoot, entry.name), entry.name, files, seen);
+        tryAddFile(path.join(projectRoot, entry.name), entry.name, files, seen, ignorePatterns);
       }
     }
   } catch {

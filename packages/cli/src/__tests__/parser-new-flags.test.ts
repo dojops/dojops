@@ -97,6 +97,31 @@ describe("parseGlobalOptions — new flags", () => {
     });
   });
 
+  describe("--output stream-json", () => {
+    it("parses --output stream-json (space-separated)", () => {
+      const { globalOpts } = parseGlobalOptions(["--output", "stream-json"]);
+      expect(globalOpts.output).toBe("stream-json");
+    });
+
+    it("parses --output=stream-json (equals form)", () => {
+      const { globalOpts } = parseGlobalOptions(["--output=stream-json"]);
+      expect(globalOpts.output).toBe("stream-json");
+    });
+
+    it("stream-json combined with other flags", () => {
+      const { globalOpts, remaining } = parseGlobalOptions([
+        "--output",
+        "stream-json",
+        "--quiet",
+        "generate",
+        "Create CI pipeline",
+      ]);
+      expect(globalOpts.output).toBe("stream-json");
+      expect(globalOpts.quiet).toBe(true);
+      expect(remaining).toEqual(["generate", "Create CI pipeline"]);
+    });
+  });
+
   describe("combined flags", () => {
     it("handles all new flags together", () => {
       const { globalOpts, remaining } = parseGlobalOptions([

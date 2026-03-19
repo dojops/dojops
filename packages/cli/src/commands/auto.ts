@@ -14,6 +14,8 @@ import { stripFlags, extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import { readPromptFile } from "../stdin";
 import { findProjectRoot } from "../state";
+import { expandFileReferences } from "../input-expander";
+import { emitStreamEvent } from "../stream-json";
 import {
   writeRunMeta,
   updateRunStatus,
@@ -236,6 +238,9 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
 
+  // Expand @file references in the prompt
+  prompt = expandFileReferences(prompt, ctx.cwd);
+
   // ── Background spawning ──────────────────────────────────────────
   if (isBackground) {
     const rootDir = findProjectRoot(ctx.cwd) ?? ctx.cwd;
@@ -324,6 +329,8 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     // MCP is optional — @dojops/mcp may not be installed or config may not exist
   }
 
+  const isStreamJson = ctx.globalOpts.output === "stream-json";
+
   const toolExecutor = new ToolExecutor({
     policy: {
       allowWrite: true,
@@ -345,10 +352,25 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     skills: skillsMap,
     mcpDispatcher,
     onToolStart: (call) => {
-      p.log.step(`${pc.cyan(call.name)} ${summarizeArgs(call)}`);
+      if (isStreamJson) {
+        emitStreamEvent({
+          type: "tool_use",
+          name: call.name,
+          arguments: call.arguments as Record<string, unknown>,
+        });
+      } else {
+        p.log.step(`${pc.cyan(call.name)} ${summarizeArgs(call)}`);
+      }
     },
     onToolEnd: (call, result) => {
-      if (result.isError) {
+      if (isStreamJson) {
+        emitStreamEvent({
+          type: "tool_result",
+          name: call.name,
+          output: result.output.slice(0, 4096),
+          isError: result.isError || undefined,
+        });
+      } else if (result.isError) {
         p.log.warn(pc.dim(`  ✗ ${result.output.split("\n")[0]}`));
       }
     },
@@ -398,8 +420,15 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
 
   const startTime = Date.now();
 
+  // Stream-JSON: emit init event
+  if (isStreamJson) {
+    const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+    const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+    emitStreamEvent({ type: "init", provider, model, timestamp: new Date().toISOString() });
+  }
+
   // Background child: suppress interactive output
-  const isInteractive = !isBackgroundChild;
+  const isInteractive = !isBackgroundChild && !isStreamJson;
   const s = isInteractive ? p.spinner() : null;
   s?.start("Agent working...");
 
@@ -409,6 +438,23 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
 
     // Display summary — strip any JSON wrapper that leaked through from LLM output
     const summary = cleanDisplayText(result.summary);
+
+    // Stream-JSON: emit final result event
+    if (isStreamJson) {
+      emitStreamEvent({
+        type: "result",
+        content: summary,
+        stats: {
+          success: result.success,
+          iterations: result.iterations,
+          toolCalls: result.toolCalls.length,
+          totalTokens: result.totalTokens,
+          filesWritten: result.filesWritten,
+          filesModified: result.filesModified,
+        },
+      });
+    }
+
     if (isInteractive) {
       console.log();
       p.log.message(summary);
@@ -468,6 +514,14 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     }
   } catch (err) {
     s?.stop("Error");
+
+    // Stream-JSON: emit error event
+    if (isStreamJson) {
+      emitStreamEvent({
+        type: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     // Background child: mark run as failed
     if (isBackgroundChild && backgroundRunId) {

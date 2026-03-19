@@ -21,6 +21,7 @@ import { classifyTaskRisk } from "../risk-classifier";
 import { cliApprovalHandler } from "../approval";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
 import { buildFileTree } from "@dojops/session";
+import { emitStreamEvent } from "../stream-json";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 type Context7Provider = {
@@ -29,7 +30,12 @@ type Context7Provider = {
 };
 
 function isStructuredOutput(ctx: CLIContext): boolean {
-  return ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml" || ctx.globalOpts.raw;
+  return (
+    ctx.globalOpts.output === "json" ||
+    ctx.globalOpts.output === "yaml" ||
+    ctx.globalOpts.output === "stream-json" ||
+    ctx.globalOpts.raw
+  );
 }
 
 async function initContext7(): Promise<{
@@ -843,6 +849,19 @@ async function handleAgentResult(
     trackAgentActivity(projectRoot, prompt, route.agent.name, writePath, genDuration);
   }
 
+  // stream-json output was already emitted during streaming — just run hooks
+  if (ctx.globalOpts.output === "stream-json") {
+    if (projectRoot) {
+      runHooks(
+        projectRoot,
+        "post-generate",
+        { prompt, agent: route.agent.name, outputPath: writePath },
+        { verbose: ctx.globalOpts.verbose },
+      );
+    }
+    return;
+  }
+
   if (ctx.globalOpts.raw) {
     writeRawOutput(result.content);
     return;
@@ -916,7 +935,8 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const augmentedPrompt = buildAugmentedPrompt(prompt, projectRoot, ctx.globalOpts.verbose);
 
   const structured = isStructuredOutput(ctx);
-  const canStream = !structured && !writePath && route.agent.supportsStreaming;
+  const isStreamJson = ctx.globalOpts.output === "stream-json";
+  const canStream = (!structured || isStreamJson) && !writePath && route.agent.supportsStreaming;
 
   let result: {
     content: string;
@@ -924,7 +944,27 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   };
   let genDuration: number;
 
-  if (canStream) {
+  if (isStreamJson && canStream) {
+    // Stream-JSON: emit JSONL events for CI/CD integration
+    const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+    const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+    emitStreamEvent({ type: "init", provider, model, timestamp: new Date().toISOString() });
+    const genStart = Date.now();
+    result = await route.agent.streamWithHistory(
+      [{ role: "user", content: sanitizeUserInput(augmentedPrompt) }],
+      (chunk) => emitStreamEvent({ type: "chunk", content: chunk }),
+    );
+    genDuration = Date.now() - genStart;
+    emitStreamEvent({
+      type: "result",
+      content: result.content,
+      stats: {
+        agent: route.agent.name,
+        durationMs: genDuration,
+        ...(result.usage ?? {}),
+      },
+    });
+  } else if (canStream) {
     // Stream tokens progressively to terminal
     const { createStreamRenderer } = await import("../tui/stream-renderer");
     const renderer = createStreamRenderer({ quiet: ctx.globalOpts.quiet });
@@ -936,6 +976,23 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     );
     genDuration = Date.now() - genStart;
     renderer.finalize();
+  } else if (isStreamJson) {
+    // stream-json requested but agent doesn't support streaming — emit init + result
+    const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+    const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+    emitStreamEvent({ type: "init", provider, model, timestamp: new Date().toISOString() });
+    const genStart = Date.now();
+    result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
+    genDuration = Date.now() - genStart;
+    emitStreamEvent({
+      type: "result",
+      content: result.content,
+      stats: {
+        agent: route.agent.name,
+        durationMs: genDuration,
+        ...(result.usage ?? {}),
+      },
+    });
   } else {
     // Existing spinner path (structured output, file writing, or non-streaming provider)
     const s2 = p.spinner();

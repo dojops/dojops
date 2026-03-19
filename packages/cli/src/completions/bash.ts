@@ -84,7 +84,7 @@ _dojops() {
         COMPREPLY=($(compgen -W "$(_dojops_get_dynamic modules)" -- "$cur"))
         return ;;
       --output)
-        COMPREPLY=($(compgen -W "table json yaml" -- "$cur"))
+        COMPREPLY=($(compgen -W "table json yaml stream-json" -- "$cur"))
         return ;;
       --fail-on)
         COMPREPLY=($(compgen -W "CRITICAL HIGH MEDIUM LOW" -- "$cur"))

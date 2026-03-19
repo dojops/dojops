@@ -15,6 +15,7 @@ import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
 import { VALID_PROVIDERS, resolveToken, resolveOllamaHost, resolveOllamaTls } from "../config";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
+import { expandFileReferences } from "../input-expander";
 import {
   renderHeader,
   renderTurnStats,
@@ -614,6 +615,7 @@ const HELP_ENTRIES: Array<{ cmd: string; args?: string; desc: string }> = [
   { cmd: "/agent", args: "<name>", desc: "Pin routing to a specific agent (use 'auto' to unpin)" },
   { cmd: "/model", desc: "Switch LLM model (interactive picker)" },
   { cmd: "/provider", args: "[name]", desc: "Switch LLM provider mid-session (preserves history)" },
+  { cmd: "/compress", desc: "Summarize conversation to free context window" },
   { cmd: "/sessions", desc: "List saved chat sessions" },
   { cmd: "/status", desc: "Show current session status bar" },
   { cmd: "/history", desc: "Show recent messages in this session" },
@@ -624,6 +626,7 @@ const HELP_ENTRIES: Array<{ cmd: string; args?: string; desc: string }> = [
   { cmd: "/scan", args: "[type]", desc: "Run security/dependency scanners" },
   { cmd: "/auto", args: "<prompt>", desc: "Run autonomous agent (iterative tool-use)" },
   { cmd: "/voice", desc: "Push-to-talk voice input (requires whisper.cpp + sox)" },
+  { cmd: "!", args: "<command>", desc: "Run a shell command (e.g. !git status)" },
 ];
 
 function handleHelpCommand(): void {
@@ -640,6 +643,8 @@ function handleHelpCommand(): void {
   }
 
   console.log(`\n${pc.dim("  Anything else is sent as a message to the AI agent.")}`);
+  console.log(`\n  ${pc.dim("Use @path/to/file to inject file contents inline.")}`);
+  console.log(`  ${pc.dim("Use !command to run shell commands inline.")}`);
   console.log(divider);
 }
 
@@ -681,6 +686,25 @@ async function handleSlashCommand(
   }
   if (trimmed === "/provider" || trimmed.startsWith("/provider ")) {
     await handleProviderCommand(trimmed, session, rootDir, ctx, docAugmenter);
+    return true;
+  }
+  if (trimmed === "/compress") {
+    const s = p.spinner();
+    s.start("Compressing conversation...");
+    try {
+      const info = await session.compress();
+      if (info) {
+        s.stop("Conversation compressed.");
+        p.log.success(
+          `Summarized ${info.messagesSummarized} messages, kept ${info.messagesRetained} recent.`,
+        );
+      } else {
+        s.stop("Nothing to compress (fewer than 4 messages).");
+      }
+    } catch (err) {
+      s.stop("Compression failed.");
+      p.log.error(formatError(err));
+    }
     return true;
   }
   if (trimmed === "/sessions") {
@@ -752,6 +776,31 @@ async function processLoopInput(
   const trimmed = input.trim();
   if (!trimmed) return;
 
+  // Shell passthrough: !command executes a shell command
+  if (trimmed.startsWith("!") && trimmed.length > 1) {
+    const command = trimmed.slice(1).trim();
+    if (!command) return;
+    try {
+      const output = execFileSync("/bin/sh", ["-c", command], {
+        cwd: ctx.cwd,
+        encoding: "utf-8",
+        timeout: 30_000,
+        maxBuffer: 64 * 1024,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      process.stdout.write(`\n${pc.dim("$")} ${pc.cyan(command)}\n`);
+      process.stdout.write(output);
+      if (!output.endsWith("\n")) process.stdout.write("\n");
+    } catch (err) {
+      const e = err as { stdout?: string; stderr?: string; status?: number };
+      process.stdout.write(`\n${pc.dim("$")} ${pc.cyan(command)}\n`);
+      if (e.stdout) process.stdout.write(e.stdout);
+      if (e.stderr) process.stdout.write(pc.red(e.stderr));
+      p.log.warn(`Exit code: ${e.status ?? "unknown"}`);
+    }
+    return;
+  }
+
   const handled = await handleSlashCommand(
     trimmed,
     session,
@@ -769,7 +818,9 @@ async function processLoopInput(
       );
       return;
     }
-    await handleSendMessage(session, trimmed, ctx);
+    // Expand @file references before sending to the LLM
+    const expanded = expandFileReferences(trimmed, ctx.cwd);
+    await handleSendMessage(session, expanded, ctx);
   }
 }
 

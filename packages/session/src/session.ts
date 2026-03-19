@@ -321,6 +321,31 @@ export class ChatSession {
     this.state.pinnedAgent = undefined;
   }
 
+  /**
+   * Manually compress conversation by summarizing older messages.
+   * Keeps the most recent messages and replaces the rest with a summary.
+   */
+  async compress(): Promise<{ messagesSummarized: number; messagesRetained: number } | null> {
+    if (this.state.messages.length < 4) return null;
+
+    const keepCount = Math.min(4, this.state.messages.length);
+    const totalBefore = this.state.messages.length;
+    const oldMessages = this.state.messages.slice(0, totalBefore - keepCount);
+
+    this.state.summary = await this.summarizer.summarize(oldMessages);
+    this.state.messages = this.state.messages.slice(-keepCount);
+    this.state.metadata.messageCount = this.state.messages.length;
+    this.state.metadata.totalTokensEstimate = this.memoryManager.estimateTokens(
+      this.state.messages,
+    );
+    this.state.updatedAt = new Date().toISOString();
+
+    return {
+      messagesSummarized: totalBefore - keepCount,
+      messagesRetained: keepCount,
+    };
+  }
+
   clearMessages(): void {
     this.state.messages = [];
     this.state.summary = undefined;

@@ -123,6 +123,129 @@ describe("ChatSession", () => {
     });
   });
 
+  describe("compress()", () => {
+    it("returns null when fewer than 4 messages", async () => {
+      const { session } = createTestSession();
+      // Add 2 messages via send (user + assistant = 2 messages)
+      await session.send("Hello");
+      expect(session.messages).toHaveLength(2);
+
+      const result = await session.compress();
+      expect(result).toBeNull();
+    });
+
+    it("returns null with exactly 3 messages", async () => {
+      const state: ChatSessionState = {
+        id: "chat-compress-3",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        mode: "INTERACTIVE",
+        messages: [
+          { role: "user", content: "msg1", timestamp: "2024-01-01T00:00:01.000Z" },
+          { role: "assistant", content: "reply1", timestamp: "2024-01-01T00:00:02.000Z" },
+          { role: "user", content: "msg2", timestamp: "2024-01-01T00:00:03.000Z" },
+        ],
+        metadata: { totalTokensEstimate: 0, messageCount: 3 },
+      };
+      const { session } = createTestSession({ state });
+
+      const result = await session.compress();
+      expect(result).toBeNull();
+    });
+
+    it("returns summarization info when >= 4 messages", async () => {
+      const provider: LLMProvider = {
+        name: "mock",
+        generate: vi
+          .fn()
+          // First 2 calls for send() agent calls
+          .mockResolvedValueOnce({ content: "response1" })
+          .mockResolvedValueOnce({ content: "response2" })
+          // 3rd call for summarizer.summarize()
+          .mockResolvedValueOnce({ content: "Summary of conversation" }),
+      };
+      const router = new AgentRouter(provider);
+      const session = new ChatSession({ provider, router });
+      session.pinAgent("ops-cortex");
+
+      await session.send("msg1");
+      await session.send("msg2");
+      // Now we have 4 messages (2 user + 2 assistant)
+      expect(session.messages).toHaveLength(4);
+
+      const result = await session.compress();
+
+      expect(result).not.toBeNull();
+      expect(result!.messagesRetained).toBe(4);
+      expect(result!.messagesSummarized).toBe(0);
+    });
+
+    it("summarizes old messages and retains recent ones with 6+ messages", async () => {
+      const provider: LLMProvider = {
+        name: "mock",
+        generate: vi
+          .fn()
+          // 3 send() agent calls
+          .mockResolvedValueOnce({ content: "r1" })
+          .mockResolvedValueOnce({ content: "r2" })
+          .mockResolvedValueOnce({ content: "r3" })
+          // compress() summarizer call
+          .mockResolvedValueOnce({ content: "Conversation summary" }),
+      };
+      const router = new AgentRouter(provider);
+      const session = new ChatSession({ provider, router });
+      session.pinAgent("ops-cortex");
+
+      await session.send("m1");
+      await session.send("m2");
+      await session.send("m3");
+      // 6 messages total
+      expect(session.messages).toHaveLength(6);
+
+      const result = await session.compress();
+
+      expect(result).not.toBeNull();
+      expect(result!.messagesRetained).toBe(4);
+      expect(result!.messagesSummarized).toBe(2);
+      // Session should now have only 4 messages
+      expect(session.messages).toHaveLength(4);
+    });
+
+    it("updates session metadata after compression", async () => {
+      // Pre-build state with an old updatedAt to avoid same-millisecond race
+      const state: ChatSessionState = {
+        id: "chat-compress-meta",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        mode: "INTERACTIVE",
+        messages: [
+          { role: "user", content: "m1", timestamp: "2024-01-01T00:00:01.000Z" },
+          { role: "assistant", content: "r1", timestamp: "2024-01-01T00:00:02.000Z" },
+          { role: "user", content: "m2", timestamp: "2024-01-01T00:00:03.000Z" },
+          { role: "assistant", content: "r2", timestamp: "2024-01-01T00:00:04.000Z" },
+          { role: "user", content: "m3", timestamp: "2024-01-01T00:00:05.000Z" },
+          { role: "assistant", content: "r3", timestamp: "2024-01-01T00:00:06.000Z" },
+        ],
+        metadata: { totalTokensEstimate: 100, messageCount: 6 },
+      };
+      const provider: LLMProvider = {
+        name: "mock",
+        generate: vi.fn().mockResolvedValueOnce({ content: "Summary text" }),
+      };
+      const router = new AgentRouter(provider);
+      const session = new ChatSession({ provider, router, state });
+
+      await session.compress();
+
+      const stateAfter = session.getState();
+      expect(stateAfter.metadata.messageCount).toBe(4);
+      expect(stateAfter.summary).toBe("Summary text");
+      // updatedAt should be updated from the old 2024 value
+      expect(stateAfter.updatedAt).not.toBe("2024-01-01T00:00:00.000Z");
+      expect(stateAfter.metadata.totalTokensEstimate).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe("summarization edge cases", () => {
     it("continues when summarization fails", async () => {
       // With maxContextMessages: 4, summarization triggers when messageCount > floor(4 * 1.5) = 6.

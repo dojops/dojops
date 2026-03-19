@@ -7,6 +7,7 @@ export * from "./devops-checker";
 export * from "./devsecops-reviewer";
 export * from "./review-tool-map";
 export * from "./file-discovery";
+export * from "./dojopsignore";
 export * from "./tool-deps";
 export * from "./system-tools";
 export * from "./critic";

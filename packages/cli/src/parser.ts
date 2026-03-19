@@ -50,8 +50,8 @@ function parseTimeout(raw: string): number {
 
 /** Parse and validate an output format value. */
 function parseOutputFormat(raw: string): OutputFormat {
-  if (!["table", "json", "yaml"].includes(raw))
-    throw new Error(`Invalid --output value: "${raw}". Valid: table, json, yaml`);
+  if (!["table", "json", "yaml", "stream-json"].includes(raw))
+    throw new Error(`Invalid --output value: "${raw}". Valid: table, json, yaml, stream-json`);
   return raw as OutputFormat;
 }
 

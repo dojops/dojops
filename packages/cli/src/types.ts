@@ -1,7 +1,7 @@
 import { LLMProvider, ThinkingLevel } from "@dojops/core";
 import { DojOpsConfig } from "./config";
 
-export type OutputFormat = "table" | "json" | "yaml";
+export type OutputFormat = "table" | "json" | "yaml" | "stream-json";
 
 export interface GlobalOptions {
   profile?: string;

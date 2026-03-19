@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { parseDojopsMdString, discoverDevOpsFiles } from "@dojops/core";
+import {
+  parseDojopsMdString,
+  discoverDevOpsFiles,
+  loadIgnorePatterns,
+  isIgnored,
+} from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 
 /** Load project context from DOJOPS.md (preferred) or .dojops/context.json (legacy). */
@@ -102,8 +107,9 @@ export function buildFileTree(
 ): string {
   const lines: string[] = [];
   const SKIP = new Set(["node_modules", ".git", ".dojops", "__pycache__", ".next", "dist", "out"]);
+  const ignorePatterns = loadIgnorePatterns(rootDir);
 
-  function walk(dir: string, prefix: string, depth: number): void {
+  function walk(dir: string, prefix: string, depth: number, relDir: string): void {
     if (depth > maxDepth || lines.length >= maxEntries) return;
     let entries: fs.Dirent[];
     try {
@@ -122,16 +128,18 @@ export function buildFileTree(
         return;
       }
       if (entry.name.startsWith(".") || SKIP.has(entry.name)) continue;
+      const relPath = relDir ? `${relDir}/${entry.name}` : entry.name;
+      if (ignorePatterns.length > 0 && isIgnored(relPath, ignorePatterns)) continue;
       if (entry.isDirectory()) {
         lines.push(`${prefix}${entry.name}/`);
-        walk(path.join(dir, entry.name), prefix + "  ", depth + 1);
+        walk(path.join(dir, entry.name), prefix + "  ", depth + 1, relPath);
       } else {
         lines.push(`${prefix}${entry.name}`);
       }
     }
   }
 
-  walk(rootDir, "", 0);
+  walk(rootDir, "", 0, "");
   return lines.join("\n");
 }
 
