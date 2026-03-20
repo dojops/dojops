@@ -82,6 +82,9 @@ import { costCommand } from "./commands/cost";
 import { driftCommand } from "./commands/drift";
 import { fixDepsCommand } from "./commands/fix-deps";
 import { auditExportCommand } from "./commands/audit-export";
+import { secretsCommand } from "./commands/secrets";
+import { learnCommand } from "./commands/learn";
+import { backupCommand } from "./commands/backup";
 import {
   skillsUpdateCommand,
   skillsExportCommand,
@@ -116,6 +119,9 @@ registerCommand("untrust", untrustCommand);
 registerCommand("cost", costCommand);
 registerCommand("drift", driftCommand);
 registerCommand("fix-deps", fixDepsCommand);
+registerCommand("secrets", secretsCommand);
+registerCommand("learn", learnCommand);
+registerCommand("backup", backupCommand);
 
 // Nested: checkpoint <sub>
 registerSubcommand("checkpoint", "create", (args, ctx) =>
@@ -140,6 +146,23 @@ registerSubcommand("runs", "clean", (args, ctx) => runsCommand(["clean", ...args
 // Nested: memory <sub> (additional subcommands)
 registerSubcommand("memory", "auto", (args, ctx) => memoryCommand(["auto", ...args], ctx));
 registerSubcommand("memory", "errors", (args, ctx) => memoryCommand(["errors", ...args], ctx));
+
+// Nested: secrets <sub> (encrypted secrets vault)
+registerSubcommand("secrets", "set", (args, ctx) => secretsCommand(["set", ...args], ctx));
+registerSubcommand("secrets", "get", (args, ctx) => secretsCommand(["get", ...args], ctx));
+registerSubcommand("secrets", "list", (args, ctx) => secretsCommand(["list", ...args], ctx));
+registerSubcommand("secrets", "remove", (args, ctx) => secretsCommand(["remove", ...args], ctx));
+
+// Nested: learn <sub> (pattern analysis)
+registerSubcommand("learn", "patterns", (args, ctx) => learnCommand(["patterns", ...args], ctx));
+registerSubcommand("learn", "rules", (args, ctx) => learnCommand(["rules", ...args], ctx));
+registerSubcommand("learn", "resolve", (args, ctx) => learnCommand(["resolve", ...args], ctx));
+registerSubcommand("learn", "dismiss", (args, ctx) => learnCommand(["dismiss", ...args], ctx));
+registerSubcommand("learn", "summary", (args, ctx) => learnCommand(["summary", ...args], ctx));
+
+// Nested: backup <sub>
+registerSubcommand("backup", "restore", (args, ctx) => backupCommand(["restore", ...args], ctx));
+registerSubcommand("backup", "list", (args, ctx) => backupCommand(["list", ...args], ctx));
 
 // Nested: mcp <sub> (MCP server management)
 registerSubcommand("mcp", "list", (args, ctx) => mcpCommand(["list", ...args], ctx));
@@ -344,6 +367,9 @@ const QUIET_COMMANDS = new Set([
   "cost",
   "drift",
   "fix-deps",
+  "secrets",
+  "learn",
+  "backup",
 ]);
 
 const NESTED_COMMAND_PARENTS = new Set([
@@ -360,6 +386,9 @@ const NESTED_COMMAND_PARENTS = new Set([
   "mcp",
   "checkpoint",
   "trust",
+  "secrets",
+  "learn",
+  "backup",
 ]);
 
 /** Route the resolved command or fall back to generate. */

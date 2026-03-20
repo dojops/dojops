@@ -246,6 +246,8 @@ function isToolRelevantToProject(skillName: string, repoCtx: RepoContext): boole
     // Security tools: always relevant for any project
     case "trivy":
     case "gitleaks":
+    case "semgrep":
+    case "checkov":
       return true;
 
     default:

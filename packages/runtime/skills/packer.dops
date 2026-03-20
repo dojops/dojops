@@ -1,0 +1,138 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: packer
+  version: 2.2.0
+  description: "Generate HashiCorp Packer templates for machine image builds"
+  author: dojops
+  license: MIT
+  tags: [packer, image, ami, vm, hashicorp, hcl]
+
+context:
+  technology: Packer
+  fileFormat: json
+  outputGuidance: |
+    Generate Packer HCL2 configuration split into standard files.
+    Output a JSON object with file paths as keys and HCL content as string values.
+    Format: { "files": { "main.pkr.hcl": "...", "variables.pkr.hcl": "...", "source.pkr.hcl": "..." } }
+    Each file content must be valid HCL2 that Packer can parse independently.
+    Always include these files:
+      - main.pkr.hcl — packer block with required_plugins plus build blocks (source references and provisioners)
+      - variables.pkr.hcl — all variable blocks
+      - source.pkr.hcl — all source blocks (e.g., source "amazon-ebs", source "qemu", source "virtualbox-iso")
+    Optionally include when needed:
+      - locals.pkr.hcl — local values and computed expressions
+      - data.pkr.hcl — data sources (e.g., amazon-ami, http)
+    Do NOT output raw HCL — use the JSON wrapper format for multi-file output.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - FLAT structure: All keys at root level (main.pkr.hcl, variables.pkr.hcl) — NEVER wrap in packer/ or project/ subfolder.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty valid HCL2 content.
+    - Use HCL2 syntax exclusively (NOT legacy JSON template format).
+    - File extensions must be .pkr.hcl (NOT .tf or .json).
+
+    PROVISIONER AND POST-PROCESSOR RULES:
+    - Always declare every plugin used in a required_plugins block inside the packer {} block.
+    - The ONLY provisioners you may use are: shell, shell-local, file, powershell, windows-shell, windows-restart, breakpoint.
+    - The ONLY post-processors you may use are: manifest, checksum, shell-local, artifice, compress.
+    - Use shell provisioner with inline scripts for ALL software installation and configuration.
+    - For ISO-based builds (qemu, virtualbox-iso, vmware-iso), use boot_command with proper boot_wait and shutdown_command.
+    - Ensure ssh_username and ssh_password or ssh_keypair_name are set for SSH communicator.
+  bestPractices:
+    - Use HCL2 syntax (.pkr.hcl files) instead of legacy JSON templates
+    - Pin plugin versions in required_plugins to prevent breaking changes
+    - Use variables for all environment-specific values (AMI IDs, regions, instance types)
+    - Use the packer block with required_plugins for all plugin dependencies
+    - Separate concerns into standard files (main.pkr.hcl, variables.pkr.hcl, source.pkr.hcl)
+    - Use shell provisioner with inline scripts for all software installation and configuration tasks
+    - Tag images with build metadata (timestamp, git commit, builder)
+    - Use data sources to look up base AMIs dynamically instead of hardcoding
+    - No hardcoded credentials (AWS keys, passwords, tokens) — use environment variables
+    - Use post-processors for artifact management (manifest, checksum)
+    - Define validation rules on variables with sensitive=true for secrets
+    - Set communicator timeouts to handle slow instance boot
+  context7Libraries:
+    - name: packer
+      query: "Packer HCL2 syntax, source blocks, build blocks, provisioners, variables, plugins, post-processors"
+
+files:
+  - path: "{outputPath}/main.pkr.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/variables.pkr.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/source.pkr.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/locals.pkr.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/data.pkr.hcl"
+    format: raw
+    conditional: true
+
+detection:
+  paths: ["*.pkr.hcl", "*.pkr.json", "packer.json"]
+  updateMode: true
+
+verification:
+  binary:
+    command: "packer init . && packer validate ."
+    parser: packer-validate
+    timeout: 60000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: required
+
+scope:
+  write: ["**/*.pkr.hcl", "**/*.pkr.json"]
+
+risk:
+  level: MEDIUM
+  rationale: "Image build definitions may affect cloud resources and incur costs"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Packer
+
+## Prompt
+
+You are a HashiCorp Packer expert. Generate production-ready Packer HCL2 templates for machine image builds.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+FINAL INSTRUCTIONS — these override any conflicting patterns from the project context above:
+- The ONLY provisioners you may use are: shell, shell-local, file, powershell, windows-shell, windows-restart, breakpoint. No other provisioner types exist for your purposes.
+- The ONLY post-processors you may use are: manifest, checksum, shell-local, artifice, compress. No other post-processor types exist for your purposes.
+- Use shell provisioner with inline scripts for ALL software installation, package management, and service configuration.
+- For ISO-based builds, always include boot_command, boot_wait, ssh_username, ssh_password, and shutdown_command.
+- Every source plugin (qemu, virtualbox-iso, vmware-iso, amazon-ebs, etc.) MUST be declared in a required_plugins block.
+
+## Keywords
+
+packer, machine image, ami, vm image, image build, golden image, hcl2,
+hashicorp, amazon-ebs, qemu, virtualbox-iso, vmware-iso, azure-arm,
+googlecompute, provisioner, post-processor, pkr.hcl, iso

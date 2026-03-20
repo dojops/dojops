@@ -108,6 +108,18 @@ describe("system-tools", () => {
   });
 
   describe("new system tools", () => {
+    it("finds packer with zip archive", () => {
+      expectToolProps("packer", {
+        archiveType: "zip",
+        binaryName: "packer",
+        binaryPathInArchive: null,
+      });
+    });
+
+    it("builds correct packer download URL", () => {
+      expectDownloadUrl("packer", "1.11.2", ["releases.hashicorp.com/packer", "1.11.2", ".zip"]);
+    });
+
     it("finds helm", () => {
       expectToolProps("helm", { archiveType: "tar.gz", binaryName: "helm" });
       expect(findSystemTool("helm")!.binaryPathInArchive).toBeDefined();
@@ -191,8 +203,8 @@ describe("system-tools", () => {
   });
 
   describe("SYSTEM_TOOLS registry", () => {
-    it("contains 13 tool definitions", () => {
-      expect(SYSTEM_TOOLS).toHaveLength(13);
+    it("contains 16 tool definitions", () => {
+      expect(SYSTEM_TOOLS).toHaveLength(16);
     });
 
     it("all tools have required fields", () => {

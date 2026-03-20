@@ -65,6 +65,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("cost")}               Estimate infrastructure costs (Infracost)`);
   console.log(`  ${pc.cyan("drift")}              Detect infrastructure drift (Terraform/K8s)`);
   console.log(`  ${pc.cyan("fix-deps")}           Auto-remediate dependency vulnerabilities`);
+  console.log(`  ${pc.cyan("secrets")}            Manage encrypted secrets (set/get/list/remove)`);
+  console.log(`  ${pc.cyan("learn")}              View execution patterns and learned rules`);
+  console.log(`  ${pc.cyan("backup")}             Backup/restore .dojops/ project data`);
   console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));

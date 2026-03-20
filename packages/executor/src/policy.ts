@@ -54,7 +54,11 @@ export const DEVOPS_WRITE_ALLOWLIST: string[] = [
   "nginx/**",
   "nginx.conf",
   "prometheus/**",
+  "prometheus.yml",
+  "prometheus.yaml",
   "alertmanager/**",
+  "alertmanager.yml",
+  "alertmanager.yaml",
   "Makefile",
   "makefile",
   "GNUmakefile",
@@ -63,6 +67,9 @@ export const DEVOPS_WRITE_ALLOWLIST: string[] = [
   "*.timer",
   "vars/**",
   "jenkins/**",
+  "packer/**",
+  "*.pkr.hcl",
+  "*.pkr.json",
 ];
 
 /** Match a string against a simple glob pattern with `*` wildcards (no regex). */

@@ -220,6 +220,39 @@ async function handleSingleMessage(
 
 // ── TUI Welcome ─────────────────────────────────────────────────
 
+/** Display previous conversation messages when resuming a session. */
+function displayResumedHistory(session: ChatSession): void {
+  const msgs = session.messages;
+  if (msgs.length === 0) return;
+
+  const width = getTermWidth();
+  const divider = pc.dim("─".repeat(Math.min(width, 80)));
+  console.log(divider);
+  console.log(pc.dim(`  Conversation history (${msgs.length} messages)`));
+  console.log(divider);
+
+  // Show last 10 messages for context — enough to pick up where you left off
+  const recent = msgs.slice(-10);
+  const skipped = msgs.length - recent.length;
+  if (skipped > 0) {
+    console.log(pc.dim(`  ... ${skipped} earlier message${skipped > 1 ? "s" : ""} omitted\n`));
+  }
+
+  for (const msg of recent) {
+    const role = msg.role === "user" ? pc.cyan("You") : pc.green("Agent");
+    const time = pc.dim(new Date(msg.timestamp).toLocaleTimeString());
+    const content = msg.content.length > 500 ? msg.content.slice(0, 497) + "..." : msg.content;
+    console.log(`  ${role} ${time}`);
+    // Indent each line of content for visual grouping
+    for (const line of highlightCodeBlocks(content).split("\n")) {
+      console.log(`  ${pc.dim("│")} ${line}`);
+    }
+    console.log();
+  }
+
+  console.log(divider);
+}
+
 function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown): void {
   p.intro(pc.bold(pc.cyan("DojOps Interactive Chat")));
 
@@ -232,12 +265,13 @@ function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown
 
   // Status indicators
   const indicators: string[] = [];
-  if (msgCount > 0) {
-    const historyLabel = pc.dim(`History: ${msgCount} messages`);
-    indicators.push(`${pc.green("●")} ${historyLabel}`);
-  }
   if (contextInfo) indicators.push(`${pc.green("●")} ${pc.dim("Project context loaded")}`);
   if (indicators.length > 0) p.log.message(indicators.join("  "));
+
+  // Display previous messages when resuming a session
+  if (msgCount > 0) {
+    displayResumedHistory(session);
+  }
 
   // Compact command hint
   p.log.message(

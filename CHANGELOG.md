@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-03-20
+
+### Added
+
+- **Semgrep and checkov in toolchain**: Both Python-based scanners are now installable via `dojops toolchain install semgrep checkov` using sandboxed venvs, bringing the toolchain to 16 tools
+- **Post-install commands for system tools**: New `postInstallCommands` field on `SystemTool` interface allows tools to run setup steps after binary installation (e.g. trivy vulnerability DB download)
+- **Trivy DB auto-download**: Trivy vulnerability database (~100 MB) is automatically downloaded after toolchain installation via `trivy image --download-db-only`
+- **Chat session history on resume**: Resuming a chat session now displays the last 10 messages with role labels, timestamps, and formatted content instead of just "loaded X messages"
+- **Skill fallback system**: When no built-in or installed skill matches a prompt, DojOps searches the Hub marketplace and falls back to Context7-augmented LLM generation before routing to agents
+- **Generalized pip tool installer**: `installPipTool()` replaces the ansible-specific installer, supporting any Python tool with `archiveType: "pipx"` in sandboxed venvs
+- **New CLI commands**: `dojops backup`, `dojops learn`, `dojops secrets` for project backup management, learning resources, and secret scanning
+
+### Fixed
+
+- **Toolchain migration when both directories exist**: `migrateToolchainDir()` now merges binaries and registry entries from `~/.dojops/tools/` into `~/.dojops/toolchain/` instead of silently skipping migration
+- **Doctor command shows correct toolchain paths**: `~/.dojops/tools/bin/` references updated to `~/.dojops/toolchain/bin/` in doctor output
+- **Semgrep and checkov marked as always-relevant**: Both scanners now appear in `dojops doctor` output for all projects, matching trivy and gitleaks behavior
+- **Packer validation parser**: Added `packer-validate` output parser for HCL validation results
+
+### Changed
+
+- **System tools registry expanded to 16 tools**: Added semgrep, checkov definitions alongside existing 14 tools
+- **`BINARY_TO_SYSTEM_TOOL` mapping updated**: Added semgrep and checkov binary-to-tool mappings
+
 ## [1.1.6] - 2026-03-20
 
 ### Fixed

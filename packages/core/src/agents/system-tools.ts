@@ -25,6 +25,8 @@ export interface SystemTool {
   binaryPathInArchive?: string;
   /** SHA-256 checksums keyed by version string. Used to verify downloaded binaries. */
   sha256?: Record<string, string>;
+  /** Commands to run after binary installation (e.g. DB download). Each entry is [cmd, ...args]. */
+  postInstallCommands?: string[][];
 }
 
 export interface InstalledTool {
@@ -114,12 +116,15 @@ export const BINARY_TO_SYSTEM_TOOL: Record<string, string> = {
   "ansible-pull": "ansible",
   // Direct 1:1 mappings (binary name = tool name)
   terraform: "terraform",
+  packer: "packer",
   kubectl: "kubectl",
   helm: "helm",
   hadolint: "hadolint",
   trivy: "trivy",
   gitleaks: "gitleaks",
   shellcheck: "shellcheck",
+  semgrep: "semgrep",
+  checkov: "checkov",
   actionlint: "actionlint",
   promtool: "promtool",
   circleci: "circleci",
@@ -137,6 +142,17 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     archiveType: "zip",
     urlTemplate:
       "https://releases.hashicorp.com/terraform/{{version}}/terraform_{{version}}_{{platform}}_{{arch}}.zip",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_AMD64,
+    supportedTargets: UNIX_AND_WIN_TARGETS,
+  }),
+  defineTool({
+    name: "packer",
+    description: "Machine image builder for creating identical images across multiple platforms",
+    latestVersion: "1.11.2",
+    archiveType: "zip",
+    urlTemplate:
+      "https://releases.hashicorp.com/packer/{{version}}/packer_{{version}}_{{platform}}_{{arch}}.zip",
     platformMap: PLATFORM_LOWER,
     archMap: ARCH_AMD64,
     supportedTargets: UNIX_AND_WIN_TARGETS,
@@ -182,6 +198,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
       "https://github.com/aquasecurity/trivy/releases/download/v{{version}}/trivy_{{version}}_{{platform}}-{{arch}}.tar.gz",
     platformMap: { linux: "Linux", darwin: "macOS", win32: "Windows" },
     archMap: { x64: "64bit", arm64: "ARM64" },
+    postInstallCommands: [["trivy", "image", "--download-db-only"]],
   }),
   defineTool({
     name: "gitleaks",
@@ -198,6 +215,24 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     name: "ansible",
     description: "IT automation tool for configuration management and deployment",
     latestVersion: "11.1.0",
+    archiveType: "pipx",
+    urlTemplate: "",
+    platformMap: PLATFORM_LOWER_WIN32,
+    archMap: ARCH_NATIVE,
+  }),
+  defineTool({
+    name: "semgrep",
+    description: "Static analysis tool for finding bugs and enforcing code standards",
+    latestVersion: "1.113.0",
+    archiveType: "pipx",
+    urlTemplate: "",
+    platformMap: PLATFORM_LOWER_WIN32,
+    archMap: ARCH_NATIVE,
+  }),
+  defineTool({
+    name: "checkov",
+    description: "Infrastructure as Code scanner for security and compliance policies",
+    latestVersion: "3.2.345",
     archiveType: "pipx",
     urlTemplate: "",
     platformMap: PLATFORM_LOWER_WIN32,

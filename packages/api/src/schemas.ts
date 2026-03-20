@@ -7,11 +7,22 @@ export const GenerateRequestSchema = z.object({
 
 export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 
-export const PlanRequestSchema = z.object({
-  goal: z.string().min(1, "goal is required").max(65536, "goal too long"),
-  execute: z.boolean().optional().default(false),
-  autoApprove: z.boolean().optional().default(false),
-});
+export const PlanRequestSchema = z.preprocess(
+  (data: unknown) => {
+    if (typeof data === "object" && data !== null) {
+      const obj = data as Record<string, unknown>;
+      if (!obj.goal && typeof obj.prompt === "string") {
+        return { ...obj, goal: obj.prompt };
+      }
+    }
+    return data;
+  },
+  z.object({
+    goal: z.string().min(1, "goal is required").max(65536, "goal too long"),
+    execute: z.boolean().optional().default(false),
+    autoApprove: z.boolean().optional().default(false),
+  }),
+);
 
 export type PlanRequest = z.infer<typeof PlanRequestSchema>;
 

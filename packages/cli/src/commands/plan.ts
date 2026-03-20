@@ -26,6 +26,13 @@ import {
   PlanState,
   getCurrentUser,
 } from "../state";
+import {
+  extractSearchTerms,
+  searchHub,
+  promptHubInstall,
+  installHubSkill,
+  warnNoSkill,
+} from "../skill-fallback";
 
 /** Enrich each task with tool metadata from the registry. */
 function enrichTasksWithMetadata(graph: TaskGraph, registry: SkillRegistry): void {
@@ -306,6 +313,62 @@ async function loadExecutionMemory(
   }
 }
 
+/**
+ * Handle tasks assigned to "generic" by the decomposer — no built-in skill matched.
+ * Searches the hub for matching skills and offers installation.
+ * Returns "retry" if a skill was installed (caller should re-decompose),
+ * or "skip" if no skill was found (warning shown to user).
+ */
+async function handleGenericTasks(
+  ctx: CLIContext,
+  prompt: string,
+  genericTasks: { id: string; description: string }[],
+  isJson: boolean,
+): Promise<"retry" | "skip"> {
+  const structured = isJson || ctx.globalOpts.raw;
+  const searchTerms = extractSearchTerms(prompt);
+
+  // Search hub for matching skills
+  const s = p.spinner();
+  if (!structured) s.start("Searching hub for matching skills...");
+
+  const { DEFAULT_HUB_URL } = await import("./skills");
+  const packages = await searchHub(searchTerms, DEFAULT_HUB_URL, ctx.globalOpts.verbose);
+
+  if (!structured) {
+    s.stop(
+      packages.length > 0
+        ? `Found ${packages.length} matching skill(s) on hub`
+        : "No matching skills on hub",
+    );
+  }
+
+  if (packages.length > 0) {
+    const selected = await promptHubInstall(ctx, packages);
+
+    if (selected) {
+      const installSpinner = p.spinner();
+      if (!structured) installSpinner.start(`Installing ${pc.cyan(selected.name)}...`);
+
+      const installed = await installHubSkill(selected.slug, selected.name);
+
+      if (!structured) installSpinner.stop(installed ? "Installed" : "Install failed");
+
+      if (installed) return "retry";
+    }
+  }
+
+  // No skill installed — warn the user
+  if (!structured) {
+    warnNoSkill(searchTerms);
+    for (const task of genericTasks) {
+      p.log.info(pc.dim(`  Task "${task.id}" will proceed without skill-based validation`));
+    }
+  }
+
+  return "skip";
+}
+
 export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
   const {
     prompt: textPrompt,
@@ -347,7 +410,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   const executionMemory = await loadExecutionMemory(projectRoot, prompt);
   const fileTree = projectRoot ? buildFileTree(projectRoot) : undefined;
 
-  const graph = await runDecomposition({
+  let graph = await runDecomposition({
     prompt,
     provider,
     tools,
@@ -357,6 +420,27 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     executionMemory,
     fileTree,
   });
+
+  // Handle tasks assigned to "generic" (no matching skill)
+  const genericTasks = graph.tasks.filter((t) => t.tool === "generic");
+  if (genericTasks.length > 0) {
+    const resolved = await handleGenericTasks(ctx, prompt, genericTasks, isJson);
+    if (resolved === "retry") {
+      // Hub skill was installed — re-decompose with the expanded tool set
+      const updatedRegistry = createSkillRegistry(provider, projectRoot ?? undefined);
+      const updatedTools = applyToolFilter(updatedRegistry.getAll(), ctx.globalOpts.skill, isJson);
+      graph = await runDecomposition({
+        prompt,
+        provider,
+        tools: updatedTools,
+        repoContext,
+        ctx,
+        isJson,
+        executionMemory,
+        fileTree,
+      });
+    }
+  }
 
   enrichTasksWithMetadata(graph, registry);
   if (!isJson) displayTaskGraph(graph);

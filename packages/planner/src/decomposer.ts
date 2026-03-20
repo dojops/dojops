@@ -73,6 +73,7 @@ Canonical output paths by module:
 - dockerfile: outputPath="." (Dockerfile at project root)
 - docker-compose: outputPath="." (docker-compose.yml at root)
 - ansible: outputPath="ansible" (playbooks under ansible/)
+- packer: outputPath="packer" (Packer HCL2 templates under packer/)
 - prometheus: outputPath="monitoring" or "." if prometheus.yml exists
 - nginx: outputPath="." (nginx.conf at root or /etc/nginx/)
 - systemd: outputPath="." (service files at root)
@@ -141,15 +142,18 @@ export async function decompose(
     : "";
 
   const validToolNames = tools.map((t) => t.name);
-  const dynamicSchema = createTaskGraphSchema(validToolNames);
+  // "generic" is a pseudo-tool the LLM can assign when no existing tool matches the request
+  const allValidNames = [...validToolNames, "generic"];
+  const dynamicSchema = createTaskGraphSchema(allValidNames);
 
   const response = await provider.generate({
     system: `You are a DevOps task planner. Break down the user's goal into precise, narrowly-scoped tasks using available tools.
 
 ## Available tools
 
-IMPORTANT: The "tool" field in each task MUST be one of these exact names: ${validToolNames.join(", ")}.
+IMPORTANT: The "tool" field in each task MUST be one of these exact names: ${allValidNames.join(", ")}.
 Do NOT invent tool names, add suffixes, or use variations. For example, use "helm" not "helm-chart", use "kubernetes" not "k8s-manifest".
+If the user's request does NOT closely match any specific tool above, use "generic". For example, a HashiCorp Vault policy is NOT a Terraform config — use "generic" instead of forcing "terraform".
 
 ${toolList}
 ${agentSection}
@@ -175,6 +179,7 @@ RULES for the "prompt" field:
 - Analysis/check tasks must NOT produce file output — they are read-only.
 - Use dependsOn when a task needs another task to be completed first (e.g., "update workflow to use new action" depends on "create the action").
 - NEVER create tasks for README.md, documentation, or non-tool-specific files using a DevOps tool. Each tool can ONLY generate files in its own format (e.g., terraform generates .tf files ONLY, github-actions generates YAML workflow/action files ONLY). Documentation tasks should be omitted from the plan entirely.
+- Packer tasks generate complete templates with built-in shell provisioners. Do NOT create separate ansible/chef/puppet tasks to "support" a packer template unless the user explicitly asks for Ansible/Chef/Puppet integration.
 
 ## Example decomposition
 
@@ -227,7 +232,7 @@ BAD decomposition (DO NOT DO THIS):
 
 - Each task's "input" object MUST match the tool's input fields exactly. Do not invent fields.
 - Do NOT use $ref for "existingContent" — it is always injected from disk automatically.
-- Use canonical output paths: github-actions → outputPath="."; kubernetes → "k8s"; helm → "charts/<name>"; terraform → "terraform" (or "."); dockerfile/docker-compose/makefile/gitlab-ci/jenkinsfile → "."; ansible → "ansible"; prometheus → "monitoring".
+- Use canonical output paths: github-actions → outputPath="."; kubernetes → "k8s"; helm → "charts/<name>"; terraform → "terraform" (or "."); packer → "packer"; dockerfile/docker-compose/makefile/gitlab-ci/jenkinsfile → "."; ansible → "ansible"; prometheus → "monitoring".
 - outputPath must always be a DIRECTORY, never a file path.
 
 Respond with a JSON object:

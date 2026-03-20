@@ -28,6 +28,7 @@ describe("getParser", () => {
       "ansible-syntax",
       "docker-compose-config",
       "actionlint",
+      "packer-validate",
     ];
     for (const name of knownParsers) {
       expect(getParser(name)).toBeDefined();
@@ -44,7 +45,7 @@ describe("getAvailableParsers", () => {
     expect(parsers).toContain("nginx-stderr");
   });
 
-  it("returns 13 parsers", () => {
-    expect(getAvailableParsers()).toHaveLength(13);
+  it("returns 14 parsers", () => {
+    expect(getAvailableParsers()).toHaveLength(14);
   });
 });

@@ -66,6 +66,7 @@ const KNOWN_VERIFICATION_PARSERS = new Set([
   "gitlab-ci",
   "generic-stderr",
   "generic-json",
+  "packer-validate",
 ]);
 
 /** Validate required sections exist. */

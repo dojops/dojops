@@ -5,10 +5,12 @@
  * Runtime checking lives in @dojops/cli (preflight.ts).
  */
 
+export type InstallMethod = "npm" | "pipx";
+
 export interface ToolDependency {
   /** Human-readable name, e.g. "ShellCheck" */
   name: string;
-  /** npm package name, e.g. "shellcheck" or "@open-policy-agent/opa-wasm" */
+  /** Package identifier, e.g. "shellcheck" (npm) or "checkov" (pipx) */
   npmPackage: string;
   /** CLI binary name if the dep exposes one (omit for library-only deps) */
   binary?: string;
@@ -16,6 +18,8 @@ export interface ToolDependency {
   description: string;
   /** If true, missing tool blocks execution. All current deps are optional. */
   required: boolean;
+  /** Install method: "npm" (default) or "pipx" for Python packages */
+  installMethod?: InstallMethod;
 }
 
 export interface ToolCheckResult {
@@ -44,6 +48,9 @@ export type PackageRunner = "npx" | "npm" | "pnpm";
  * - pnpm: `pnpm add -g <package>`
  */
 export function getInstallCommand(dep: ToolDependency, runner: PackageRunner): string {
+  if (dep.installMethod === "pipx") {
+    return `pipx install ${dep.npmPackage}`;
+  }
   switch (runner) {
     case "npx":
       return `npx ${dep.npmPackage}`;

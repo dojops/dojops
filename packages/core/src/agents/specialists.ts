@@ -83,6 +83,7 @@ const CHECKOV_DEP: ToolDependency = {
   binary: "checkov",
   description: "IaC security scanning",
   required: false,
+  installMethod: "pipx",
 };
 
 const OPA_WASM_DEP: ToolDependency = {

@@ -167,7 +167,9 @@ describe("CLI", () => {
     });
 
     it("skills list runs without error", () => {
-      expectRunContains(["skills", "list"], ["No custom skills discovered"]);
+      const output = run("skills", "list");
+      // May find user-installed skills or report none — either is valid
+      expect(output.includes("Skills") || output.includes("No custom skills")).toBe(true);
     });
   });
 });

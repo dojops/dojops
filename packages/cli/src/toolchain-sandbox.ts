@@ -65,25 +65,77 @@ const LEGACY_TOOLS_DIR = path.join(os.homedir(), ".dojops", "tools");
 
 /**
  * Auto-migrate ~/.dojops/tools/ → ~/.dojops/toolchain/ if old path has bin/ or registry.json.
- * Only runs once; safe to call repeatedly.
+ * Handles three cases:
+ * 1. Only tools/ exists → rename to toolchain/
+ * 2. Both exist → merge binaries and registry entries from tools/ into toolchain/
+ * 3. Only toolchain/ exists → nothing to do
  */
 function migrateToolchainDir(): void {
-  if (fs.existsSync(TOOLCHAIN_DIR)) return;
-
   const legacyBinDir = path.join(LEGACY_TOOLS_DIR, "bin");
   const legacyRegistry = path.join(LEGACY_TOOLS_DIR, "registry.json");
 
   if (!fs.existsSync(legacyBinDir) && !fs.existsSync(legacyRegistry)) return;
 
-  try {
-    fs.renameSync(LEGACY_TOOLS_DIR, TOOLCHAIN_DIR);
-  } catch {
-    // Cross-device rename failed — copy instead
+  if (!fs.existsSync(TOOLCHAIN_DIR)) {
+    // Case 1: only tools/ exists — rename
     try {
-      fs.cpSync(LEGACY_TOOLS_DIR, TOOLCHAIN_DIR, { recursive: true });
+      fs.renameSync(LEGACY_TOOLS_DIR, TOOLCHAIN_DIR);
     } catch {
-      // Migration failed — will start fresh
+      try {
+        fs.cpSync(LEGACY_TOOLS_DIR, TOOLCHAIN_DIR, { recursive: true });
+      } catch {
+        return;
+      }
     }
+    return;
+  }
+
+  // Case 2: both exist — merge legacy binaries into toolchain
+  try {
+    const toolchainBinDir = path.join(TOOLCHAIN_DIR, "bin");
+    fs.mkdirSync(toolchainBinDir, { recursive: true });
+
+    // Copy binaries that don't already exist in toolchain
+    if (fs.existsSync(legacyBinDir)) {
+      for (const entry of fs.readdirSync(legacyBinDir)) {
+        const dest = path.join(toolchainBinDir, entry);
+        if (!fs.existsSync(dest)) {
+          fs.copyFileSync(path.join(legacyBinDir, entry), dest);
+          try {
+            fs.chmodSync(dest, 0o755);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
+
+    // Merge registry entries — update stale paths to toolchain/
+    if (fs.existsSync(legacyRegistry)) {
+      try {
+        const legacyReg = JSON.parse(fs.readFileSync(legacyRegistry, "utf-8")) as ToolRegistry;
+        const currentReg = loadToolchainRegistry();
+        const currentNames = new Set(currentReg.tools.map((t) => t.name));
+
+        for (const tool of legacyReg.tools) {
+          if (currentNames.has(tool.name)) continue;
+          // Rewrite path from tools/ to toolchain/
+          tool.binaryPath = tool.binaryPath.replace(
+            `${path.sep}tools${path.sep}`,
+            `${path.sep}toolchain${path.sep}`,
+          );
+          currentReg.tools.push(tool);
+        }
+        saveToolchainRegistry(currentReg);
+      } catch {
+        /* registry merge failed — not critical */
+      }
+    }
+
+    // Remove legacy directory after successful merge
+    fs.rmSync(LEGACY_TOOLS_DIR, { recursive: true, force: true });
+  } catch {
+    /* merge failed — leave both directories intact */
   }
 }
 
@@ -268,7 +320,7 @@ export async function installSystemTool(
   ctx?: ToolchainContext,
 ): Promise<InstalledTool> {
   if (tool.archiveType === "pipx") {
-    return installAnsible(tool, ctx);
+    return installPipTool(tool, ctx);
   }
   if (tool.archiveType === "source") {
     return installFromSource(tool, version, ctx);
@@ -337,6 +389,24 @@ export async function installSystemTool(
     registry.tools.push(installed);
     saveToolchainRegistry(registry, ctx);
 
+    // Run post-install commands (e.g. trivy DB download)
+    if (tool.postInstallCommands?.length) {
+      for (const [cmd, ...args] of tool.postInstallCommands) {
+        try {
+          runBin(cmd, args, {
+            timeout: 120_000,
+            stdio: "pipe",
+            env: {
+              ...process.env,
+              PATH: `${tc.binDir}${path.delimiter}${process.env.PATH ?? ""}`,
+            },
+          });
+        } catch {
+          // Post-install failed — tool is still installed, setup will retry on first use
+        }
+      }
+    }
+
     return installed;
   } finally {
     // Cleanup temp files
@@ -388,22 +458,22 @@ function commandExists(name: string): boolean {
 }
 
 /**
- * Install ansible via a sandboxed venv or pipx fallback.
+ * Install a Python tool via a sandboxed venv or pipx fallback.
  *
  * Strategy order (sandboxed-first):
- * 1. Sandbox venv at ~/.dojops/toolchain/venvs/ansible/ — fully sandboxed, always works with python3
- * 2. `pipx install ansible` — fallback if python3 is unavailable
+ * 1. Sandbox venv at ~/.dojops/toolchain/venvs/<name>/ — fully sandboxed, always works with python3
+ * 2. `pipx install <name>` — fallback if python3 is unavailable
  *
  * If an existing venv has broken shebangs (e.g., after directory migration),
  * the venv is deleted and recreated.
  */
-export async function installAnsible(
+export async function installPipTool(
   tool: SystemTool,
   ctx?: ToolchainContext,
 ): Promise<InstalledTool> {
   const tc = ctx ?? globalToolchainCtx();
   ensureToolchainDir(ctx);
-  const venvDir = path.join(tc.dir, "venvs", "ansible");
+  const venvDir = path.join(tc.dir, "venvs", tool.name);
   let binaryPath: string;
 
   // Strategy 1: sandbox venv (preferred — fully sandboxed)
@@ -424,11 +494,11 @@ export async function installAnsible(
     }
 
     const venvPip = path.join(venvDir, "bin", "pip");
-    runBin(venvPip, ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
+    runBin(venvPip, ["install", tool.name], { timeout: 300_000, stdio: "pipe" });
 
-    // Symlink venv ansible binary into toolchain bin
-    const venvBinary = path.join(venvDir, "bin", "ansible");
-    const destPath = path.join(tc.binDir, "ansible");
+    // Symlink venv binary into toolchain bin
+    const venvBinary = path.join(venvDir, "bin", tool.binaryName);
+    const destPath = path.join(tc.binDir, tool.binaryName);
     try {
       fs.unlinkSync(destPath);
     } catch {
@@ -437,26 +507,33 @@ export async function installAnsible(
     fs.symlinkSync(venvBinary, destPath);
     binaryPath = destPath;
 
-    // Symlink companion binaries (ansible-playbook, etc.) from venv
-    symlinkAnsibleCompanions(venvBinary, ctx);
+    // Ansible-specific: symlink companion binaries
+    if (tool.name === "ansible") {
+      symlinkAnsibleCompanions(venvBinary, ctx);
+    }
 
-    return registerAnsible(tool, binaryPath, ctx);
+    return registerPipTool(tool, binaryPath, ctx);
   }
 
   // Strategy 2: pipx fallback (when python3 is not available)
   if (commandExists("pipx")) {
-    runBin("pipx", ["install", "ansible"], { timeout: 300_000, stdio: "pipe" });
+    runBin("pipx", ["install", tool.name], { timeout: 300_000, stdio: "pipe" });
     ensurePipxBinOnPath();
-    binaryPath = findInstalledBinary("ansible");
-    symlinkAnsibleCompanions(binaryPath, ctx);
-    return registerAnsible(tool, binaryPath, ctx);
+    binaryPath = findInstalledBinary(tool.binaryName);
+    if (tool.name === "ansible") {
+      symlinkAnsibleCompanions(binaryPath, ctx);
+    }
+    return registerPipTool(tool, binaryPath, ctx);
   }
 
   throw new Error(
-    "Cannot install ansible: neither python3 nor pipx found. " +
+    `Cannot install ${tool.name}: neither python3 nor pipx found. ` +
       "Install python3 (recommended) or pipx first.",
   );
 }
+
+/** @deprecated Use installPipTool instead */
+export const installAnsible = installPipTool;
 
 /**
  * Ansible companion binaries that should be symlinked alongside the main binary.
@@ -599,7 +676,7 @@ function findInstalledBinary(name: string): string {
   }
 }
 
-function registerAnsible(
+function registerPipTool(
   tool: SystemTool,
   binaryPath: string,
   ctx?: ToolchainContext,
@@ -622,7 +699,7 @@ function registerAnsible(
 
 /**
  * Install a tool that requires building from source.
- * Dispatches to tool-specific handlers (like pipx → installAnsible).
+ * Dispatches to tool-specific handlers (like pipx → installPipTool).
  */
 async function installFromSource(
   tool: SystemTool,

@@ -140,6 +140,13 @@ describe("isDevOpsFile", () => {
     expect(isDevOpsFile("app.service")).toBe(true);
     expect(isDevOpsFile(".gitlab-ci.yml")).toBe(true);
     expect(isDevOpsFile("prometheus/rules.yml")).toBe(true);
+    expect(isDevOpsFile("prometheus.yml")).toBe(true);
+    expect(isDevOpsFile("prometheus.yaml")).toBe(true);
+    expect(isDevOpsFile("alertmanager.yml")).toBe(true);
+    expect(isDevOpsFile("alertmanager.yaml")).toBe(true);
+    expect(isDevOpsFile("packer/main.pkr.hcl")).toBe(true);
+    expect(isDevOpsFile("main.pkr.hcl")).toBe(true);
+    expect(isDevOpsFile("packer/variables.pkr.json")).toBe(true);
   });
 
   it("rejects non-DevOps files", () => {

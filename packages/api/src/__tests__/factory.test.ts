@@ -85,11 +85,11 @@ describe("factory", () => {
   });
 
   describe("createTools", () => {
-    it("creates all 18 built-in tools", () => {
+    it("creates all built-in tools (19 .dops skills + any global)", () => {
       process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const tools = createTools(provider);
-      expect(tools).toHaveLength(18);
+      expect(tools.length).toBeGreaterThanOrEqual(19);
       const names = tools.map((t) => t.name);
       expect(names).toContain("github-actions");
       expect(names).toContain("terraform");

@@ -106,7 +106,7 @@ const InitSkillResponseSchema = z.object({
 
 type InitSkillResponse = z.infer<typeof InitSkillResponseSchema>;
 
-const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "https://hub.dojops.ai";
+export const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "https://hub.dojops.ai";
 
 function throwHubError(err: unknown): never {
   throw new CLIError(
@@ -879,7 +879,7 @@ export const skillsPublishCommand: CommandHandler = async (args) => {
  *
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  */
-async function resolveLatestVersion(slug: string, skillName: string): Promise<string> {
+export async function resolveLatestVersion(slug: string, skillName: string): Promise<string> {
   const infoRes = await fetch(`${DEFAULT_HUB_URL}/api/packages/${slug}`);
   if (!infoRes.ok) {
     if (infoRes.status === 404) {
@@ -901,7 +901,7 @@ async function resolveLatestVersion(slug: string, skillName: string): Promise<st
   return info.latestVersion.semver;
 }
 
-async function downloadAndVerify(
+export async function downloadAndVerify(
   slug: string,
   version: string,
   skillName: string,
@@ -937,7 +937,7 @@ async function downloadAndVerify(
   return { fileBuffer, actualHash, expectedHash };
 }
 
-function resolveInstallDir(isGlobal: boolean): string {
+export function resolveInstallDir(isGlobal: boolean): string {
   if (isGlobal) {
     return path.join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".dojops", "skills");
   }
@@ -947,7 +947,9 @@ function resolveInstallDir(isGlobal: boolean): string {
     : path.resolve(".dojops", "skills");
 }
 
-async function parseDownloadedSkill(fileBuffer: Buffer): Promise<ReturnType<typeof parseDopsFile>> {
+export async function parseDownloadedSkill(
+  fileBuffer: Buffer,
+): Promise<ReturnType<typeof parseDopsFile>> {
   try {
     const { parseDopsString, validateDopsSkill } = await import("@dojops/runtime");
     const skill = parseDopsString(fileBuffer.toString("utf-8"));
@@ -1071,7 +1073,7 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
   }
 };
 
-interface SearchPackage {
+export interface SearchPackage {
   name: string;
   slug: string;
   description: string;

@@ -443,6 +443,7 @@ describe("ALLOWED_VERIFICATION_BINARIES whitelist sync", () => {
       "tflint",
       "kubeval",
       "conftest",
+      "packer",
       "checkov",
       "trivy",
       "kube-score",
@@ -470,7 +471,7 @@ describe("ALLOWED_VERIFICATION_BINARIES whitelist sync", () => {
     expect(ALLOWED_VERIFICATION_BINARIES.size).toBe(expected.length);
   });
 
-  it("has exactly 33 binaries", () => {
-    expect(ALLOWED_VERIFICATION_BINARIES.size).toBe(33);
+  it("has exactly 34 binaries", () => {
+    expect(ALLOWED_VERIFICATION_BINARIES.size).toBe(34);
   });
 });

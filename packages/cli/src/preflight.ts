@@ -263,6 +263,28 @@ function npmInstallSandboxed(pkg: string): void {
   });
 }
 
+/**
+ * Install a Python package via pipx.
+ * Falls back to pip install --user if pipx is not available.
+ */
+function pipxInstall(pkg: string): void {
+  try {
+    runBin("pipx", ["install", pkg], { timeout: 120_000, stdio: "pipe" });
+  } catch {
+    // pipx not found — try pip install --user as fallback
+    runBin("pip3", ["install", "--user", pkg], { timeout: 120_000, stdio: "pipe" });
+  }
+}
+
+/** Install a tool dependency using the appropriate method. */
+function installDependency(dep: ToolDependency): void {
+  if (dep.installMethod === "pipx") {
+    pipxInstall(dep.npmPackage);
+  } else {
+    npmInstallSandboxed(dep.npmPackage);
+  }
+}
+
 /** Prompt user to select tools to install into the toolchain sandbox. */
 async function selectToolsForInstall(missing: ToolDependency[]): Promise<string[] | null> {
   const selected = await p.multiselect({
@@ -291,9 +313,9 @@ async function installNpmPackages(
   for (const pkg of packages) {
     const dep = missing.find((d) => d.npmPackage === pkg)!;
     const s = p.spinner();
-    s.start(`Installing ${dep.name} into toolchain...`);
+    s.start(`Installing ${dep.name}...`);
     try {
-      npmInstallSandboxed(pkg);
+      installDependency(dep);
       s.stop(`${pc.green("\u2713")} ${dep.name} installed.`);
       installed.push(pkg);
       continue;
@@ -310,7 +332,7 @@ async function installNpmPackages(
     const retrySpinner = p.spinner();
     retrySpinner.start(`Retrying ${dep.name}...`);
     try {
-      npmInstallSandboxed(pkg);
+      installDependency(dep);
       retrySpinner.stop(`${pc.green("\u2713")} ${dep.name} installed on retry.`);
       installed.push(pkg);
     } catch (err) {
@@ -323,10 +345,11 @@ async function installNpmPackages(
   if (manualInstall.length > 0) {
     p.log.info(pc.yellow(`\n${manualInstall.length} tool(s) require manual installation:`));
     for (const { dep, hint } of manualInstall) {
-      const lines = [
-        `  ${pc.bold(dep.name)} (${dep.npmPackage})`,
-        `    ${pc.dim("npm install -g " + dep.npmPackage)}`,
-      ];
+      const installCmd =
+        dep.installMethod === "pipx"
+          ? `pipx install ${dep.npmPackage}`
+          : `npm install -g ${dep.npmPackage}`;
+      const lines = [`  ${pc.bold(dep.name)} (${dep.npmPackage})`, `    ${pc.dim(installCmd)}`];
       if (hint) {
         lines.push(`    ${pc.dim("Context7 hint:")} ${pc.dim(hint.split("\n")[0])}`);
       }

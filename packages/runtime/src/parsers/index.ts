@@ -12,6 +12,7 @@ import { parseMakeDryrun } from "./make-dryrun";
 import { parseAnsibleSyntax } from "./ansible-syntax";
 import { parseDockerComposeConfig } from "./docker-compose-config";
 import { parseActionlint } from "./actionlint";
+import { parsePackerValidate } from "./packer-validate";
 
 export type VerificationParser = (
   output: string,
@@ -38,6 +39,7 @@ const PARSERS: Record<string, VerificationParser> = {
   "ansible-syntax": parseAnsibleSyntax,
   "docker-compose-config": parseDockerComposeConfig,
   actionlint: parseActionlint,
+  "packer-validate": parsePackerValidate,
 };
 
 export function getParser(name: string): VerificationParser | undefined {

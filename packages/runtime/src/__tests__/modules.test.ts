@@ -107,6 +107,32 @@ describe("Built-in .dops modules", () => {
   }
 });
 
+describe("packer.dops", () => {
+  it("has context with Packer technology and JSON format (multi-file)", () => {
+    expectContext("packer.dops", "Packer", "json");
+  });
+
+  it("has context7Libraries referencing packer", () => {
+    expectContext7Library("packer.dops", "packer");
+  });
+
+  it("has binary verification with packer-validate parser", () => {
+    expectBinaryParser("packer.dops", "packer-validate");
+  });
+
+  it("generates raw .pkr.hcl files", () => {
+    expectFirstFile("packer.dops", "raw", ".pkr.hcl");
+  });
+
+  it("has file specs for standard packer files", () => {
+    const module = parseV2Module("packer.dops");
+    const paths = module.frontmatter.files.map((f) => f.path);
+    expect(paths).toContain("{outputPath}/main.pkr.hcl");
+    expect(paths).toContain("{outputPath}/variables.pkr.hcl");
+    expect(paths).toContain("{outputPath}/source.pkr.hcl");
+  });
+});
+
 describe("terraform.dops", () => {
   it("has context with Terraform technology and JSON format (multi-file)", () => {
     expectContext("terraform.dops", "Terraform", "json");

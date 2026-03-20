@@ -24,6 +24,7 @@ export const ALLOWED_VERIFICATION_BINARIES = new Set([
   "tflint",
   "kubeval",
   "conftest",
+  "packer",
   "checkov",
   "trivy",
   "kube-score",

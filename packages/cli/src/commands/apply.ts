@@ -45,10 +45,36 @@ import { createProgressReporter } from "../progress";
 import { validateReplayIntegrity, checkToolIntegrity } from "./replay-validator";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
 import { buildFileTree } from "@dojops/session";
+import { z } from "zod";
 // readExistingToolFile is no longer used here — existingContent is detected
 // lazily at execution time by each tool's runtime (detectContent in DopsRuntimeV2).
 
 type ToolEntry = ReturnType<ReturnType<typeof createSkillRegistry>["getAll"]>[number];
+
+/**
+ * Lightweight skill for tasks that don't match any built-in or installed skill.
+ * Generates raw LLM content with no verification.
+ */
+function createGenericSkill(provider: {
+  generate(req: { system: string; prompt: string }): Promise<{ content: string }>;
+}): ToolEntry {
+  return {
+    name: "generic",
+    description: "Raw LLM generation — no matching skill available",
+    inputSchema: z.object({ prompt: z.string() }).passthrough() as z.ZodType,
+    validate: () => ({ valid: true }),
+    async generate(input: Record<string, unknown>) {
+      const prompt = (input.prompt as string) ?? "";
+      const result = await provider.generate({
+        system:
+          "You are a DevOps configuration generator. Generate production-ready configuration based on the request. Output the file content directly — no markdown fences, no explanations.",
+        prompt,
+      });
+      return { success: true, data: { content: result.content, files: {} } };
+    },
+    // No verify() — verification is intentionally skipped for generic tasks
+  } as unknown as ToolEntry;
+}
 
 interface ApplyFlags {
   autoApprove: boolean;
@@ -347,7 +373,7 @@ async function executeDryRun(
     for (const task of remainingTasks) {
       const tool = tools.find((t) => t.name === task.tool);
       if (!tool) {
-        p.log.warn(`Skipping ${pc.bold(task.id)}: module "${task.tool}" not found.`);
+        p.log.warn(`Skipping ${pc.bold(task.id)}: skill "${task.tool}" not found.`);
         continue;
       }
       await generateDryRunPreview(task, tool);
@@ -909,6 +935,18 @@ async function classifyAndProcessTask(
 
   const tool = toolMap.get(taskNode.tool);
   if (!tool?.execute) {
+    // Generic tasks: display generated content since no files will be written
+    if (taskNode.tool === "generic" && taskResult.output && !ctx.jsonOutput) {
+      const outputData = taskResult.output as Record<string, unknown>;
+      const content = (outputData?.content as string) ?? "";
+      if (content) {
+        const preview = content.length > 3000 ? content.slice(0, 3000) + "\n..." : content;
+        p.note(
+          wrapForNote(preview),
+          truncateNoteTitle(`${taskResult.taskId} — generated (unvalidated)`),
+        );
+      }
+    }
     return processNonExecutableTask(taskResult);
   }
 
@@ -1155,6 +1193,12 @@ async function executeApplyPlan(
     projectContext: projectContext || undefined,
   });
   const tools = registry.getAll();
+
+  // Inject generic skill if plan has tasks with tool="generic"
+  const hasGenericTasks = plan.tasks.some((t) => t.tool === "generic");
+  if (hasGenericTasks) {
+    tools.push(createGenericSkill(provider));
+  }
 
   if (flags.replay) {
     handleReplayValidation(plan, provider, ctx.globalOpts.model, registry, flags.force, root);

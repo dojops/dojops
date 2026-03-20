@@ -22,6 +22,7 @@ import { cliApprovalHandler } from "../approval";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
 import { buildFileTree } from "@dojops/session";
 import { emitStreamEvent } from "../stream-json";
+import { trySkillFallback } from "../skill-fallback";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 type Context7Provider = {
@@ -206,6 +207,7 @@ const SKILL_KEYWORDS: Record<string, string[]> = {
   cloudformation: ["cloudformation", "cfn", "aws template", "aws stack"],
   argocd: ["argocd", "argo cd", "gitops", "argo"],
   pulumi: ["pulumi"],
+  packer: ["packer", "machine image", "ami build", "golden image", "pkr.hcl", "vm image"],
   "otel-collector": ["opentelemetry", "otel", "collector", "telemetry"],
 };
 
@@ -1027,6 +1029,46 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
       skillDirect.skillCtx,
     );
     return;
+  }
+
+  // Intelligent skill fallback: hub search + Context7 before agent routing
+  const fallbackResult = await trySkillFallback(
+    ctx,
+    prompt,
+    writePath,
+    allowAllPaths,
+    projectRoot,
+    provider,
+    docAugmenter,
+    context7Provider,
+    projectContextStr,
+  );
+  if (fallbackResult === "handled") return;
+
+  // Hub skill was installed — retry skill matching
+  if (fallbackResult === "retry") {
+    const retrySkill = trySkillDirectPath(
+      ctx,
+      prompt,
+      projectRoot,
+      provider,
+      docAugmenter,
+      context7Provider,
+      projectContextStr,
+    );
+    if (retrySkill?.registryHasSkill) {
+      await handleSkillDirect(
+        ctx,
+        args,
+        prompt,
+        writePath,
+        allowAllPaths,
+        retrySkill.skillName,
+        retrySkill.skillCtx,
+      );
+      return;
+    }
+    // Installed skill not detected — fall through to agent routing
   }
 
   const { router } = createRouter(provider, projectRoot, docAugmenter);
