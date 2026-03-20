@@ -131,7 +131,7 @@ describe("provider command", () => {
 
       expect(consoleSpy).toHaveBeenCalledTimes(1);
       const output = JSON.parse(consoleSpy.mock.calls[0][0]);
-      expect(output).toHaveLength(6);
+      expect(output).toHaveLength(7);
       expect(output.find((p: { name: string }) => p.name === "anthropic").configured).toBe(true);
       expect(output.find((p: { name: string }) => p.name === "anthropic").default).toBe(true);
       expect(output.find((p: { name: string }) => p.name === "openai").configured).toBe(false);

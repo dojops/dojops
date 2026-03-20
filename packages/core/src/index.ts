@@ -7,6 +7,7 @@ export * from "./llm/openai";
 export * from "./llm/ollama";
 export * from "./llm/anthropic";
 export * from "./llm/deepseek";
+export * from "./llm/mistral";
 export * from "./llm/gemini";
 export * from "./llm/copilot-auth";
 export * from "./llm/github-copilot";

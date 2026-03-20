@@ -173,6 +173,18 @@ describe("factory", () => {
       expect(provider.name).toBe("noop");
     });
 
+    it("creates MistralProvider when provider=mistral", () => {
+      process.env.MISTRAL_API_KEY = "test-key";
+      const provider = createProvider({ provider: "mistral" });
+      expect(provider.name).toBe("mistral");
+    });
+
+    it("returns NoopProvider for mistral when allowMissing=true", () => {
+      delete process.env.MISTRAL_API_KEY;
+      const provider = createProvider({ provider: "mistral", allowMissing: true });
+      expect(provider.name).toBe("noop");
+    });
+
     it("returns NoopProvider for gemini when allowMissing=true", () => {
       delete process.env.GEMINI_API_KEY;
       const provider = createProvider({ provider: "gemini", allowMissing: true });

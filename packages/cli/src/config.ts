@@ -34,6 +34,7 @@ export const VALID_PROVIDERS = [
   "anthropic",
   "ollama",
   "deepseek",
+  "mistral",
   "gemini",
   "github-copilot",
 ] as const;
@@ -43,6 +44,7 @@ const TOKEN_ENV_MAP: Record<string, string> = {
   openai: "OPENAI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   deepseek: "DEEPSEEK_API_KEY",
+  mistral: "MISTRAL_API_KEY",
   gemini: "GEMINI_API_KEY",
   "github-copilot": "GITHUB_COPILOT_TOKEN",
 };

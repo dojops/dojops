@@ -139,7 +139,7 @@ Full details in the [documentation](https://doc.dojops.ai).
 @dojops/mcp            MCP server connections, tool discovery
 @dojops/context        Context7 documentation augmentation
 @dojops/session        Chat session management, memory
-@dojops/core           LLM abstraction (6 providers), 17 specialist agents
+@dojops/core           LLM abstraction (7 providers), 17 specialist agents
 @dojops/sdk            BaseSkill<T>, Zod validation, file utilities
 ```
 

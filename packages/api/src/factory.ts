@@ -3,6 +3,7 @@ import {
   OllamaProvider,
   AnthropicProvider,
   DeepSeekProvider,
+  MistralProvider,
   GeminiProvider,
   GitHubCopilotProvider,
   LLMProvider,
@@ -71,6 +72,7 @@ function buildKeyedProvider(
   > = {
     anthropic: { envVar: "ANTHROPIC_API_KEY", ctor: AnthropicProvider },
     deepseek: { envVar: "DEEPSEEK_API_KEY", ctor: DeepSeekProvider },
+    mistral: { envVar: "MISTRAL_API_KEY", ctor: MistralProvider },
     gemini: { envVar: "GEMINI_API_KEY", ctor: GeminiProvider },
   };
 
@@ -81,6 +83,7 @@ function buildKeyedProvider(
     openai: "OpenAI",
     anthropic: "Anthropic",
     deepseek: "DeepSeek",
+    mistral: "Mistral",
     gemini: "Gemini",
   };
   const displayName =

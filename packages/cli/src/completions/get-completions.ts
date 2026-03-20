@@ -1,7 +1,15 @@
 import { readdirSync } from "node:fs";
 import { join, basename, extname } from "node:path";
 
-const PROVIDERS = ["openai", "anthropic", "ollama", "deepseek", "gemini", "github-copilot"];
+const PROVIDERS = [
+  "openai",
+  "anthropic",
+  "ollama",
+  "deepseek",
+  "mistral",
+  "gemini",
+  "github-copilot",
+];
 
 /** Aliases: canonical skill name → additional completion names. */
 const SKILL_ALIASES: Record<string, string[]> = {

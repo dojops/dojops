@@ -47,7 +47,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/scanner        10 security scanners + remediation engine
 @dojops/session        Chat session management + autonomous agent loop (AgentLoop) + memory + context injection
 @dojops/context        Context7 documentation augmentation for v2 skills
-@dojops/core           LLM abstraction + 6 providers + 17 specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/core           LLM abstraction + 7 providers + 17 specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseSkill<T> abstract class with Zod validation + optional verify() + file-reader utilities
 ```
 
@@ -116,7 +116,7 @@ interface LLMProvider {
 
 The optional `generateWithTools()` method enables native tool-calling for the autonomous agent loop. OpenAI, Anthropic, and Gemini use provider-native tool-calling APIs; Ollama uses a prompt-based fallback that injects tool descriptions into the system prompt and parses structured JSON output.
 
-All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema. All 6 providers support `temperature` passthrough for deterministic reproducibility (conditionally included in API calls only when explicitly set). A `DeterministicProvider` wrapper forces `temperature: 0` on every call for replay mode (`apply --replay`). A `FallbackProvider` wraps multiple providers and automatically falls back to the next on failure (configured via `--fallback-provider` flag or `DOJOPS_FALLBACK_PROVIDER` env var). The `GitHubCopilotProvider` creates a new OpenAI client per `generate()` call to use the freshest JWT (tokens expire every ~30 min).
+All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema. All 7 providers support `temperature` passthrough for deterministic reproducibility (conditionally included in API calls only when explicitly set). A `DeterministicProvider` wrapper forces `temperature: 0` on every call for replay mode (`apply --replay`). A `FallbackProvider` wraps multiple providers and automatically falls back to the next on failure (configured via `--fallback-provider` flag or `DOJOPS_FALLBACK_PROVIDER` env var). The `GitHubCopilotProvider` creates a new OpenAI client per `generate()` call to use the freshest JWT (tokens expire every ~30 min).
 
 ### 2. Multi-Agent System (`@dojops/core`)
 

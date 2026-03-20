@@ -54,6 +54,7 @@ function collectEnvTokenLines(): string[] {
     openai: "OPENAI_API_KEY",
     anthropic: "ANTHROPIC_API_KEY",
     deepseek: "DEEPSEEK_API_KEY",
+    mistral: "MISTRAL_API_KEY",
     gemini: "GEMINI_API_KEY",
   };
   const envLines: string[] = [];
@@ -89,6 +90,7 @@ function showConfig(config: DojOpsConfig, scopePath?: string): void {
     `  openai:          ${maskToken(config.tokens?.openai)}`,
     `  anthropic:       ${maskToken(config.tokens?.anthropic)}`,
     `  deepseek:        ${maskToken(config.tokens?.deepseek)}`,
+    `  mistral:         ${maskToken(config.tokens?.mistral)}`,
     `  gemini:          ${maskToken(config.tokens?.gemini)}`,
     `  ollama:          ${pc.dim("(no token needed)")}`,
     `  github-copilot:  ${formatCopilotStatus(isProjectScope)}`,
@@ -872,6 +874,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     anthropic: "e.g. claude-sonnet-4-5-20250929",
     ollama: "e.g. llama3, mistral, codellama",
     deepseek: "e.g. deepseek-chat, deepseek-reasoner",
+    mistral: "e.g. mistral-large-latest, mistral-small-latest",
     gemini: "e.g. gemini-2.5-flash, gemini-2.5-pro",
     "github-copilot": "e.g. gpt-4o, claude-3.5-sonnet, o1-mini",
   };
