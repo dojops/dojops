@@ -50,6 +50,8 @@ context:
     - **Container hosts**: Docker/Podman install, registry auth, container deployment
     - **Cloud provisioning**: AWS/GCP/Azure resource setup via cloud modules
   bestPractices:
+    - "CRITICAL: Modules go INSIDE tasks: list, NEVER at the play level. Correct: '- hosts: all\\n  tasks:\\n    - name: Install nginx\\n      ansible.builtin.apt:\\n        name: nginx'. Wrong: '- hosts: all\\n  ansible.builtin.apt:\\n    name: nginx' — this causes 'not a valid attribute for a Play' error."
+    - "In role tasks/main.yml, write ONLY the task list (no hosts/play wrapper). Correct: '- name: Install pkg\\n  ansible.builtin.apt:\\n    name: pkg'. Wrong: '- hosts: all\\n  tasks:' — role tasks are NOT plays."
     - Use handlers for service restarts triggered by configuration changes (notify + handler)
     - Group related tasks with blocks and meaningful names
     - Use variables for environment-specific values, with defaults in defaults/main.yml

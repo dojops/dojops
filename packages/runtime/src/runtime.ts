@@ -351,6 +351,18 @@ export function isAnalysisText(content: string): boolean {
 }
 
 /**
+ * Detect whether a task's input prompt marks it as analysis-only.
+ * The planner decomposer always includes "Do NOT generate any files" in
+ * analysis task prompts (see decomposer.ts line 169). This check prevents
+ * file writing even when the LLM ignores the instruction and returns
+ * valid file content (common with JSON-format skills like Ansible).
+ */
+export function isAnalysisOnlyPrompt(input: Record<string, unknown>): boolean {
+  const prompt = typeof input.prompt === "string" ? input.prompt : "";
+  return prompt.includes("Do NOT generate any files") || prompt.includes("Analyze only");
+}
+
+/**
  * Validate generated content matches the expected format.
  * Returns an array of error messages (empty = valid).
  */
@@ -886,11 +898,11 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
 
     const { generated, isUpdate } = genResult.data as { generated: string; isUpdate: boolean };
 
-    // Analysis/text output: if the LLM returned prose (e.g. markdown analysis)
-    // instead of the expected format, return the content without validating or
-    // writing files. This handles planner "analyze" tasks that use a skill for
-    // context but produce text output, not file content.
-    if (isAnalysisText(generated)) {
+    // Analysis-only task: if the prompt explicitly says not to generate files,
+    // return the content without validating or writing. This handles planner
+    // "analyze" tasks that use a skill for context but should not write output.
+    // Also catches analysis text by format (markdown headings/bold).
+    if (isAnalysisOnlyPrompt(input) || isAnalysisText(generated)) {
       return {
         success: true,
         data: { generated, isUpdate },

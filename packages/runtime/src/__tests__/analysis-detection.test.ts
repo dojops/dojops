@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isAnalysisText, validateGeneratedContent } from "../runtime";
+import { isAnalysisText, isAnalysisOnlyPrompt, validateGeneratedContent } from "../runtime";
 
 describe("isAnalysisText", () => {
   it("detects markdown heading level 2", () => {
@@ -52,6 +52,43 @@ describe("isAnalysisText", () => {
 - **app**: Node.js/Next.js application service
   - Builds from local Dockerfile`;
     expect(isAnalysisText(bugOutput)).toBe(true);
+  });
+});
+
+describe("isAnalysisOnlyPrompt", () => {
+  it("detects decomposer analysis instruction", () => {
+    expect(
+      isAnalysisOnlyPrompt({
+        prompt:
+          "Analyze existing docker-compose.yml. Do NOT generate any files. Return your findings as plain text.",
+      }),
+    ).toBe(true);
+  });
+
+  it("detects 'Analyze only' marker", () => {
+    expect(
+      isAnalysisOnlyPrompt({ prompt: "Analyze only. Check the Ansible playbook structure." }),
+    ).toBe(true);
+  });
+
+  it("does not match generation prompts", () => {
+    expect(
+      isAnalysisOnlyPrompt({ prompt: "Create a docker-compose.yml for a Node.js app with Redis" }),
+    ).toBe(false);
+  });
+
+  it("does not match update prompts", () => {
+    expect(
+      isAnalysisOnlyPrompt({ prompt: "Update the existing Dockerfile to use multi-stage build" }),
+    ).toBe(false);
+  });
+
+  it("handles missing prompt", () => {
+    expect(isAnalysisOnlyPrompt({})).toBe(false);
+  });
+
+  it("handles non-string prompt", () => {
+    expect(isAnalysisOnlyPrompt({ prompt: 42 })).toBe(false);
   });
 });
 
