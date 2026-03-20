@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> &nbsp;&middot;&nbsp;
+  <a href="#quick-start">Quick start</a> &nbsp;&middot;&nbsp;
   <a href="#features">Features</a> &nbsp;&middot;&nbsp;
-  <a href="https://doc.dojops.ai">Documentation</a> &nbsp;&middot;&nbsp;
-  <a href="https://hub.dojops.ai">Skill Hub</a> &nbsp;&middot;&nbsp;
+  <a href="https://doc.dojops.ai">Docs</a> &nbsp;&middot;&nbsp;
+  <a href="https://hub.dojops.ai">Skill hub</a> &nbsp;&middot;&nbsp;
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -100,27 +100,27 @@ Your prompt gets routed to the right specialist agent. The LLM output is locked 
 
 ## Features
 
-**Agents and providers.** 17 specialist agents cover Terraform, Kubernetes, CI/CD, security, Docker, cloud architecture, and more. You can create custom agents with `dojops agents create`. Six LLM providers are supported: OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini, and GitHub Copilot. Switch providers mid-session with `/provider`.
+17 specialist agents cover Terraform, Kubernetes, CI/CD, security, Docker, cloud architecture, and more. You can create custom agents with `dojops agents create`. Six LLM providers are supported: OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini, and GitHub Copilot. Switch providers mid-session with `/provider`.
 
-**Skills.** 18 built-in skills for GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile, Grafana, CloudFormation, ArgoCD, Pulumi, and OpenTelemetry Collector. Write your own as `.dops v2` manifests and share them on the [DojOps Hub](https://hub.dojops.ai).
+18 built-in skills handle GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile, Grafana, CloudFormation, ArgoCD, Pulumi, and OpenTelemetry Collector. Write your own as `.dops v2` manifests and share them on the [DojOps Hub](https://hub.dojops.ai).
 
-**Autonomous agent.** `dojops auto` reads your project, plans changes, writes code, runs verification, and self-repairs on failure in an iterative tool-use loop. Run it in the background with `--background` and check results later with `dojops runs`.
+`dojops auto` reads your project, plans changes, writes code, runs verification, and self-repairs on failure in an iterative tool-use loop. Run it in the background with `--background` and check results later with `dojops runs`.
 
-**MCP integration.** Extend DojOps with external tools via the [Model Context Protocol](https://modelcontextprotocol.io). Connect any MCP server (stdio or HTTP) with `dojops mcp add` — tools are automatically discovered and available to the agent loop.
+Extend DojOps with external tools via the [Model Context Protocol](https://modelcontextprotocol.io). Connect any MCP server (stdio or HTTP) with `dojops mcp add`. Tools are automatically discovered and available to the agent loop.
 
-**Streaming and voice.** LLM responses stream to the terminal in real time. Use `--voice` to dictate prompts via local whisper.cpp (fully offline, no data leaves your machine).
+LLM responses stream to the terminal in real time. Use `--voice` to dictate prompts via local whisper.cpp, fully offline.
 
-**Planning and execution.** Complex goals get decomposed into dependency-aware task graphs with risk classification and semaphore-based parallel execution. File writes are atomic, restricted to infrastructure paths, and backed up automatically. You see a diff preview before every write. Failed plans can be resumed without re-running completed tasks.
+Complex goals get decomposed into dependency-aware task graphs with risk classification and parallel execution. File writes are atomic, restricted to infrastructure paths, and backed up automatically. You see a diff preview before every write. Failed plans can be resumed without re-running completed tasks.
 
-**Security scanning.** 10 scanners run before configs go live: Trivy, Gitleaks, Checkov, Semgrep, Hadolint, ShellCheck, npm/pip audit, SBOM generation, and license scanning. Configs are also validated by external tools (terraform validate, hadolint, kubectl dry-run) before anything is written.
+10 scanners run before configs go live: Trivy, Gitleaks, Checkov, Semgrep, Hadolint, ShellCheck, npm/pip audit, SBOM generation, and license scanning. Configs are also validated by external tools before anything is written.
 
-**Persistent memory.** DojOps remembers project context across sessions. Notes, error patterns, and task history are stored locally and automatically injected into LLM context when relevant. Toggle with `dojops memory auto`.
+DojOps remembers project context across sessions. Notes, error patterns, and task history are stored locally and automatically injected into LLM context when relevant. Toggle with `dojops memory auto`.
 
-**Audit and policy.** Every action is recorded in a hash-chained JSONL log with SHA-256 integrity verification. The policy engine controls which paths are writable, enforces timeouts and file size limits, and restricts environment variable access.
+Every action is recorded in a hash-chained JSONL log with SHA-256 integrity verification. The policy engine controls which paths are writable, enforces timeouts and file size limits, and restricts environment variable access.
 
-**API and dashboard.** 21 REST endpoints expose everything over HTTP. The web dashboard shows metrics, agents, execution history, and security findings. Run `dojops serve` to start it.
+21 REST endpoints expose everything over HTTP. The web dashboard shows metrics, agents, execution history, and security findings. Run `dojops serve` to start it.
 
-**No telemetry.** Nothing leaves your machine except requests to your chosen LLM provider.
+Nothing leaves your machine except requests to your chosen LLM provider.
 
 Full details in the [documentation](https://doc.dojops.ai).
 
