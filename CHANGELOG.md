@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-03-20
+
+### Fixed
+
+- **Scope policy rejects root-level files with `**/`glob patterns**:`matchesSinglePattern()`now handles`**/`prefix for root-level files (e.g.`**/\*.yml`matches`prometheus.yml`). Previously, skills like Prometheus and Pulumi failed with "blocked by scope policy" when writing to root-level output paths
+- **Ansible plan execution failures**: Multi-file output normalization, `.gitkeep` filtering, and directory-only path guards across runtime, binary-verifier, and safe-executor layers
+- **Analysis-only plan tasks incorrectly validated as YAML**: Tasks that produce analysis text (not config files) are now detected and skip structural validation
+- **Analysis tasks writing empty files**: Guard added to prevent file writes when task output is analysis/commentary rather than generated config
+- **`detectOutputPathPrefix` too narrow**: Broadened to strip any common non-structural first segment from LLM output keys, not just the skill name
+- **Verify files normalized before peer file merge**: Moved normalization to after `mergePeerFiles()` so peer file paths are also stripped of output prefixes
+- **`_peerFiles` lost during self-repair loop**: SafeExecutor now preserves `_peerFiles` from initial output through repair iterations
+- **Token usage not displayed after plan execution**: Removed verbose-only guard so token counts always show in non-JSON mode
+- **Token counts lost between PlannerExecutor and SafeExecutor**: `_usage` is now embedded in PlannerExecutor task output and extracted in `apply.ts` for SafeExecutor accumulation
+
+### Changed
+
+- **15 skill files hardened to v2.2.0**: Pulumi `fileFormat` corrected from `raw` to `json`; Jenkinsfile fake binary verification removed; CloudFormation `cfn-lint` verification added; scope patterns tightened for GitHub Actions, Grafana, ArgoCD, OTel Collector, Docker Compose, Systemd, and Helm; flat directory structure rules added where applicable
+- **`.gitkeep` filtered at all layers**: Normalization, validation, verification temp dirs, and binary-verifier `writeFilesToTmpDir()` all skip `.gitkeep`/`.keep` files and directory-only paths
+
 ## [1.1.5] - 2026-03-20
 
 ### Added
