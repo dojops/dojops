@@ -1056,11 +1056,15 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     peerFiles: Record<string, string>,
   ): { verifyFiles: Record<string, string> | undefined; filename: string } {
     let verifyFiles = this.tryParseVerifyFiles(rawContent);
+    const filename = verifyFiles ? "output" : derivePrimaryFilename(this.skill.frontmatter.files);
+    verifyFiles = mergePeerFiles(verifyFiles, peerFiles);
+    // Normalize AFTER merge so both current task files and peer files from
+    // prior tasks get the same prefix stripping (e.g., ansible/ → flat).
+    // Without this, peer files retain the on-disk prefix (ansible/roles/...)
+    // while current files are stripped, causing role-not-found errors.
     if (verifyFiles) {
       verifyFiles = this.normalizeVerifyFiles(verifyFiles);
     }
-    const filename = verifyFiles ? "output" : derivePrimaryFilename(this.skill.frontmatter.files);
-    verifyFiles = mergePeerFiles(verifyFiles, peerFiles);
     return { verifyFiles, filename };
   }
 
@@ -1087,20 +1091,38 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
 
   /**
    * Detect the outputPath prefix from LLM output keys.
-   * If all non-trivial keys share a common prefix that matches the skill name
-   * or a known pattern, return it for stripping.
+   * If all keys with path separators share a common first segment that isn't
+   * a structural directory (roles, group_vars, etc.), return it for stripping.
+   * This catches LLM prefixes like "ansible/", "playbooks/", "project/", etc.
    */
   private detectOutputPathPrefix(keys: string[]): string {
-    if (keys.length === 0) return "";
-    // Check if all keys share a common first segment that matches the skill name
-    const segments = keys.map((k) => k.split("/")[0]);
+    // Only consider keys that actually have a path separator
+    const keysWithSlash = keys.filter((k) => k.includes("/"));
+    if (keysWithSlash.length === 0) return "";
+
+    const segments = keysWithSlash.map((k) => k.split("/")[0]);
     const firstSegment = segments[0];
     if (!firstSegment) return "";
-    const allSharePrefix = segments.every((s) => s === firstSegment);
-    if (allSharePrefix && firstSegment === this.name) {
-      return firstSegment;
-    }
-    return "";
+
+    // All keyed paths must share the same first segment
+    if (!segments.every((s) => s === firstSegment)) return "";
+
+    // Don't strip structural directories — these are real content paths
+    const structuralDirs = new Set([
+      "roles",
+      "group_vars",
+      "host_vars",
+      "templates",
+      "handlers",
+      "defaults",
+      "tasks",
+      "vars",
+      "meta",
+      "files",
+    ]);
+    if (structuralDirs.has(firstSegment)) return "";
+
+    return firstSegment;
   }
 
   /** Attempt to parse multi-file output for verification. Returns undefined on failure. */

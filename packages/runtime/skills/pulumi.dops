@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: pulumi
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Pulumi infrastructure-as-code in TypeScript or Python"
   author: dojops
   license: MIT
@@ -12,12 +12,9 @@ meta:
 
 context:
   technology: Pulumi
-  fileFormat: raw
+  fileFormat: json
   outputGuidance: |
     Generate Pulumi infrastructure-as-code using TypeScript (preferred) or Python.
-    Output raw source code directly — do NOT wrap in JSON or code fences.
-    The output must be valid, runnable Pulumi code.
-
     For TypeScript projects, generate:
     - index.ts — Main Pulumi program with resource definitions
     - Pulumi.yaml — Project configuration (name, runtime, description)
@@ -28,8 +25,14 @@ context:
     - Pulumi.yaml — Project configuration (name, runtime: python, description)
     - requirements.txt — Python dependencies
 
-    When generating multi-file output, use JSON wrapper format:
+    Output format — always use JSON wrapper:
     { "files": { "index.ts": "...", "Pulumi.yaml": "..." } }
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key containing file paths and content.
+    - Do NOT generate .gitkeep files or empty placeholder files.
+    - FLAT structure: File keys start from project root (index.ts, Pulumi.yaml) — NEVER wrap in a subdirectory.
+    - Every file value must be non-empty source code or valid YAML.
 
     Detect the cloud provider and use case from context:
     - **AWS**: @pulumi/aws for EC2, S3, Lambda, RDS, ECS, etc.
@@ -75,7 +78,7 @@ permissions:
   network: none
 
 scope:
-  write: ["*.ts", "*.py", "Pulumi.yaml", "Pulumi.*.yaml", "requirements.txt"]
+  write: ["**/*.ts", "**/*.py", "Pulumi.yaml", "Pulumi.*.yaml", "**/requirements.txt", "**/package.json", "**/tsconfig.json"]
 
 risk:
   level: MEDIUM

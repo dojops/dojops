@@ -799,10 +799,25 @@ async function processExecutableTask(
   // (e.g., terraform validate needs all .tf files, not just the current task's output)
   const peerFiles = collectPeerFiles(taskResult.taskId, ctx);
 
-  // Pass pre-generated output from planner to avoid re-running the LLM generate phase
-  let preGenerated = taskResult.output
-    ? { success: true as const, data: taskResult.output }
-    : undefined;
+  // Pass pre-generated output from planner to avoid re-running the LLM generate phase.
+  // Extract _usage embedded by PlannerExecutor so SafeExecutor can track token counts.
+  let preGenerated:
+    | {
+        success: true;
+        data: unknown;
+        usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+      }
+    | undefined;
+  if (taskResult.output) {
+    const outputObj =
+      taskResult.output && typeof taskResult.output === "object"
+        ? (taskResult.output as Record<string, unknown>)
+        : undefined;
+    const usage = outputObj?._usage as
+      | { promptTokens: number; completionTokens: number; totalTokens: number }
+      | undefined;
+    preGenerated = { success: true as const, data: taskResult.output, usage };
+  }
 
   // Inject peer files into the pre-generated data so verify() can include them
   if (preGenerated && Object.keys(peerFiles).length > 0) {
@@ -810,7 +825,7 @@ async function processExecutableTask(
       preGenerated.data && typeof preGenerated.data === "object"
         ? { ...(preGenerated.data as Record<string, unknown>), _peerFiles: peerFiles }
         : { generated: preGenerated.data, _peerFiles: peerFiles };
-    preGenerated = { success: true as const, data };
+    preGenerated = { ...preGenerated, data };
   }
 
   const execResult = await ctx.safeExecutor.executeTask(
@@ -1246,7 +1261,7 @@ async function executeApplyPlan(
     throw new CLIError(ExitCode.GENERAL_ERROR, "Some tasks failed. Use --resume to retry.");
   }
 
-  if (ctx.globalOpts.verbose) {
+  if (!flags.jsonOutput) {
     displayTokenUsage(safeExecutor);
   }
 

@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: argocd
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate ArgoCD Application and ApplicationSet manifests"
   author: dojops
   license: MIT
@@ -77,7 +77,7 @@ permissions:
   network: none
 
 scope:
-  write: ["**/*.yaml", "**/*.yml"]
+  write: ["application.yaml", "applicationset.yaml", "appproject.yaml", "**/argocd/**/*.yaml", "**/argocd/**/*.yml"]
 
 risk:
   level: MEDIUM

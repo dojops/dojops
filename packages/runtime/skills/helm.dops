@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: helm
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Helm chart scaffolding with values, templates, and dependencies"
   author: dojops
   license: MIT
@@ -18,6 +18,12 @@ context:
     Core files: Chart.yaml (apiVersion: v2), values.yaml, templates/deployment.yaml, templates/service.yaml, templates/_helpers.tpl.
     Add templates/ingress.yaml, serviceaccount.yaml, hpa.yaml, configmap.yaml, NOTES.txt, or tests/ only when relevant.
     Do NOT output raw YAML — always use the JSON wrapper.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - FLAT structure: All keys start from chart root (Chart.yaml, values.yaml, templates/...) — NEVER wrap in mychart/ or helm/ subfolder.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty valid YAML, TOML, or template content.
   bestPractices:
     - Use apiVersion v2 in Chart.yaml with proper type (application or library)
     - Define sensible defaults in values.yaml that work out of the box for local development
@@ -84,7 +90,7 @@ permissions:
   network: none
 
 scope:
-  write: ["**/*.yaml", "**/*.yml", "**/*.tpl", "**/*.txt"]
+  write: ["**/*.yaml", "**/*.yml", "**/*.tpl", "**/*.txt", "**/*.json"]
 
 risk:
   level: MEDIUM

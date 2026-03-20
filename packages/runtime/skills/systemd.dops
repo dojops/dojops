@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: systemd
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate systemd service unit files"
   author: dojops
   license: MIT
@@ -62,7 +62,7 @@ permissions:
   network: none
 
 scope:
-  write: ["*.service"]
+  write: ["*.service", "*.timer", "*.socket"]
 
 risk:
   level: MEDIUM

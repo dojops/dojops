@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: prometheus
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Prometheus monitoring configurations with alerting and recording rules"
   author: dojops
   license: MIT
@@ -23,6 +23,12 @@ context:
       - alertmanager.yml — Alertmanager routing, receivers, inhibition rules (when alerting is requested)
     Each file content must be valid YAML that Prometheus/Alertmanager can parse.
     Do NOT output raw YAML — use the JSON wrapper to enable multi-file output.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key. Each value must be valid YAML content.
+    - FLAT structure: All files at output root (prometheus.yml, alert-rules.yml) — NEVER wrap in prometheus/ subfolder.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty valid YAML.
 
     Detect monitoring target from context:
     - **Application monitoring**: HTTP request rate/duration/errors, custom app metrics endpoints

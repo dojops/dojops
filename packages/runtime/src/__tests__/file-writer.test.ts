@@ -206,6 +206,26 @@ describe("matchesScopePattern", () => {
     );
     expect(result).toBe(true);
   });
+
+  it("matches **/*.ext against root-level files", () => {
+    expect(matchesScopePattern("prometheus.yml", ["**/*.yml"], {})).toBe(true);
+    expect(matchesScopePattern("index.ts", ["**/*.ts"], {})).toBe(true);
+  });
+
+  it("matches **/*.ext against nested files", () => {
+    expect(matchesScopePattern("subdir/config.yml", ["**/*.yml"], {})).toBe(true);
+    expect(matchesScopePattern("src/utils/index.ts", ["**/*.ts"], {})).toBe(true);
+  });
+
+  it("rejects **/*.ext for wrong extension", () => {
+    expect(matchesScopePattern("config.json", ["**/*.yml"], {})).toBe(false);
+    expect(matchesScopePattern("main.py", ["**/*.ts"], {})).toBe(false);
+  });
+
+  it("matches **/exact-name against root-level file", () => {
+    expect(matchesScopePattern("Pulumi.yaml", ["**/Pulumi.yaml"], {})).toBe(true);
+    expect(matchesScopePattern("Pulumi.yaml", ["Pulumi.yaml"], {})).toBe(true);
+  });
 });
 
 describe("writeFiles with scope enforcement", () => {

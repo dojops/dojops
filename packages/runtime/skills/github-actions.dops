@@ -59,6 +59,12 @@ context:
     Keep existing jobs/triggers, add or change only what the user requests.
     The JSON key MUST match the existing file path.
 
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty placeholder files.
+    - File keys must start with .github/workflows/ — NEVER wrap in an additional subdirectory.
+    - Every file value must be non-empty valid YAML.
+
     === RULES ===
     - The JSON key is the EXACT file path where the file will be written — choose it carefully based on the type
     - For composite actions: key = ".github/actions/<name>/action.yml" — NOT ".github/workflows/..."
@@ -161,7 +167,7 @@ permissions:
   network: none
 
 scope:
-  write: ["**/*.yml", "**/*.yaml"]
+  write: [".github/**/*.yml", ".github/**/*.yaml"]
 
 risk:
   level: LOW

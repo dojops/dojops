@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: kubernetes
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Kubernetes deployment manifests"
   author: dojops
   license: MIT
@@ -33,6 +33,8 @@ context:
     - Readiness and liveness probes
     - Security context (non-root, read-only filesystem when possible)
     - Standard labels (app.kubernetes.io/name, instance, version, component)
+
+    Output ALL resources in a single file as multi-document YAML separated by ---. Do NOT split into multiple files.
   bestPractices:
     - Set resource requests and limits for all containers (prevents noisy-neighbor issues)
     - Use readiness and liveness probes for health checking (httpGet, tcpSocket, or exec)

@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: cloudformation
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate AWS CloudFormation YAML templates"
   author: dojops
   license: MIT
@@ -65,10 +65,15 @@ verification:
     - path: "Resources"
       required: true
       message: "CloudFormation template must define at least one resource"
+  binary:
+    command: "cfn-lint {entryFile}"
+    parser: generic-stderr
+    timeout: 30000
+    cwd: output
 
 permissions:
   filesystem: write
-  child_process: none
+  child_process: required
   network: none
 
 scope:

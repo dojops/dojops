@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: grafana
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Grafana dashboard JSON configurations"
   author: dojops
   license: MIT
@@ -31,6 +31,8 @@ context:
     - **Kubernetes**: Pod resource usage, node capacity, deployment health
     - **Database**: Query latency, connections, cache hit ratio, replication lag
     - **Business metrics**: Custom application KPIs with stat panels
+
+    Output ONLY the raw Grafana dashboard JSON object — no code fences, no "files" wrapper, no markdown. Start directly with {.
   bestPractices:
     - Organize panels into logical rows with descriptive titles
     - Use template variables for datasource, namespace, and instance selection
@@ -72,7 +74,7 @@ permissions:
   network: none
 
 scope:
-  write: ["**/*.json"]
+  write: ["dashboard.json", "**/dashboards/*.json", "**/grafana/*.json"]
 
 risk:
   level: LOW

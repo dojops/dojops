@@ -286,7 +286,12 @@ export class PlannerExecutor {
           ])
         : await generatePromise;
       if (output.success) {
-        this.recordResult(task, "completed", results, failed, undefined, output.data);
+        // Embed usage in data so SafeExecutor can accumulate token counts
+        const data =
+          output.usage && output.data && typeof output.data === "object"
+            ? { ...(output.data as Record<string, unknown>), _usage: output.usage }
+            : output.data;
+        this.recordResult(task, "completed", results, failed, undefined, data);
       } else {
         this.recordResult(task, "failed", results, failed, output.error);
       }

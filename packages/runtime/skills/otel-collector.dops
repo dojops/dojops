@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: otel-collector
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate OpenTelemetry Collector configuration"
   author: dojops
   license: MIT
@@ -75,7 +75,7 @@ permissions:
   network: none
 
 scope:
-  write: ["**/*.yaml", "**/*.yml"]
+  write: ["otel-collector-config.yaml", "**/otel-collector*.yaml", "**/otel-collector*.yml", "**/otel*.yaml"]
 
 risk:
   level: LOW

@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: jenkinsfile
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Jenkins pipeline configurations, shared libraries, and Groovy pipeline code"
   author: dojops
   license: MIT
@@ -32,6 +32,12 @@ context:
 
     Always output a JSON object with "files" key. Each value must be valid Groovy/Jenkinsfile content.
     Do NOT output raw Groovy — use the JSON wrapper for all output modes.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - FLAT structure: Jenkinsfile at root, shared libraries in vars/ and src/ — NEVER wrap in jenkins/ or pipeline/ subfolder.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty Groovy or YAML content.
 
     Detect project type from context to customize the pipeline:
     - **Java/Maven**: Use `mvn` commands, tools block with Maven/JDK, archiveArtifacts for JARs/WARs
@@ -84,13 +90,6 @@ files:
 detection:
   paths: ["Jenkinsfile", "vars/*.groovy", "src/**/*.groovy"]
   updateMode: true
-
-verification:
-  binary:
-    command: "npx @jenkins-cd/js-builder lint {entryFile} || true"
-    parser: generic-stderr
-    timeout: 30000
-    cwd: output
 
 permissions:
   filesystem: write

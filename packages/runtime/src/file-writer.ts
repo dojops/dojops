@@ -346,6 +346,16 @@ function matchesSinglePattern(normalizedResolved: string, normalizedExpanded: st
     return normalizedResolved.startsWith(prefix + "/") || normalizedResolved === prefix;
   }
 
+  // **/ prefix means "at any depth including root".
+  // For root-level files (no directory separator), strip the **/ and match remainder directly.
+  if (normalizedExpanded.startsWith("**/") && !normalizedResolved.includes("/")) {
+    const remainder = normalizedExpanded.slice(3);
+    if (remainder.includes("*")) {
+      return matchGlobPattern(normalizedResolved, remainder);
+    }
+    return normalizedResolved === remainder;
+  }
+
   if (normalizedExpanded.includes("*")) {
     return matchGlobPattern(normalizedResolved, normalizedExpanded);
   }

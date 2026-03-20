@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: dockerfile
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate multi-stage Dockerfiles and .dockerignore files"
   author: dojops
   license: MIT
@@ -18,6 +18,11 @@ context:
     Format: { "files": { "Dockerfile": "FROM ...", ".dockerignore": "node_modules\n.git\n..." } }
     Always include both Dockerfile and .dockerignore.
     Do NOT output raw Dockerfile — use the JSON wrapper for multi-file output.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - ALWAYS use exactly "Dockerfile" (capital D) as the key — never "dockerfile" or "docker/Dockerfile".
+    - Do NOT generate .gitkeep files, directory-only paths, or empty content.
 
     Detect the project type from context and generate the appropriate Dockerfile:
     - **Node.js**: node:20-slim base, COPY package*.json first, npm ci --omit=dev, multi-stage

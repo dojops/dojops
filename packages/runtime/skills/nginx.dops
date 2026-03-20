@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: nginx
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Nginx web server and reverse proxy configurations"
   author: dojops
   license: MIT
@@ -41,6 +41,7 @@ context:
     - Use rate limiting (limit_req_zone, limit_req) to protect against abuse
     - For WebSocket, use map $http_upgrade $connection_upgrade pattern
     - Set client_max_body_size appropriate to the application (default 1m is often too small)
+    - "CRITICAL: ALWAYS include a complete top-level nginx.conf with worker_processes, events { }, and http { } blocks — nginx -t requires valid top-level structure."
   context7Libraries:
     - name: nginx
       query: "Nginx configuration reverse proxy upstream, SSL/TLS termination certificates, server blocks location, load balancing, rate limiting limit_req_zone, WebSocket proxy upgrade, security headers, gzip compression"

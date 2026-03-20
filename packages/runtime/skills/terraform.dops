@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: terraform
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Terraform infrastructure-as-code configurations"
   author: dojops
   license: MIT
@@ -28,6 +28,12 @@ context:
       - locals.tf — local values and computed expressions
       - backend.tf — backend configuration (S3, GCS, etc.)
     Do NOT output raw HCL — use the JSON wrapper format for multi-file output.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - FLAT structure: All keys at root level (main.tf, variables.tf) — NEVER wrap in terraform/ or project/ subfolder.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty valid HCL content.
   bestPractices:
     - Pin provider versions using pessimistic constraint (~>) to prevent breaking changes
     - Use variables for all environment-specific values
@@ -84,7 +90,7 @@ permissions:
   network: none
 
 scope:
-  write: ["*.tf", "**/*.tf"]
+  write: ["**/*.tf", "**/*.tfvars"]
 
 risk:
   level: MEDIUM
