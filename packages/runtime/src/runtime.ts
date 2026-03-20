@@ -333,6 +333,24 @@ export function validateGeneratedPaths(filePaths: string[]): string[] {
 }
 
 /**
+ * Detect whether LLM output is analysis/prose text rather than file content.
+ * This handles planner "analyze" tasks where the LLM returns markdown findings
+ * instead of the expected format (YAML, JSON, HCL, etc.).
+ *
+ * Uses conservative heuristics: only markdown heading level 2+ (##) which
+ * never appears at the start of valid YAML/JSON/HCL/Terraform/INI output.
+ * Single # is NOT matched because it overlaps with YAML comments.
+ */
+export function isAnalysisText(content: string): boolean {
+  const trimmed = content.trimStart();
+  // Markdown heading level 2+ (##, ###, etc.) — not valid document start in any config format
+  if (/^#{2,6}\s/.test(trimmed)) return true;
+  // Markdown bold at the start (**Analysis**, **Summary**, etc.)
+  if (/^\*\*[^*]+\*\*/.test(trimmed)) return true;
+  return false;
+}
+
+/**
  * Validate generated content matches the expected format.
  * Returns an array of error messages (empty = valid).
  */
@@ -867,6 +885,18 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     if (!genResult.success || !genResult.data) return genResult;
 
     const { generated, isUpdate } = genResult.data as { generated: string; isUpdate: boolean };
+
+    // Analysis/text output: if the LLM returned prose (e.g. markdown analysis)
+    // instead of the expected format, return the content without validating or
+    // writing files. This handles planner "analyze" tasks that use a skill for
+    // context but produce text output, not file content.
+    if (isAnalysisText(generated)) {
+      return {
+        success: true,
+        data: { generated, isUpdate },
+        usage: genResult.usage,
+      };
+    }
 
     // Post-generation validation: check paths and content format before writing
     const validationError = this.validateGeneratedOutput(generated);
