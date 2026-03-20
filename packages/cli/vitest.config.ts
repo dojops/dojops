@@ -8,6 +8,7 @@ export default defineConfig({
       ...defaultExclude,
       "**/e2e.test.ts",
       "**/*.e2e.test.ts",
+      "**/e2e-*.test.ts",
       "**/smoke.test.ts",
       "**/*.smoke.test.ts",
     ],

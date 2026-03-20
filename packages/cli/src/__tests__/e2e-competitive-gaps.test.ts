@@ -88,9 +88,8 @@ function dojopsFull(
 // ── Setup ────────────────────────────────────────────────────────────
 
 beforeAll(() => {
-  // Skip setup when test repo is not available (e.g. CI)
-  if (!fs.existsSync(TEST_REPO)) return;
-
+  // Ensure the test repo exists
+  expect(fs.existsSync(TEST_REPO)).toBe(true);
   expect(fs.existsSync(path.join(TEST_REPO, "package.json"))).toBe(true);
 
   // Ensure CLI is built
