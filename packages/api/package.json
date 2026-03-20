@@ -1,6 +1,6 @@
 {
   "name": "@dojops/api",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "REST API server and web dashboard for DojOps DevOps agent",
   "license": "MIT",
   "repository": {

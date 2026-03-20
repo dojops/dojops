@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-03-20
+
 ### Added
 
 - **5 new built-in skills**: Pulumi (`pulumi.dops`), ArgoCD (`argocd.dops`), CloudFormation (`cloudformation.dops`), Grafana (`grafana.dops`), OpenTelemetry Collector (`otel-collector.dops`) — total built-in skills now 18
