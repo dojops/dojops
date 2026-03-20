@@ -444,6 +444,21 @@ export class SafeExecutor {
         return { repaired: false, earlyResult: regenResult.result };
       }
       generateOutput = regenResult.output;
+      // Preserve _peerFiles from the initial output so verification can find
+      // files written by prior tasks (e.g., role files needed by a playbook task)
+      if (
+        generateOutput.data &&
+        typeof generateOutput.data === "object" &&
+        initialOutput.data &&
+        typeof initialOutput.data === "object" &&
+        "_peerFiles" in (initialOutput.data as Record<string, unknown>)
+      ) {
+        const dataObj = generateOutput.data as Record<string, unknown>;
+        const initObj = initialOutput.data as Record<string, unknown>;
+        if (!("_peerFiles" in dataObj)) {
+          (generateOutput.data as Record<string, unknown>)._peerFiles = initObj._peerFiles;
+        }
+      }
       verifyResult = await this.runVerification(tool, generateOutput, meta);
       retries++;
     }

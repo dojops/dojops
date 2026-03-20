@@ -59,10 +59,12 @@ class TTYProgressReporter implements ProgressReporter {
   private currentStep = "";
   private spinnerIndex = 0;
   private spinnerTimer: ReturnType<typeof setInterval> | null = null;
+  private descriptions = new Map<string, string>();
 
   constructor(private readonly total: number) {}
 
   start(stepId: string, description: string): void {
+    this.descriptions.set(stepId, description);
     this.currentStep = `${stepId}: ${description}`;
     this.render();
     this.startSpinner();
@@ -74,15 +76,19 @@ class TTYProgressReporter implements ProgressReporter {
     this.completed++;
     const pct = Math.round((this.completed / this.total) * 100);
     const pctLabel = pc.dim("(" + pct + "%)");
-    console.log(`  ${pc.green("✓")} ${pc.blue(stepId)} ${pctLabel}`);
+    const desc = this.descriptions.get(stepId);
+    const descLabel = desc ? pc.dim(": " + desc) : "";
+    console.log(`  ${pc.green("✓")} ${pc.blue(stepId)}${descLabel} ${pctLabel}`);
   }
 
   fail(stepId: string, error?: string): void {
     this.stopSpinner();
     this.clearLine();
     this.completed++;
+    const desc = this.descriptions.get(stepId);
+    const descLabel = desc ? pc.dim(": " + desc) : "";
     const suffix = error ? " " + pc.dim(error) : "";
-    console.log(`  ${pc.red("✗")} ${pc.blue(stepId)}${suffix}`);
+    console.log(`  ${pc.red("✗")} ${pc.blue(stepId)}${descLabel}${suffix}`);
   }
 
   done(): void {

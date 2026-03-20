@@ -128,11 +128,14 @@ function parsePlanArgs(
   autoApprove: boolean;
   skipVerify: boolean;
   useVoice: boolean;
+  timeout: string | undefined;
 } {
   const executeMode = hasFlag(args, "--execute");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const skipVerify = hasFlag(args, "--skip-verify");
   const useVoice = hasFlag(args, "--voice");
+  // Capture --timeout before stripFlags removes it
+  const timeout = extractFlagValue(args, "--timeout");
   const inlinePrompt = stripFlags(
     args,
     new Set(["--execute", "--yes", "--skip-verify", "--force", "--allow-all-paths", "--voice"]),
@@ -146,7 +149,7 @@ function parsePlanArgs(
     prompt = inlinePrompt ? `${inlinePrompt}\n\n${fileContent}` : fileContent;
   }
 
-  return { prompt, executeMode, autoApprove, skipVerify, useVoice };
+  return { prompt, executeMode, autoApprove, skipVerify, useVoice, timeout };
 }
 
 /** Filter modules to a single module if --module flag is set. */
@@ -256,6 +259,7 @@ async function delegateToApply(
   autoApprove: boolean,
   skipVerify: boolean,
   ctx: CLIContext,
+  timeout?: string,
 ): Promise<void> {
   const { applyCommand } = await import("./apply");
   const applyArgs = [planId];
@@ -265,6 +269,7 @@ async function delegateToApply(
   if (hasFlag(args, "--allow-all-paths")) applyArgs.push("--allow-all-paths");
   const repairAttempts = extractFlagValue(args, "--repair-attempts");
   if (repairAttempts) applyArgs.push("--repair-attempts", repairAttempts);
+  if (timeout) applyArgs.push("--timeout", timeout);
   return applyCommand(applyArgs, ctx);
 }
 
@@ -308,6 +313,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     autoApprove,
     skipVerify,
     useVoice,
+    timeout,
   } = parsePlanArgs(args, ctx);
 
   let prompt = textPrompt;
@@ -355,7 +361,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   enrichTasksWithMetadata(graph, registry);
   if (!isJson) displayTaskGraph(graph);
 
-  if (ctx.globalOpts.dryRun) {
+  if (ctx.globalOpts.dryRun && !executeMode) {
     if (!isJson) {
       p.log.info(`${pc.yellow("[dry-run]")} Plan not saved — preview only.`);
     }
@@ -367,7 +373,9 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   const startTime = Date.now();
 
   if (executeMode) {
-    return delegateToApply(planId, args, autoApprove, skipVerify, ctx);
+    // --dry-run with --execute: save plan, then delegate to apply's dry-run
+    // which generates output previews without writing files
+    return delegateToApply(planId, args, autoApprove, skipVerify, ctx, timeout);
   }
 
   await appendAudit(root, {

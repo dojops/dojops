@@ -739,6 +739,10 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     const outputPath = typeof input.outputPath === "string" ? input.outputPath : "";
     const normalized: Record<string, string> = {};
     for (const [key, val] of Object.entries(fileContents)) {
+      // Silently discard placeholder files (.gitkeep, .keep) — directories are
+      // auto-created when actual content files are written. LLMs sometimes generate
+      // these despite instructions, so filtering here prevents scope/validation errors.
+      if (/\.(gitkeep|keep)$/.test(key)) continue;
       normalized[stripOutputPrefix(key, outputPath)] = val;
     }
     return normalized;
@@ -874,6 +878,9 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
   ): void {
     if (!normalizedContents) return;
 
+    // If all LLM keys were filtered (e.g., only .gitkeep files), treat as no-op
+    if (Object.keys(normalizedContents).length === 0) return;
+
     const hasOutput =
       tracker.filesWritten.length > 0 ||
       tracker.filesModified.length > 0 ||
@@ -961,6 +968,8 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     }
 
     for (const [fp, content] of Object.entries(fileContents)) {
+      // Placeholder files (.gitkeep, .keep) are intentionally empty
+      if (/\.(gitkeep|keep)$/.test(fp)) continue;
       const isEmpty = !content || content.trim().length === 0;
       if (isEmpty) {
         return failedOutput(new Error(`Content validation failed: Empty content for ${fp}`));
@@ -1037,15 +1046,61 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
    * Resolve verification files and filename for binary verification.
    * For multi-file modules, parses the JSON wrapper. For single-file, derives filename
    * from the primary file spec.
+   *
+   * Normalizes LLM output keys: strips outputPath prefix (LLMs sometimes wrap files
+   * in a subdirectory matching the skill name) and filters out directory-only paths
+   * and .gitkeep placeholders that would break the verifier.
    */
   private resolveVerifyFilesAndFilename(
     rawContent: string,
     peerFiles: Record<string, string>,
   ): { verifyFiles: Record<string, string> | undefined; filename: string } {
     let verifyFiles = this.tryParseVerifyFiles(rawContent);
+    if (verifyFiles) {
+      verifyFiles = this.normalizeVerifyFiles(verifyFiles);
+    }
     const filename = verifyFiles ? "output" : derivePrimaryFilename(this.skill.frontmatter.files);
     verifyFiles = mergePeerFiles(verifyFiles, peerFiles);
     return { verifyFiles, filename };
+  }
+
+  /**
+   * Normalize verify file keys: strip outputPath prefix, remove .gitkeep placeholders,
+   * and filter directory-only paths (keys ending in "/" or with no file extension).
+   */
+  private normalizeVerifyFiles(files: Record<string, string>): Record<string, string> {
+    // Detect common outputPath prefix from file spec paths (e.g., "ansible" from "{outputPath}/site.yml")
+    const outputPath = this.detectOutputPathPrefix(Object.keys(files));
+    const normalized: Record<string, string> = {};
+    for (const [key, val] of Object.entries(files)) {
+      // Skip .gitkeep / .keep placeholders
+      if (/\.(gitkeep|keep)$/.test(key)) continue;
+      // Skip directory-only paths (trailing slash, no actual file)
+      if (key.endsWith("/")) continue;
+      const stripped = stripOutputPrefix(key, outputPath);
+      // Skip if stripping resulted in empty path
+      if (!stripped) continue;
+      normalized[stripped] = val;
+    }
+    return normalized;
+  }
+
+  /**
+   * Detect the outputPath prefix from LLM output keys.
+   * If all non-trivial keys share a common prefix that matches the skill name
+   * or a known pattern, return it for stripping.
+   */
+  private detectOutputPathPrefix(keys: string[]): string {
+    if (keys.length === 0) return "";
+    // Check if all keys share a common first segment that matches the skill name
+    const segments = keys.map((k) => k.split("/")[0]);
+    const firstSegment = segments[0];
+    if (!firstSegment) return "";
+    const allSharePrefix = segments.every((s) => s === firstSegment);
+    if (allSharePrefix && firstSegment === this.name) {
+      return firstSegment;
+    }
+    return "";
   }
 
   /** Attempt to parse multi-file output for verification. Returns undefined on failure. */

@@ -175,6 +175,10 @@ function writeFilesToTmpDir(
 ): void {
   if (files && Object.keys(files).length > 0) {
     for (const [fname, fcontent] of Object.entries(files)) {
+      // Skip directory-only paths (trailing /) — these cause EISDIR errors
+      if (fname.endsWith("/")) continue;
+      // Skip .gitkeep/.keep placeholders
+      if (/\.(gitkeep|keep)$/.test(fname)) continue;
       const filePath = path.join(tmpDir, fname);
       const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -276,6 +280,8 @@ const NON_ENTRY_PATTERNS = [
   /\bvars\//,
   /\bmeta\//,
   /\.(j2|cfg|ini)$/,
+  /\broles\//, // Role files (tasks, handlers, etc.) are not standalone playbooks
+  /\.gitkeep$/,
 ];
 
 /** Check whether a filename is a non-entry file (inventory, vars, templates, etc.). */

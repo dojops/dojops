@@ -596,18 +596,6 @@ function createExecutorWithCallbacks(
   return { executor, progress };
 }
 
-/** Detect tasks that should skip verification (analysis-only or documentation tasks). */
-const ANALYSIS_PATTERNS = [
-  /\banalyze\b/i,
-  /\banalysis\b/i,
-  /\binspect\b/i,
-  /\breview\b/i,
-  /\bcheck\b/i,
-  /\baudit\b/i,
-  /\bdo not generate\b/i,
-  /\bdon'?t generate\b/i,
-];
-
 /** Documentation files that no DevOps tool can generate — they always fail verification. */
 const DOC_FILE_PATTERNS = [
   /\breadme\b/i,
@@ -620,10 +608,10 @@ const DOC_FILE_PATTERNS = [
 
 function isAnalysisTask(description: string, prompt?: string): boolean {
   const text = `${description} ${prompt ?? ""}`;
-  return (
-    ANALYSIS_PATTERNS.some((p) => p.test(text)) &&
-    /\bdo\s+not\b.*\b(generate|create|write)\b/i.test(text)
-  );
+  // Match decomposer convention: "Do NOT generate any files" (exact phrase)
+  if (/do\s+not\s+generate\s+any\s+files/i.test(text)) return true;
+  if (/\banalyze\s+only\b/i.test(text)) return true;
+  return false;
 }
 
 function isDocumentationTask(description: string, prompt?: string): boolean {
@@ -645,13 +633,14 @@ async function buildToolMetadata(
     metadata.risk = classifyTaskRisk({ tool: taskDef.tool, description: taskDef.description });
     // Skip verification for analysis-only or documentation tasks
     // (analysis produces text, docs produce markdown — neither can pass tool-specific validators)
-    // But never skip for known module tools — they always produce valid tool output
     const prompt = taskDef.input?.prompt as string | undefined;
-    if (
-      !KNOWN_MODULE_TOOLS.has(taskDef.tool) &&
-      (isAnalysisTask(taskDef.description, prompt) ||
-        isDocumentationTask(taskDef.description, prompt))
-    ) {
+    // Analysis tasks skip verification even for known tools — they produce prose, not config files
+    if (isAnalysisTask(taskDef.description, prompt)) {
+      metadata.skipVerification = true;
+    }
+    // Documentation tasks skip verification only for non-tool tasks
+    // (a Helm chart mentioning README.md is not a "documentation task")
+    if (!KNOWN_MODULE_TOOLS.has(taskDef.tool) && isDocumentationTask(taskDef.description, prompt)) {
       metadata.skipVerification = true;
     }
   }
@@ -769,6 +758,7 @@ function processNonExecutableTask(taskResult: {
 }
 
 interface ApplyContext {
+  root: string;
   plan: PlanState;
   safeExecutor: SafeExecutor;
   allFilesCreated: string[];
@@ -780,11 +770,14 @@ interface ApplyContext {
 /** Collect files written by completed same-tool tasks for cross-task verification context. */
 function collectPeerFiles(taskId: string, ctx: ApplyContext): Record<string, string> {
   const peers: Record<string, string> = {};
-  // Read files already written to disk by prior tasks (e.g., other .tf files)
+  const root = ctx.root;
+  // Read files already written to disk by prior tasks (e.g., other .tf files, role directories)
+  // Preserve relative paths so the verification temp dir mirrors the project structure
+  // (e.g., ansible roles at roles/common/tasks/main.yml, not flattened to main.yml)
   for (const filePath of ctx.allFilesCreated) {
     try {
-      const basename = path.basename(filePath);
-      peers[basename] = fs.readFileSync(filePath, "utf-8");
+      const absPath = path.isAbsolute(filePath) ? filePath : path.join(root, filePath);
+      peers[filePath] = fs.readFileSync(absPath, "utf-8");
     } catch {
       // File may have been cleaned up or moved — skip
     }
@@ -906,6 +899,20 @@ async function classifyAndProcessTask(
 
   if (shouldSkipDocTask(taskResult, ctx.plan, ctx.jsonOutput)) {
     return { taskId: taskResult.taskId, status: "completed", output: taskResult.output };
+  }
+
+  // Analysis tasks produce prose, not config files — skip execution (file writing)
+  const taskDef = ctx.plan.tasks.find((t) => t.id === taskResult.taskId);
+  if (taskDef) {
+    const taskPrompt = taskDef.input?.prompt as string | undefined;
+    if (isAnalysisTask(taskDef.description, taskPrompt)) {
+      if (!ctx.jsonOutput) {
+        p.log.info(
+          `${pc.dim("○")} ${pc.bold(taskResult.taskId)} ${pc.dim("skipped (analysis-only task)")}`,
+        );
+      }
+      return { taskId: taskResult.taskId, status: "completed", output: taskResult.output };
+    }
   }
 
   return processExecutableTask(taskResult, taskNode, tool, ctx);
@@ -1201,6 +1208,7 @@ async function executeApplyPlan(
   progress?.done();
 
   const applyCtx: ApplyContext = {
+    root,
     plan,
     safeExecutor,
     allFilesCreated: [],

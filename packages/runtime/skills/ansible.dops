@@ -4,7 +4,7 @@ kind: tool
 
 meta:
   name: ansible
-  version: 2.1.0
+  version: 2.2.0
   description: "Generate Ansible playbooks, roles, and inventory for configuration management"
   author: dojops
   license: MIT
@@ -17,19 +17,20 @@ context:
     Analyze the user's request to determine what to generate:
 
     1. **Simple playbook** (default): Single playbook.yml with all tasks inline.
-       Output format: { "files": { "playbook.yml": "---\n- hosts: all\n  tasks: ..." } }
+       Output format: { "files": { "playbook.yml": "---\n- hosts: all\n  tasks:\n    - name: Install nginx\n      ansible.builtin.apt:\n        name: nginx" } }
 
     2. **Playbook + inventory**: When the user specifies hosts, environments, or infrastructure targets.
        Output format: { "files": { "playbook.yml": "...", "inventory.yml": "..." } }
 
     3. **Role-based project**: When the user asks for a role, reusable automation, or structured project.
        Output format: { "files": {
-         "site.yml": "---\n- hosts: all\n  roles:\n    - common",
-         "roles/common/tasks/main.yml": "...",
-         "roles/common/handlers/main.yml": "...",
-         "roles/common/templates/config.j2": "...",
-         "roles/common/defaults/main.yml": "...",
-         "roles/common/meta/main.yml": "..."
+         "site.yml": "---\n- hosts: all\n  become: true\n  roles:\n    - common\n    - appname",
+         "roles/common/tasks/main.yml": "---\n- name: Update apt cache\n  ansible.builtin.apt:\n    update_cache: true",
+         "roles/common/handlers/main.yml": "---\n[]",
+         "roles/common/defaults/main.yml": "---\ncommon_packages:\n  - curl\n  - git",
+         "roles/appname/tasks/main.yml": "---\n- name: Install app\n  ansible.builtin.apt:\n    name: \"{{ app_package }}\"",
+         "roles/appname/defaults/main.yml": "---\napp_package: myapp",
+         "inventory.yml": "---\nall:\n  hosts:\n    server1:\n      ansible_host: 192.168.1.10"
        } }
 
     4. **Multi-playbook project**: For complex setups with separate plays for different server groups.
@@ -39,8 +40,14 @@ context:
          "inventory.yml": "...", "group_vars/all.yml": "..."
        } }
 
-    Always output a JSON object with "files" key. Each value must be valid YAML.
-    Do NOT output raw YAML — use the JSON wrapper for all output modes.
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key. Each value must be valid YAML content.
+    - Do NOT output raw YAML — use the JSON wrapper for all output modes.
+    - Do NOT generate .gitkeep files or empty placeholder files. Only generate files with actual content.
+    - All inventory files MUST use .yml extension (e.g., "inventory.yml", not "inventory/hosts").
+    - Role names are dynamic — use the actual role name, not always "common".
+    - Every file value must be non-empty valid YAML.
+    - FLAT directory structure: All top-level files (site.yml, playbook.yml, inventory.yml) go at the output ROOT, NOT inside subdirectories. NEVER create a "playbooks/" or "ansible/" wrapper folder. Correct: "site.yml", "roles/common/tasks/main.yml". WRONG: "playbooks/site.yml", "ansible/roles/common/tasks/main.yml".
 
     Detect the automation target from context:
     - **Web servers**: Apache/Nginx installation, SSL/TLS setup, vhost configuration
@@ -50,8 +57,8 @@ context:
     - **Container hosts**: Docker/Podman install, registry auth, container deployment
     - **Cloud provisioning**: AWS/GCP/Azure resource setup via cloud modules
   bestPractices:
-    - "CRITICAL: Modules go INSIDE tasks: list, NEVER at the play level. Correct: '- hosts: all\\n  tasks:\\n    - name: Install nginx\\n      ansible.builtin.apt:\\n        name: nginx'. Wrong: '- hosts: all\\n  ansible.builtin.apt:\\n    name: nginx' — this causes 'not a valid attribute for a Play' error."
-    - "In role tasks/main.yml, write ONLY the task list (no hosts/play wrapper). Correct: '- name: Install pkg\\n  ansible.builtin.apt:\\n    name: pkg'. Wrong: '- hosts: all\\n  tasks:' — role tasks are NOT plays."
+    - "CRITICAL: In role task files (roles/*/tasks/main.yml), write ONLY the task list — NO play-level keys (hosts, become, etc.). Correct role task file: '---\\n- name: Install nginx\\n  ansible.builtin.apt:\\n    name: nginx\\n    state: present'. WRONG role task file: '---\\n- hosts: all\\n  tasks:\\n    - name: Install nginx' — role tasks are NOT plays."
+    - "CRITICAL: Modules go INSIDE tasks: list, NEVER at the play level. Correct play: '- hosts: all\\n  tasks:\\n    - name: Install nginx\\n      ansible.builtin.apt:\\n        name: nginx'. WRONG: '- hosts: all\\n  ansible.builtin.apt:\\n    name: nginx' — this causes 'not a valid attribute for a Play' error."
     - Use handlers for service restarts triggered by configuration changes (notify + handler)
     - Group related tasks with blocks and meaningful names
     - Use variables for environment-specific values, with defaults in defaults/main.yml
@@ -83,21 +90,6 @@ files:
   - path: "{outputPath}/group_vars/all.yml"
     format: raw
     conditional: true
-  - path: "{outputPath}/roles/common/tasks/main.yml"
-    format: raw
-    conditional: true
-  - path: "{outputPath}/roles/common/handlers/main.yml"
-    format: raw
-    conditional: true
-  - path: "{outputPath}/roles/common/templates/config.j2"
-    format: raw
-    conditional: true
-  - path: "{outputPath}/roles/common/defaults/main.yml"
-    format: raw
-    conditional: true
-  - path: "{outputPath}/roles/common/meta/main.yml"
-    format: raw
-    conditional: true
 
 detection:
   paths: ["playbook.yml", "site.yml", "*.yml", "roles/*/tasks/main.yml"]
@@ -116,7 +108,7 @@ permissions:
   network: none
 
 scope:
-  write: ["**/*.yml", "**/*.yaml", "**/*.j2", "**/*.cfg"]
+  write: ["**/*.yml", "**/*.yaml", "**/*.j2", "**/*.cfg", "**/*.ini"]
 
 risk:
   level: MEDIUM
