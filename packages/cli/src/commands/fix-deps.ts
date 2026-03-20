@@ -69,58 +69,37 @@ function countNpmVulnerabilities(pm: "npm" | "pnpm"): number {
   }
 }
 
-function runNpmFix(pm: "npm" | "pnpm", dryRun: boolean): string[] {
-  const details: string[] = [];
+function captureExecOutput(cmd: string, args: string[]): string[] {
+  try {
+    const result = execFileSync(cmd, args, { stdio: "pipe", timeout: 120_000 });
+    const output = result.toString("utf-8").trim();
+    return output ? output.split("\n").slice(0, 10) : [];
+  } catch (err: unknown) {
+    const execErr = err as { stdout?: Buffer };
+    if (execErr.stdout) {
+      const output = execErr.stdout.toString("utf-8").trim();
+      return output ? output.split("\n").slice(0, 10) : [];
+    }
+    return [];
+  }
+}
 
+function runNpmFix(pm: "npm" | "pnpm", dryRun: boolean): string[] {
   if (pm === "npm") {
     const args = ["audit", "fix"];
     if (dryRun) args.push("--dry-run");
-
-    try {
-      const result = execFileSync("npm", args, { stdio: "pipe", timeout: 120_000 });
-      const output = result.toString("utf-8");
-      if (output.trim()) {
-        details.push(...output.trim().split("\n").slice(0, 10));
-      }
-    } catch (err: unknown) {
-      const execErr = err as { stdout?: Buffer };
-      if (execErr.stdout) {
-        const output = execErr.stdout.toString("utf-8");
-        if (output.trim()) {
-          details.push(...output.trim().split("\n").slice(0, 10));
-        }
-      }
-    }
-  } else {
-    // pnpm doesn't have a built-in audit fix, so we run npm audit fix in a compatibility mode
-    p.log.warn(
-      "pnpm does not have a native fix command. Running npm audit fix which may conflict with pnpm-lock.yaml. Consider running 'pnpm update' manually instead.",
-    );
-    if (dryRun) {
-      details.push("pnpm does not support --fix natively. Would run: npm audit fix");
-    } else {
-      try {
-        const result = execFileSync("npm", ["audit", "fix"], {
-          stdio: "pipe",
-          timeout: 120_000,
-        });
-        const output = result.toString("utf-8");
-        if (output.trim()) {
-          details.push(...output.trim().split("\n").slice(0, 10));
-        }
-      } catch (err: unknown) {
-        const execErr = err as { stdout?: Buffer };
-        if (execErr.stdout) {
-          const output = execErr.stdout.toString("utf-8");
-          if (output.trim()) {
-            details.push(...output.trim().split("\n").slice(0, 10));
-          }
-        }
-      }
-    }
+    return captureExecOutput("npm", args);
   }
 
-  return details;
+  p.log.warn(
+    "pnpm does not have a native fix command. Running npm audit fix which may conflict with pnpm-lock.yaml. Consider running 'pnpm update' manually instead.",
+  );
+
+  if (dryRun) {
+    return ["pnpm does not support --fix natively. Would run: npm audit fix"];
+  }
+
+  return captureExecOutput("npm", ["audit", "fix"]);
 }
 
 // ── pip fix ───────────────────────────────────────────────────────
@@ -203,75 +182,60 @@ function displayFixResult(result: FixResult): void {
 
 // ── Main command ──────────────────────────────────────────────────
 
-export async function fixDepsCommand(args: string[], ctx: CLIContext): Promise<void> {
-  const startTime = Date.now();
+function runScanAndFix(
+  label: string,
+  isJson: boolean,
+  scanVulns: () => number,
+  fix: () => string[],
+  recount: () => number,
+  dryRun: boolean,
+): FixResult | null {
+  const spinner = p.spinner();
+  if (!isJson) spinner.start(`Scanning ${label} dependencies...`);
 
-  const useNpm = hasFlag(args, "--npm");
-  const usePip = hasFlag(args, "--pip");
-  const dryRun = hasFlag(args, "--dry-run") || ctx.globalOpts.dryRun;
-  const detectBoth = !useNpm && !usePip;
-
-  const results: FixResult[] = [];
-
-  if (dryRun && !ctx.globalOpts.quiet) {
-    p.log.info(pc.yellow("Dry-run mode: no changes will be applied."));
+  const beforeCount = scanVulns();
+  if (beforeCount === 0) {
+    if (!isJson) spinner.stop(`No ${label} vulnerabilities found`);
+    return null;
   }
 
-  // npm / pnpm fix
-  if (useNpm || detectBoth) {
-    const pm = detectPackageManager();
-    if (pm) {
-      const spinner = p.spinner();
-      if (ctx.globalOpts.output !== "json") spinner.start(`Scanning ${pm} dependencies...`);
+  if (!isJson) spinner.start(`Fixing ${label} dependencies (${beforeCount} vulnerabilities)...`);
+  const details = fix();
+  const afterCount = dryRun ? beforeCount : recount();
+  if (!isJson) spinner.stop(`${label} fix complete`);
 
-      const beforeCount = countNpmVulnerabilities(pm);
-      if (beforeCount === 0) {
-        if (ctx.globalOpts.output !== "json") spinner.stop(`No ${pm} vulnerabilities found`);
-      } else {
-        if (ctx.globalOpts.output !== "json")
-          spinner.start(`Fixing ${pm} dependencies (${beforeCount} vulnerabilities)...`);
-        const details = runNpmFix(pm, dryRun);
-        const afterCount = dryRun ? beforeCount : countNpmVulnerabilities(pm);
-        if (ctx.globalOpts.output !== "json") spinner.stop(`${pm} fix complete`);
+  return {
+    tool: label,
+    beforeCount,
+    afterCount,
+    fixed: beforeCount - afterCount,
+    details,
+  };
+}
 
-        results.push({
-          tool: pm,
-          beforeCount,
-          afterCount,
-          fixed: beforeCount - afterCount,
-          details,
-        });
-      }
-    } else if (!detectBoth) {
+function fixNpmPhase(detectBoth: boolean, dryRun: boolean, isJson: boolean): FixResult | null {
+  const pm = detectPackageManager();
+
+  if (!pm) {
+    if (!detectBoth) {
       throw new CLIError(ExitCode.VALIDATION_ERROR, "No package.json or pnpm-lock.yaml found.");
     }
+    return null;
   }
 
-  // pip fix
-  if (usePip || detectBoth) {
-    if (isPipAuditInstalled()) {
-      const spinner = p.spinner();
-      if (ctx.globalOpts.output !== "json") spinner.start("Scanning pip dependencies...");
+  return runScanAndFix(
+    pm,
+    isJson,
+    () => countNpmVulnerabilities(pm),
+    () => runNpmFix(pm, dryRun),
+    () => countNpmVulnerabilities(pm),
+    dryRun,
+  );
+}
 
-      const beforeCount = countPipVulnerabilities();
-      if (beforeCount === 0) {
-        if (ctx.globalOpts.output !== "json") spinner.stop("No pip vulnerabilities found");
-      } else {
-        if (ctx.globalOpts.output !== "json")
-          spinner.start(`Fixing pip dependencies (${beforeCount} vulnerabilities)...`);
-        const details = runPipFix(dryRun);
-        const afterCount = dryRun ? beforeCount : countPipVulnerabilities();
-        if (ctx.globalOpts.output !== "json") spinner.stop("pip fix complete");
-
-        results.push({
-          tool: "pip-audit",
-          beforeCount,
-          afterCount,
-          fixed: beforeCount - afterCount,
-          details,
-        });
-      }
-    } else if (usePip) {
+function fixPipPhase(explicit: boolean, dryRun: boolean, isJson: boolean): FixResult | null {
+  if (!isPipAuditInstalled()) {
+    if (explicit) {
       p.note(
         [
           `${pc.bold(pc.yellow("pip-audit is not installed."))}`,
@@ -282,10 +246,56 @@ export async function fixDepsCommand(args: string[], ctx: CLIContext): Promise<v
       );
       throw new CLIError(ExitCode.GENERAL_ERROR, "pip-audit is not installed.");
     }
+    return null;
+  }
+
+  return runScanAndFix(
+    "pip-audit",
+    isJson,
+    countPipVulnerabilities,
+    () => runPipFix(dryRun),
+    countPipVulnerabilities,
+    dryRun,
+  );
+}
+
+function outputFixResults(results: FixResult[], isJson: boolean): void {
+  if (isJson) {
+    console.log(JSON.stringify(results, null, 2));
+    return;
+  }
+  for (const result of results) {
+    displayFixResult(result);
+  }
+}
+
+export async function fixDepsCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const startTime = Date.now();
+
+  const useNpm = hasFlag(args, "--npm");
+  const usePip = hasFlag(args, "--pip");
+  const dryRun = hasFlag(args, "--dry-run") || ctx.globalOpts.dryRun;
+  const detectBoth = !useNpm && !usePip;
+  const isJson = ctx.globalOpts.output === "json";
+
+  if (dryRun && !ctx.globalOpts.quiet) {
+    p.log.info(pc.yellow("Dry-run mode: no changes will be applied."));
+  }
+
+  const results: FixResult[] = [];
+
+  if (useNpm || detectBoth) {
+    const result = fixNpmPhase(detectBoth, dryRun, isJson);
+    if (result) results.push(result);
+  }
+
+  if (usePip || detectBoth) {
+    const result = fixPipPhase(usePip, dryRun, isJson);
+    if (result) results.push(result);
   }
 
   if (results.length === 0) {
-    if (ctx.globalOpts.output === "json") {
+    if (isJson) {
       console.log(JSON.stringify([], null, 2));
     } else {
       p.log.info("No dependency vulnerabilities to fix.");
@@ -293,13 +303,7 @@ export async function fixDepsCommand(args: string[], ctx: CLIContext): Promise<v
     return;
   }
 
-  if (ctx.globalOpts.output === "json") {
-    console.log(JSON.stringify(results, null, 2));
-  } else {
-    for (const result of results) {
-      displayFixResult(result);
-    }
-  }
+  outputFixResults(results, isJson);
 
   const root = findProjectRoot();
   if (root) {

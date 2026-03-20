@@ -53,6 +53,94 @@ interface SarifResult {
   properties?: Record<string, unknown>;
 }
 
+function groupFindingsByTool(report: ScanReport): Map<string, ScanFinding[]> {
+  const map = new Map<string, ScanFinding[]>();
+  for (const scanner of report.scannersRun) {
+    map.set(scanner, []);
+  }
+  for (const finding of report.findings) {
+    const existing = map.get(finding.tool) ?? [];
+    existing.push(finding);
+    map.set(finding.tool, existing);
+  }
+  return map;
+}
+
+function buildSarifRule(finding: ScanFinding): SarifRule {
+  const rule: SarifRule = {
+    id: finding.id,
+    shortDescription: { text: finding.message },
+    properties: {
+      "security-severity": toSecuritySeverity(finding.severity),
+    },
+  };
+  if (finding.recommendation) {
+    rule.fullDescription = { text: finding.recommendation };
+  }
+  return rule;
+}
+
+function buildResultProperties(finding: ScanFinding): Record<string, unknown> {
+  const props: Record<string, unknown> = {
+    category: finding.category,
+    severity: finding.severity,
+  };
+  if (finding.cve) props.cve = finding.cve;
+  if (finding.cvss !== undefined) props.cvss = finding.cvss;
+  if (finding.cwe) props.cwe = finding.cwe;
+  if (finding.fixVersion) props.fixVersion = finding.fixVersion;
+  return props;
+}
+
+function buildSarifResult(finding: ScanFinding): SarifResult {
+  const result: SarifResult = {
+    ruleId: finding.id,
+    level: toSarifLevel(finding.severity),
+    message: { text: finding.message },
+  };
+
+  if (finding.file) {
+    result.locations = [
+      {
+        physicalLocation: {
+          artifactLocation: { uri: finding.file },
+          ...(finding.line ? { region: { startLine: finding.line } } : {}),
+        },
+      },
+    ];
+  }
+
+  result.properties = buildResultProperties(finding);
+  return result;
+}
+
+function buildSarifRun(
+  toolName: string,
+  findings: ScanFinding[],
+): { tool: object; results: SarifResult[] } {
+  const rulesMap = new Map<string, SarifRule>();
+  const results: SarifResult[] = [];
+
+  for (const finding of findings) {
+    if (!rulesMap.has(finding.id)) {
+      rulesMap.set(finding.id, buildSarifRule(finding));
+    }
+    results.push(buildSarifResult(finding));
+  }
+
+  return {
+    tool: {
+      driver: {
+        name: `dojops-scanner/${toolName}`,
+        version: "1.0.0",
+        informationUri: "https://dojops.ai",
+        rules: [...rulesMap.values()],
+      },
+    },
+    results,
+  };
+}
+
 /**
  * Transform a DojOps ScanReport into SARIF 2.1.0 format.
  *
@@ -60,80 +148,10 @@ interface SarifResult {
  * If a scanner produced no findings, it is still included as an empty run.
  */
 export function toSarif(report: ScanReport): object {
-  // Group findings by scanner tool
-  const findingsByTool = new Map<string, ScanFinding[]>();
-  for (const scanner of report.scannersRun) {
-    findingsByTool.set(scanner, []);
-  }
-  for (const finding of report.findings) {
-    const existing = findingsByTool.get(finding.tool) ?? [];
-    existing.push(finding);
-    findingsByTool.set(finding.tool, existing);
-  }
-
+  const findingsByTool = groupFindingsByTool(report);
   const runs = [];
   for (const [toolName, findings] of findingsByTool) {
-    // Build unique rules from findings
-    const rulesMap = new Map<string, SarifRule>();
-    const results: SarifResult[] = [];
-
-    for (const finding of findings) {
-      // Use finding ID as rule ID
-      if (!rulesMap.has(finding.id)) {
-        const rule: SarifRule = {
-          id: finding.id,
-          shortDescription: { text: finding.message },
-          properties: {
-            "security-severity": toSecuritySeverity(finding.severity),
-          },
-        };
-        if (finding.recommendation) {
-          rule.fullDescription = { text: finding.recommendation };
-        }
-        rulesMap.set(finding.id, rule);
-      }
-
-      const result: SarifResult = {
-        ruleId: finding.id,
-        level: toSarifLevel(finding.severity),
-        message: { text: finding.message },
-      };
-
-      if (finding.file) {
-        result.locations = [
-          {
-            physicalLocation: {
-              artifactLocation: { uri: finding.file },
-              ...(finding.line ? { region: { startLine: finding.line } } : {}),
-            },
-          },
-        ];
-      }
-
-      const props: Record<string, unknown> = {
-        category: finding.category,
-        severity: finding.severity,
-      };
-      if (finding.cve) props.cve = finding.cve;
-      if (finding.cvss !== undefined) props.cvss = finding.cvss;
-      if (finding.cwe) props.cwe = finding.cwe;
-      if (finding.fixVersion) props.fixVersion = finding.fixVersion;
-      result.properties = props;
-
-      results.push(result);
-    }
-
-    runs.push({
-      tool: {
-        driver: {
-          name: `dojops-scanner/${toolName}`,
-          version: "1.0.0",
-          informationUri: "https://dojops.ai",
-          rules: [...rulesMap.values()],
-        },
-      },
-      results,
-    });
+    runs.push(buildSarifRun(toolName, findings));
   }
 
   return {

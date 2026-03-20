@@ -75,6 +75,61 @@ function compareVersions(current: string, latest: string): boolean {
   return false;
 }
 
+interface UpdateInfo {
+  name: string;
+  currentVersion: string;
+  latestVersion: string;
+  location: string;
+  filePath: string;
+  updateAvailable: boolean;
+}
+
+async function fetchUpdateInfo(skills: InstalledSkill[]): Promise<UpdateInfo[]> {
+  const updates: UpdateInfo[] = [];
+  for (const skill of skills) {
+    const latest = await checkHubVersion(skill.name);
+    if (latest) {
+      updates.push({
+        name: skill.name,
+        currentVersion: skill.version,
+        latestVersion: latest,
+        location: skill.location,
+        filePath: skill.filePath,
+        updateAvailable: compareVersions(skill.version, latest),
+      });
+    }
+  }
+  return updates;
+}
+
+async function downloadAndApplyUpdate(update: UpdateInfo): Promise<void> {
+  const slug = update.name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const res = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${update.latestVersion}`);
+  if (!res.ok) return;
+
+  const fileBuffer = Buffer.from(await res.arrayBuffer());
+  const checksum = res.headers.get("x-checksum-sha256");
+  if (checksum) {
+    const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+    if (hash !== checksum) {
+      p.log.error(`Integrity check failed for ${update.name}. Expected ${checksum}, got ${hash}`);
+      return;
+    }
+  }
+  fs.writeFileSync(update.filePath, fileBuffer);
+  p.log.success(`Updated ${pc.cyan(update.name)} to v${update.latestVersion}`);
+}
+
+async function autoInstallUpdates(available: UpdateInfo[]): Promise<void> {
+  for (const update of available) {
+    try {
+      await downloadAndApplyUpdate(update);
+    } catch (err) {
+      p.log.warn(`Failed to update ${update.name}: ${toErrorMessage(err)}`);
+    }
+  }
+}
+
 /**
  * `dojops skills update [name]` — checks the Hub for newer versions of installed skills.
  */
@@ -105,29 +160,7 @@ export const skillsUpdateCommand: CommandHandler = async (args, ctx) => {
   const spinner = p.spinner();
   if (!isJson) spinner.start("Checking hub for updates...");
 
-  interface UpdateInfo {
-    name: string;
-    currentVersion: string;
-    latestVersion: string;
-    location: string;
-    filePath: string;
-    updateAvailable: boolean;
-  }
-
-  const updates: UpdateInfo[] = [];
-  for (const skill of toCheck) {
-    const latest = await checkHubVersion(skill.name);
-    if (latest) {
-      updates.push({
-        name: skill.name,
-        currentVersion: skill.version,
-        latestVersion: latest,
-        location: skill.location,
-        filePath: skill.filePath,
-        updateAvailable: compareVersions(skill.version, latest),
-      });
-    }
-  }
+  const updates = await fetchUpdateInfo(toCheck);
 
   if (!isJson) spinner.stop("Update check complete");
 
@@ -143,36 +176,16 @@ export const skillsUpdateCommand: CommandHandler = async (args, ctx) => {
     return;
   }
 
-  const lines = available.map(
-    (u) =>
-      `  ${pc.cyan(u.name.padEnd(25))} ${pc.dim(`v${u.currentVersion}`)} ${pc.dim("->")} ${pc.green(`v${u.latestVersion}`)}  ${pc.dim(`(${u.location})`)}`,
-  );
+  const lines = available.map((u) => {
+    const current = pc.dim(`v${u.currentVersion}`);
+    const latest = pc.green(`v${u.latestVersion}`);
+    const location = pc.dim(`(${u.location})`);
+    return `  ${pc.cyan(u.name.padEnd(25))} ${current} ${pc.dim("->")} ${latest}  ${location}`;
+  });
   p.note(lines.join("\n"), `Updates Available (${available.length})`);
 
   if (autoInstall) {
-    for (const update of available) {
-      const slug = update.name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-      try {
-        const res = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${update.latestVersion}`);
-        if (res.ok) {
-          const fileBuffer = Buffer.from(await res.arrayBuffer());
-          const checksum = res.headers.get("x-checksum-sha256");
-          if (checksum) {
-            const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-            if (hash !== checksum) {
-              p.log.error(
-                `Integrity check failed for ${update.name}. Expected ${checksum}, got ${hash}`,
-              );
-              continue;
-            }
-          }
-          fs.writeFileSync(update.filePath, fileBuffer);
-          p.log.success(`Updated ${pc.cyan(update.name)} to v${update.latestVersion}`);
-        }
-      } catch (err) {
-        p.log.warn(`Failed to update ${update.name}: ${toErrorMessage(err)}`);
-      }
-    }
+    await autoInstallUpdates(available);
   } else {
     p.log.info(pc.dim("Run with --yes to auto-install updates."));
   }

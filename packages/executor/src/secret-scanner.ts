@@ -16,8 +16,8 @@ const PLACEHOLDER_PATTERNS = [
   /^placeholder$/i,
   /^example$/i,
   /^your[_-].*[_-]here$/i,
-  /^\{\{.*\}\}$/, // {{ template }}
-  /^\$\{.*\}$/, // ${VAR}
+  /^\{\{.*\}\}$/,
+  /^\$\{.*\}$/,
   /^<REPLACE>$/i,
   /^<YOUR_.*>$/i,
 ];
@@ -67,6 +67,20 @@ const SECRET_PATTERNS: SecretPattern[] = [
   },
 ];
 
+function matchLineAgainstPattern(
+  line: string,
+  lineNumber: number,
+  sp: SecretPattern,
+): SecretMatch | null {
+  if (!sp.regex.test(line)) return null;
+  // SA-13: Skip placeholder values for password/secret patterns
+  if (sp.checkPlaceholder) {
+    const value = extractQuotedValue(line, sp.regex);
+    if (value && isPlaceholderValue(value)) return null;
+  }
+  return { pattern: sp.name, line: lineNumber, severity: sp.severity };
+}
+
 /**
  * Scan content for common secret patterns.
  * Returns an array of matches with the pattern name, line number, and severity.
@@ -76,18 +90,9 @@ export function scanForSecrets(content: string): SecretMatch[] {
   const lines = content.split("\n");
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    for (const { regex, name, severity, checkPlaceholder } of SECRET_PATTERNS) {
-      if (regex.test(line)) {
-        // SA-13: Skip placeholder values for password/secret patterns
-        if (checkPlaceholder) {
-          const value = extractQuotedValue(line, regex);
-          if (value && isPlaceholderValue(value)) {
-            continue;
-          }
-        }
-        matches.push({ pattern: name, line: i + 1, severity });
-      }
+    for (const sp of SECRET_PATTERNS) {
+      const match = matchLineAgainstPattern(lines[i], i + 1, sp);
+      if (match) matches.push(match);
     }
   }
 

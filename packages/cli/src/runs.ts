@@ -97,6 +97,21 @@ export function readRunResult(rootDir: string, id: string): RunResult | null {
   }
 }
 
+function reconcileStaleRun(rootDir: string, meta: RunMeta): void {
+  if (meta.status !== "running" || meta.pid <= 0) return;
+  try {
+    process.kill(meta.pid, 0);
+  } catch {
+    meta.status = "failed";
+    meta.completedAt = new Date().toISOString();
+    try {
+      fs.writeFileSync(metaPath(rootDir, meta.id), JSON.stringify(meta, null, 2));
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
 export function listRuns(rootDir: string): RunMeta[] {
   const dir = runsDir(rootDir);
   if (!fs.existsSync(dir)) return [];
@@ -107,27 +122,11 @@ export function listRuns(rootDir: string): RunMeta[] {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const meta = readRunMeta(rootDir, entry.name);
-    if (meta) {
-      // Check if a "running" process is actually still alive
-      if (meta.status === "running" && meta.pid > 0) {
-        try {
-          process.kill(meta.pid, 0);
-        } catch {
-          // Process no longer alive — mark as failed
-          meta.status = "failed";
-          meta.completedAt = new Date().toISOString();
-          try {
-            fs.writeFileSync(metaPath(rootDir, meta.id), JSON.stringify(meta, null, 2));
-          } catch {
-            /* best-effort */
-          }
-        }
-      }
-      metas.push(meta);
-    }
+    if (!meta) continue;
+    reconcileStaleRun(rootDir, meta);
+    metas.push(meta);
   }
 
-  // Sort by startedAt descending (most recent first)
   metas.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   return metas;
 }

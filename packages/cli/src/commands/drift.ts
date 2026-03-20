@@ -73,127 +73,123 @@ function detectTerraformDrift(): DriftReport {
   }
 }
 
-function parseTerraformPlanJson(jsonOutput: string): DriftReport {
-  const resources: DriftedResource[] = [];
+function resolveChangeType(actions: string[]): DriftedResource["changeType"] {
+  if (actions.includes("create") && actions.includes("delete")) return "replace";
+  if (actions.includes("create")) return "create";
+  if (actions.includes("update")) return "update";
+  if (actions.includes("delete")) return "delete";
+  return "unknown";
+}
 
-  // terraform plan -json outputs multiple JSON objects, one per line
-  const lines = jsonOutput.split("\n").filter((l) => l.trim());
-  let planData: TfPlanJson | undefined;
-
-  for (const line of lines) {
-    try {
-      const obj = JSON.parse(line) as Record<string, unknown>;
-      if (obj.resource_changes) {
-        planData = obj as unknown as TfPlanJson;
-        break;
-      }
-    } catch {
-      // skip non-JSON lines
-    }
-  }
-
-  if (planData?.resource_changes) {
-    for (const rc of planData.resource_changes) {
-      const actions = rc.change.actions;
-      if (actions.length === 1 && actions[0] === "no-op") continue;
-
-      let changeType: DriftedResource["changeType"] = "unknown";
-      if (actions.includes("create") && actions.includes("delete")) changeType = "replace";
-      else if (actions.includes("create")) changeType = "create";
-      else if (actions.includes("update")) changeType = "update";
-      else if (actions.includes("delete")) changeType = "delete";
-
-      resources.push({
-        type: rc.type,
-        name: rc.address,
-        changeType,
-        source: "terraform",
-      });
-    }
-  }
-
-  const summary = {
+function buildDriftSummary(resources: DriftedResource[]): DriftReport["summary"] {
+  return {
     total: resources.length,
     create: resources.filter((r) => r.changeType === "create").length,
     update: resources.filter((r) => r.changeType === "update").length,
     delete: resources.filter((r) => r.changeType === "delete").length,
     replace: resources.filter((r) => r.changeType === "replace").length,
   };
+}
+
+function extractPlanData(jsonOutput: string): TfPlanJson | undefined {
+  const lines = jsonOutput.split("\n").filter((l) => l.trim());
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line) as Record<string, unknown>;
+      if (obj.resource_changes) return obj as unknown as TfPlanJson;
+    } catch {
+      // skip non-JSON lines
+    }
+  }
+  return undefined;
+}
+
+function parseTerraformPlanJson(jsonOutput: string): DriftReport {
+  const resources: DriftedResource[] = [];
+  const planData = extractPlanData(jsonOutput);
+
+  if (planData?.resource_changes) {
+    for (const rc of planData.resource_changes) {
+      const actions = rc.change.actions;
+      if (actions.length === 1 && actions[0] === "no-op") continue;
+
+      resources.push({
+        type: rc.type,
+        name: rc.address,
+        changeType: resolveChangeType(actions),
+        source: "terraform",
+      });
+    }
+  }
 
   return {
     source: "terraform",
     driftDetected: resources.length > 0,
     resources,
-    summary,
+    summary: buildDriftSummary(resources),
   };
 }
 
 // ── Kubernetes drift detection ────────────────────────────────────
 
-function detectKubernetesDrift(manifestPath?: string): DriftReport {
-  const target = manifestPath || ".";
-  const resources: DriftedResource[] = [];
+function emptyDriftReport(source: "terraform" | "kubernetes"): DriftReport {
+  return {
+    source,
+    driftDetected: false,
+    resources: [],
+    summary: { total: 0, create: 0, update: 0, delete: 0, replace: 0 },
+  };
+}
 
+function parseKubeDiffResources(diffOutput: string, target: string): DriftedResource[] {
+  const resources: DriftedResource[] = [];
+  const diffLines = diffOutput.split("\n");
+
+  for (const line of diffLines) {
+    if (!line.startsWith("diff -u")) continue;
+    const match = line.match(/\/([^/]+)\/([^/]+)$/);
+    if (match) {
+      resources.push({
+        type: match[1] || "Resource",
+        name: match[2] || "unknown",
+        changeType: "update",
+        source: "kubernetes",
+        details: "Configuration differs from live state",
+      });
+    }
+  }
+
+  if (resources.length === 0 && diffOutput.trim()) {
+    resources.push({
+      type: "Resource",
+      name: target,
+      changeType: "update",
+      source: "kubernetes",
+      details: "Configuration drift detected",
+    });
+  }
+
+  return resources;
+}
+
+function detectKubernetesDrift(manifestPath = "."): DriftReport {
   try {
-    execFileSync("kubectl", ["diff", "-f", target], {
+    execFileSync("kubectl", ["diff", "-f", manifestPath], {
       stdio: "pipe",
       timeout: 60_000,
     });
-    // Exit code 0: no diff
-    return {
-      source: "kubernetes",
-      driftDetected: false,
-      resources: [],
-      summary: { total: 0, create: 0, update: 0, delete: 0, replace: 0 },
-    };
+    return emptyDriftReport("kubernetes");
   } catch (err: unknown) {
     const execErr = err as { status?: number; stdout?: Buffer; stderr?: Buffer };
-    // Exit code 1 means differences found
+
     if (execErr.status === 1 && execErr.stdout) {
       const diffOutput = execErr.stdout.toString("utf-8");
-      const diffLines = diffOutput.split("\n");
-
-      // Parse unified diff headers to extract resource names
-      for (const line of diffLines) {
-        if (line.startsWith("diff -u")) {
-          // Extract resource info from the diff header
-          const match = line.match(/\/([^/]+)\/([^/]+)$/);
-          if (match) {
-            resources.push({
-              type: match[1] || "Resource",
-              name: match[2] || "unknown",
-              changeType: "update",
-              source: "kubernetes",
-              details: "Configuration differs from live state",
-            });
-          }
-        }
-      }
-
-      // If no resources parsed from diff headers, create a generic entry
-      if (resources.length === 0 && diffOutput.trim()) {
-        resources.push({
-          type: "Resource",
-          name: target,
-          changeType: "update",
-          source: "kubernetes",
-          details: "Configuration drift detected",
-        });
-      }
-
-      const summary = {
-        total: resources.length,
-        create: resources.filter((r) => r.changeType === "create").length,
-        update: resources.filter((r) => r.changeType === "update").length,
-        delete: resources.filter((r) => r.changeType === "delete").length,
-        replace: resources.filter((r) => r.changeType === "replace").length,
-      };
-
+      const resources = parseKubeDiffResources(diffOutput, manifestPath);
       return {
         source: "kubernetes",
         driftDetected: true,
         resources,
-        summary,
+        summary: buildDriftSummary(resources),
         rawOutput: diffOutput,
       };
     }
@@ -253,6 +249,55 @@ function displayDriftReport(report: DriftReport): void {
 
 // ── Main command ──────────────────────────────────────────────────
 
+function runDriftDetection(
+  label: string,
+  detect: () => DriftReport,
+  isJson: boolean,
+  suppressErrors: boolean,
+): DriftReport | null {
+  const spinner = p.spinner();
+  if (!isJson) spinner.start(`Detecting ${label} drift...`);
+
+  try {
+    const report = detect();
+    if (!isJson)
+      spinner.stop(report.driftDetected ? `${label} drift detected` : `No ${label} drift`);
+    return report;
+  } catch (err) {
+    if (!isJson) spinner.stop(`${label} drift detection failed`);
+    if (suppressErrors) {
+      p.log.warn(`${label}: ${toErrorMessage(err)}`);
+      return null;
+    }
+    throw err;
+  }
+}
+
+function outputDriftResults(reports: DriftReport[], isJson: boolean): void {
+  if (isJson) {
+    console.log(JSON.stringify(reports.length === 1 ? reports[0] : reports, null, 2));
+    return;
+  }
+  for (const report of reports) {
+    displayDriftReport(report);
+  }
+}
+
+function auditDriftCommand(reports: DriftReport[], startTime: number): void {
+  const root = findProjectRoot();
+  if (!root) return;
+
+  const hasDrift = reports.some((r) => r.driftDetected);
+  appendAudit(root, {
+    timestamp: new Date().toISOString(),
+    user: getCurrentUser(),
+    command: "drift",
+    action: "detect",
+    status: hasDrift ? "drift-detected" : "no-drift",
+    durationMs: Date.now() - startTime,
+  });
+}
+
 export async function driftCommand(args: string[], ctx: CLIContext): Promise<void> {
   const startTime = Date.now();
 
@@ -260,45 +305,23 @@ export async function driftCommand(args: string[], ctx: CLIContext): Promise<voi
   const useKubernetes = hasFlag(args, "--kubernetes");
   const manifestPath = extractFlagValue(args, "--path");
   const detectBoth = !useTerraform && !useKubernetes;
+  const isJson = ctx.globalOpts.output === "json";
 
   const reports: DriftReport[] = [];
 
   if (useTerraform || detectBoth) {
-    const isStructuredOutput = ctx.globalOpts.output === "json";
-    const spinner = p.spinner();
-    if (!isStructuredOutput) spinner.start("Detecting Terraform drift...");
-    try {
-      const report = detectTerraformDrift();
-      if (!isStructuredOutput)
-        spinner.stop(report.driftDetected ? "Terraform drift detected" : "No Terraform drift");
-      reports.push(report);
-    } catch (err) {
-      if (!isStructuredOutput) spinner.stop("Terraform drift detection failed");
-      if (detectBoth) {
-        p.log.warn(`Terraform: ${toErrorMessage(err)}`);
-      } else {
-        throw err;
-      }
-    }
+    const report = runDriftDetection("Terraform", detectTerraformDrift, isJson, detectBoth);
+    if (report) reports.push(report);
   }
 
   if (useKubernetes || detectBoth) {
-    const isStructuredOutput = ctx.globalOpts.output === "json";
-    const spinner = p.spinner();
-    if (!isStructuredOutput) spinner.start("Detecting Kubernetes drift...");
-    try {
-      const report = detectKubernetesDrift(manifestPath);
-      if (!isStructuredOutput)
-        spinner.stop(report.driftDetected ? "Kubernetes drift detected" : "No Kubernetes drift");
-      reports.push(report);
-    } catch (err) {
-      if (!isStructuredOutput) spinner.stop("Kubernetes drift detection failed");
-      if (detectBoth) {
-        p.log.warn(`Kubernetes: ${toErrorMessage(err)}`);
-      } else {
-        throw err;
-      }
-    }
+    const report = runDriftDetection(
+      "Kubernetes",
+      () => detectKubernetesDrift(manifestPath),
+      isJson,
+      detectBoth,
+    );
+    if (report) reports.push(report);
   }
 
   if (reports.length === 0 && detectBoth) {
@@ -306,24 +329,6 @@ export async function driftCommand(args: string[], ctx: CLIContext): Promise<voi
     return;
   }
 
-  if (ctx.globalOpts.output === "json") {
-    console.log(JSON.stringify(reports.length === 1 ? reports[0] : reports, null, 2));
-  } else {
-    for (const report of reports) {
-      displayDriftReport(report);
-    }
-  }
-
-  const root = findProjectRoot();
-  if (root) {
-    const hasDrift = reports.some((r) => r.driftDetected);
-    appendAudit(root, {
-      timestamp: new Date().toISOString(),
-      user: getCurrentUser(),
-      command: "drift",
-      action: "detect",
-      status: hasDrift ? "drift-detected" : "no-drift",
-      durationMs: Date.now() - startTime,
-    });
-  }
+  outputDriftResults(reports, isJson);
+  auditDriftCommand(reports, startTime);
 }

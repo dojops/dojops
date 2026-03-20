@@ -59,7 +59,7 @@ class TTYProgressReporter implements ProgressReporter {
   private currentStep = "";
   private spinnerIndex = 0;
   private spinnerTimer: ReturnType<typeof setInterval> | null = null;
-  private descriptions = new Map<string, string>();
+  private readonly descriptions = new Map<string, string>();
 
   constructor(private readonly total: number) {}
 

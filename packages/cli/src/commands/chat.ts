@@ -653,14 +653,103 @@ function handleHelpCommand(): void {
 
 // ── Slash command router ────────────────────────────────────────
 
-async function handleSlashCommand(
+async function handleCompressCommand(session: ChatSession): Promise<void> {
+  const s = p.spinner();
+  s.start("Compressing conversation...");
+  try {
+    const info = await session.compress();
+    if (info) {
+      s.stop("Conversation compressed.");
+      p.log.success(
+        `Summarized ${info.messagesSummarized} messages, kept ${info.messagesRetained} recent.`,
+      );
+    } else {
+      s.stop("Nothing to compress (fewer than 4 messages).");
+    }
+  } catch (err) {
+    s.stop("Compression failed.");
+    p.log.error(formatError(err));
+  }
+}
+
+async function handleCheckpointCommand(trimmed: string, rootDir: string): Promise<void> {
+  const name = trimmed.slice(12).trim() || undefined;
+  try {
+    const { createCheckpoint } = await import("@dojops/executor");
+    const entry = createCheckpoint(rootDir, name);
+    if (entry) {
+      const nameLabel = name ? ` (${pc.bold(name)})` : "";
+      p.log.success(`Checkpoint ${pc.cyan(entry.id)}${nameLabel} created`);
+      if (entry.filesTracked.length > 0) {
+        p.log.info(pc.dim(`Files: ${entry.filesTracked.join(", ")}`));
+      }
+    } else {
+      p.log.info("No changes to checkpoint.");
+    }
+  } catch (err) {
+    p.log.error(`Checkpoint failed: ${formatError(err)}`);
+  }
+}
+
+async function handleRestoreCommand(trimmed: string, rootDir: string): Promise<void> {
+  const idOrName = trimmed.slice(9).trim();
+  if (!idOrName) {
+    p.log.warn("Usage: /restore <id|name>");
+    return;
+  }
+  try {
+    const { restoreCheckpoint } = await import("@dojops/executor");
+    const entry = restoreCheckpoint(rootDir, idOrName);
+    if (entry) {
+      const restoreLabel = entry.name ? ` (${entry.name})` : "";
+      p.log.success(`Restored checkpoint ${pc.cyan(entry.id)}${restoreLabel}`);
+    } else {
+      p.log.warn(`Checkpoint "${idOrName}" not found.`);
+    }
+  } catch (err) {
+    p.log.error(`Restore failed: ${formatError(err)}`);
+  }
+}
+
+async function handleRewindCommand(
+  trimmed: string,
+  session: ChatSession,
+  rootDir: string,
+): Promise<void> {
+  const parts = trimmed.slice(7).trim().split(/\s+/);
+  const withCode = parts.includes("--code");
+  const nStr = parts.find((pt) => /^\d+$/.test(pt));
+  const n = nStr ? parseInt(nStr, 10) : 1;
+  const result = session.rewind(n);
+  if (result.removedTurns === 0) {
+    p.log.info("Nothing to rewind.");
+  } else {
+    p.log.success(
+      `Rewound ${result.removedTurns} turn${result.removedTurns > 1 ? "s" : ""} (${result.removedMessages.length} messages removed)`,
+    );
+  }
+  if (!withCode) return;
+  try {
+    const { listCheckpoints, restoreCheckpoint } = await import("@dojops/executor");
+    const checkpoints = listCheckpoints(rootDir);
+    if (checkpoints.length > 0) {
+      const latest = checkpoints[0];
+      restoreCheckpoint(rootDir, latest.id);
+      p.log.success(`Files restored from checkpoint ${pc.cyan(latest.id)}`);
+    } else {
+      p.log.info(pc.dim("No checkpoints available for file restoration."));
+    }
+  } catch (err) {
+    p.log.warn(`File restore failed: ${formatError(err)}`);
+  }
+}
+
+function handleSimpleSlashCommand(
   trimmed: string,
   session: ChatSession,
   rootDir: string,
   ctx: CLIContext,
-  docAugmenter?: DocAugmenter,
-  voiceConfig?: VoiceConfig,
-): Promise<boolean> {
+): boolean {
   if (trimmed === "/help") {
     handleHelpCommand();
     return true;
@@ -683,6 +772,25 @@ async function handleSlashCommand(
     handleStatusCommand(session, ctx);
     return true;
   }
+  if (trimmed === "/sessions") {
+    handleSessionsCommand(rootDir);
+    return true;
+  }
+  if (trimmed.startsWith("/agent ")) {
+    handleAgentCommand(session, trimmed);
+    return true;
+  }
+  return false;
+}
+
+async function handleAsyncSlashCommand(
+  trimmed: string,
+  session: ChatSession,
+  rootDir: string,
+  ctx: CLIContext,
+  docAugmenter?: DocAugmenter,
+  voiceConfig?: VoiceConfig,
+): Promise<boolean> {
   if (trimmed === "/model") {
     await handleModelCommand(ctx);
     return true;
@@ -692,30 +800,7 @@ async function handleSlashCommand(
     return true;
   }
   if (trimmed === "/compress") {
-    const s = p.spinner();
-    s.start("Compressing conversation...");
-    try {
-      const info = await session.compress();
-      if (info) {
-        s.stop("Conversation compressed.");
-        p.log.success(
-          `Summarized ${info.messagesSummarized} messages, kept ${info.messagesRetained} recent.`,
-        );
-      } else {
-        s.stop("Nothing to compress (fewer than 4 messages).");
-      }
-    } catch (err) {
-      s.stop("Compression failed.");
-      p.log.error(formatError(err));
-    }
-    return true;
-  }
-  if (trimmed === "/sessions") {
-    handleSessionsCommand(rootDir);
-    return true;
-  }
-  if (trimmed.startsWith("/agent ")) {
-    handleAgentCommand(session, trimmed);
+    await handleCompressCommand(session);
     return true;
   }
   if (trimmed.startsWith("/plan ")) {
@@ -735,74 +820,15 @@ async function handleSlashCommand(
     return true;
   }
   if (trimmed === "/checkpoint" || trimmed.startsWith("/checkpoint ")) {
-    const name = trimmed.slice(12).trim() || undefined;
-    try {
-      const { createCheckpoint } = await import("@dojops/executor");
-      const entry = createCheckpoint(rootDir, name);
-      if (entry) {
-        p.log.success(
-          `Checkpoint ${pc.cyan(entry.id)}${name ? ` (${pc.bold(name)})` : ""} created`,
-        );
-        if (entry.filesTracked.length > 0) {
-          p.log.info(pc.dim(`Files: ${entry.filesTracked.join(", ")}`));
-        }
-      } else {
-        p.log.info("No changes to checkpoint.");
-      }
-    } catch (err) {
-      p.log.error(`Checkpoint failed: ${formatError(err)}`);
-    }
+    await handleCheckpointCommand(trimmed, rootDir);
     return true;
   }
   if (trimmed.startsWith("/restore ")) {
-    const idOrName = trimmed.slice(9).trim();
-    if (!idOrName) {
-      p.log.warn("Usage: /restore <id|name>");
-      return true;
-    }
-    try {
-      const { restoreCheckpoint } = await import("@dojops/executor");
-      const entry = restoreCheckpoint(rootDir, idOrName);
-      if (entry) {
-        p.log.success(
-          `Restored checkpoint ${pc.cyan(entry.id)}${entry.name ? ` (${entry.name})` : ""}`,
-        );
-      } else {
-        p.log.warn(`Checkpoint "${idOrName}" not found.`);
-      }
-    } catch (err) {
-      p.log.error(`Restore failed: ${formatError(err)}`);
-    }
+    await handleRestoreCommand(trimmed, rootDir);
     return true;
   }
   if (trimmed === "/rewind" || trimmed.startsWith("/rewind ")) {
-    const parts = trimmed.slice(7).trim().split(/\s+/);
-    const withCode = parts.includes("--code");
-    const nStr = parts.find((p) => /^\d+$/.test(p));
-    const n = nStr ? parseInt(nStr, 10) : 1;
-    const result = session.rewind(n);
-    if (result.removedTurns === 0) {
-      p.log.info("Nothing to rewind.");
-    } else {
-      p.log.success(
-        `Rewound ${result.removedTurns} turn${result.removedTurns > 1 ? "s" : ""} (${result.removedMessages.length} messages removed)`,
-      );
-    }
-    if (withCode) {
-      try {
-        const { listCheckpoints, restoreCheckpoint } = await import("@dojops/executor");
-        const checkpoints = listCheckpoints(rootDir);
-        if (checkpoints.length > 0) {
-          const latest = checkpoints[0];
-          restoreCheckpoint(rootDir, latest.id);
-          p.log.success(`Files restored from checkpoint ${pc.cyan(latest.id)}`);
-        } else {
-          p.log.info(pc.dim("No checkpoints available for file restoration."));
-        }
-      } catch (err) {
-        p.log.warn(`File restore failed: ${formatError(err)}`);
-      }
-    }
+    await handleRewindCommand(trimmed, session, rootDir);
     return true;
   }
   if (trimmed === "/voice") {
@@ -810,6 +836,18 @@ async function handleSlashCommand(
     return true;
   }
   return false;
+}
+
+async function handleSlashCommand(
+  trimmed: string,
+  session: ChatSession,
+  rootDir: string,
+  ctx: CLIContext,
+  docAugmenter?: DocAugmenter,
+  voiceConfig?: VoiceConfig,
+): Promise<boolean> {
+  if (handleSimpleSlashCommand(trimmed, session, rootDir, ctx)) return true;
+  return handleAsyncSlashCommand(trimmed, session, rootDir, ctx, docAugmenter, voiceConfig);
 }
 
 // ── Interactive loop ────────────────────────────────────────────
@@ -839,6 +877,27 @@ function isExitInput(input: unknown): boolean {
   return p.isCancel(input) || input === "/exit";
 }
 
+function handleShellPassthrough(command: string, cwd: string): void {
+  try {
+    const output = execFileSync("/bin/sh", ["-c", command], {
+      cwd,
+      encoding: "utf-8",
+      timeout: 30_000,
+      maxBuffer: 64 * 1024,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    process.stdout.write(`\n${pc.dim("$")} ${pc.cyan(command)}\n`);
+    process.stdout.write(output);
+    if (!output.endsWith("\n")) process.stdout.write("\n");
+  } catch (err) {
+    const e = err as { stdout?: string; stderr?: string; status?: number };
+    process.stdout.write(`\n${pc.dim("$")} ${pc.cyan(command)}\n`);
+    if (e.stdout) process.stdout.write(e.stdout);
+    if (e.stderr) process.stdout.write(pc.red(e.stderr));
+    p.log.warn(`Exit code: ${e.status ?? "unknown"}`);
+  }
+}
+
 async function processLoopInput(
   input: string,
   session: ChatSession,
@@ -850,28 +909,9 @@ async function processLoopInput(
   const trimmed = input.trim();
   if (!trimmed) return;
 
-  // Shell passthrough: !command executes a shell command
   if (trimmed.startsWith("!") && trimmed.length > 1) {
     const command = trimmed.slice(1).trim();
-    if (!command) return;
-    try {
-      const output = execFileSync("/bin/sh", ["-c", command], {
-        cwd: ctx.cwd,
-        encoding: "utf-8",
-        timeout: 30_000,
-        maxBuffer: 64 * 1024,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      process.stdout.write(`\n${pc.dim("$")} ${pc.cyan(command)}\n`);
-      process.stdout.write(output);
-      if (!output.endsWith("\n")) process.stdout.write("\n");
-    } catch (err) {
-      const e = err as { stdout?: string; stderr?: string; status?: number };
-      process.stdout.write(`\n${pc.dim("$")} ${pc.cyan(command)}\n`);
-      if (e.stdout) process.stdout.write(e.stdout);
-      if (e.stderr) process.stdout.write(pc.red(e.stderr));
-      p.log.warn(`Exit code: ${e.status ?? "unknown"}`);
-    }
+    if (command) handleShellPassthrough(command, ctx.cwd);
     return;
   }
 
@@ -883,19 +923,16 @@ async function processLoopInput(
     docAugmenter,
     voiceConfig,
   );
-  if (!handled) {
-    // Block unknown slash commands from being sent to the LLM
-    if (trimmed.startsWith("/")) {
-      const cmd = trimmed.split(/\s/)[0];
-      p.log.warn(
-        `Unknown command ${pc.cyan(cmd)}. Type ${pc.cyan("/help")} for available commands.`,
-      );
-      return;
-    }
-    // Expand @file references before sending to the LLM
-    const expanded = expandFileReferences(trimmed, ctx.cwd);
-    await handleSendMessage(session, expanded, ctx);
+  if (handled) return;
+
+  if (trimmed.startsWith("/")) {
+    const cmd = trimmed.split(/\s/)[0];
+    p.log.warn(`Unknown command ${pc.cyan(cmd)}. Type ${pc.cyan("/help")} for available commands.`);
+    return;
   }
+
+  const expanded = expandFileReferences(trimmed, ctx.cwd);
+  await handleSendMessage(session, expanded, ctx);
 }
 
 async function runInteractiveLoop(
@@ -1021,6 +1058,44 @@ async function chatExportCommand(args: string[], ctx: CLIContext): Promise<void>
   }
 }
 
+// ── Trust check helper ───────────────────────────────────────────
+
+interface TrustConfigs {
+  agents: string[];
+  mcpServers: string[];
+  skills: string[];
+  envPassthrough: string[];
+}
+
+function logUntrustedConfigs(cfgs: TrustConfigs): void {
+  p.log.warn("This workspace has custom configs that haven't been trusted:");
+  if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
+  if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
+  if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
+  if (cfgs.envPassthrough.length > 0)
+    p.log.info(`  MCP servers request access to env vars: ${cfgs.envPassthrough.join(", ")}`);
+}
+
+async function resolveTrustCheck(rootDir: string, nonInteractive: boolean): Promise<boolean> {
+  const { isFolderTrusted, trustFolder } = await import("../trust");
+  const trustCheck = isFolderTrusted(rootDir);
+  if (trustCheck.trusted) return false;
+
+  const cfgs = trustCheck.configs;
+  const hasConfigs = cfgs.agents.length > 0 || cfgs.mcpServers.length > 0 || cfgs.skills.length > 0;
+  if (!hasConfigs || nonInteractive) return false;
+
+  logUntrustedConfigs(cfgs);
+  const trustDecision = await p.confirm({ message: "Trust this workspace?" });
+  if (p.isCancel(trustDecision) || !trustDecision) {
+    p.log.info(pc.dim("Skipping custom agents/MCP/skills for this session."));
+    return true;
+  }
+  trustFolder(rootDir);
+  p.log.success("Workspace trusted.");
+  return false;
+}
+
 // ── Main entry point ────────────────────────────────────────────
 
 export async function chatCommand(args: string[], ctx: CLIContext): Promise<void> {
@@ -1043,7 +1118,6 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     );
   }
 
-  // Resolve voice config if --voice flag is set (fail early if deps missing)
   let voiceConfig: VoiceConfig | undefined;
   if (voiceFlag) {
     const { resolveVoiceConfig } = await import("../voice");
@@ -1051,7 +1125,6 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     p.log.info(`${pc.cyan("Voice mode enabled")} — use /voice for push-to-talk`);
   }
 
-  // ── Model routing: log if enabled (per-message routing in chat) ─
   if (!ctx.globalOpts.model) {
     const { loadConfig } = await import("../config");
     const config = loadConfig();
@@ -1062,33 +1135,7 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
 
   const provider = ctx.getProvider();
   const docAugmenter = await loadDocAugmenter();
-
-  // ── Trust check: gate custom agents/MCP/skills ─────────────────
-  const { isFolderTrusted, trustFolder } = await import("../trust");
-  const trustCheck = isFolderTrusted(rootDir);
-  let skipCustomConfigs = false;
-  if (!trustCheck.trusted) {
-    const cfgs = trustCheck.configs;
-    const hasConfigs =
-      cfgs.agents.length > 0 || cfgs.mcpServers.length > 0 || cfgs.skills.length > 0;
-    if (hasConfigs && !ctx.globalOpts.nonInteractive) {
-      p.log.warn("This workspace has custom configs that haven't been trusted:");
-      if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
-      if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
-      if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
-      if (cfgs.envPassthrough.length > 0)
-        p.log.info(`  MCP servers request access to env vars: ${cfgs.envPassthrough.join(", ")}`);
-      const trustDecision = await p.confirm({ message: "Trust this workspace?" });
-      if (p.isCancel(trustDecision) || !trustDecision) {
-        skipCustomConfigs = true;
-        p.log.info(pc.dim("Skipping custom agents/MCP/skills for this session."));
-      } else {
-        trustFolder(rootDir);
-        p.log.success("Workspace trusted.");
-      }
-    }
-  }
-
+  const skipCustomConfigs = await resolveTrustCheck(rootDir, ctx.globalOpts.nonInteractive);
   const { router } = createRouter(provider, rootDir, docAugmenter, skipCustomConfigs);
 
   const state = resolveSessionState(rootDir, resumeFlag, sessionName, deterministic);

@@ -67,6 +67,37 @@ function formatCurrency(amount: string | undefined, currency: string): string {
   return `${symbol}${num.toFixed(2)}`;
 }
 
+function buildResourceTable(resources: InfracostResource[], currency: string): string[] {
+  const lines: string[] = [];
+  lines.push(`  ${pc.bold("Resource".padEnd(40))} ${pc.bold("Monthly Cost".padStart(14))}`);
+  lines.push(`  ${"─".repeat(40)} ${"─".repeat(14)}`);
+
+  for (const resource of resources) {
+    const cost = formatCurrency(resource.monthlyCost, currency);
+    lines.push(`  ${resource.name.padEnd(40)} ${cost.padStart(14)}`);
+
+    if (resource.subresources) {
+      for (const sub of resource.subresources) {
+        const subCost = formatCurrency(sub.monthlyCost, currency);
+        lines.push(`    ${pc.dim(sub.name.padEnd(38))} ${subCost.padStart(14)}`);
+      }
+    }
+  }
+
+  lines.push(`  ${"─".repeat(40)} ${"─".repeat(14)}`);
+  return lines;
+}
+
+function buildCostDiffLine(diffAmount: string, currency: string): string | null {
+  if (!diffAmount || diffAmount === "0") return null;
+  const diff = parseFloat(diffAmount);
+  const diffLabel =
+    diff > 0
+      ? pc.red(`+${formatCurrency(diffAmount, currency)}`)
+      : pc.green(formatCurrency(diffAmount, currency));
+  return `  ${pc.bold("Monthly Cost Change".padEnd(40))} ${diffLabel.padStart(14)}`;
+}
+
 function displayCostSummary(data: InfracostOutput): void {
   const currency = data.currency || "USD";
 
@@ -77,22 +108,7 @@ function displayCostSummary(data: InfracostOutput): void {
     lines.push("");
 
     if (project.resources.length > 0) {
-      lines.push(`  ${pc.bold("Resource".padEnd(40))} ${pc.bold("Monthly Cost".padStart(14))}`);
-      lines.push(`  ${"─".repeat(40)} ${"─".repeat(14)}`);
-
-      for (const resource of project.resources) {
-        const cost = formatCurrency(resource.monthlyCost, currency);
-        lines.push(`  ${resource.name.padEnd(40)} ${cost.padStart(14)}`);
-
-        if (resource.subresources) {
-          for (const sub of resource.subresources) {
-            const subCost = formatCurrency(sub.monthlyCost, currency);
-            lines.push(`    ${pc.dim(sub.name.padEnd(38))} ${subCost.padStart(14)}`);
-          }
-        }
-      }
-
-      lines.push(`  ${"─".repeat(40)} ${"─".repeat(14)}`);
+      lines.push(...buildResourceTable(project.resources, currency));
     }
 
     const totalMonthly = formatCurrency(project.totalMonthlyCost, currency);
@@ -100,14 +116,8 @@ function displayCostSummary(data: InfracostOutput): void {
       `  ${pc.bold("Total Monthly Cost".padEnd(40))} ${pc.bold(totalMonthly.padStart(14))}`,
     );
 
-    if (project.diffTotalMonthlyCost && project.diffTotalMonthlyCost !== "0") {
-      const diff = parseFloat(project.diffTotalMonthlyCost);
-      const diffLabel =
-        diff > 0
-          ? pc.red(`+${formatCurrency(project.diffTotalMonthlyCost, currency)}`)
-          : pc.green(formatCurrency(project.diffTotalMonthlyCost, currency));
-      lines.push(`  ${pc.bold("Monthly Cost Change".padEnd(40))} ${diffLabel.padStart(14)}`);
-    }
+    const diffLine = buildCostDiffLine(project.diffTotalMonthlyCost || "", currency);
+    if (diffLine) lines.push(diffLine);
 
     p.note(lines.join("\n"), `Cost Estimate: ${project.name || project.path}`);
   }

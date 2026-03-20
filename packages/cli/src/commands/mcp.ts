@@ -41,12 +41,16 @@ async function mcpList(ctx: CLIContext): Promise<void> {
 
   for (const [name, serverConfig] of entries) {
     const transport = serverConfig.transport;
-    const detail =
-      transport === "stdio"
-        ? `${serverConfig.command}${serverConfig.args?.length ? " " + serverConfig.args.join(" ") : ""}`
-        : serverConfig.url;
+    let detail: string;
+    if (transport === "stdio") {
+      const argsSuffix = serverConfig.args?.length ? " " + serverConfig.args.join(" ") : "";
+      detail = `${serverConfig.command}${argsSuffix}`;
+    } else {
+      detail = serverConfig.url;
+    }
 
-    p.log.message(`  ${pc.cyan(name)} ${pc.dim(`(${transport})`)} ${pc.dim(detail)}`);
+    const transportLabel = pc.dim(`(${transport})`);
+    p.log.message(`  ${pc.cyan(name)} ${transportLabel} ${pc.dim(detail)}`);
   }
 
   // Optionally test connections

@@ -77,6 +77,50 @@ export function isDangerousCommand(cmd: string): { dangerous: boolean; reason: s
   return { dangerous: false, reason: "" };
 }
 
+function findBlockedNetworkCommand(command: string): string | null {
+  for (const netCmd of NETWORK_COMMANDS) {
+    if (new RegExp(`\\b${netCmd}\\b`).test(command)) return netCmd;
+  }
+  return null;
+}
+
+function validateSearchPatterns(
+  callId: string,
+  rawPattern: string | undefined,
+  contentPattern: string | undefined,
+): ToolResult | null {
+  if (!rawPattern && !contentPattern) {
+    return {
+      callId,
+      output:
+        "No search criteria provided. Use 'pattern' for file name matching and/or 'content_pattern' for content search.",
+      isError: true,
+    };
+  }
+  if (rawPattern && rawPattern.length > MAX_PATTERN_LENGTH) {
+    return {
+      callId,
+      output: `File pattern too long (${rawPattern.length} chars, max ${MAX_PATTERN_LENGTH}). Provide a more specific pattern.`,
+      isError: true,
+    };
+  }
+  if (contentPattern && contentPattern.length > MAX_PATTERN_LENGTH) {
+    return {
+      callId,
+      output: `Content pattern too long (${contentPattern.length} chars, max ${MAX_PATTERN_LENGTH}). Provide a more specific pattern.`,
+      isError: true,
+    };
+  }
+  if (contentPattern && /^(\.\*|\.\+)$/.test(contentPattern.trim())) {
+    return {
+      callId,
+      output: `Content pattern "${contentPattern}" is too broad. Provide a more specific pattern.`,
+      isError: true,
+    };
+  }
+  return null;
+}
+
 export interface ToolExecutorOptions {
   policy: ExecutionPolicy;
   cwd: string;
@@ -422,18 +466,16 @@ export class ToolExecutor {
 
     // G-06: Block network commands when allowNetwork is false
     if (!this.opts.policy.allowNetwork) {
-      for (const netCmd of NETWORK_COMMANDS) {
-        // Match as a word boundary to avoid false positives (e.g. "curling")
-        if (new RegExp(`\\b${netCmd}\\b`).test(command)) {
-          this.opts.onPolicyWarning?.(
-            `Network command "${netCmd}" detected but allowNetwork is false`,
-          );
-          return {
-            callId: call.id,
-            output: `Command blocked: network command "${netCmd}" is not allowed (allowNetwork is false)`,
-            isError: true,
-          };
-        }
+      const blockedNet = findBlockedNetworkCommand(command);
+      if (blockedNet) {
+        this.opts.onPolicyWarning?.(
+          `Network command "${blockedNet}" detected but allowNetwork is false`,
+        );
+        return {
+          callId: call.id,
+          output: `Command blocked: network command "${blockedNet}" is not allowed (allowNetwork is false)`,
+          isError: true,
+        };
       }
     }
 
@@ -528,44 +570,12 @@ export class ToolExecutor {
       ? this.resolvePath(call.arguments.path as string)
       : this.opts.cwd;
 
-    // No criteria provided at all
-    if (!rawPattern && !contentPattern) {
-      return {
-        callId: call.id,
-        output:
-          "No search criteria provided. Use 'pattern' for file name matching and/or 'content_pattern' for content search.",
-        isError: true,
-      };
-    }
-
-    // G-24: Cap pattern length
-    if (rawPattern && rawPattern.length > MAX_PATTERN_LENGTH) {
-      return {
-        callId: call.id,
-        output: `File pattern too long (${rawPattern.length} chars, max ${MAX_PATTERN_LENGTH}). Provide a more specific pattern.`,
-        isError: true,
-      };
-    }
-    if (contentPattern && contentPattern.length > MAX_PATTERN_LENGTH) {
-      return {
-        callId: call.id,
-        output: `Content pattern too long (${contentPattern.length} chars, max ${MAX_PATTERN_LENGTH}). Provide a more specific pattern.`,
-        isError: true,
-      };
-    }
-
-    // G-24: Block bare wildcard patterns that can cause DoS
-    if (contentPattern && /^(\.\*|\.\+)$/.test(contentPattern.trim())) {
-      return {
-        callId: call.id,
-        output: `Content pattern "${contentPattern}" is too broad. Provide a more specific pattern.`,
-        isError: true,
-      };
-    }
+    const validationError = validateSearchPatterns(call.id, rawPattern, contentPattern);
+    if (validationError) return validationError;
 
     // Normalize pattern: extract directory components from patterns like "terraform-iac/**/*.tf"
     let pattern = rawPattern;
-    if (pattern && pattern.includes("/")) {
+    if (pattern?.includes("/")) {
       const normalized = normalizeSearchPattern(pattern, searchPath);
       pattern = normalized.pattern;
       searchPath = normalized.searchPath;

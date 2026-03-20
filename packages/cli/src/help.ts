@@ -244,6 +244,12 @@ export function printHelp(): void {
 }
 
 export function printCommandHelp(command: string): void {
+  if (printCoreCommandHelp(command)) return;
+  if (printExtendedCommandHelp(command)) return;
+  printHelp();
+}
+
+function printCoreCommandHelp(command: string): boolean {
   switch (command) {
     case "plan":
       console.log(`\n${pc.bold("dojops plan")} — Decompose a goal into a task graph`);
@@ -890,6 +896,14 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
+    default:
+      return false;
+  }
+  return true;
+}
+
+function printExtendedCommandHelp(command: string): boolean {
+  switch (command) {
     case "chat":
       console.log(`\n${pc.bold("dojops chat")} — Interactive AI DevOps session`);
       console.log(`\n${pc.bold("USAGE")}`);
@@ -1383,6 +1397,7 @@ export function printCommandHelp(command: string): void {
       break;
 
     default:
-      printHelp();
+      return false;
   }
+  return true;
 }

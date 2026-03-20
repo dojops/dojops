@@ -187,17 +187,12 @@ Use these for validation (e.g. terraform validate, helm lint, kubectl --dry-run)
   return prompt;
 }
 
-/**
- * Autonomous agent mode: iterative tool-use loop (ReAct pattern).
- * The LLM reads files, makes changes, runs commands, and verifies — all autonomously.
- *
- * Usage: dojops auto "Create CI for Node app"
- */
-export async function autoCommand(args: string[], ctx: CLIContext): Promise<void> {
-  const isBackground = hasFlag(args, "--background");
-  const isBackgroundChild = hasFlag(args, "--_background-child");
-  const backgroundRunId = extractFlagValue(args, "--run-id");
+// ── Prompt resolution ────────────────────────────────────────────
 
+function resolveAutoPrompt(
+  args: string[],
+  ctx: CLIContext,
+): { prompt: string; useVoice: boolean; inlinePrompt: string } {
   const useVoice = hasFlag(args, "--voice");
   const inlinePrompt = stripFlags(
     args,
@@ -213,216 +208,215 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     new Set(["--timeout", "--repair-attempts", "--max-iterations", "--run-id"]),
   ).join(" ");
 
-  // Build prompt: file content + inline args (same pattern as plan command)
   let prompt = inlinePrompt;
   if (ctx.globalOpts.file) {
     const fileContent = readPromptFile(ctx.globalOpts.file);
     prompt = inlinePrompt ? `${inlinePrompt}\n\n${fileContent}` : fileContent;
   }
 
-  // Voice input: record + transcribe when --voice flag is set and no text prompt
-  if (useVoice && !prompt) {
-    const { resolveVoiceConfig, voiceInput } = await import("../voice");
-    const voiceConfig = resolveVoiceConfig();
-    p.log.info(`${pc.cyan("Recording...")} Speak your task (press Enter to stop, max 30s)`);
-    const transcribed = await voiceInput(voiceConfig);
-    if (transcribed) {
-      p.log.info(`${pc.dim("Transcribed:")} ${transcribed}`);
-      prompt = transcribed;
+  return { prompt, useVoice, inlinePrompt };
+}
+
+async function resolveVoicePrompt(prompt: string): Promise<string> {
+  const { resolveVoiceConfig, voiceInput } = await import("../voice");
+  const voiceConfig = resolveVoiceConfig();
+  p.log.info(`${pc.cyan("Recording...")} Speak your task (press Enter to stop, max 30s)`);
+  const transcribed = await voiceInput(voiceConfig);
+  if (transcribed) {
+    p.log.info(`${pc.dim("Transcribed:")} ${transcribed}`);
+    return transcribed;
+  }
+  return prompt;
+}
+
+// ── Background spawning ─────────────────────────────────────────
+
+function filterSensitiveEnv(): Record<string, string> {
+  const SENSITIVE_ENV_PATTERNS = [/_API_KEY$/, /_TOKEN$/, /_SECRET$/, /_PASSWORD$/];
+  const SAFE_ENV_PREFIXES = [
+    "PATH",
+    "HOME",
+    "USER",
+    "SHELL",
+    "NODE_",
+    "DOJOPS_PROVIDER",
+    "DOJOPS_MODEL",
+  ];
+  const filteredEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    const isSensitive = SENSITIVE_ENV_PATTERNS.some((pat) => pat.test(key));
+    const isSafe = SAFE_ENV_PREFIXES.some((prefix) => key === prefix || key.startsWith(prefix));
+    if (!isSensitive || isSafe) {
+      filteredEnv[key] = value;
     }
   }
+  return filteredEnv;
+}
 
-  if (!prompt) {
-    p.log.info(`  ${pc.dim("$")} dojops auto <prompt>`);
-    p.log.info(`  ${pc.dim("$")} dojops auto -f prompt.md`);
-    p.log.info(`  ${pc.dim("$")} dojops auto --background <prompt>`);
-    p.log.info(`  ${pc.dim("$")} dojops auto --voice`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
+function spawnBackgroundRun(prompt: string, cwd: string): void {
+  const rootDir = findProjectRoot(cwd) ?? cwd;
+  const runId = randomUUID();
+  const dir = runDir(rootDir, runId);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const meta: RunMeta = {
+    id: runId,
+    prompt,
+    status: "running",
+    pid: 0,
+    startedAt: new Date().toISOString(),
+  };
+
+  const logStream = fs.openSync(outputLogPath(rootDir, runId), "w");
+  const childArgs = process.argv.slice(1).filter((a) => a !== "--background");
+  childArgs.push("--_background-child", `--run-id=${runId}`);
+
+  const child = spawn(process.execPath, childArgs, {
+    detached: true,
+    stdio: ["ignore", logStream, logStream],
+    cwd,
+    env: filterSensitiveEnv(),
+  });
+
+  meta.pid = child.pid ?? 0;
+  writeRunMeta(rootDir, meta);
+  child.unref();
+  fs.closeSync(logStream);
+
+  p.log.success(`Background run started: ${pc.cyan(runId)}`);
+  p.log.info(pc.dim(`Check progress: dojops runs show ${runId.slice(0, 8)}`));
+}
+
+// ── Trust check ─────────────────────────────────────────────────
+
+interface AutoTrustResult {
+  skipCustomConfigs: boolean;
+  requireApprovalForCommands: boolean;
+}
+
+function logAutoUntrustedConfigs(cfgs: {
+  agents: string[];
+  mcpServers: string[];
+  skills: string[];
+  envPassthrough: string[];
+}): void {
+  p.log.warn("This workspace has custom configs that haven't been trusted:");
+  if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
+  if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
+  if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
+  if (cfgs.envPassthrough.length > 0)
+    p.log.info(`  MCP servers request access to env vars: ${cfgs.envPassthrough.join(", ")}`);
+}
+
+async function resolveAutoTrustCheck(
+  rootDir: string | null,
+  nonInteractive: boolean,
+): Promise<AutoTrustResult> {
+  if (!rootDir) return { skipCustomConfigs: false, requireApprovalForCommands: false };
+
+  const { isFolderTrusted, trustFolder } = await import("../trust");
+  const trustCheck = isFolderTrusted(rootDir);
+  const cfgs = trustCheck.configs;
+  const hasConfigs = cfgs.agents.length > 0 || cfgs.mcpServers.length > 0 || cfgs.skills.length > 0;
+
+  if (trustCheck.trusted || !hasConfigs) {
+    return { skipCustomConfigs: false, requireApprovalForCommands: false };
   }
 
-  // Expand @file references in the prompt
-  prompt = expandFileReferences(prompt, ctx.cwd);
-
-  // ── Background spawning ──────────────────────────────────────────
-  if (isBackground) {
-    const rootDir = findProjectRoot(ctx.cwd) ?? ctx.cwd;
-    const runId = randomUUID();
-    const dir = runDir(rootDir, runId);
-    fs.mkdirSync(dir, { recursive: true });
-
-    const meta: RunMeta = {
-      id: runId,
-      prompt,
-      status: "running",
-      pid: 0,
-      startedAt: new Date().toISOString(),
-    };
-
-    const logStream = fs.openSync(outputLogPath(rootDir, runId), "w");
-
-    // Re-build argv: replace --background with --_background-child + --run-id
-    const childArgs = process.argv.slice(1).filter((a) => a !== "--background");
-    childArgs.push("--_background-child", `--run-id=${runId}`);
-
-    // CS-03: Filter sensitive env vars from background child (same principle as MCP sanitization)
-    const SENSITIVE_ENV_PATTERNS = [/_API_KEY$/, /_TOKEN$/, /_SECRET$/, /_PASSWORD$/];
-    const SAFE_ENV_PREFIXES = [
-      "PATH",
-      "HOME",
-      "USER",
-      "SHELL",
-      "NODE_",
-      "DOJOPS_PROVIDER",
-      "DOJOPS_MODEL",
-    ];
-    const filteredEnv: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value === undefined) continue;
-      const isSensitive = SENSITIVE_ENV_PATTERNS.some((p) => p.test(key));
-      const isSafe = SAFE_ENV_PREFIXES.some((prefix) => key === prefix || key.startsWith(prefix));
-      if (!isSensitive || isSafe) {
-        filteredEnv[key] = value;
-      }
-    }
-
-    const child = spawn(process.execPath, childArgs, {
-      detached: true,
-      stdio: ["ignore", logStream, logStream],
-      cwd: ctx.cwd,
-      env: filteredEnv,
-    });
-
-    meta.pid = child.pid ?? 0;
-    writeRunMeta(rootDir, meta);
-    child.unref();
-    fs.closeSync(logStream);
-
-    p.log.success(`Background run started: ${pc.cyan(runId)}`);
-    p.log.info(pc.dim(`Check progress: dojops runs show ${runId.slice(0, 8)}`));
-    return;
+  if (nonInteractive) {
+    p.log.warn(
+      "Untrusted workspace: custom agents/MCP/skills skipped. run_command requires approval.",
+    );
+    return { skipCustomConfigs: true, requireApprovalForCommands: true };
   }
 
-  const maxIterations = Number.parseInt(extractFlagValue(args, "--max-iterations") ?? "50", 10);
-
-  p.log.info(
-    `${pc.bold(pc.cyan("Autonomous agent mode"))} — iterative tool-use (max ${maxIterations} iterations)`,
-  );
-
-  // ── Model routing: override model for simple/complex prompts ───
-  if (!ctx.globalOpts.model) {
-    const { loadConfig } = await import("../config");
-    const config = loadConfig();
-    if (config.modelRouting?.enabled) {
-      const { resolveModelForPrompt } = await import("@dojops/core");
-      const override = resolveModelForPrompt(prompt, config.modelRouting);
-      if (override) {
-        ctx.globalOpts.model = override.model;
-        if (ctx.globalOpts.verbose) {
-          p.log.info(pc.dim(`Model routing: ${override.reason} → ${override.model}`));
-        }
-      }
-    }
+  logAutoUntrustedConfigs(cfgs);
+  const trustDecision = await p.confirm({ message: "Trust this workspace?" });
+  if (p.isCancel(trustDecision) || !trustDecision) {
+    p.log.info(
+      pc.dim("Skipping custom agents/MCP/skills for this session. run_command requires approval."),
+    );
+    return { skipCustomConfigs: true, requireApprovalForCommands: true };
   }
 
-  const provider = ctx.getProvider();
-  const cwd = ctx.cwd;
+  trustFolder(rootDir);
+  p.log.success("Workspace trusted.");
+  return { skipCustomConfigs: false, requireApprovalForCommands: false };
+}
 
-  // Load skills for the run_skill tool
-  const rootDir = findProjectRoot(cwd);
+// ── Skills + MCP loading ────────────────────────────────────────
 
-  // ── Trust check: gate custom agents/MCP/skills ─────────────────
-  let skipCustomConfigs = false;
-  let requireApprovalForCommands = false;
-  if (rootDir) {
-    const { isFolderTrusted, trustFolder } = await import("../trust");
-    const trustCheck = isFolderTrusted(rootDir);
-    const cfgs = trustCheck.configs;
-    const hasConfigs =
-      cfgs.agents.length > 0 || cfgs.mcpServers.length > 0 || cfgs.skills.length > 0;
-    if (!trustCheck.trusted && hasConfigs) {
-      if (ctx.globalOpts.nonInteractive) {
-        // G-13: In non-interactive mode, warn but don't block CI/CD
-        p.log.warn(
-          "Untrusted workspace: custom agents/MCP/skills skipped. run_command requires approval.",
-        );
-        skipCustomConfigs = true;
-        requireApprovalForCommands = true;
-      } else {
-        p.log.warn("This workspace has custom configs that haven't been trusted:");
-        if (cfgs.agents.length > 0) p.log.info(`  Agents: ${cfgs.agents.join(", ")}`);
-        if (cfgs.mcpServers.length > 0) p.log.info(`  MCP servers: ${cfgs.mcpServers.join(", ")}`);
-        if (cfgs.skills.length > 0) p.log.info(`  Skills: ${cfgs.skills.join(", ")}`);
-        if (cfgs.envPassthrough.length > 0)
-          p.log.info(`  MCP servers request access to env vars: ${cfgs.envPassthrough.join(", ")}`);
-        const trustDecision = await p.confirm({ message: "Trust this workspace?" });
-        if (p.isCancel(trustDecision) || !trustDecision) {
-          skipCustomConfigs = true;
-          requireApprovalForCommands = true;
-          p.log.info(
-            pc.dim(
-              "Skipping custom agents/MCP/skills for this session. run_command requires approval.",
-            ),
-          );
-        } else {
-          trustFolder(rootDir);
-          p.log.success("Workspace trusted.");
-        }
-      }
-    }
-  }
-
+async function loadSkillsMap(
+  provider: ReturnType<CLIContext["getProvider"]>,
+  rootDir: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let skillsMap = new Map<string, any>();
+): Promise<Map<string, any>> {
   try {
-    const skills = await createTools(provider, rootDir ?? cwd);
-    skillsMap = new Map(skills.map((s) => [s.name, s]));
+    const skills = await createTools(provider, rootDir);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const skillsMap = new Map<string, any>(skills.map((s) => [s.name, s]));
     if (skills.length > 0) {
       p.log.info(pc.dim(`Loaded ${skills.length} skills: ${skills.map((s) => s.name).join(", ")}`));
     }
+    return skillsMap;
   } catch {
-    // Skills loading is optional — agent can still read/write/run commands
+    return new Map();
   }
+}
 
-  // Load MCP tools (optional — external tool servers, skipped if untrusted)
-  let mcpDispatcher: McpToolDispatcherType | undefined;
-  let mcpDisconnect: (() => Promise<void>) | undefined;
-  let mcpTools: ToolDefinition[] = [];
-  if (!skipCustomConfigs)
-    try {
-      const { loadMcpConfig, McpClientManager, McpToolDispatcher } = await import("@dojops/mcp");
-      const mcpConfig = loadMcpConfig(rootDir ?? cwd);
-      if (Object.keys(mcpConfig.mcpServers).length > 0) {
-        const mcpManager = new McpClientManager();
-        await mcpManager.connectAll(mcpConfig);
-        const connected = mcpManager.getConnectedServers();
-        if (connected.length > 0) {
-          const dispatcher = new McpToolDispatcher(mcpManager);
-          mcpDispatcher = dispatcher;
-          mcpTools = dispatcher.getToolDefinitions();
-          mcpDisconnect = () => mcpManager.disconnectAll();
-          p.log.info(
-            pc.dim(
-              `Connected ${connected.length} MCP server${connected.length > 1 ? "s" : ""} (${mcpTools.length} tools)`,
-            ),
-          );
-        }
-      }
-    } catch {
-      // MCP is optional — @dojops/mcp may not be installed or config may not exist
+interface McpResources {
+  mcpDispatcher?: McpToolDispatcherType;
+  mcpDisconnect?: () => Promise<void>;
+  mcpTools: ToolDefinition[];
+}
+
+async function loadMcpResources(rootDir: string): Promise<McpResources> {
+  try {
+    const { loadMcpConfig, McpClientManager, McpToolDispatcher } = await import("@dojops/mcp");
+    const mcpConfig = loadMcpConfig(rootDir);
+    if (Object.keys(mcpConfig.mcpServers).length === 0) {
+      return { mcpTools: [] };
     }
+    const mcpManager = new McpClientManager();
+    await mcpManager.connectAll(mcpConfig);
+    const connected = mcpManager.getConnectedServers();
+    if (connected.length === 0) return { mcpTools: [] };
 
-  const isStreamJson = ctx.globalOpts.output === "stream-json";
+    const dispatcher = new McpToolDispatcher(mcpManager);
+    p.log.info(
+      pc.dim(
+        `Connected ${connected.length} MCP server${connected.length > 1 ? "s" : ""} (${dispatcher.getToolDefinitions().length} tools)`,
+      ),
+    );
+    return {
+      mcpDispatcher: dispatcher,
+      mcpDisconnect: () => mcpManager.disconnectAll(),
+      mcpTools: dispatcher.getToolDefinitions(),
+    };
+  } catch {
+    return { mcpTools: [] };
+  }
+}
 
-  // G-14: Default to DevOps allowlist enforcement; only disable with explicit flag
-  const allowAllPaths = hasFlag(args, "--allow-all-paths");
+// ── Tool executor setup ─────────────────────────────────────────
 
-  // G-14: Denied write paths — protect sensitive directories
+function buildToolExecutor(
+  cwd: string,
+  rootDir: string | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  skillsMap: Map<string, any>,
+  mcpDispatcher: McpToolDispatcherType | undefined,
+  requireApprovalForCommands: boolean,
+  allowAllPaths: boolean,
+  isStreamJson: boolean,
+): ToolExecutor {
   const sensitiveHomePaths = ["/.ssh", "/.gnupg", "/.aws", "/.config"].map(
     (suffix) => os.homedir() + suffix,
   );
   const deniedPaths = [...sensitiveHomePaths, path.join(cwd, ".env")];
 
-  const toolExecutor = new ToolExecutor({
+  return new ToolExecutor({
     policy: {
       allowWrite: true,
       allowedWritePaths: [cwd],
@@ -454,7 +448,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
             p.log.info(pc.dim(`Checkpoint ${entry.id} created before first write`));
           }
         } catch {
-          // Checkpointing is best-effort — don't block the agent
+          // Checkpointing is best-effort
         }
       };
     })(),
@@ -478,33 +472,227 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
           isError: result.isError || undefined,
         });
       } else if (result.isError) {
-        p.log.warn(pc.dim(`  ✗ ${result.output.split("\n")[0]}`));
+        p.log.warn(pc.dim(`  \u2717 ${result.output.split("\n")[0]}`));
       }
     },
   });
+}
 
-  // Discover available CLI binaries for the system prompt
+// ── System prompt + memory ──────────────────────────────────────
+
+function buildSystemPromptWithMemory(
+  cwd: string,
+  skillNames: string[],
+  availableBinaries: string[],
+  effectiveRootDir: string,
+  memoryEnabled: boolean,
+  prompt: string,
+): string {
+  let systemPrompt = buildAutoSystemPrompt(cwd, skillNames, availableBinaries);
+  if (!memoryEnabled) return systemPrompt;
+
+  try {
+    const memCtx = queryMemory(effectiveRootDir, "generate" as TaskType, prompt);
+    const contextStr = buildMemoryContextString(memCtx);
+    if (contextStr) {
+      systemPrompt += `\n\n## Memory Context (from previous sessions)\n${contextStr}`;
+    }
+  } catch {
+    // Memory is non-critical
+  }
+  return systemPrompt;
+}
+
+// ── Model routing ───────────────────────────────────────────────
+
+async function applyAutoModelRouting(ctx: CLIContext, prompt: string): Promise<void> {
+  if (ctx.globalOpts.model) return;
+  const { loadConfig } = await import("../config");
+  const config = loadConfig();
+  if (!config.modelRouting?.enabled) return;
+  const { resolveModelForPrompt } = await import("@dojops/core");
+  const override = resolveModelForPrompt(prompt, config.modelRouting);
+  if (!override) return;
+  ctx.globalOpts.model = override.model;
+  if (ctx.globalOpts.verbose) {
+    p.log.info(pc.dim(`Model routing: ${override.reason} → ${override.model}`));
+  }
+}
+
+// ── Result handling ─────────────────────────────────────────────
+
+function displayInteractiveResult(
+  result: {
+    summary: string;
+    filesWritten: string[];
+    filesModified: string[];
+    iterations: number;
+    toolCalls: { length: number };
+    totalTokens: number;
+  },
+  cwd: string,
+): void {
+  console.log();
+  p.log.message(result.summary);
+
+  const rel = (f: string) => (f.startsWith(cwd) ? f.slice(cwd.length + 1) : f);
+  if (result.filesWritten.length > 0) {
+    p.log.success(`Created: ${result.filesWritten.map((f) => pc.green(rel(f))).join(", ")}`);
+  }
+  if (result.filesModified.length > 0) {
+    p.log.success(`Modified: ${result.filesModified.map((f) => pc.yellow(rel(f))).join(", ")}`);
+  }
+
+  p.log.info(
+    pc.dim(
+      `${result.iterations} iterations \u00B7 ${result.toolCalls.length} tool calls \u00B7 ${result.totalTokens.toLocaleString()} tokens`,
+    ),
+  );
+}
+
+function recordAutoMemory(
+  effectiveRootDir: string,
+  prompt: string,
+  summary: string,
+  result: {
+    success: boolean;
+    filesWritten: string[];
+    filesModified: string[];
+    iterations: number;
+    toolCalls: { length: number };
+    totalTokens: number;
+  },
+  startTime: number,
+): void {
+  try {
+    recordTask(effectiveRootDir, {
+      timestamp: new Date().toISOString(),
+      task_type: "generate" as TaskType,
+      prompt,
+      result_summary: summary.slice(0, 500),
+      status: result.success ? "success" : "failure",
+      duration_ms: Date.now() - startTime,
+      related_files: JSON.stringify([...result.filesWritten, ...result.filesModified]),
+      agent_or_skill: "auto",
+      metadata: JSON.stringify({
+        iterations: result.iterations,
+        toolCalls: result.toolCalls.length,
+        totalTokens: result.totalTokens,
+      }),
+    });
+  } catch {
+    // Memory is non-critical
+  }
+}
+
+function writeBackgroundResult(
+  effectiveRootDir: string,
+  backgroundRunId: string,
+  summary: string,
+  result: {
+    success: boolean;
+    iterations: number;
+    toolCalls: { length: number };
+    totalTokens: number;
+    filesWritten: string[];
+    filesModified: string[];
+  },
+): void {
+  writeRunResult(effectiveRootDir, backgroundRunId, {
+    success: result.success,
+    summary,
+    iterations: result.iterations,
+    toolCalls: result.toolCalls.length,
+    totalTokens: result.totalTokens,
+    filesWritten: result.filesWritten,
+    filesModified: result.filesModified,
+  });
+  updateRunStatus(effectiveRootDir, backgroundRunId, result.success ? "completed" : "failed");
+}
+
+/**
+ * Autonomous agent mode: iterative tool-use loop (ReAct pattern).
+ * The LLM reads files, makes changes, runs commands, and verifies — all autonomously.
+ *
+ * Usage: dojops auto "Create CI for Node app"
+ */
+export async function autoCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const isBackground = hasFlag(args, "--background");
+  const isBackgroundChild = hasFlag(args, "--_background-child");
+  const backgroundRunId = extractFlagValue(args, "--run-id");
+
+  const { prompt: initialPrompt, useVoice } = resolveAutoPrompt(args, ctx);
+  let prompt = initialPrompt;
+
+  if (useVoice && !prompt) {
+    prompt = await resolveVoicePrompt(prompt);
+  }
+
+  if (!prompt) {
+    p.log.info(`  ${pc.dim("$")} dojops auto <prompt>`);
+    p.log.info(`  ${pc.dim("$")} dojops auto -f prompt.md`);
+    p.log.info(`  ${pc.dim("$")} dojops auto --background <prompt>`);
+    p.log.info(`  ${pc.dim("$")} dojops auto --voice`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
+  }
+
+  prompt = expandFileReferences(prompt, ctx.cwd);
+
+  if (isBackground) {
+    spawnBackgroundRun(prompt, ctx.cwd);
+    return;
+  }
+
+  const maxIterations = Number.parseInt(extractFlagValue(args, "--max-iterations") ?? "50", 10);
+  p.log.info(
+    `${pc.bold(pc.cyan("Autonomous agent mode"))} — iterative tool-use (max ${maxIterations} iterations)`,
+  );
+
+  await applyAutoModelRouting(ctx, prompt);
+
+  const provider = ctx.getProvider();
+  const cwd = ctx.cwd;
+  const rootDir = findProjectRoot(cwd);
+
+  const { skipCustomConfigs, requireApprovalForCommands } = await resolveAutoTrustCheck(
+    rootDir,
+    ctx.globalOpts.nonInteractive,
+  );
+
+  const skillsMap = await loadSkillsMap(provider, rootDir ?? cwd);
+
+  const mcpResources = skipCustomConfigs
+    ? { mcpTools: [] as ToolDefinition[] }
+    : await loadMcpResources(rootDir ?? cwd);
+
+  const isStreamJson = ctx.globalOpts.output === "stream-json";
+  const allowAllPaths = hasFlag(args, "--allow-all-paths");
+
+  const toolExecutor = buildToolExecutor(
+    cwd,
+    rootDir,
+    skillsMap,
+    mcpResources.mcpDispatcher,
+    requireApprovalForCommands,
+    allowAllPaths,
+    isStreamJson,
+  );
+
   const availableBinaries = discoverAvailableBinaries();
   const skillNames = [...skillsMap.keys()];
-
-  const allTools = [...AGENT_TOOLS, ...mcpTools];
-
-  // ── Auto-memory: inject context from previous sessions ───────────
-  let systemPrompt = buildAutoSystemPrompt(cwd, skillNames, availableBinaries);
   const effectiveRootDir = rootDir ?? cwd;
   const memoryEnabled = loadMemoryConfig(effectiveRootDir);
 
-  if (memoryEnabled) {
-    try {
-      const memCtx = queryMemory(effectiveRootDir, "generate" as TaskType, prompt);
-      const contextStr = buildMemoryContextString(memCtx);
-      if (contextStr) {
-        systemPrompt += `\n\n## Memory Context (from previous sessions)\n${contextStr}`;
-      }
-    } catch {
-      // Memory is non-critical — continue without it
-    }
-  }
+  const systemPrompt = buildSystemPromptWithMemory(
+    cwd,
+    skillNames,
+    availableBinaries,
+    effectiveRootDir,
+    memoryEnabled,
+    prompt,
+  );
+
+  const allTools = [...AGENT_TOOLS, ...mcpResources.mcpTools];
 
   const loop = new AgentLoop({
     provider,
@@ -513,28 +701,29 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     systemPrompt,
     maxIterations,
     onThinking: (text) => {
-      if (text) {
-        // Skip raw JSON output (e.g. LLM returning tool calls as text)
-        const trimmed = text.trim();
-        if (trimmed.startsWith("{") || trimmed.startsWith("[")) return;
-        const firstLine = trimmed.split("\n")[0];
-        if (firstLine.length > 0) {
-          p.log.info(pc.dim(firstLine.length > 100 ? firstLine.slice(0, 97) + "..." : firstLine));
-        }
+      if (!text) return;
+      const trimmed = text.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) return;
+      const firstLine = trimmed.split("\n")[0];
+      if (firstLine.length > 0) {
+        p.log.info(pc.dim(firstLine.length > 100 ? firstLine.slice(0, 97) + "..." : firstLine));
       }
     },
   });
 
   const startTime = Date.now();
 
-  // Stream-JSON: emit init event
   if (isStreamJson) {
-    const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
-    const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
-    emitStreamEvent({ type: "init", provider, model, timestamp: new Date().toISOString() });
+    const providerName = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+    const modelName = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+    emitStreamEvent({
+      type: "init",
+      provider: providerName,
+      model: modelName,
+      timestamp: new Date().toISOString(),
+    });
   }
 
-  // Background child: suppress interactive output
   const isInteractive = !isBackgroundChild && !isStreamJson;
   const s = isInteractive ? p.spinner() : null;
   s?.start("Agent working...");
@@ -543,10 +732,8 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     const result = await loop.run(prompt);
     s?.stop(result.success ? pc.green("Done") : pc.yellow("Stopped"));
 
-    // Display summary — strip any JSON wrapper that leaked through from LLM output
     const summary = cleanDisplayText(result.summary);
 
-    // Stream-JSON: emit final result event
     if (isStreamJson) {
       emitStreamEvent({
         type: "result",
@@ -563,66 +750,19 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     }
 
     if (isInteractive) {
-      console.log();
-      p.log.message(summary);
-
-      // Display file changes (relative to cwd for readability)
-      const rel = (f: string) => (f.startsWith(cwd) ? f.slice(cwd.length + 1) : f);
-      if (result.filesWritten.length > 0) {
-        p.log.success(`Created: ${result.filesWritten.map((f) => pc.green(rel(f))).join(", ")}`);
-      }
-      if (result.filesModified.length > 0) {
-        p.log.success(`Modified: ${result.filesModified.map((f) => pc.yellow(rel(f))).join(", ")}`);
-      }
-
-      // Display stats
-      p.log.info(
-        pc.dim(
-          `${result.iterations} iterations · ${result.toolCalls.length} tool calls · ${result.totalTokens.toLocaleString()} tokens`,
-        ),
-      );
+      displayInteractiveResult({ ...result, summary }, cwd);
     }
 
-    // ── Auto-memory: record completed task ───────────────────────────
     if (memoryEnabled) {
-      try {
-        recordTask(effectiveRootDir, {
-          timestamp: new Date().toISOString(),
-          task_type: "generate" as TaskType,
-          prompt,
-          result_summary: summary.slice(0, 500),
-          status: result.success ? "success" : "failure",
-          duration_ms: Date.now() - startTime,
-          related_files: JSON.stringify([...result.filesWritten, ...result.filesModified]),
-          agent_or_skill: "auto",
-          metadata: JSON.stringify({
-            iterations: result.iterations,
-            toolCalls: result.toolCalls.length,
-            totalTokens: result.totalTokens,
-          }),
-        });
-      } catch {
-        // Memory is non-critical
-      }
+      recordAutoMemory(effectiveRootDir, prompt, summary, result, startTime);
     }
 
-    // ── Background child: write result and update meta ──────────────
     if (isBackgroundChild && backgroundRunId) {
-      writeRunResult(effectiveRootDir, backgroundRunId, {
-        success: result.success,
-        summary,
-        iterations: result.iterations,
-        toolCalls: result.toolCalls.length,
-        totalTokens: result.totalTokens,
-        filesWritten: result.filesWritten,
-        filesModified: result.filesModified,
-      });
-      updateRunStatus(effectiveRootDir, backgroundRunId, result.success ? "completed" : "failed");
+      writeBackgroundResult(effectiveRootDir, backgroundRunId, summary, result);
     }
   } catch (err) {
     s?.stop("Error");
 
-    // Stream-JSON: emit error event
     if (isStreamJson) {
       emitStreamEvent({
         type: "error",
@@ -630,7 +770,6 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
       });
     }
 
-    // Background child: mark run as failed
     if (isBackgroundChild && backgroundRunId) {
       updateRunStatus(effectiveRootDir, backgroundRunId, "failed");
     }
@@ -638,9 +777,8 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     const message = err instanceof Error ? err.message : String(err);
     throw new CLIError(ExitCode.GENERAL_ERROR, message);
   } finally {
-    // Disconnect MCP servers (best-effort)
-    if (mcpDisconnect) {
-      await mcpDisconnect().catch(() => {});
+    if (mcpResources.mcpDisconnect) {
+      await mcpResources.mcpDisconnect().catch(() => {});
     }
   }
 }

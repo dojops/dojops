@@ -50,7 +50,8 @@ function escapeCSV(value: string): string {
 function exportAsCsv(entries: AuditEntry[]): string {
   const header = "timestamp,sequence,type,summary,hash,status,user,durationMs";
   const rows = entries.map((e) => {
-    const summary = `${e.command}/${e.action}${e.planId ? ` (${e.planId})` : ""}`;
+    const planSuffix = e.planId ? ` (${e.planId})` : "";
+    const summary = `${e.command}/${e.action}${planSuffix}`;
     return [
       escapeCSV(e.timestamp),
       e.seq ?? "",
@@ -76,11 +77,20 @@ function exportAsSyslog(entries: AuditEntry[]): string {
   return entries
     .map((e) => {
       // Severity mapping: success=6 (info), failure=3 (error), cancelled=4 (warning)
-      const severity = e.status === "failure" ? 3 : e.status === "cancelled" ? 4 : 6;
+      let severity: number;
+      if (e.status === "failure") {
+        severity = 3;
+      } else if (e.status === "cancelled") {
+        severity = 4;
+      } else {
+        severity = 6;
+      }
       // Facility 1 (user-level)
       const priority = 8 + severity;
       const ts = new Date(e.timestamp).toISOString();
-      const msg = `${e.command}/${e.action} status=${e.status} duration=${e.durationMs}ms${e.planId ? ` planId=${e.planId}` : ""}${e.hash ? ` hash=${e.hash}` : ""}`;
+      const planPart = e.planId ? ` planId=${e.planId}` : "";
+      const hashPart = e.hash ? ` hash=${e.hash}` : "";
+      const msg = `${e.command}/${e.action} status=${e.status} duration=${e.durationMs}ms${planPart}${hashPart}`;
       return `<${priority}>1 ${ts} ${hostname} ${appName} - - - ${msg}`;
     })
     .join("\n");

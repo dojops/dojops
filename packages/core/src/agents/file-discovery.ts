@@ -192,25 +192,29 @@ function handleSubdirectory(
   }
 }
 
+interface ScanContext {
+  extensions: string[] | undefined;
+  names: string[] | undefined;
+  files: DiscoveredFile[];
+  seen: Set<string>;
+  ignorePatterns: string[];
+}
+
 /** Handle a file entry during directory scanning. */
 function handleFileEntry(
   entryAbsPath: string,
   entryRelPath: string,
   entryName: string,
-  extensions: string[] | undefined,
-  names: string[] | undefined,
-  files: DiscoveredFile[],
-  seen: Set<string>,
-  ignorePatterns: string[],
+  ctx: ScanContext,
 ): void {
-  if (extensions) {
+  if (ctx.extensions) {
     const ext = path.extname(entryName).toLowerCase();
-    if (extensions.includes(ext)) {
-      tryAddFile(entryAbsPath, entryRelPath, files, seen, ignorePatterns);
+    if (ctx.extensions.includes(ext)) {
+      tryAddFile(entryAbsPath, entryRelPath, ctx.files, ctx.seen, ctx.ignorePatterns);
     }
   }
-  if (names?.includes(entryName)) {
-    tryAddFile(entryAbsPath, entryRelPath, files, seen, ignorePatterns);
+  if (ctx.names?.includes(entryName)) {
+    tryAddFile(entryAbsPath, entryRelPath, ctx.files, ctx.seen, ctx.ignorePatterns);
   }
 }
 
@@ -246,16 +250,13 @@ function scanDirectory(
       }
 
       if (!entry.isFile()) continue;
-      handleFileEntry(
-        entryAbsPath,
-        entryRelPath,
-        entry.name,
+      handleFileEntry(entryAbsPath, entryRelPath, entry.name, {
         extensions,
         names,
         files,
         seen,
         ignorePatterns,
-      );
+      });
     }
   } catch {
     // Directory doesn't exist — skip

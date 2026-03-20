@@ -100,7 +100,11 @@ describe("ChatSession provider switching", () => {
     const msgs = session.messages;
     // Messages only use {role, content, timestamp} — no provider-specific fields
     for (const msg of msgs) {
-      expect(Object.keys(msg).sort()).toEqual(["content", "role", "timestamp"]);
+      expect(Object.keys(msg).sort((a, b) => a.localeCompare(b))).toEqual([
+        "content",
+        "role",
+        "timestamp",
+      ]);
     }
   });
 });

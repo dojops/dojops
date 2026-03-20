@@ -33,7 +33,8 @@ function handleCreate(args: string[], ctx: CLIContext): void {
     return;
   }
 
-  p.log.success(`Checkpoint ${pc.cyan(entry.id)}${name ? ` (${pc.bold(name)})` : ""} created`);
+  const nameLabel = name ? ` (${pc.bold(name)})` : "";
+  p.log.success(`Checkpoint ${pc.cyan(entry.id)}${nameLabel} created`);
   if (entry.filesTracked.length > 0) {
     p.log.info(pc.dim(`Files: ${entry.filesTracked.join(", ")}`));
   }
@@ -78,7 +79,8 @@ function handleRestore(args: string[], ctx: CLIContext): void {
     return;
   }
 
-  p.log.success(`Restored checkpoint ${pc.cyan(entry.id)}${entry.name ? ` (${entry.name})` : ""}`);
+  const restoreLabel = entry.name ? ` (${entry.name})` : "";
+  p.log.success(`Restored checkpoint ${pc.cyan(entry.id)}${restoreLabel}`);
 }
 
 function handleClean(): void {

@@ -54,35 +54,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
 
   const report = await executeScan(scanRoot, flags.scanType, context, ctx);
 
-  if (ctx.globalOpts.output === "json") {
-    const output = flags.complianceFramework
-      ? {
-          ...report,
-          compliance: mapFindingsToCompliance(report.findings, flags.complianceFramework),
-        }
-      : report;
-    console.log(JSON.stringify(output, null, 2));
-    throwOnSeverity(report, flags.failOnSeverity);
-    return;
-  }
-
-  if (ctx.globalOpts.output === "yaml") {
-    const output = flags.complianceFramework
-      ? {
-          ...report,
-          compliance: mapFindingsToCompliance(report.findings, flags.complianceFramework),
-        }
-      : report;
-    console.log(yaml.dump(output, { lineWidth: 120, noRefs: true }));
-    throwOnSeverity(report, flags.failOnSeverity);
-    return;
-  }
-
-  if (ctx.globalOpts.output === "sarif") {
-    console.log(JSON.stringify(toSarif(report), null, 2));
-    throwOnSeverity(report, flags.failOnSeverity);
-    return;
-  }
+  if (emitStructuredOutput(report, flags, ctx)) return;
 
   displayScannerStatus(report);
   displaySummary(report.summary);
@@ -231,6 +203,29 @@ function resolveScanRoot(
   return { root, scanRoot: root };
 }
 
+function emitStructuredOutput(report: ScanReport, flags: ScanFlags, ctx: CLIContext): boolean {
+  const { output } = ctx.globalOpts;
+  if (output === "sarif") {
+    console.log(JSON.stringify(toSarif(report), null, 2));
+    throwOnSeverity(report, flags.failOnSeverity);
+    return true;
+  }
+
+  if (output !== "json" && output !== "yaml") return false;
+
+  const base = flags.complianceFramework
+    ? { ...report, compliance: mapFindingsToCompliance(report.findings, flags.complianceFramework) }
+    : report;
+
+  if (output === "json") {
+    console.log(JSON.stringify(base, null, 2));
+  } else {
+    console.log(yaml.dump(base, { lineWidth: 120, noRefs: true }));
+  }
+  throwOnSeverity(report, flags.failOnSeverity);
+  return true;
+}
+
 async function executeScan(
   scanRoot: string,
   scanType: ScanType,
@@ -352,35 +347,40 @@ function displayComplianceReport(findings: ScanFinding[], framework: string): vo
   const report: ComplianceReport = mapFindingsToCompliance(findings, framework);
 
   const lines: string[] = [];
-  lines.push(`${pc.bold("Framework:")}  ${report.framework} ${pc.dim(`v${report.version}`)}`);
+  const versionLabel = pc.dim(`v${report.version}`);
+  lines.push(`${pc.bold("Framework:")}  ${report.framework} ${versionLabel}`);
   lines.push(
     `${pc.bold("Score:")}      ${complianceScoreLabel(report.summary.compliancePercentage)}`,
   );
   lines.push("");
 
   for (const control of report.controls) {
-    const icon =
-      control.status === "pass"
-        ? pc.green("PASS")
-        : control.status === "fail"
-          ? pc.red("FAIL")
-          : pc.yellow("WARN");
+    let icon: string;
+    if (control.status === "pass") {
+      icon = pc.green("PASS");
+    } else if (control.status === "fail") {
+      icon = pc.red("FAIL");
+    } else {
+      icon = pc.yellow("WARN");
+    }
     lines.push(`  ${icon}  ${control.controlId}  ${pc.dim(control.description)}`);
     if (control.findings.length > 0) {
       for (const f of control.findings.slice(0, 3)) {
         lines.push(`         ${pc.dim("→")} ${f.message}`);
       }
       if (control.findings.length > 3) {
-        lines.push(`         ${pc.dim(`… and ${control.findings.length - 3} more`)}`);
+        const moreLabel = pc.dim(`… and ${control.findings.length - 3} more`);
+        lines.push(`         ${moreLabel}`);
       }
     }
   }
 
   const { passing, failing, partial, totalControls } = report.summary;
   lines.push("");
-  lines.push(
-    `${pc.green(`${passing} pass`)}, ${pc.red(`${failing} fail`)}, ${pc.yellow(`${partial} partial`)} — ${totalControls} controls total`,
-  );
+  const passLabel = pc.green(`${passing} pass`);
+  const failLabel = pc.red(`${failing} fail`);
+  const partialLabel = pc.yellow(`${partial} partial`);
+  lines.push(`${passLabel}, ${failLabel}, ${partialLabel} — ${totalControls} controls total`);
 
   p.note(lines.join("\n"), `Compliance: ${report.framework}`);
 }

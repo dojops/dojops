@@ -149,7 +149,8 @@ function handleErrors(args: string[], ctx: CLIContext): void {
     const resolved = ep.resolution ? pc.green(" [resolved]") : "";
     const msg =
       ep.error_message.length > 80 ? ep.error_message.slice(0, 77) + "..." : ep.error_message;
-    return `${pc.cyan(`#${ep.id}`)} ${pc.dim(ep.task_type)}${count}${resolved}  ${msg}`;
+    const idLabel = pc.cyan(`#${ep.id}`);
+    return `${idLabel} ${pc.dim(ep.task_type)}${count}${resolved}  ${msg}`;
   });
   p.note(lines.join("\n"), `Error patterns (${patterns.length})`);
 }

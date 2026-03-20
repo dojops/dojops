@@ -639,6 +639,23 @@ async function installFromSource(
 const WHISPER_MODEL_URL =
   "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
 
+function assertBuildPrerequisites(): void {
+  const missing: string[] = [];
+  if (!commandExists("git")) missing.push("git");
+  if (!commandExists("cmake")) missing.push("cmake");
+  if (!commandExists("make") && !commandExists("ninja")) missing.push("make or ninja");
+  if (!commandExists("cc") && !commandExists("gcc") && !commandExists("clang")) {
+    missing.push("cc/gcc/clang (C compiler)");
+  }
+  if (missing.length === 0) return;
+  throw new Error(
+    `Cannot build whisper.cpp — missing: ${missing.join(", ")}.\n` +
+      "Install build tools:\n" +
+      "  macOS: xcode-select --install && brew install cmake\n" +
+      "  Linux: sudo apt install build-essential cmake git",
+  );
+}
+
 /**
  * Install whisper.cpp by cloning the repo and building from source.
  *
@@ -663,22 +680,7 @@ async function installWhisperCpp(
   const ver = version ?? tool.latestVersion;
   ensureToolchainDir(ctx);
 
-  // Check build prerequisites
-  const missing: string[] = [];
-  if (!commandExists("git")) missing.push("git");
-  if (!commandExists("cmake")) missing.push("cmake");
-  if (!commandExists("make") && !commandExists("ninja")) missing.push("make or ninja");
-  if (!commandExists("cc") && !commandExists("gcc") && !commandExists("clang")) {
-    missing.push("cc/gcc/clang (C compiler)");
-  }
-  if (missing.length > 0) {
-    throw new Error(
-      `Cannot build whisper.cpp — missing: ${missing.join(", ")}.\n` +
-        "Install build tools:\n" +
-        "  macOS: xcode-select --install && brew install cmake\n" +
-        "  Linux: sudo apt install build-essential cmake git",
-    );
-  }
+  assertBuildPrerequisites();
 
   // Clone to temp directory
   const buildDir = path.join(os.tmpdir(), `dojops-whisper-build-${Date.now()}`);

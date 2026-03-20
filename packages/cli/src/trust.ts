@@ -110,6 +110,28 @@ function listFiles(dir: string): string[] {
   }
 }
 
+/** CS-05: Extract allowEnvPassthrough entries from mcp.json servers. */
+function extractEnvPassthrough(mcpPath: string): string[] {
+  const result: string[] = [];
+  try {
+    const mcpRaw = JSON.parse(fs.readFileSync(mcpPath, "utf-8"));
+    const servers = mcpRaw?.mcpServers ?? {};
+    for (const serverConfig of Object.values(servers)) {
+      const cfg = serverConfig as Record<string, unknown>;
+      if (Array.isArray(cfg.allowEnvPassthrough)) {
+        for (const v of cfg.allowEnvPassthrough) {
+          if (typeof v === "string" && !result.includes(v)) {
+            result.push(v);
+          }
+        }
+      }
+    }
+  } catch {
+    // Invalid JSON — skip env extraction
+  }
+  return result;
+}
+
 /**
  * Discover workspace configs: custom agents, MCP servers, custom skills.
  * Also extracts allowEnvPassthrough entries from mcp.json so the trust
@@ -120,33 +142,54 @@ export function discoverWorkspaceConfigs(projectDir: string): TrustCheck["config
   const mcpPath = path.join(dojopsDir, "mcp.json");
   const hasMcp = fs.existsSync(mcpPath);
 
-  // CS-05: Extract allowEnvPassthrough from mcp.json
-  const envPassthrough: string[] = [];
-  if (hasMcp) {
-    try {
-      const mcpRaw = JSON.parse(fs.readFileSync(mcpPath, "utf-8"));
-      const servers = mcpRaw?.mcpServers ?? {};
-      for (const serverConfig of Object.values(servers)) {
-        const cfg = serverConfig as Record<string, unknown>;
-        if (Array.isArray(cfg.allowEnvPassthrough)) {
-          for (const v of cfg.allowEnvPassthrough) {
-            if (typeof v === "string" && !envPassthrough.includes(v)) {
-              envPassthrough.push(v);
-            }
-          }
-        }
-      }
-    } catch {
-      // Invalid JSON — skip env extraction
-    }
-  }
-
   return {
     agents: listFiles(path.join(dojopsDir, "agents")),
     mcpServers: hasMcp ? ["mcp.json"] : [],
     skills: listFiles(path.join(dojopsDir, "skills")),
-    envPassthrough,
+    envPassthrough: hasMcp ? extractEnvPassthrough(mcpPath) : [],
   };
+}
+
+function collectAgentParts(agentsDir: string): string[] {
+  if (!fs.existsSync(agentsDir)) return [];
+  const parts: string[] = [];
+  for (const f of listFiles(agentsDir)) {
+    try {
+      parts.push(`agent:${f}:${fs.readFileSync(path.join(agentsDir, f), "utf-8")}`);
+    } catch {
+      // skip unreadable files
+    }
+  }
+  return parts;
+}
+
+function collectMcpParts(mcpPath: string): string[] {
+  if (!fs.existsSync(mcpPath)) return [];
+  try {
+    return [`mcp:${fs.readFileSync(mcpPath, "utf-8")}`];
+  } catch {
+    return [];
+  }
+}
+
+function collectSkillParts(skillsDir: string): string[] {
+  if (!fs.existsSync(skillsDir)) return [];
+  const parts: string[] = [];
+  for (const f of listFiles(skillsDir)) {
+    try {
+      const skillPath = path.join(skillsDir, f);
+      if (fs.statSync(skillPath).isDirectory()) {
+        for (const sf of listFiles(skillPath)) {
+          parts.push(`skill:${f}/${sf}:${fs.readFileSync(path.join(skillPath, sf), "utf-8")}`);
+        }
+      } else {
+        parts.push(`skill:${f}:${fs.readFileSync(skillPath, "utf-8")}`);
+      }
+    } catch {
+      // skip
+    }
+  }
+  return parts;
 }
 
 /**
@@ -155,51 +198,13 @@ export function discoverWorkspaceConfigs(projectDir: string): TrustCheck["config
 export function computeConfigHash(projectDir: string): string {
   const dojopsDir = path.join(projectDir, ".dojops");
   const hash = crypto.createHash("sha256");
-  const parts: string[] = [];
+  const parts = [
+    ...collectAgentParts(path.join(dojopsDir, "agents")),
+    ...collectMcpParts(path.join(dojopsDir, "mcp.json")),
+    ...collectSkillParts(path.join(dojopsDir, "skills")),
+  ];
 
-  // Agents
-  const agentsDir = path.join(dojopsDir, "agents");
-  if (fs.existsSync(agentsDir)) {
-    for (const f of listFiles(agentsDir)) {
-      try {
-        parts.push(`agent:${f}:${fs.readFileSync(path.join(agentsDir, f), "utf-8")}`);
-      } catch {
-        // skip unreadable files
-      }
-    }
-  }
-
-  // MCP config
-  const mcpPath = path.join(dojopsDir, "mcp.json");
-  if (fs.existsSync(mcpPath)) {
-    try {
-      parts.push(`mcp:${fs.readFileSync(mcpPath, "utf-8")}`);
-    } catch {
-      // skip
-    }
-  }
-
-  // Skills
-  const skillsDir = path.join(dojopsDir, "skills");
-  if (fs.existsSync(skillsDir)) {
-    for (const f of listFiles(skillsDir)) {
-      try {
-        const skillPath = path.join(skillsDir, f);
-        if (fs.statSync(skillPath).isDirectory()) {
-          const inner = listFiles(skillPath);
-          for (const sf of inner) {
-            parts.push(`skill:${f}/${sf}:${fs.readFileSync(path.join(skillPath, sf), "utf-8")}`);
-          }
-        } else {
-          parts.push(`skill:${f}:${fs.readFileSync(skillPath, "utf-8")}`);
-        }
-      } catch {
-        // skip
-      }
-    }
-  }
-
-  parts.sort();
+  parts.sort((a, b) => a.localeCompare(b));
   for (const p of parts) hash.update(p);
   return hash.digest("hex");
 }

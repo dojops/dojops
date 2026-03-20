@@ -287,7 +287,7 @@ function isTypeDeclarationStart(trimmed: string): boolean {
 function isFunctionSignature(trimmed: string): boolean {
   return (
     /^(?:export\s+)?(?:async\s+)?function[\s*]/.test(trimmed) ||
-    /^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:\(|<)/.test(trimmed) ||
+    /^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?[(<]/.test(trimmed) ||
     /^(?:public|private|protected|static|async|get|set|readonly)\s/.test(trimmed) ||
     /^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?\w+\s*=>/.test(trimmed) ||
     (/^\w+\s*\(/.test(trimmed) &&

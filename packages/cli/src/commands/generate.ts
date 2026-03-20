@@ -835,16 +835,22 @@ function resolvePrompt(args: string[], ctx: CLIContext, writePath: string | unde
 }
 
 /** Handle the agent-routed generation result: persist, output, hooks. */
+interface AgentResultOpts {
+  prompt: string;
+  projectRoot: string | undefined;
+  writePath: string | undefined;
+  allowAllPaths: boolean;
+  genDuration: number;
+}
+
 async function handleAgentResult(
   ctx: CLIContext,
   result: { content: string },
   route: { agent: { name: string } },
-  prompt: string,
-  projectRoot: string | undefined,
-  writePath: string | undefined,
-  allowAllPaths: boolean,
-  genDuration: number,
+  opts: AgentResultOpts,
 ): Promise<void> {
+  const { prompt, projectRoot, writePath, allowAllPaths, genDuration } = opts;
+
   persistGeneration(projectRoot, prompt, result.content, {
     agentName: route.agent.name,
     filesWritten: writePath ? [writePath] : [],
@@ -889,6 +895,104 @@ async function handleAgentResult(
   }
 }
 
+type GenerationResult = {
+  content: string;
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+};
+
+function emitStreamInitAndResult(
+  ctx: CLIContext,
+  agentName: string,
+  result: GenerationResult,
+  genDuration: number,
+): void {
+  emitStreamEvent({
+    type: "result",
+    content: result.content,
+    stats: {
+      agent: agentName,
+      durationMs: genDuration,
+      ...(result.usage ?? {}),
+    },
+  });
+}
+
+async function runGeneration(
+  ctx: CLIContext,
+  route: ReturnType<typeof resolveRoute>,
+  augmentedPrompt: string,
+  structured: boolean,
+): Promise<{ result: GenerationResult; genDuration: number }> {
+  const isStreamJson = ctx.globalOpts.output === "stream-json";
+  const canStream = (!structured || isStreamJson) && route.agent.supportsStreaming;
+
+  if (isStreamJson) {
+    const providerName = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+    const modelName = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+    emitStreamEvent({
+      type: "init",
+      provider: providerName,
+      model: modelName,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  if (isStreamJson && canStream) {
+    const genStart = Date.now();
+    const result = await route.agent.streamWithHistory(
+      [{ role: "user", content: sanitizeUserInput(augmentedPrompt) }],
+      (chunk) => emitStreamEvent({ type: "chunk", content: chunk }),
+    );
+    const genDuration = Date.now() - genStart;
+    emitStreamInitAndResult(ctx, route.agent.name, result, genDuration);
+    return { result, genDuration };
+  }
+
+  if (canStream) {
+    const { createStreamRenderer } = await import("../tui/stream-renderer");
+    const renderer = createStreamRenderer({ quiet: ctx.globalOpts.quiet });
+    renderer.showPhase(`${route.agent.name} generating...`);
+    const genStart = Date.now();
+    const result = await route.agent.streamWithHistory(
+      [{ role: "user", content: sanitizeUserInput(augmentedPrompt) }],
+      (chunk) => renderer.writeChunk(chunk),
+    );
+    const genDuration = Date.now() - genStart;
+    renderer.finalize();
+    return { result, genDuration };
+  }
+
+  if (isStreamJson) {
+    const genStart = Date.now();
+    const result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
+    const genDuration = Date.now() - genStart;
+    emitStreamInitAndResult(ctx, route.agent.name, result, genDuration);
+    return { result, genDuration };
+  }
+
+  const s2 = p.spinner();
+  if (!structured) s2.start("Thinking...");
+  const genStart = Date.now();
+  const result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
+  const genDuration = Date.now() - genStart;
+  if (!structured) s2.stop("Done.");
+  return { result, genDuration };
+}
+
+async function applyModelRouting(ctx: CLIContext, prompt: string): Promise<void> {
+  if (ctx.globalOpts.model) return;
+  const { loadConfig } = await import("../config");
+  const config = loadConfig();
+  if (!config.modelRouting?.enabled) return;
+  const { resolveModelForPrompt } = await import("@dojops/core");
+  const override = resolveModelForPrompt(prompt, config.modelRouting);
+  if (!override) return;
+  ctx.globalOpts.model = override.model;
+  if (ctx.globalOpts.verbose) {
+    p.log.info(pc.dim(`Model routing: ${override.reason} → ${override.model}`));
+  }
+}
+
 export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const writePath = extractFlagValue(args, "--write");
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
@@ -897,21 +1001,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const projectRoot = findProjectRoot() ?? undefined;
   runPreGenerateHook(projectRoot, prompt, ctx.globalOpts.verbose);
 
-  // ── Model routing: override model for simple/complex prompts ───
-  if (!ctx.globalOpts.model) {
-    const { loadConfig } = await import("../config");
-    const config = loadConfig();
-    if (config.modelRouting?.enabled) {
-      const { resolveModelForPrompt } = await import("@dojops/core");
-      const override = resolveModelForPrompt(prompt, config.modelRouting);
-      if (override) {
-        ctx.globalOpts.model = override.model;
-        if (ctx.globalOpts.verbose) {
-          p.log.info(pc.dim(`Model routing: ${override.reason} → ${override.model}`));
-        }
-      }
-    }
-  }
+  await applyModelRouting(ctx, prompt);
 
   const provider = ctx.getProvider();
   const { docAugmenter, context7Provider } = await initContext7();
@@ -954,88 +1044,18 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   const augmentedPrompt = buildAugmentedPrompt(prompt, projectRoot, ctx.globalOpts.verbose);
-
   const structured = isStructuredOutput(ctx);
-  const isStreamJson = ctx.globalOpts.output === "stream-json";
-  const canStream = (!structured || isStreamJson) && !writePath && route.agent.supportsStreaming;
-
-  let result: {
-    content: string;
-    usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
-  };
-  let genDuration: number;
-
-  if (isStreamJson && canStream) {
-    // Stream-JSON: emit JSONL events for CI/CD integration
-    const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
-    const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
-    emitStreamEvent({ type: "init", provider, model, timestamp: new Date().toISOString() });
-    const genStart = Date.now();
-    result = await route.agent.streamWithHistory(
-      [{ role: "user", content: sanitizeUserInput(augmentedPrompt) }],
-      (chunk) => emitStreamEvent({ type: "chunk", content: chunk }),
-    );
-    genDuration = Date.now() - genStart;
-    emitStreamEvent({
-      type: "result",
-      content: result.content,
-      stats: {
-        agent: route.agent.name,
-        durationMs: genDuration,
-        ...(result.usage ?? {}),
-      },
-    });
-  } else if (canStream) {
-    // Stream tokens progressively to terminal
-    const { createStreamRenderer } = await import("../tui/stream-renderer");
-    const renderer = createStreamRenderer({ quiet: ctx.globalOpts.quiet });
-    renderer.showPhase(`${route.agent.name} generating...`);
-    const genStart = Date.now();
-    result = await route.agent.streamWithHistory(
-      [{ role: "user", content: sanitizeUserInput(augmentedPrompt) }],
-      (chunk) => renderer.writeChunk(chunk),
-    );
-    genDuration = Date.now() - genStart;
-    renderer.finalize();
-  } else if (isStreamJson) {
-    // stream-json requested but agent doesn't support streaming — emit init + result
-    const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
-    const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
-    emitStreamEvent({ type: "init", provider, model, timestamp: new Date().toISOString() });
-    const genStart = Date.now();
-    result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
-    genDuration = Date.now() - genStart;
-    emitStreamEvent({
-      type: "result",
-      content: result.content,
-      stats: {
-        agent: route.agent.name,
-        durationMs: genDuration,
-        ...(result.usage ?? {}),
-      },
-    });
-  } else {
-    // Existing spinner path (structured output, file writing, or non-streaming provider)
-    const s2 = p.spinner();
-    if (!structured) s2.start("Thinking...");
-    const genStart = Date.now();
-    result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
-    genDuration = Date.now() - genStart;
-    if (!structured) s2.stop("Done.");
-  }
+  const { result, genDuration } = await runGeneration(ctx, route, augmentedPrompt, structured);
 
   if (ctx.globalOpts.verbose) {
     p.log.info(`Generation completed in ${genDuration}ms (${result.content.length} chars)`);
   }
 
-  await handleAgentResult(
-    ctx,
-    result,
-    route,
+  await handleAgentResult(ctx, result, route, {
     prompt,
     projectRoot,
     writePath,
     allowAllPaths,
     genDuration,
-  );
+  });
 }
