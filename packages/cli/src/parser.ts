@@ -186,7 +186,6 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "history",
     "config",
     "auth",
-    "serve",
     "doctor",
     "status",
     "init",
@@ -212,6 +211,15 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "runs",
     "mcp",
     "version",
+    "checkpoint",
+    "trust",
+    "untrust",
+    "cost",
+    "drift",
+    "fix-deps",
+    "secrets",
+    "learn",
+    "backup",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([
@@ -263,6 +271,12 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "apply",
     "auto",
     "errors",
+    "summary",
+    "patterns",
+    "rules",
+    "resolve",
+    "dismiss",
+    "clear",
   ]);
 
   const command: string[] = [];

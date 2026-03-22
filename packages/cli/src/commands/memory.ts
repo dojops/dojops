@@ -6,6 +6,7 @@ import {
   addNote,
   listNotes,
   removeNote,
+  clearNotes,
   searchNotes,
   listErrorPatterns,
   loadMemoryConfig,
@@ -86,6 +87,16 @@ function handleRemove(args: string[]): void {
     p.log.success(`Removed note #${id}`);
   } else {
     p.log.info(`Note #${id} not found.`);
+  }
+}
+
+function handleClear(): void {
+  const rootDir = getRoot();
+  const count = clearNotes(rootDir);
+  if (count > 0) {
+    p.log.success(`Cleared ${count} note${count === 1 ? "" : "s"}.`);
+  } else {
+    p.log.info("No notes to clear.");
   }
 }
 
@@ -177,6 +188,9 @@ export async function memoryCommand(args: string[], ctx: CLIContext): Promise<vo
     case "rm":
       handleRemove(rest);
       break;
+    case "clear":
+      handleClear();
+      break;
     case "search":
       handleSearch(rest, ctx);
       break;
@@ -188,7 +202,7 @@ export async function memoryCommand(args: string[], ctx: CLIContext): Promise<vo
       break;
     default:
       throw new Error(
-        `Unknown memory subcommand: "${sub}". Available: list, add, remove, search, auto, errors`,
+        `Unknown memory subcommand: "${sub}". Available: list, add, remove, clear, search, auto, errors`,
       );
   }
 }

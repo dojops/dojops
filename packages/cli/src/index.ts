@@ -146,6 +146,7 @@ registerSubcommand("runs", "clean", (args, ctx) => runsCommand(["clean", ...args
 // Nested: memory <sub> (additional subcommands)
 registerSubcommand("memory", "auto", (args, ctx) => memoryCommand(["auto", ...args], ctx));
 registerSubcommand("memory", "errors", (args, ctx) => memoryCommand(["errors", ...args], ctx));
+registerSubcommand("memory", "clear", (args, ctx) => memoryCommand(["clear", ...args], ctx));
 
 // Nested: secrets <sub> (encrypted secrets vault)
 registerSubcommand("secrets", "set", (args, ctx) => secretsCommand(["set", ...args], ctx));

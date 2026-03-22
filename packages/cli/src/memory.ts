@@ -286,6 +286,19 @@ export function removeNote(rootDir: string, id: number): boolean {
   }
 }
 
+/** Remove all notes. Returns the number of deleted rows. */
+export function clearNotes(rootDir: string): number {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return 0;
+
+    const result = db.prepare(`DELETE FROM notes`).run();
+    return result.changes;
+  } catch {
+    return 0;
+  }
+}
+
 /** Search notes by keyword match against content and keywords fields. */
 export function searchNotes(rootDir: string, query: string, limit = 20): NoteRecord[] {
   try {

@@ -1326,11 +1326,13 @@ function printExtendedCommandHelp(command: string): boolean {
       console.log(`  ${pc.dim("$")} dojops memory list [--category NAME]`);
       console.log(`  ${pc.dim("$")} dojops memory add <text> [--category NAME] [--keywords WORDS]`);
       console.log(`  ${pc.dim("$")} dojops memory remove <id>`);
+      console.log(`  ${pc.dim("$")} dojops memory clear`);
       console.log(`  ${pc.dim("$")} dojops memory search <query>`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(`  ${pc.cyan("list")}       List all notes (default)`);
       console.log(`  ${pc.cyan("add")}        Add a note with optional category and keywords`);
       console.log(`  ${pc.cyan("remove")}     Remove a note by ID (alias: rm)`);
+      console.log(`  ${pc.cyan("clear")}      Delete all notes`);
       console.log(`  ${pc.cyan("search")}     Search notes by keyword`);
       console.log(`  ${pc.cyan("auto")}       Toggle auto-enrichment from agent runs (on/off)`);
       console.log(`  ${pc.cyan("errors")}     List learned error patterns`);
@@ -1349,6 +1351,7 @@ function printExtendedCommandHelp(command: string): boolean {
       console.log(`  ${pc.dim("$")} dojops memory list --category terraform`);
       console.log(`  ${pc.dim("$")} dojops memory search terraform`);
       console.log(`  ${pc.dim("$")} dojops memory remove 3`);
+      console.log(`  ${pc.dim("$")} dojops memory clear`);
       console.log();
       break;
 
@@ -1396,6 +1399,139 @@ function printExtendedCommandHelp(command: string): boolean {
       console.log(`  ${pc.dim("$")} dojops trust`);
       console.log(`  ${pc.dim("$")} dojops trust list`);
       console.log(`  ${pc.dim("$")} dojops untrust`);
+      console.log();
+      break;
+
+    case "tokens":
+      console.log(`\n${pc.bold("dojops tokens")} — View LLM token usage across commands`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops tokens [--days N] [--graph] [--by-command]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--days N")}        Show usage from the last N days only`);
+      console.log(`  ${pc.cyan("--graph")}         Display a daily usage bar chart`);
+      console.log(`  ${pc.cyan("--by-command")}    Break down usage by command type`);
+      console.log(`  ${pc.cyan("--output json")}   Output raw JSON`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Shows aggregated token consumption across all LLM providers.`);
+      console.log(`  Usage is tracked automatically for every DojOps command that`);
+      console.log(`  calls an LLM. Data is stored in .dojops/tokens.jsonl.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops tokens`);
+      console.log(`  ${pc.dim("$")} dojops tokens --days 7`);
+      console.log(`  ${pc.dim("$")} dojops tokens --graph --by-command`);
+      console.log(`  ${pc.dim("$")} dojops tokens --days 30 --output json`);
+      console.log();
+      break;
+
+    case "secrets":
+    case "secrets set":
+    case "secrets get":
+    case "secrets list":
+    case "secrets remove":
+      console.log(
+        `\n${pc.bold("dojops secrets")} — Encrypted secrets vault for API keys and tokens`,
+      );
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops secrets list`);
+      console.log(`  ${pc.dim("$")} dojops secrets set <name> <value>`);
+      console.log(`  ${pc.dim("$")} dojops secrets get <name> [--raw]`);
+      console.log(`  ${pc.dim("$")} dojops secrets remove <name>`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("list")}       List stored secret names (default)`);
+      console.log(`  ${pc.cyan("set")}        Store a secret (AES-256-GCM encrypted)`);
+      console.log(`  ${pc.cyan("get")}        Retrieve a secret (masked unless --raw)`);
+      console.log(`  ${pc.cyan("remove")}     Delete a secret`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--raw")}          Show the full decrypted value (get only)`);
+      console.log(`  ${pc.cyan("--output json")}  Output as JSON`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Secrets are encrypted with AES-256-GCM and stored in`);
+      console.log(`  .dojops/secrets.json with restrictive file permissions (0600).`);
+      console.log(`  Use this for API keys, tokens, and other credentials that`);
+      console.log(`  DojOps skills and agents can reference at runtime.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops secrets set ANTHROPIC_API_KEY sk-ant-...`);
+      console.log(`  ${pc.dim("$")} dojops secrets set AWS_ACCESS_KEY_ID AKIA...`);
+      console.log(`  ${pc.dim("$")} dojops secrets get ANTHROPIC_API_KEY`);
+      console.log(`  ${pc.dim("$")} dojops secrets get ANTHROPIC_API_KEY --raw`);
+      console.log(`  ${pc.dim("$")} dojops secrets list`);
+      console.log(`  ${pc.dim("$")} dojops secrets remove AWS_ACCESS_KEY_ID`);
+      console.log();
+      break;
+
+    case "learn":
+    case "learn patterns":
+    case "learn rules":
+    case "learn resolve":
+    case "learn dismiss":
+    case "learn summary":
+      console.log(`\n${pc.bold("dojops learn")} — Analyze execution patterns and error trends`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops learn summary`);
+      console.log(`  ${pc.dim("$")} dojops learn patterns [--limit N]`);
+      console.log(`  ${pc.dim("$")} dojops learn rules [--type TYPE] [--limit N]`);
+      console.log(`  ${pc.dim("$")} dojops learn resolve <id> <resolution>`);
+      console.log(`  ${pc.dim("$")} dojops learn dismiss <id>`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(
+        `  ${pc.cyan("summary")}    Overview of executions, errors, and recent activity (default)`,
+      );
+      console.log(
+        `  ${pc.cyan("patterns")}   Show execution frequency by command type with success rates`,
+      );
+      console.log(`  ${pc.cyan("rules")}      List learned error patterns with occurrence counts`);
+      console.log(`  ${pc.cyan("resolve")}    Mark an error pattern as resolved with a note`);
+      console.log(`  ${pc.cyan("dismiss")}    Delete an error pattern entirely`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--type TYPE")}    Filter rules by task type (e.g. generate, plan)`);
+      console.log(`  ${pc.cyan("--limit N")}      Max entries to show (default: 20)`);
+      console.log(`  ${pc.cyan("--output json")}  Output as JSON`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  DojOps automatically tracks every command execution and learns`);
+      console.log(`  from recurring errors. Error patterns are fingerprinted and`);
+      console.log(`  deduplicated — repeated failures increment the counter instead`);
+      console.log(`  of creating duplicates. Resolved patterns include your fix notes`);
+      console.log(`  and feed back into LLM context to prevent repeat mistakes.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops learn summary`);
+      console.log(`  ${pc.dim("$")} dojops learn patterns`);
+      console.log(`  ${pc.dim("$")} dojops learn rules --type generate`);
+      console.log(`  ${pc.dim("$")} dojops learn resolve 5 "Fixed by pinning provider to gpt-4o"`);
+      console.log(`  ${pc.dim("$")} dojops learn dismiss 3`);
+      console.log();
+      break;
+
+    case "backup":
+    case "backup restore":
+    case "backup list":
+      console.log(`\n${pc.bold("dojops backup")} — Back up and restore the .dojops/ directory`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops backup [--output DIR]`);
+      console.log(`  ${pc.dim("$")} dojops backup restore <archive> [--verify]`);
+      console.log(`  ${pc.dim("$")} dojops backup list`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(
+        `  ${pc.cyan("(default)")}  Create a timestamped .tar.gz backup with SHA-256 checksum`,
+      );
+      console.log(`  ${pc.cyan("restore")}    Extract a backup archive into .dojops/`);
+      console.log(`  ${pc.cyan("list")}       List existing backup archives in the project root`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--output DIR")}   Save the backup to a specific directory`);
+      console.log(`  ${pc.cyan("--verify")}       Verify SHA-256 checksum before restoring`);
+      console.log(`  ${pc.cyan("--output json")}  Output as JSON`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Creates a compressed archive of the entire .dojops/ directory`);
+      console.log(`  including config, memory database, secrets vault, checkpoints,`);
+      console.log(`  and custom skills. A SHA-256 checksum file is written alongside`);
+      console.log(`  the archive for integrity verification.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops backup`);
+      console.log(`  ${pc.dim("$")} dojops backup --output ~/backups`);
+      console.log(`  ${pc.dim("$")} dojops backup list`);
+      console.log(`  ${pc.dim("$")} dojops backup restore dojops-backup-2026-03-22.tar.gz`);
+      console.log(
+        `  ${pc.dim("$")} dojops backup restore dojops-backup-2026-03-22.tar.gz --verify`,
+      );
       console.log();
       break;
 

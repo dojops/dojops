@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.8] - 2026-03-22
+
+### Fixed
+
+- **CLI parser missing 9 registered commands**: `secrets`, `learn`, `checkpoint`, `trust`, `untrust`, `cost`, `drift`, `fix-deps`, and `backup` were registered via `registerCommand()` but absent from the `KNOWN_COMMANDS` whitelist in `parser.ts`, causing them to be misrouted as generate prompts and rejected as "Unknown command"
+- **CLI parser missing 6 subcommands**: `summary`, `patterns`, `rules`, `resolve`, `dismiss`, and `clear` were not in the `KNOWN_SUBCOMMANDS` set, preventing `dojops learn summary`, `dojops learn patterns`, etc. from being parsed correctly
+- **Duplicate `serve` entry in `KNOWN_COMMANDS`**: Removed redundant entry
+
+### Added
+
+- **`dojops memory clear` subcommand**: Deletes all project notes in a single operation instead of removing one by one with `dojops memory remove <id>`
+- **Help text for `dojops secrets`**: Full help with USAGE, SUBCOMMANDS (set, get, list, remove), OPTIONS, DESCRIPTION, and EXAMPLES sections
+- **Help text for `dojops learn`**: Full help with USAGE, SUBCOMMANDS (summary, patterns, rules, resolve, dismiss), OPTIONS, DESCRIPTION, and EXAMPLES sections
+- **Help text for `dojops tokens`**: Full help with USAGE, OPTIONS (--days, --graph, --by-command), DESCRIPTION, and EXAMPLES sections
+- **Help text for `dojops backup`**: Full help with USAGE, SUBCOMMANDS (default, restore, list), OPTIONS, DESCRIPTION, and EXAMPLES sections
+- **`memory clear` added to `dojops memory` help text**: Updated USAGE, SUBCOMMANDS, and EXAMPLES sections
+
 ## [1.1.7] - 2026-03-20
 
 ### Added
