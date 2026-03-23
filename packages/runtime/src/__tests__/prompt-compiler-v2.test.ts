@@ -41,7 +41,7 @@ describe("compilePromptV2", () => {
     expect(result).not.toContain("{bestPractices}");
   });
 
-  it("substitutes {context7Docs} when provided", () => {
+  it("substitutes {context7Docs} when provided and wraps as data", () => {
     const sections: MarkdownSections = {
       prompt: "Generate config.\n\nReference docs:\n{context7Docs}",
       keywords: "test",
@@ -52,6 +52,7 @@ describe("compilePromptV2", () => {
     );
     expect(result).toContain("### Terraform");
     expect(result).toContain("Use `resource` blocks.");
+    expect(result).toContain('<data label="reference-docs">');
     expect(result).not.toContain("{context7Docs}");
   });
 
@@ -65,7 +66,7 @@ describe("compilePromptV2", () => {
     expect(result).not.toContain("{context7Docs}");
   });
 
-  it("substitutes {projectContext} when provided", () => {
+  it("substitutes {projectContext} when provided and wraps as data", () => {
     const sections: MarkdownSections = {
       prompt: "Generate config.\n\nProject info:\n{projectContext}",
       keywords: "test",
@@ -75,6 +76,7 @@ describe("compilePromptV2", () => {
       makeContext({ projectContext: "Node.js 20, Express, PostgreSQL" }),
     );
     expect(result).toContain("Node.js 20, Express, PostgreSQL");
+    expect(result).toContain('<data label="project-context">');
     expect(result).not.toContain("{projectContext}");
   });
 
@@ -102,7 +104,7 @@ describe("compilePromptV2", () => {
     expect(result).toContain("Generate new Terraform config.");
     expect(result).toContain("UPDATING an existing configuration");
     expect(result).toContain('resource "aws_s3_bucket" {}');
-    expect(result).toContain("--- EXISTING CONFIGURATION ---");
+    expect(result).toContain('<data label="existing-config">');
     // Should NOT use the dedicated update prompt
     expect(result).not.toContain("Update existing config. Current:");
   });
@@ -119,7 +121,7 @@ describe("compilePromptV2", () => {
     expect(result).toContain("You are a Terraform expert.");
     expect(result).toContain("UPDATING an existing configuration");
     expect(result).toContain("old config content");
-    expect(result).toContain("--- EXISTING CONFIGURATION ---");
+    expect(result).toContain('<data label="existing-config">');
   });
 
   it("handles missing optional variables gracefully", () => {
@@ -181,6 +183,21 @@ describe("compilePromptV2", () => {
     expect(result).not.toContain("Must use v1.5+ syntax");
     expect(result).not.toContain("EXAMPLES:");
     expect(result).not.toContain("Example: some output here");
+  });
+
+  it("wraps {existingContent} substitution with data boundary", () => {
+    const sections: MarkdownSections = {
+      prompt: "Config: {existingContent}",
+      keywords: "test",
+    };
+    const result = compilePromptV2(
+      sections,
+      makeContext({ existingContent: "server { listen 80; }" }),
+    );
+    expect(result).toContain('<data label="existing-config">');
+    expect(result).toContain("server { listen 80; }");
+    expect(result).toContain("</data>");
+    expect(result).not.toContain("{existingContent}");
   });
 
   it("adds preserve_structure instruction in update mode", () => {

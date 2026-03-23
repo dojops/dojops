@@ -32,6 +32,44 @@ context:
     - **Logs**: Filelog receiver, attributes processor, Loki/Elasticsearch exporter
     - **Infrastructure**: Hostmetrics receiver, resource processor, backend exporter
     - **Kubernetes**: K8s attributes/events/cluster receivers, resource detection
+
+    Example — collector with OTLP ingestion, batch processing, and dual export:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+        spike_limit_mib: 128
+    exporters:
+      otlp:
+        endpoint: tempo.observability:4317
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: 0.0.0.0:8889
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlp]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus]
   bestPractices:
     - "Always include memory_limiter processor to prevent OOM (check_interval: 1s, limit_mib: 512)"
     - "Use batch processor for efficient data export (timeout: 5s, send_batch_size: 1024)"

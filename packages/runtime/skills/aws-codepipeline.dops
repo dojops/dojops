@@ -1,0 +1,125 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: aws-codepipeline
+  version: 2.2.0
+  description: "Generate AWS CodeBuild buildspec and CodePipeline configurations"
+  author: dojops
+  license: MIT
+  tags: [aws, codebuild, codepipeline, ci, cd, buildspec]
+
+context:
+  technology: AWS CodeBuild/CodePipeline
+  fileFormat: json
+  outputGuidance: |
+    Generate AWS CI/CD configuration files as a JSON object with file paths as keys and content as values.
+    Format: { "files": { "buildspec.yml": "content...", "pipeline.json": "content..." } }
+    The "buildspec.yml" key is always required. The "pipeline.json" is optional (when full pipeline definition requested).
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - buildspec.yml must be valid YAML that CodeBuild can parse.
+    - pipeline.json (if included) must be valid JSON for AWS CodePipeline.
+    - Do NOT generate .gitkeep files or empty content.
+
+    Detect the project type from context and generate the appropriate buildspec:
+    - **Node.js**: npm ci, npm test, npm run build, artifacts from dist/
+    - **Python**: pip install, pytest, artifacts from dist/ or Lambda zip
+    - **Java/Maven**: mvn package, artifacts from target/
+    - **Go**: go build, go test, static binary artifact
+    - **Docker**: docker build/push to ECR, login via $(aws ecr get-login-password)
+    - **.NET**: dotnet restore/build/test/publish
+    - **Lambda**: Build + package + deploy via SAM or CDK
+
+    EXAMPLE — Node.js buildspec with test and build:
+    {
+      "files": {
+        "buildspec.yml": "version: 0.2\n\nphases:\n  install:\n    runtime-versions:\n      nodejs: 20\n    commands:\n      - npm ci\n  pre_build:\n    commands:\n      - echo \"Running tests...\"\n      - npm test\n  build:\n    commands:\n      - echo \"Building...\"\n      - npm run build\n  post_build:\n    commands:\n      - echo \"Build completed on $(date)\"\n\nartifacts:\n  files:\n    - '**/*'\n  base-directory: dist\n\ncache:\n  paths:\n    - 'node_modules/**/*'\n\nreports:\n  test-reports:\n    files:\n      - 'junit.xml'\n    file-format: JUNITXML"
+      }
+    }
+
+    EXAMPLE — Docker build and push to ECR:
+    {
+      "files": {
+        "buildspec.yml": "version: 0.2\n\nenv:\n  variables:\n    ECR_REPO: 123456789.dkr.ecr.us-east-1.amazonaws.com/myapp\n    IMAGE_TAG: latest\n\nphases:\n  pre_build:\n    commands:\n      - echo \"Logging in to ECR...\"\n      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPO\n      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 7)\n  build:\n    commands:\n      - echo \"Building Docker image...\"\n      - docker build -t $ECR_REPO:$IMAGE_TAG .\n      - docker tag $ECR_REPO:$IMAGE_TAG $ECR_REPO:latest\n  post_build:\n    commands:\n      - docker push $ECR_REPO:$IMAGE_TAG\n      - docker push $ECR_REPO:latest\n      - echo \"Writing image definitions...\"\n      - printf '[{\"name\":\"app\",\"imageUri\":\"%s\"}]' $ECR_REPO:$IMAGE_TAG > imagedefinitions.json\n\nartifacts:\n  files:\n    - imagedefinitions.json"
+      }
+    }
+  bestPractices:
+    - Use buildspec version 0.2 (current standard)
+    - Pin runtime versions explicitly (nodejs 20, python 3.12, etc.)
+    - Use phases correctly (install → pre_build → build → post_build)
+    - Cache dependency directories to speed up builds (node_modules, .pip, .m2)
+    - Use artifacts section to pass build outputs to subsequent pipeline stages
+    - Use reports section for test result integration with CodeBuild dashboard
+    - Use env.parameter-store or env.secrets-manager for sensitive values (never hardcode)
+    - Use env.variables for non-sensitive configuration
+    - For Docker builds, use ECR login with aws ecr get-login-password (not deprecated get-login)
+    - Generate imagedefinitions.json for ECS deployments in post_build
+    - Set appropriate build timeout and compute type for the project
+    - Use batch builds for parallel test execution across multiple configurations
+  context7Libraries:
+    - name: aws-codebuild
+      query: "AWS CodeBuild buildspec.yml syntax phases install pre_build build post_build, artifacts cache reports, environment variables parameter-store secrets-manager, runtime-versions, batch builds"
+
+files:
+  - path: "buildspec.yml"
+    format: raw
+  - path: "pipeline.json"
+    format: raw
+    conditional: true
+
+detection:
+  paths: ["buildspec.yml", "buildspec.yaml"]
+  updateMode: true
+
+verification:
+  binary:
+    command: "yamllint -d relaxed {entryFile}"
+    parser: generic-stderr
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["buildspec.yml", "buildspec.yaml", "pipeline.json"]
+
+risk:
+  level: LOW
+  rationale: "CI/CD configuration changes require code review"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# AWS CodePipeline/CodeBuild
+
+## Prompt
+
+You are an AWS CI/CD expert specializing in CodeBuild buildspec files, CodePipeline configurations, and AWS deployment patterns.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+aws, codebuild, codepipeline, buildspec, ci, cd, ecr, ecs,
+lambda, sam, deploy, artifact, pipeline, source, build,
+codecommit, s3, cloudformation

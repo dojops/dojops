@@ -1,0 +1,190 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: bitbucket-pipelines
+  version: 2.2.0
+  description: "Generate Bitbucket Pipelines CI/CD configurations"
+  author: dojops
+  license: MIT
+  tags: [bitbucket, pipelines, ci, cd, atlassian]
+
+context:
+  technology: Bitbucket Pipelines
+  fileFormat: yaml
+  outputGuidance: |
+    Generate a valid Bitbucket Pipelines YAML file.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid bitbucket-pipelines.yml that Bitbucket can parse.
+
+    Detect the project type from context and generate the appropriate pipeline:
+    - **Node.js**: node image, npm ci, npm test, cache node_modules
+    - **Python**: python image, pip install, pytest, cache pip
+    - **Java/Maven**: maven image, mvn verify, cache .m2
+    - **Docker**: docker service, docker build/push to registry
+    - **Terraform**: hashicorp/terraform image, init/plan/apply
+    - **Multi-branch**: separate pipelines per branch pattern
+
+    EXAMPLE — Node.js with caching and deployment:
+    image: node:20
+
+    definitions:
+      caches:
+        npm: $HOME/.npm
+      services:
+        postgres:
+          image: postgres:16-alpine
+          variables:
+            POSTGRES_USER: test
+            POSTGRES_PASSWORD: test
+            POSTGRES_DB: testdb
+
+    pipelines:
+      default:
+        - step:
+            name: Install and Test
+            caches:
+              - npm
+            script:
+              - npm ci
+              - npm test -- --coverage
+            artifacts:
+              - coverage/**
+
+        - step:
+            name: Build
+            caches:
+              - npm
+            script:
+              - npm ci
+              - npm run build
+            artifacts:
+              - dist/**
+
+      branches:
+        main:
+          - step:
+              name: Install and Test
+              caches:
+                - npm
+              script:
+                - npm ci
+                - npm test
+          - step:
+              name: Build
+              caches:
+                - npm
+              script:
+                - npm ci
+                - npm run build
+              artifacts:
+                - dist/**
+          - step:
+              name: Deploy to Staging
+              deployment: staging
+              script:
+                - echo "Deploying to staging..."
+              trigger: manual
+
+    EXAMPLE — Docker build with ECR push:
+    image: atlassian/default-image:4
+
+    definitions:
+      services:
+        docker:
+          memory: 2048
+
+    pipelines:
+      branches:
+        main:
+          - step:
+              name: Build and Push
+              services:
+                - docker
+              caches:
+                - docker
+              script:
+                - export IMAGE_TAG=$BITBUCKET_COMMIT
+                - docker build -t $ECR_REPO:$IMAGE_TAG .
+                - pipe: atlassian/aws-ecr-push-image:2.4.0
+                  variables:
+                    AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+                    AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+                    AWS_DEFAULT_REGION: us-east-1
+                    IMAGE_NAME: $ECR_REPO
+                    TAGS: '$IMAGE_TAG latest'
+  bestPractices:
+    - Use specific Docker images with pinned versions for reproducibility
+    - Define caches in definitions section for dependency caching
+    - Use artifacts to pass build outputs between steps
+    - Use services for external dependencies (databases, Docker, Redis)
+    - Use deployment keyword for environment tracking (staging, production)
+    - "Use trigger: manual for production deployment gates"
+    - Use pipes for common integrations (AWS, GCP, Slack, etc.)
+    - Use branches section for branch-specific pipeline configurations
+    - Use pull-requests section for PR-specific validation
+    - Set appropriate step size (1x, 2x, 4x, 8x) based on resource needs
+    - Use parallel steps for independent test suites
+    - Use definitions/steps for reusable step definitions with YAML anchors
+  context7Libraries:
+    - name: bitbucket-pipelines
+      query: "Bitbucket Pipelines YAML syntax image steps caches artifacts, services docker postgres, deployment environments manual trigger, pipes, parallel steps, branches pull-requests, definitions"
+
+files:
+  - path: "bitbucket-pipelines.yml"
+    format: raw
+
+detection:
+  paths: ["bitbucket-pipelines.yml"]
+  updateMode: true
+
+verification:
+  binary:
+    command: "yamllint -d relaxed {entryFile}"
+    parser: generic-stderr
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["bitbucket-pipelines.yml"]
+
+risk:
+  level: LOW
+  rationale: "CI/CD configuration changes require pull request review"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Bitbucket Pipelines
+
+## Prompt
+
+You are a Bitbucket Pipelines expert specializing in CI/CD configuration, Atlassian integrations, and deployment pipelines.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+bitbucket, pipelines, ci, cd, atlassian, step, cache,
+artifacts, deployment, trigger, pipe, services, branch,
+pull-request, manual, docker

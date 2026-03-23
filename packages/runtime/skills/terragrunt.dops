@@ -1,0 +1,127 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: terragrunt
+  version: 2.2.0
+  description: "Generate Terragrunt configurations with remote state, dependencies, and DRY patterns"
+  author: dojops
+  license: MIT
+  tags: [terragrunt, terraform, iac, dry]
+
+context:
+  technology: Terragrunt
+  fileFormat: json
+  outputGuidance: |
+    Generate Terragrunt HCL configuration split into standard files.
+    Output a JSON object with file paths as keys and HCL content as string values.
+    Format: { "files": { "terragrunt.hcl": "...", "env/production/terragrunt.hcl": "...", "env/staging/terragrunt.hcl": "..." } }
+    Each file content must be valid HCL that Terragrunt can parse.
+
+    Always include these files:
+      - terragrunt.hcl — Root configuration with remote_state, generate blocks
+    Optionally include when needed:
+      - env/<environment>/terragrunt.hcl — Environment-specific configs with include and inputs
+      - modules/<module>/terragrunt.hcl — Module-specific configs with dependencies
+      - common.hcl or env.hcl — Shared variables loaded via read_terragrunt_config()
+    Do NOT output raw HCL — use the JSON wrapper format for multi-file output.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - Use directory structure in file keys (env/production/terragrunt.hcl).
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty valid HCL content.
+
+    Generate appropriate Terragrunt features based on the request:
+    - **Remote state**: S3/GCS/Azure backend with DynamoDB/GCS locking
+    - **Dependencies**: dependency and dependencies blocks for ordering
+    - **Include**: include blocks referencing parent terragrunt.hcl
+    - **Inputs**: Environment-specific variable values
+    - **Generate**: Generate provider.tf and backend.tf from root config
+    - **Locals**: Shared local values and path-based environment detection
+
+    Example output:
+    {
+      "files": {
+        "terragrunt.hcl": "remote_state {\n  backend = \"s3\"\n  config = {\n    bucket         = \"my-company-terraform-state\"\n    key            = \"${path_relative_to_include()}/terraform.tfstate\"\n    region         = \"us-east-1\"\n    encrypt        = true\n    dynamodb_table = \"terraform-locks\"\n  }\n}\n\ngenerate \"provider\" {\n  path      = \"provider.tf\"\n  if_exists = \"overwrite_terragrunt\"\n  contents  = <<EOF\nprovider \"aws\" {\n  region = var.aws_region\n}\nEOF\n}\n",
+        "env/production/vpc/terragrunt.hcl": "include \"root\" {\n  path = find_in_parent_folders()\n}\n\nterraform {\n  source = \"tfr:///terraform-aws-modules/vpc/aws?version=5.1.0\"\n}\n\ninputs = {\n  name       = \"prod-vpc\"\n  cidr       = \"10.0.0.0/16\"\n  azs        = [\"us-east-1a\", \"us-east-1b\", \"us-east-1c\"]\n  private_subnets = [\"10.0.1.0/24\", \"10.0.2.0/24\", \"10.0.3.0/24\"]\n  public_subnets  = [\"10.0.101.0/24\", \"10.0.102.0/24\", \"10.0.103.0/24\"]\n  enable_nat_gateway = true\n  single_nat_gateway = false\n}\n"
+      }
+    }
+  bestPractices:
+    - Use include blocks to DRY up common configuration from root terragrunt.hcl
+    - Configure remote_state in the root config and inherit in all child modules
+    - Use dependency blocks to express cross-module relationships and pass outputs
+    - Use generate blocks for provider.tf and backend.tf to avoid repetition
+    - Structure directories by environment and component (env/prod/vpc, env/prod/eks)
+    - Use read_terragrunt_config() to load shared variables from common.hcl files
+    - Set prevent_destroy = true on stateful resources in production
+    - Use path_relative_to_include() for dynamic state key generation
+    - Keep module source references in terraform blocks, not hardcoded paths
+    - Use run_cmd() sparingly and only for values that cannot be computed in HCL
+    - Configure retry_max_attempts and retryable_errors for transient failures
+    - Use locals blocks with find_in_parent_folders() for hierarchical config discovery
+  context7Libraries:
+    - name: terragrunt
+      query: "Terragrunt terragrunt.hcl remote_state include dependency inputs generate blocks, read_terragrunt_config path_relative_to_include find_in_parent_folders"
+
+files:
+  - path: "{outputPath}/terragrunt.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/env/production/terragrunt.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/env/staging/terragrunt.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/common.hcl"
+    format: raw
+    conditional: true
+
+detection:
+  paths: ["terragrunt.hcl", "**/terragrunt.hcl"]
+  updateMode: true
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/terragrunt.hcl", "**/*.hcl", "**/common.hcl", "**/env.hcl"]
+
+risk:
+  level: MEDIUM
+  rationale: "Terragrunt changes affect infrastructure provisioning orchestration"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Terragrunt
+
+## Prompt
+
+You are a Terragrunt expert. Generate production-ready Terragrunt configurations that enforce DRY infrastructure-as-code patterns across environments.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+terragrunt, include, dependency, remote_state, inputs, generate,
+terraform, iac, dry, environment, module, backend, state,
+path_relative_to_include, find_in_parent_folders, hcl

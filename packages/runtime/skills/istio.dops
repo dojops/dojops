@@ -1,0 +1,160 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: istio
+  version: 2.2.0
+  description: "Generate Istio service mesh manifests for traffic management and security"
+  author: dojops
+  license: MIT
+  tags: [istio, service-mesh, kubernetes, networking]
+
+context:
+  technology: Istio
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid Istio custom resource YAML manifests.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    Use multi-document YAML (--- separator) when generating multiple resources.
+    The output must be valid kubectl-compatible YAML for Istio CRDs.
+
+    Generate appropriate Istio resources based on the request:
+    - **VirtualService**: Route traffic with match conditions, retries, timeouts, fault injection
+    - **DestinationRule**: Load balancing, connection pool, outlier detection, TLS settings
+    - **Gateway**: Ingress/egress gateway with TLS termination and server definitions
+    - **AuthorizationPolicy**: Workload-level access control with allow/deny rules
+    - **PeerAuthentication**: mTLS mode (STRICT, PERMISSIVE, DISABLE) per namespace or workload
+    - **ServiceEntry**: Register external services into the mesh
+    - **Sidecar**: Fine-grained sidecar proxy configuration and egress filtering
+    - **EnvoyFilter**: Advanced proxy customization (use sparingly)
+
+    Structure each resource with:
+    - apiVersion: networking.istio.io/v1beta1 or security.istio.io/v1beta1
+    - metadata: name, namespace, labels
+    - spec: Resource-specific configuration
+
+    Example output:
+    ---
+    apiVersion: networking.istio.io/v1beta1
+    kind: VirtualService
+    metadata:
+      name: reviews-route
+      namespace: bookinfo
+    spec:
+      hosts:
+        - reviews
+      http:
+        - match:
+            - headers:
+                end-user:
+                  exact: jason
+          route:
+            - destination:
+                host: reviews
+                subset: v2
+        - route:
+            - destination:
+                host: reviews
+                subset: v1
+    ---
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: reviews-dr
+      namespace: bookinfo
+    spec:
+      host: reviews
+      trafficPolicy:
+        connectionPool:
+          tcp:
+            maxConnections: 100
+          http:
+            h2UpgradePolicy: UPGRADE
+        outlierDetection:
+          consecutive5xxErrors: 3
+          interval: 30s
+          baseEjectionTime: 30s
+      subsets:
+        - name: v1
+          labels:
+            version: v1
+        - name: v2
+          labels:
+            version: v2
+  bestPractices:
+    - Use STRICT mTLS via PeerAuthentication for all production namespaces
+    - Configure retries with retryOn conditions and perTryTimeout in VirtualService
+    - Set connection pool limits in DestinationRule to prevent cascading failures
+    - Enable outlier detection for automatic circuit breaking on unhealthy endpoints
+    - Use AuthorizationPolicy to enforce zero-trust networking between services
+    - Prefer VirtualService weight-based routing for canary deployments
+    - Configure request timeouts at the VirtualService level to prevent hung connections
+    - Use ServiceEntry to control egress traffic to external services
+    - Apply Sidecar resources to limit proxy memory by restricting egress hosts
+    - Always specify exportTo to control cross-namespace visibility of configs
+    - Use consistent labeling (app, version) for traffic routing and telemetry
+    - Avoid EnvoyFilter unless VirtualService/DestinationRule cannot achieve the goal
+  context7Libraries:
+    - name: istio
+      query: "Istio VirtualService DestinationRule Gateway AuthorizationPolicy PeerAuthentication mTLS traffic management, retries timeout fault injection circuit breaker"
+
+files:
+  - path: "{outputPath}/istio.yaml"
+    format: raw
+
+detection:
+  paths: ["**/istio/*.yaml", "**/istio/*.yml", "virtualservice.yaml", "destinationrule.yaml", "gateway.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "kind"
+      required: true
+      message: "Istio manifest must have a kind (VirtualService, DestinationRule, Gateway, etc.)"
+    - path: "apiVersion"
+      required: true
+      message: "Istio manifest must have an apiVersion (networking.istio.io or security.istio.io)"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml", "**/istio/**/*.yaml", "**/istio/**/*.yml"]
+
+risk:
+  level: MEDIUM
+  rationale: "Istio configuration changes affect service-to-service traffic routing and security"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Istio
+
+## Prompt
+
+You are an Istio service mesh expert. Generate production-ready Istio manifests for traffic management, security policies, and observability.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+istio, service mesh, virtualservice, destinationrule, gateway,
+mtls, sidecar, envoy, traffic, routing, canary, circuit breaker,
+authorization policy, peer authentication, service entry, ingress

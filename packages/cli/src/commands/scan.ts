@@ -11,12 +11,14 @@ import {
   toSarif,
   mapFindingsToCompliance,
   getSupportedFrameworks,
+  generateRemediationPlan,
 } from "@dojops/scanner";
 import type {
   ScanType,
   ScanReport,
   ScanFinding,
   RemediationPlan,
+  AutoRemediationPlan,
   ComplianceReport,
 } from "@dojops/scanner";
 import type { RepoContext } from "@dojops/core";
@@ -104,6 +106,10 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     metadata: JSON.stringify({ total, critical, high }),
   });
 
+  if (flags.autoFixMode && report.findings.length > 0) {
+    displayAutoRemediationPlan(report.findings, flags.autoApprove);
+  }
+
   let rescanReport: ScanReport | null = null;
   if (flags.fixMode && report.findings.length > 0) {
     rescanReport = await handleFixMode(
@@ -128,6 +134,7 @@ type SeverityThreshold = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 interface ScanFlags {
   scanType: ScanType;
   fixMode: boolean;
+  autoFixMode: boolean;
   autoApprove: boolean;
   targetDir: string | undefined;
   compareMode: boolean;
@@ -142,6 +149,7 @@ function parseScanFlags(args: string[], ctx: CLIContext): ScanFlags {
   const sbomMode = hasFlag(args, "--sbom");
   const licenseOnly = hasFlag(args, "--license");
   const fixMode = hasFlag(args, "--fix");
+  const autoFixMode = hasFlag(args, "--auto-fix");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const targetDir = extractFlagValue(args, "--target");
   const compareMode = hasFlag(args, "--compare");
@@ -175,6 +183,7 @@ function parseScanFlags(args: string[], ctx: CLIContext): ScanFlags {
   return {
     scanType,
     fixMode,
+    autoFixMode,
     autoApprove,
     targetDir,
     compareMode,
@@ -592,6 +601,62 @@ async function applyFixesAndRescan(plan: RemediationPlan, fixCtx: FixContext): P
   }
 
   return rescanReport;
+}
+
+function displayAutoRemediationPlan(findings: ScanFinding[], showCommands: boolean): void {
+  const plan: AutoRemediationPlan = generateRemediationPlan(findings);
+
+  if (plan.actions.length === 0) {
+    p.log.info("No remediation actions generated.");
+    return;
+  }
+
+  const lines: string[] = [];
+  lines.push(`${pc.bold("Summary:")} ${plan.summary}`);
+  lines.push("");
+
+  // Group by action type
+  const autoActions = plan.actions.filter((a) => a.command && a.confidence !== "low");
+  const manualActions = plan.actions.filter((a) => !a.command || a.confidence === "low");
+
+  if (autoActions.length > 0) {
+    lines.push(pc.bold(`Auto-fixable (${autoActions.length}):`));
+    for (const action of autoActions) {
+      const sev = severityLabel(action.finding.severity);
+      const conf = confidenceLabel(action.confidence);
+      lines.push(`  ${sev} ${action.description} ${conf}`);
+      if (showCommands && action.command) {
+        lines.push(`       ${pc.cyan("$")} ${pc.dim(action.command)}`);
+      }
+    }
+  }
+
+  if (manualActions.length > 0) {
+    if (autoActions.length > 0) lines.push("");
+    lines.push(pc.bold(`Manual review required (${manualActions.length}):`));
+    for (const action of manualActions) {
+      const sev = severityLabel(action.finding.severity);
+      lines.push(`  ${sev} ${action.description}`);
+    }
+  }
+
+  if (!showCommands && autoActions.length > 0) {
+    lines.push("");
+    lines.push(pc.dim("Pass --yes to display the commands that would be run."));
+  }
+
+  p.note(wrapForNote(lines.join("\n")), "Auto-Remediation Plan");
+}
+
+function confidenceLabel(confidence: "high" | "medium" | "low"): string {
+  switch (confidence) {
+    case "high":
+      return pc.green("[high]");
+    case "medium":
+      return pc.yellow("[med]");
+    case "low":
+      return pc.dim("[low]");
+  }
 }
 
 function severityLabel(severity: ScanFinding["severity"]): string {

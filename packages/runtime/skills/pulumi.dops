@@ -40,6 +40,14 @@ context:
     - **Azure**: @pulumi/azure-native for VMs, Storage, Functions, AKS
     - **Kubernetes**: @pulumi/kubernetes for K8s resources
     - **Multi-cloud**: Use appropriate provider packages
+
+    Example — TypeScript S3 bucket with tags and exported ARN:
+    {
+      "files": {
+        "Pulumi.yaml": "name: my-infra\nruntime: nodejs\ndescription: S3 bucket for application assets\n",
+        "index.ts": "import * as pulumi from \"@pulumi/pulumi\";\nimport * as aws from \"@pulumi/aws\";\n\nconst config = new pulumi.Config();\nconst env = config.require(\"environment\");\n\nconst bucket = new aws.s3.Bucket(\"app-assets\", {\n  bucket: `myapp-${env}-assets`,\n  acl: \"private\",\n  versioning: { enabled: true },\n  tags: {\n    Environment: env,\n    ManagedBy: \"pulumi\",\n  },\n});\n\nconst bucketPolicy = new aws.s3.BucketPolicy(\"app-assets-policy\", {\n  bucket: bucket.id,\n  policy: bucket.arn.apply(arn =>\n    JSON.stringify({\n      Version: \"2012-10-17\",\n      Statement: [{\n        Effect: \"Deny\",\n        Principal: \"*\",\n        Action: \"s3:*\",\n        Resource: `${arn}/*`,\n        Condition: { Bool: { \"aws:SecureTransport\": \"false\" } },\n      }],\n    })\n  ),\n});\n\nexport const bucketArn = bucket.arn;\nexport const bucketName = bucket.id;\n"
+      }
+    }
   bestPractices:
     - Use component resources to encapsulate related infrastructure
     - Store secrets using Pulumi config with --secret flag (pulumi.Config)

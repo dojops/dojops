@@ -27,6 +27,7 @@ import {
 import type { StatusBarState, TurnStats, ContextBarState } from "../tui/status-bar";
 import { execFileSync } from "node:child_process";
 import { highlightCodeBlocks } from "../tui/code-highlight";
+import { renderMascotWithText } from "../mascot";
 import type { VoiceConfig } from "../voice";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
@@ -254,26 +255,41 @@ function displayResumedHistory(session: ChatSession): void {
 }
 
 function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown): void {
+  const sessionState = session.getState();
+  const msgCount = sessionState.messages.length;
+  const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+  const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+
+  // Fresh session: show mascot alongside status info
+  if (msgCount === 0) {
+    const textLines = [
+      pc.bold(pc.cyan("DojOps Interactive Chat")),
+      "",
+      `${pc.dim("Provider:")} ${pc.white(provider)}  ${pc.dim("Model:")} ${pc.white(model)}`,
+      `${pc.dim("Session:")} ${pc.white(sessionState.id.slice(0, 8))}`,
+      contextInfo ? `${pc.green("●")} ${pc.dim("Project context loaded")}` : "",
+      "",
+      pc.dim("Type a message to chat, or ") + pc.cyan("/help") + pc.dim(" for commands."),
+    ].filter(Boolean);
+
+    console.log();
+    console.log(renderMascotWithText(textLines));
+    console.log();
+    return;
+  }
+
+  // Resumed session: standard header + history
   p.intro(pc.bold(pc.cyan("DojOps Interactive Chat")));
 
-  // Rich header bar
   const barState = buildStatusBarState(session, ctx, false);
   console.log(renderHeader(barState));
 
-  const sessionState = session.getState();
-  const msgCount = sessionState.messages.length;
-
-  // Status indicators
   const indicators: string[] = [];
   if (contextInfo) indicators.push(`${pc.green("●")} ${pc.dim("Project context loaded")}`);
   if (indicators.length > 0) p.log.message(indicators.join("  "));
 
-  // Display previous messages when resuming a session
-  if (msgCount > 0) {
-    displayResumedHistory(session);
-  }
+  displayResumedHistory(session);
 
-  // Compact command hint
   p.log.message(
     pc.dim("Type a message to chat, or ") + pc.cyan("/help") + pc.dim(" for available commands."),
   );

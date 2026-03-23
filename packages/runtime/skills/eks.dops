@@ -1,0 +1,166 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: eks
+  version: 2.2.0
+  description: "Generate Amazon EKS cluster configs, node groups, add-ons, and IAM roles"
+  author: dojops
+  license: MIT
+  tags: [eks, aws, kubernetes, cluster]
+
+context:
+  technology: EKS
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid eksctl ClusterConfig YAML for Amazon EKS.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be valid YAML that eksctl can parse and apply.
+
+    Generate appropriate EKS configuration based on the request:
+    - **ClusterConfig**: Full cluster definition with metadata, VPC, node groups
+    - **Managed node groups**: Instance types, scaling, labels, taints, AMI family
+    - **Fargate profiles**: Namespace selectors for serverless pods
+    - **Add-ons**: vpc-cni, coredns, kube-proxy, ebs-csi-driver, adot
+    - **IAM**: Service account IRSA mappings, OIDC provider, managed policies
+    - **VPC**: Subnets, security groups, endpoint access (public/private)
+    - **GitOps**: Flux bootstrap configuration for cluster management
+
+    Structure the ClusterConfig with:
+    - apiVersion: eksctl.io/v1alpha5, kind: ClusterConfig
+    - metadata: name, region, version
+    - vpc: subnets, nat, clusterEndpoints
+    - managedNodeGroups or nodeGroups: instance config, scaling, labels
+    - iam: withOIDC, serviceAccounts with IRSA policies
+    - addons: name, version, configuration
+
+    Example output:
+    apiVersion: eksctl.io/v1alpha5
+    kind: ClusterConfig
+    metadata:
+      name: prod-cluster
+      region: us-east-1
+      version: "1.29"
+    vpc:
+      clusterEndpoints:
+        publicAccess: true
+        privateAccess: true
+      nat:
+        gateway: HighlyAvailable
+    managedNodeGroups:
+      - name: app-nodes
+        instanceType: m6i.large
+        minSize: 2
+        maxSize: 10
+        desiredCapacity: 3
+        amiFamily: AL2023
+        labels:
+          role: application
+        volumeSize: 100
+        volumeType: gp3
+        iam:
+          withAddonPolicies:
+            ebs: true
+            cloudWatch: true
+      - name: gpu-nodes
+        instanceType: g5.xlarge
+        minSize: 0
+        maxSize: 4
+        desiredCapacity: 0
+        taints:
+          - key: nvidia.com/gpu
+            value: "true"
+            effect: NoSchedule
+    iam:
+      withOIDC: true
+      serviceAccounts:
+        - metadata:
+            name: aws-load-balancer-controller
+            namespace: kube-system
+          wellKnownPolicies:
+            awsLoadBalancerController: true
+        - metadata:
+            name: external-dns
+            namespace: kube-system
+          attachPolicyARNs:
+            - arn:aws:iam::policy/ExternalDNSRoute53Access
+  bestPractices:
+    - Use managed node groups over self-managed for automatic AMI updates and draining
+    - Enable IRSA (IAM Roles for Service Accounts) instead of node-level IAM roles
+    - Configure private cluster endpoint access and restrict public access CIDR blocks
+    - Use Bottlerocket or AL2023 AMI families for improved security and performance
+    - Set min/max/desired capacity with appropriate instance types for workload profiles
+    - Enable envelope encryption for Kubernetes secrets via AWS KMS
+    - Configure VPC CNI add-on with custom networking for IP address management
+    - Use Fargate profiles for batch jobs and burstable workloads
+    - Enable cluster logging (api, audit, authenticator, controllerManager, scheduler)
+    - Pin Kubernetes version explicitly and plan upgrade windows
+    - Add node group taints for dedicated workloads (GPU, high-memory)
+    - Configure Pod Identity associations as the preferred alternative to IRSA
+  context7Libraries:
+    - name: eksctl
+      query: "eksctl ClusterConfig managed node groups Fargate IRSA add-ons VPC configuration, IAM service accounts OIDC, Bottlerocket AL2023 encryption logging"
+
+files:
+  - path: "{outputPath}/cluster.yaml"
+    format: raw
+
+detection:
+  paths: ["cluster.yaml", "**/eks/*.yaml", "**/eks/*.yml", "eksctl-config.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "kind"
+      required: true
+      message: "EKS config must have kind: ClusterConfig"
+    - path: "apiVersion"
+      required: true
+      message: "EKS config must have apiVersion: eksctl.io/v1alpha5"
+    - path: "metadata"
+      required: true
+      message: "EKS config must have metadata with name and region"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["cluster.yaml", "**/eks/**/*.yaml", "**/eks/**/*.yml", "eksctl-config.yaml"]
+
+risk:
+  level: HIGH
+  rationale: "EKS cluster changes affect production Kubernetes infrastructure and workloads"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# EKS
+
+## Prompt
+
+You are an Amazon EKS expert. Generate production-ready eksctl cluster configurations with managed node groups, add-ons, IRSA, and networking.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+eks, eksctl, cluster, node group, fargate, addon, irsa, oidc,
+aws, kubernetes, managed, bottlerocket, vpc, cni, kms, encryption,
+service account, pod identity, scaling, logging, endpoint

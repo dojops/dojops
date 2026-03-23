@@ -36,6 +36,14 @@ context:
     - **Kubernetes monitoring**: kube-state-metrics, kubelet, API server, etcd, pod resource usage
     - **Database monitoring**: MySQL/PostgreSQL/Redis/MongoDB exporters, query latency, connections
     - **Service discovery**: Kubernetes SD, Consul SD, EC2 SD, file_sd_configs, DNS SD
+
+    EXAMPLE — Application monitoring with alerts:
+    {
+      "files": {
+        "prometheus.yml": "global:\n  scrape_interval: 15s\n  evaluation_interval: 15s\n\nrule_files:\n  - alert-rules.yml\n\nalerting:\n  alertmanagers:\n    - static_configs:\n        - targets: ['alertmanager:9093']\n\nscrape_configs:\n  - job_name: app\n    metrics_path: /metrics\n    static_configs:\n      - targets: ['app:3000']\n\n  - job_name: node-exporter\n    static_configs:\n      - targets: ['node-exporter:9100']",
+        "alert-rules.yml": "groups:\n  - name: app-alerts\n    rules:\n      - alert: HighErrorRate\n        expr: rate(http_requests_total{status=~\"5..\"}[5m]) / rate(http_requests_total[5m]) > 0.05\n        for: 5m\n        labels:\n          severity: critical\n        annotations:\n          summary: \"High error rate on {{ $labels.instance }}\"\n          description: \"Error rate is {{ $value | humanizePercentage }} for 5 minutes.\"\n\n      - alert: HighLatency\n        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1\n        for: 5m\n        labels:\n          severity: warning\n        annotations:\n          summary: \"High p95 latency on {{ $labels.instance }}\""
+      }
+    }
   bestPractices:
     - Set appropriate scrape intervals based on metric cardinality (15s default, 5s-60s range)
     - Use relabeling for dynamic service discovery and target filtering

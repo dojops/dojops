@@ -1051,6 +1051,8 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
 
     logUpgradeIfExists(destPath, version);
     fs.writeFileSync(destPath, fileBuffer);
+    // Persist SHA-256 sidecar for load-time re-verification
+    fs.writeFileSync(`${destPath}.sha256`, actualHash, "utf-8");
     spinner.stop("Installed successfully");
 
     p.note(

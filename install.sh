@@ -69,7 +69,7 @@ done
 # --- Banner ---
 printf "\n"
 printf "${BOLD}  DojOps Installer${RESET}\n"
-printf "  AI DevOps Automation Engine\n"
+printf "  AI Automation Engine\n"
 printf "\n"
 
 # --- Check Node.js ---

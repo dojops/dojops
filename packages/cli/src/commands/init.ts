@@ -99,7 +99,7 @@ function collectScriptParts(ctx: RepoContext): string[] {
   return parts;
 }
 
-function formatScanSummary(ctx: RepoContext): string[] {
+export function formatScanSummary(ctx: RepoContext): string[] {
   const lines: string[] = [...formatLanguagesSummary(ctx)];
 
   if (ctx.packageManager) {

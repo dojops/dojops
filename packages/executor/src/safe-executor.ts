@@ -36,6 +36,9 @@ export interface SafeExecutorOptions {
   /** Optional critic for the self-repair loop. When provided, verification failures trigger
    *  a critique LLM call before re-generation for more targeted repairs. */
   critic?: CriticCallback;
+  /** Optional proactive critic that runs after generate but before verify.
+   *  Catches semantic issues that linters miss. Separate from the reactive `critic`. */
+  proactiveCritic?: CriticCallback;
   /** Optional progress callback for UI feedback during repair loops. */
   progress?: ExecutorProgressCallback;
 }
@@ -77,6 +80,7 @@ export class SafeExecutor {
   private readonly policy: ExecutionPolicy;
   private readonly approvalHandler: ApprovalHandler;
   private readonly critic: CriticCallback | undefined;
+  private readonly proactiveCritic: CriticCallback | undefined;
   private readonly progress: ExecutorProgressCallback | undefined;
   private readonly auditLog: ExecutionAuditEntry[] = [];
   private readonly tokenUsage = { prompt: 0, completion: 0, total: 0 };
@@ -86,6 +90,7 @@ export class SafeExecutor {
     this.approvalHandler = options.approvalHandler ?? new AutoApproveHandler();
     this.progress = options.progress;
     this.critic = options.critic;
+    this.proactiveCritic = options.proactiveCritic;
   }
 
   private handleTimeoutError(
@@ -177,6 +182,35 @@ export class SafeExecutor {
       }
     }
     return undefined;
+  }
+
+  /**
+   * Advisory check: compare files written against expected files from metadata.
+   * Returns a warning string if any expected files are missing, undefined otherwise.
+   */
+  private checkFileCompleteness(
+    filesWritten: string[],
+    meta?: Record<string, unknown>,
+  ): string | undefined {
+    if (!meta?.expectedFiles || !Array.isArray(meta.expectedFiles)) return undefined;
+    const expectedFiles = meta.expectedFiles as string[];
+    if (expectedFiles.length === 0) return undefined;
+
+    const writtenBasenames = new Set(
+      filesWritten.map((f) => {
+        const parts = f.split("/");
+        return parts[parts.length - 1];
+      }),
+    );
+
+    const missing = expectedFiles.filter((f) => {
+      const parts = f.split("/");
+      const basename = parts[parts.length - 1];
+      return !writtenBasenames.has(basename);
+    });
+
+    if (missing.length === 0) return undefined;
+    return `Expected files not written: ${missing.join(", ")}`;
   }
 
   /**
@@ -289,6 +323,9 @@ export class SafeExecutor {
         });
       }
 
+      // Advisory file completeness check
+      const completenessWarning = this.checkFileCompleteness(filesWritten, meta);
+
       return this.buildResult(taskId, tool.name, "completed", startTime, {
         output: executeOutput.data,
         approval,
@@ -297,7 +334,9 @@ export class SafeExecutor {
         filesModified,
         filesUnchanged,
         usage: generateOutput.usage,
-        metadata: meta,
+        metadata: completenessWarning
+          ? { ...meta, _completenessWarning: completenessWarning }
+          : meta,
       });
     } catch (err) {
       const { status, error } = this.handleTimeoutError(err, "Execute");
@@ -507,6 +546,45 @@ export class SafeExecutor {
       generateOutput = genResult.output;
     }
 
+    // Proactive critique: run a separate critic before verification to catch semantic issues early.
+    // If the critic finds errors, attempt one re-generation with repair instructions
+    // before entering the formal verify → repair loop.
+    if (this.proactiveCritic && !this.policy.skipVerification) {
+      try {
+        const content =
+          typeof generateOutput.data === "string"
+            ? generateOutput.data
+            : JSON.stringify(generateOutput.data ?? "");
+        const preVerify: VerificationResult = {
+          passed: true,
+          tool: tool.name,
+          issues: [],
+        };
+        const critique = await this.proactiveCritic.critique(content, preVerify, tool.name);
+        if (critique.repairInstructions && critique.repairInstructions.length > 20) {
+          const regenInput =
+            input && typeof input === "object"
+              ? {
+                  ...(input as Record<string, unknown>),
+                  _repairContext: critique.repairInstructions,
+                }
+              : input;
+          const regenResult = await this.runGeneratePhase(
+            taskId,
+            tool,
+            regenInput,
+            startTime,
+            meta,
+          );
+          if (!("result" in regenResult)) {
+            generateOutput = regenResult.output;
+          }
+        }
+      } catch {
+        // Proactive critique is advisory — don't block on failure
+      }
+    }
+
     let verifyResult = await this.runVerification(tool, generateOutput, meta);
 
     if (!verifyResult.ok) {
@@ -654,6 +732,7 @@ export class SafeExecutor {
       verification: details.verification,
       durationMs,
       auditLog: auditEntry,
+      metadata: details.metadata,
     };
   }
 }

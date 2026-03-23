@@ -82,7 +82,7 @@ export const RUN_COMMAND_TOOL: ToolDefinition = {
 export const RUN_SKILL_TOOL: ToolDefinition = {
   name: "run_skill",
   description:
-    "Run a DojOps skill (.dops file) to generate DevOps configurations. Use for Terraform, Dockerfile, CI/CD, K8s, etc.",
+    "Run a DojOps skill to generate DevOps configurations (Terraform, Dockerfile, CI/CD, K8s, etc.). The input object MUST contain a 'prompt' field describing what to generate.",
   parameters: {
     type: "object",
     properties: {
@@ -92,7 +92,24 @@ export const RUN_SKILL_TOOL: ToolDefinition = {
       },
       input: {
         type: "object",
-        description: "Input parameters for the skill, matching its input schema",
+        description:
+          "Input for the skill. Must contain 'prompt' (required): a description of what to generate. Optional: 'existingContent' (existing config to update), 'outputPath' (directory to write files).",
+        properties: {
+          prompt: {
+            type: "string",
+            description:
+              "What to generate — describe the desired configuration in detail (e.g. 'Create a Dockerfile for a Node.js 20 app with multi-stage build')",
+          },
+          existingContent: {
+            type: "string",
+            description: "Existing configuration content to update (for update mode)",
+          },
+          outputPath: {
+            type: "string",
+            description: "Directory path where generated files should be written",
+          },
+        },
+        required: ["prompt"],
         additionalProperties: true,
       },
     },

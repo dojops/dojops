@@ -1,0 +1,139 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: falco
+  version: 2.2.0
+  description: "Generate Falco runtime security rules, exceptions, and notification channels"
+  author: dojops
+  license: MIT
+  tags: [falco, security, runtime, kubernetes]
+
+context:
+  technology: Falco
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid Falco rules YAML configuration.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be valid Falco rules YAML that falco can load.
+
+    Generate appropriate Falco configuration based on the request:
+    - **Rules**: Detection rules with condition, output, priority, source
+    - **Macros**: Reusable condition fragments for DRY rule authoring
+    - **Lists**: Named lists of items (processes, containers, paths) referenced in conditions
+    - **Exceptions**: Override specific rule matches to reduce noise
+    - **Required engine version**: Minimum Falco engine version for syscall fields
+
+    Structure each rule with:
+    - rule: Descriptive name of the detection
+    - desc: What the rule detects and why
+    - condition: Syscall-based filter expression
+    - output: Alert message template with field interpolation (%evt.type, %container.name, etc.)
+    - priority: EMERGENCY, ALERT, CRITICAL, ERROR, WARNING, NOTICE, INFORMATIONAL, DEBUG
+    - source: syscall (default) or k8s_audit
+    - tags: Classification tags (network, process, filesystem, container, mitre_*)
+    - enabled: true/false for toggling built-in rules
+
+    Example output:
+    - list: sensitive_mount_paths
+      items:
+        - /proc
+        - /var/run/docker.sock
+
+    - macro: container
+      condition: container.id != host
+
+    - rule: Reverse shell in container
+      desc: Detects a process in a container opening a new network connection and spawning a shell
+      condition: >
+        container and evt.type = execve
+        and proc.name in (bash, sh, zsh)
+        and fd.type = ipv4
+        and fd.direction = out
+      output: >
+        Reverse shell detected (container=%container.name
+        image=%container.image.repository
+        proc=%proc.cmdline connection=%fd.name user=%user.name)
+      priority: CRITICAL
+      source: syscall
+      tags:
+        - container
+        - network
+        - process
+        - mitre_execution
+        - mitre_command_and_control
+  bestPractices:
+    - Use macros to factor out common conditions (container, host, spawned_process)
+    - Reference built-in lists (shell_binaries, sensitive_file_names) before creating custom ones
+    - Set priority based on actual impact — CRITICAL for container escapes, WARNING for anomalies
+    - Tag rules with MITRE ATT&CK technique IDs (mitre_execution, mitre_persistence, etc.)
+    - Use exceptions to allowlist known-good behaviors rather than disabling entire rules
+    - Keep conditions specific to reduce false positives — combine container, process, and file filters
+    - Include %container.id, %container.name, and %proc.cmdline in output for investigation context
+    - "Use append: true to extend default rules instead of replacing them"
+    - Test custom rules with falco --dry-run before deploying
+    - Separate custom rules into their own files (custom_rules.yaml) to survive upgrades
+    - Configure output channels (stdout, syslog, HTTP, gRPC) based on SIEM integration needs
+    - Group related rules by threat category for easier management
+  context7Libraries:
+    - name: falco
+      query: "Falco rules YAML condition output priority macros lists exceptions, syscall filtering container detection, MITRE ATT&CK tagging k8s_audit"
+
+files:
+  - path: "{outputPath}/falco_rules.yaml"
+    format: raw
+
+detection:
+  paths: ["falco_rules.yaml", "**/falco/*.yaml", "**/falco/*.yml", "falco.yaml", "*_rules.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "rule"
+      required: false
+      requiredUnless: "macro"
+      message: "Falco config must contain at least one rule, macro, or list definition"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*_rules.yaml", "**/*_rules.yml", "**/falco/**/*.yaml", "**/falco/**/*.yml"]
+
+risk:
+  level: LOW
+  rationale: "Falco rules define detection logic without modifying running workloads"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Falco
+
+## Prompt
+
+You are a Falco runtime security expert. Generate production-ready Falco rules for detecting threats in containers and Kubernetes clusters.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+falco, runtime security, rule, syscall, alert, container escape,
+macro, list, exception, priority, condition, output, k8s audit,
+mitre, detection, threat, siem, container, process, filesystem

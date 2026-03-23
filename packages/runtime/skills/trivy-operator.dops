@@ -1,0 +1,137 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: trivy-operator
+  version: 2.2.0
+  description: "Generate Trivy Operator Helm values, scan policies, and compliance configurations"
+  author: dojops
+  license: MIT
+  tags: [trivy, security, scanning, kubernetes, operator]
+
+context:
+  technology: Trivy Operator
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid Trivy Operator configuration YAML.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    Use multi-document YAML (--- separator) when generating multiple resources.
+
+    Generate appropriate Trivy Operator configuration based on the request:
+    - **Helm values**: Operator deployment configuration (values.yaml format)
+    - **ConfigAuditReport**: Configuration audit policies for K8s resources
+    - **VulnerabilityReport config**: Scanner settings, severity thresholds, ignore rules
+    - **Compliance policies**: CIS Kubernetes Benchmark, NSA/CISA hardening, PSS
+    - **ExposedSecretReport config**: Secret detection scanning settings
+    - **SBOM config**: Software bill of materials generation settings
+    - **ClusterComplianceReport**: Cluster-wide compliance assessment
+
+    For Helm values, structure with:
+    - trivy.severity: Comma-separated severity list (CRITICAL,HIGH,MEDIUM,LOW)
+    - trivy.ignoreUnfixed: Whether to skip unfixed vulnerabilities
+    - operator.scanJobTimeout: Maximum scan duration
+    - operator.vulnerabilityScannerEnabled/configAuditScannerEnabled/sbomGenerationEnabled
+    - compliance.specs: Which compliance benchmarks to enable
+
+    Example output:
+    operator:
+      vulnerabilityScannerEnabled: true
+      configAuditScannerEnabled: true
+      sbomGenerationEnabled: true
+      scanJobTimeout: 10m
+      scanJobsConcurrentLimit: 3
+    trivy:
+      severity: CRITICAL,HIGH
+      ignoreUnfixed: true
+      timeout: 5m0s
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    excludeNamespaces: kube-system,gatekeeper-system
+    compliance:
+      specs:
+        - k8s-cis-1.23
+        - k8s-nsa-1.0
+    report:
+      recordFailedChecksOnly: true
+    nodeCollector:
+      tolerations:
+        - operator: Exists
+  bestPractices:
+    - Enable vulnerability scanning with severity threshold (CRITICAL,HIGH at minimum)
+    - Configure ignoreUnfixed to reduce noise from vulnerabilities without available patches
+    - Set scan timeouts appropriate to cluster size (large images need more time)
+    - Enable config audit scanning to detect Kubernetes misconfigurations
+    - Use compliance specs (cis, nsa, pss-baseline, pss-restricted) for regulatory needs
+    - Configure SBOM generation for software supply chain visibility
+    - Set resource limits on scan jobs to prevent cluster resource exhaustion
+    - Use excludeNamespaces to skip scanning system namespaces
+    - Configure report TTL to automatically clean up old scan results
+    - Enable exposed secret scanning for detecting leaked credentials in images
+    - Use private registry authentication for scanning images in private registries
+    - Configure webhook notifications for critical vulnerability findings
+  context7Libraries:
+    - name: trivy-operator
+      query: "Trivy Operator Helm values VulnerabilityReport ConfigAuditReport compliance CIS, scan configuration severity ignoreUnfixed SBOM ExposedSecretReport ClusterComplianceReport"
+
+files:
+  - path: "{outputPath}/trivy-operator.yaml"
+    format: raw
+
+detection:
+  paths: ["**/trivy-operator/*.yaml", "**/trivy-operator/*.yml", "trivy-operator-values.yaml", "**/trivy/**/*.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "trivy"
+      required: false
+      message: "Trivy Operator Helm values should include a trivy configuration section"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml", "**/trivy-operator/**/*.yaml", "**/trivy/**/*.yaml"]
+
+risk:
+  level: LOW
+  rationale: "Trivy Operator configuration defines scanning behavior without modifying workloads"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Trivy Operator
+
+## Prompt
+
+You are a Trivy Operator and Kubernetes security scanning expert. Generate production-ready Trivy Operator configurations, scan policies, and compliance settings.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+trivy operator, vulnerability report, compliance, scan, sbom, config audit,
+security, kubernetes, cis, nsa, pss, severity, image scanning,
+exposed secret, helm values, report, benchmark, registry

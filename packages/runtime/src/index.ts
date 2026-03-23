@@ -81,6 +81,7 @@ export {
   DopsRuntimeV2Options,
   DocProvider,
   ToolMetadata,
+  SkillTrustLevel,
   stripCodeFences,
   parseRawContent,
   parseMultiFileOutput,

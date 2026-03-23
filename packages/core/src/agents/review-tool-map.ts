@@ -30,14 +30,14 @@ export const REVIEW_TOOL_MAP: ReviewToolSpec[] = [
   {
     patterns: [".github/workflows/*.yml", ".github/workflows/*.yaml"],
     binary: "actionlint",
-    args: ["{file}"],
+    args: ["-shellcheck=", "{file}"],
     parser: "actionlint",
     description: "GitHub Actions workflow syntax and best practices",
   },
   {
     patterns: [".github/actions/*/action.yml", ".github/actions/*/action.yaml"],
     binary: "actionlint",
-    args: ["{file}"],
+    args: ["-shellcheck=", "{file}"],
     parser: "actionlint",
     description: "GitHub Actions composite action validation",
   },

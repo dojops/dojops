@@ -18,8 +18,12 @@ import {
   resolveError,
   removeErrorPattern,
   errorFingerprint,
+  recordOutcome,
+  getBestModel,
+  recordPreference,
+  getPreferences,
 } from "../memory";
-import type { TaskRecord } from "../memory";
+import type { TaskRecord, SkillOutcome } from "../memory";
 
 let tmpDir: string;
 
@@ -542,5 +546,221 @@ describe("buildMemoryContextString with error warnings", () => {
     expect(result).toContain("Known error patterns");
     expect(result).toContain("LLM request timed out");
     expect(result).toContain("3x");
+  });
+});
+
+// ── Skill outcomes ──────────────────────────────────────────────
+
+function makeOutcome(overrides?: Partial<SkillOutcome>): SkillOutcome {
+  return {
+    task_type: "generate",
+    skill_name: "dockerfile",
+    model: "gpt-4o-mini",
+    tier: "fast",
+    status: "success",
+    quality_score: 1.0,
+    duration_ms: 500,
+    input_tokens: 200,
+    output_tokens: 300,
+    cost_estimate: 0.0003,
+    repair_attempts: 0,
+    error_summary: "",
+    ...overrides,
+  };
+}
+
+describe("recordOutcome", () => {
+  it("inserts a skill outcome record", () => {
+    recordOutcome(tmpDir, makeOutcome());
+
+    const db = openMemoryDb(tmpDir)!;
+    const rows = db.prepare("SELECT * FROM skill_outcomes").all();
+    expect(rows).toHaveLength(1);
+    expect((rows[0] as Record<string, unknown>).skill_name).toBe("dockerfile");
+  });
+
+  it("stores quality_score and cost_estimate correctly", () => {
+    recordOutcome(tmpDir, makeOutcome({ quality_score: 0.7, cost_estimate: 1.23 }));
+
+    const db = openMemoryDb(tmpDir)!;
+    const row = db.prepare("SELECT * FROM skill_outcomes").get() as Record<string, unknown>;
+    expect(row.quality_score).toBeCloseTo(0.7);
+    expect(row.cost_estimate).toBeCloseTo(1.23);
+  });
+
+  it("truncates error_summary to 200 chars", () => {
+    const longError = "x".repeat(500);
+    recordOutcome(tmpDir, makeOutcome({ error_summary: longError, status: "failure" }));
+
+    const db = openMemoryDb(tmpDir)!;
+    const row = db.prepare("SELECT * FROM skill_outcomes").get() as Record<string, unknown>;
+    expect((row.error_summary as string).length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe("getBestModel", () => {
+  it("returns null with fewer than 3 samples", () => {
+    recordOutcome(tmpDir, makeOutcome({ model: "gpt-4o-mini" }));
+    recordOutcome(tmpDir, makeOutcome({ model: "gpt-4o-mini" }));
+
+    expect(getBestModel(tmpDir, "dockerfile")).toBeNull();
+  });
+
+  it("returns model with highest average quality_score", () => {
+    // 3 outcomes with gpt-4o-mini at quality 0.5
+    for (let i = 0; i < 3; i++) {
+      recordOutcome(tmpDir, makeOutcome({ model: "gpt-4o-mini", quality_score: 0.5 }));
+    }
+    // 3 outcomes with gpt-4o at quality 0.9
+    for (let i = 0; i < 3; i++) {
+      recordOutcome(tmpDir, makeOutcome({ model: "gpt-4o", tier: "standard", quality_score: 0.9 }));
+    }
+
+    const best = getBestModel(tmpDir, "dockerfile");
+    expect(best).not.toBeNull();
+    expect(best!.model).toBe("gpt-4o");
+    expect(best!.avgQuality).toBeGreaterThan(0.8);
+    expect(best!.sampleSize).toBe(3);
+  });
+
+  it("ignores failed outcomes", () => {
+    for (let i = 0; i < 5; i++) {
+      recordOutcome(
+        tmpDir,
+        makeOutcome({ model: "gpt-4o-mini", status: "failure", quality_score: 0 }),
+      );
+    }
+    expect(getBestModel(tmpDir, "dockerfile")).toBeNull();
+  });
+
+  it("returns null for unknown skill", () => {
+    for (let i = 0; i < 5; i++) {
+      recordOutcome(tmpDir, makeOutcome({ model: "gpt-4o-mini" }));
+    }
+    expect(getBestModel(tmpDir, "terraform")).toBeNull();
+  });
+});
+
+// ── Learned preferences ─────────────────────────────────────────
+
+describe("recordPreference", () => {
+  it("creates a new preference with confidence 0.5", () => {
+    recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+
+    const prefs = getPreferences(tmpDir);
+    expect(prefs).toHaveLength(1);
+    expect(prefs[0].key).toBe("model:dockerfile");
+    expect(prefs[0].value).toBe("gpt-4o");
+    expect(prefs[0].confidence).toBeCloseTo(0.5);
+  });
+
+  it("increments confidence on update (Bayesian update)", () => {
+    recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+    recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+    recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+
+    const prefs = getPreferences(tmpDir);
+    expect(prefs).toHaveLength(1);
+    // 0.5 + 0.1 + 0.1 = 0.7
+    expect(prefs[0].confidence).toBeCloseTo(0.7);
+  });
+
+  it("caps confidence at 1.0", () => {
+    for (let i = 0; i < 10; i++) {
+      recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+    }
+
+    const prefs = getPreferences(tmpDir);
+    expect(prefs[0].confidence).toBeLessThanOrEqual(1.0);
+  });
+});
+
+describe("getPreferences", () => {
+  it("filters by key prefix", () => {
+    recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+    recordPreference(tmpDir, "model:terraform", "gpt-4o");
+    recordPreference(tmpDir, "agent:ci", "ci-specialist");
+
+    const modelPrefs = getPreferences(tmpDir, "model:");
+    expect(modelPrefs).toHaveLength(2);
+    expect(modelPrefs.every((p) => p.key.startsWith("model:"))).toBe(true);
+  });
+
+  it("returns all preferences when no prefix", () => {
+    recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+    recordPreference(tmpDir, "agent:ci", "ci-specialist");
+
+    const all = getPreferences(tmpDir);
+    expect(all).toHaveLength(2);
+  });
+
+  it("returns empty array for no matches", () => {
+    expect(getPreferences(tmpDir, "nonexistent:")).toEqual([]);
+  });
+});
+
+describe("buildMemoryContextString with learned preferences", () => {
+  it("includes high-confidence preferences when rootDir provided", () => {
+    // Boost confidence above 0.7 threshold (0.5 + 0.1*3 = 0.8)
+    for (let i = 0; i < 4; i++) {
+      recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+    }
+
+    const result = buildMemoryContextString(
+      {
+        recentTasks: [
+          {
+            id: 1,
+            timestamp: "2025-03-08T10:00:00Z",
+            task_type: "generate",
+            prompt: "test",
+            result_summary: "ok",
+            status: "success",
+            duration_ms: 100,
+            related_files: "[]",
+            agent_or_skill: "",
+            metadata: "{}",
+          },
+        ],
+        relatedTasks: [],
+        isContinuation: false,
+        relevantNotes: [],
+        errorWarnings: [],
+      },
+      tmpDir,
+    );
+    expect(result).toContain("Learned model preferences");
+    expect(result).toContain("dockerfile");
+    expect(result).toContain("gpt-4o");
+  });
+
+  it("excludes low-confidence preferences", () => {
+    // Single recording → confidence 0.5, below threshold
+    recordPreference(tmpDir, "model:dockerfile", "gpt-4o");
+
+    const result = buildMemoryContextString(
+      {
+        recentTasks: [
+          {
+            id: 1,
+            timestamp: "2025-03-08T10:00:00Z",
+            task_type: "generate",
+            prompt: "test",
+            result_summary: "ok",
+            status: "success",
+            duration_ms: 100,
+            related_files: "[]",
+            agent_or_skill: "",
+            metadata: "{}",
+          },
+        ],
+        relatedTasks: [],
+        isContinuation: false,
+        relevantNotes: [],
+        errorWarnings: [],
+      },
+      tmpDir,
+    );
+    expect(result).not.toContain("Learned model preferences");
   });
 });

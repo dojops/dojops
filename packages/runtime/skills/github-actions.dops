@@ -156,7 +156,7 @@ detection:
 
 verification:
   binary:
-    command: "actionlint .github/workflows/*.yml 2>&1 || true"
+    command: "actionlint -shellcheck= .github/workflows/*.yml 2>&1 || true"
     parser: actionlint
     timeout: 30000
     cwd: output

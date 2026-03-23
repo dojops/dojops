@@ -104,6 +104,8 @@ export interface ExecutionResult {
   verification?: VerificationResult;
   durationMs: number;
   auditLog: ExecutionAuditEntry;
+  /** Metadata passed through from the caller, enriched with advisory warnings. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ExecutionAuditEntry {

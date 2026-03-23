@@ -19,6 +19,17 @@ context:
     Add templates/ingress.yaml, serviceaccount.yaml, hpa.yaml, configmap.yaml, NOTES.txt, or tests/ only when relevant.
     Do NOT output raw YAML — always use the JSON wrapper.
 
+    Example output:
+    {
+      "files": {
+        "Chart.yaml": "apiVersion: v2\nname: myapp\nversion: 0.1.0\nappVersion: \"1.0.0\"\ntype: application\n",
+        "values.yaml": "replicaCount: 2\nimage:\n  repository: myapp\n  tag: \"\"\n  pullPolicy: IfNotPresent\nservice:\n  type: ClusterIP\n  port: 80\nresources:\n  requests:\n    cpu: 100m\n    memory: 128Mi\n  limits:\n    cpu: 500m\n    memory: 256Mi\n",
+        "templates/_helpers.tpl": "{{- define \"myapp.fullname\" -}}\n{{- if .Values.fullnameOverride }}\n{{- .Values.fullnameOverride | trunc 63 | trimSuffix \"-\" }}\n{{- else }}\n{{- printf \"%s-%s\" .Release.Name .Chart.Name | trunc 63 | trimSuffix \"-\" }}\n{{- end }}\n{{- end }}\n\n{{- define \"myapp.labels\" -}}\napp.kubernetes.io/name: {{ .Chart.Name }}\napp.kubernetes.io/instance: {{ .Release.Name }}\napp.kubernetes.io/version: {{ .Chart.AppVersion | quote }}\napp.kubernetes.io/managed-by: {{ .Release.Service }}\n{{- end }}\n",
+        "templates/deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ include \"myapp.fullname\" . }}\n  labels:\n    {{- include \"myapp.labels\" . | nindent 4 }}\nspec:\n  replicas: {{ .Values.replicaCount }}\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: {{ .Chart.Name }}\n      app.kubernetes.io/instance: {{ .Release.Name }}\n  template:\n    metadata:\n      labels:\n        {{- include \"myapp.labels\" . | nindent 8 }}\n    spec:\n      containers:\n        - name: {{ .Chart.Name }}\n          image: \"{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}\"\n          imagePullPolicy: {{ .Values.image.pullPolicy }}\n          ports:\n            - containerPort: {{ .Values.service.port }}\n          {{- if .Values.resources }}\n          resources:\n            {{- toYaml .Values.resources | nindent 12 }}\n          {{- end }}\n",
+        "templates/service.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: {{ include \"myapp.fullname\" . }}\n  labels:\n    {{- include \"myapp.labels\" . | nindent 4 }}\nspec:\n  type: {{ .Values.service.type }}\n  ports:\n    - port: {{ .Values.service.port }}\n      targetPort: {{ .Values.service.port }}\n      protocol: TCP\n  selector:\n    app.kubernetes.io/name: {{ .Chart.Name }}\n    app.kubernetes.io/instance: {{ .Release.Name }}\n"
+      }
+    }
+
     CRITICAL OUTPUT RULES:
     - Always output a JSON object with "files" key.
     - FLAT structure: All keys start from chart root (Chart.yaml, values.yaml, templates/...) — NEVER wrap in mychart/ or helm/ subfolder.

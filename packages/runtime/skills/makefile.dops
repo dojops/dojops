@@ -26,6 +26,31 @@ context:
     - **Rust**: build (cargo build), test (cargo test), release (cargo build --release), clean
     - **Docker**: build (docker build), run (docker run), push (docker push), compose-up
     - **General**: help, build, test, lint, format, clean, dev, deploy
+
+    EXAMPLE — Go project Makefile (note: recipe lines MUST use tab characters):
+    .DEFAULT_GOAL := help
+    APP_NAME ?= myapp
+    VERSION ?= $(shell git describe --tags --always --dirty)
+
+    .PHONY: help build test lint run clean
+
+    help: ## Show available targets
+    	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+    build: ## Build the binary
+    	go build -ldflags="-s -w -X main.version=$(VERSION)" -o bin/$(APP_NAME) ./cmd/$(APP_NAME)
+
+    test: ## Run tests
+    	go test -race -coverprofile=coverage.out ./...
+
+    lint: ## Run linters
+    	golangci-lint run ./...
+
+    run: build ## Build and run
+    	./bin/$(APP_NAME)
+
+    clean: ## Remove build artifacts
+    	rm -rf bin/ coverage.out
   bestPractices:
     - Declare .PHONY targets for non-file targets
     - Include a help target that lists available targets

@@ -1,0 +1,126 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: aws-cdk
+  version: 2.2.0
+  description: "Generate AWS CDK stack code in TypeScript with constructs, props, and outputs"
+  author: dojops
+  license: MIT
+  tags: [aws, cdk, iac, typescript, cloud]
+
+context:
+  technology: AWS CDK
+  fileFormat: json
+  outputGuidance: |
+    Generate AWS CDK infrastructure-as-code in TypeScript.
+    Output a JSON object with file paths as keys and TypeScript/config content as string values.
+    Format: { "files": { "lib/my-stack.ts": "...", "bin/app.ts": "...", "cdk.json": "..." } }
+    Each file content must be valid TypeScript or JSON.
+
+    Always include these files:
+      - bin/app.ts — CDK app entry point with environment config
+      - lib/<stack-name>-stack.ts — Main stack class with constructs
+      - cdk.json — CDK configuration with app command and context
+    Optionally include when needed:
+      - lib/<construct-name>.ts — Reusable L3 constructs
+      - lib/<stack-name>-stack.props.ts — Stack props interface
+      - tsconfig.json — TypeScript configuration
+    Do NOT output raw TypeScript — use the JSON wrapper format for multi-file output.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - Use bin/ and lib/ directory structure in file keys.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty TypeScript or valid JSON content.
+
+    Use appropriate CDK construct levels:
+    - **L1 (Cfn*)**: Raw CloudFormation resources, only when L2 is unavailable
+    - **L2**: AWS construct library defaults with sensible props
+    - **L3**: Patterns combining multiple L2 constructs (e.g., ApplicationLoadBalancedFargateService)
+
+    Example output:
+    {
+      "files": {
+        "lib/storage-stack.ts": "import * as cdk from 'aws-cdk-lib';\nimport * as s3 from 'aws-cdk-lib/aws-s3';\nimport * as iam from 'aws-cdk-lib/aws-iam';\nimport { Construct } from 'constructs';\n\nexport interface StorageStackProps extends cdk.StackProps {\n  bucketName: string;\n  versioned?: boolean;\n}\n\nexport class StorageStack extends cdk.Stack {\n  public readonly bucket: s3.Bucket;\n\n  constructor(scope: Construct, id: string, props: StorageStackProps) {\n    super(scope, id, props);\n\n    this.bucket = new s3.Bucket(this, 'DataBucket', {\n      bucketName: props.bucketName,\n      versioned: props.versioned ?? true,\n      encryption: s3.BucketEncryption.S3_MANAGED,\n      removalPolicy: cdk.RemovalPolicy.RETAIN,\n      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,\n    });\n\n    new cdk.CfnOutput(this, 'BucketArn', {\n      value: this.bucket.bucketArn,\n    });\n  }\n}\n",
+        "bin/app.ts": "#!/usr/bin/env node\nimport * as cdk from 'aws-cdk-lib';\nimport { StorageStack } from '../lib/storage-stack';\n\nconst app = new cdk.App();\nnew StorageStack(app, 'StorageStack', {\n  bucketName: 'my-company-data',\n  env: { account: '123456789012', region: 'us-east-1' },\n});\n"
+      }
+    }
+  bestPractices:
+    - Use L2 and L3 constructs over L1 (Cfn*) for better defaults and less boilerplate
+    - Define stack props interfaces for configuration injection
+    - Use cdk.Tags.of() for consistent resource tagging across all constructs
+    - Configure removal policies (RemovalPolicy.RETAIN) on stateful resources
+    - Use environment-aware stacks with explicit account and region props
+    - Export cross-stack values with CfnOutput and importValue for loose coupling
+    - Follow CDK construct naming conventions (PascalCase classes, camelCase props)
+    - Use aws-cdk-lib and constructs packages, not individual @aws-cdk/* v1 packages
+    - Store secrets in SSM Parameter Store or Secrets Manager, never in code
+    - Use cdk.Aspects for cross-cutting validations and compliance checks
+    - Set appropriate encryption on storage, queues, and topics by default
+    - Use grant* methods for IAM permissions instead of writing raw policies
+  context7Libraries:
+    - name: aws-cdk
+      query: "AWS CDK TypeScript Stack construct L2 L3, CfnOutput Tags RemovalPolicy, grant methods IAM, environment props, cdk.json configuration"
+
+files:
+  - path: "{outputPath}/bin/app.ts"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/lib/stack.ts"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/cdk.json"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/tsconfig.json"
+    format: raw
+    conditional: true
+
+detection:
+  paths: ["cdk.json", "**/cdk.out/**", "bin/*.ts", "**/lib/*-stack.ts"]
+  updateMode: true
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["**/*.ts", "cdk.json", "tsconfig.json", "**/bin/**", "**/lib/**"]
+
+risk:
+  level: MEDIUM
+  rationale: "CDK synthesizes CloudFormation and provisions AWS cloud resources"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# AWS CDK
+
+## Prompt
+
+You are an AWS CDK expert specializing in TypeScript. Generate production-ready CDK stacks with proper construct patterns, props, outputs, and IAM configuration.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+cdk, aws cdk, stack, construct, cfn, aws, cloud development kit,
+typescript, l2, l3, pattern, output, grant, iam, s3, lambda,
+ec2, vpc, ecs, fargate, rds, dynamodb, sqs, sns, cloudformation

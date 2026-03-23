@@ -35,6 +35,61 @@ context:
     - Standard labels (app.kubernetes.io/name, instance, version, component)
 
     Output ALL resources in a single file as multi-document YAML separated by ---. Do NOT split into multiple files.
+
+    Example output skeleton (raw YAML, no JSON wrapper):
+    ---
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: myapp
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: myapp
+      namespace: myapp
+      labels:
+        app.kubernetes.io/name: myapp
+    spec:
+      replicas: 2
+      selector:
+        matchLabels:
+          app.kubernetes.io/name: myapp
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: myapp
+        spec:
+          containers:
+            - name: myapp
+              image: myapp:1.0.0
+              ports:
+                - containerPort: 8080
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              readinessProbe:
+                httpGet:
+                  path: /health
+                  port: 8080
+              securityContext:
+                runAsNonRoot: true
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: myapp
+      namespace: myapp
+    spec:
+      selector:
+        app.kubernetes.io/name: myapp
+      ports:
+        - port: 80
+          targetPort: 8080
   bestPractices:
     - Set resource requests and limits for all containers (prevents noisy-neighbor issues)
     - Use readiness and liveness probes for health checking (httpGet, tcpSocket, or exec)

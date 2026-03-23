@@ -8,7 +8,8 @@ import { appendActivity } from "../dojops-md";
 import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { createSkillRegistry } from "@dojops/skill-registry";
-import { PlannerExecutor } from "@dojops/planner";
+import { PlannerExecutor, critiquePlan } from "@dojops/planner";
+import { ALL_SPECIALIST_CONFIGS } from "@dojops/core";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";
 import {
@@ -617,7 +618,16 @@ function createExecutorWithCallbacks(
         }
       },
     },
-    generateTimeoutMs ? { generateTimeoutMs } : undefined,
+    (() => {
+      const agentConfigs = new Map<string, { systemPrompt: string }>();
+      for (const config of ALL_SPECIALIST_CONFIGS) {
+        agentConfigs.set(config.name, { systemPrompt: config.systemPrompt });
+      }
+      return {
+        ...(generateTimeoutMs ? { generateTimeoutMs } : {}),
+        agentConfigs,
+      };
+    })(),
   );
   return { executor, progress };
 }
@@ -1253,6 +1263,22 @@ async function executeApplyPlan(
 
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const graph = buildTaskGraph(plan);
+
+  // Plan-level critique: LLM reviews the task graph before execution
+  if (!flags.skipVerify) {
+    const validToolNames = [...tools.map((t) => t.name), "generic"];
+    const critique = await critiquePlan(graph, provider, validToolNames);
+    if (critique.issues.length > 0) {
+      for (const issue of critique.issues) {
+        p.log.warn(`${pc.yellow("⚠")} Plan issue: ${issue}`);
+      }
+    }
+    if (!critique.approved) {
+      p.log.error("Plan critique rejected the task graph. Review the issues above.");
+      return;
+    }
+  }
+
   const { executor, progress } = createExecutorWithCallbacks(
     tools,
     graph,
@@ -1265,6 +1291,14 @@ async function executeApplyPlan(
     maxConcurrency: flags.maxConcurrency,
   });
   progress?.done();
+
+  // Cross-task replanning: surface failure context so the user can rerun with adjusted plan
+  if (planResult.replanContext) {
+    p.log.warn(`${pc.yellow("⚠")} Some tasks failed. Replan context:\n${planResult.replanContext}`);
+    p.log.info(
+      `${pc.dim("Tip:")} Re-run with the same goal to automatically skip completed tasks and retry failures.`,
+    );
+  }
 
   const applyCtx: ApplyContext = {
     root,

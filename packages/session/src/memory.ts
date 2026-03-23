@@ -56,10 +56,13 @@ export class MemoryManager {
   }
 
   estimateTokens(messages: ChatMessage[]): number {
+    let totalWords = 0;
     let totalChars = 0;
     for (const msg of messages) {
+      totalWords += msg.content.split(/\s+/).filter(Boolean).length;
       totalChars += msg.content.length;
     }
-    return Math.ceil(totalChars / 4);
+    // Word-based (BPE ~1.4 tokens/word) with char-based floor for long unspaced content
+    return Math.max(Math.ceil(totalWords * 1.4), Math.ceil(totalChars / 4));
   }
 }

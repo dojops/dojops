@@ -85,6 +85,7 @@ import { auditExportCommand } from "./commands/audit-export";
 import { secretsCommand } from "./commands/secrets";
 import { learnCommand } from "./commands/learn";
 import { backupCommand } from "./commands/backup";
+import { ariseCommand } from "./commands/arise";
 import {
   skillsUpdateCommand,
   skillsExportCommand,
@@ -122,6 +123,7 @@ registerCommand("fix-deps", fixDepsCommand);
 registerCommand("secrets", secretsCommand);
 registerCommand("learn", learnCommand);
 registerCommand("backup", backupCommand);
+registerCommand("arise", ariseCommand);
 
 // Nested: checkpoint <sub>
 registerSubcommand("checkpoint", "create", (args, ctx) =>

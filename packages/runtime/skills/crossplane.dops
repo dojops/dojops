@@ -1,0 +1,172 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: crossplane
+  version: 2.2.0
+  description: "Generate Crossplane compositions, XRDs, claims, and provider configs"
+  author: dojops
+  license: MIT
+  tags: [crossplane, kubernetes, iac, cloud]
+
+context:
+  technology: Crossplane
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid Crossplane custom resource YAML manifests.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    Use multi-document YAML (--- separator) when generating multiple resources.
+    The output must be valid kubectl-compatible YAML for Crossplane CRDs.
+
+    Generate appropriate Crossplane resources based on the request:
+    - **CompositeResourceDefinition (XRD)**: Define the API shape for composite resources
+    - **Composition**: Map composite resources to managed resources with patches
+    - **Claim (XRC)**: Namespace-scoped resource request referencing an XRD
+    - **Provider**: Install and configure cloud providers (AWS, GCP, Azure)
+    - **ProviderConfig**: Authentication and connection details for providers
+    - **Managed Resources**: Cloud resources (RDSInstance, Bucket, VPC, etc.)
+
+    Structure each resource with:
+    - apiVersion: apiextensions.crossplane.io/v1 (XRD, Composition) or claim-specific
+    - metadata: name, namespace (for claims), labels, annotations
+    - spec: Resource-specific configuration with patches, resources, connectionDetails
+
+    Example output:
+    ---
+    apiVersion: apiextensions.crossplane.io/v1
+    kind: CompositeResourceDefinition
+    metadata:
+      name: xpostgresqlinstances.db.example.org
+    spec:
+      group: db.example.org
+      names:
+        kind: XPostgreSQLInstance
+        plural: xpostgresqlinstances
+      claimNames:
+        kind: PostgreSQLInstance
+        plural: postgresqlinstances
+      versions:
+        - name: v1alpha1
+          served: true
+          referenceable: true
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  properties:
+                    storageGB:
+                      type: integer
+                      description: Storage size in GB
+    ---
+    apiVersion: apiextensions.crossplane.io/v1
+    kind: Composition
+    metadata:
+      name: postgresql-aws
+    spec:
+      compositeTypeRef:
+        apiVersion: db.example.org/v1alpha1
+        kind: XPostgreSQLInstance
+      resources:
+        - name: rds-instance
+          base:
+            apiVersion: rds.aws.upbound.io/v1beta1
+            kind: Instance
+            spec:
+              forProvider:
+                engine: postgres
+                engineVersion: "15"
+                instanceClass: db.t3.micro
+          patches:
+            - fromFieldPath: spec.storageGB
+              toFieldPath: spec.forProvider.allocatedStorage
+    ---
+    apiVersion: db.example.org/v1alpha1
+    kind: PostgreSQLInstance
+    metadata:
+      name: my-db
+      namespace: default
+    spec:
+      storageGB: 20
+      compositionRef:
+        name: postgresql-aws
+      writeConnectionSecretToRef:
+        name: my-db-conn
+  bestPractices:
+    - Define XRDs with clear OpenAPI schemas including descriptions and validation rules
+    - Use Composition patches (FromCompositeFieldPath, ToCompositeFieldPath) for data flow
+    - Configure connectionDetails to propagate secrets from managed resources to claims
+    - Use ProviderConfig with IRSA (AWS), Workload Identity (GCP), or managed identity (Azure)
+    - Set writeConnectionSecretToRef on both compositions and claims for secret propagation
+    - Pin provider package versions using constraints (e.g., >=v0.40.0)
+    - Use composition functions (function-patch-and-transform) for advanced patching logic
+    - Organize compositions by team or application boundary
+    - Add readinessChecks on composed resources to gate composite readiness
+    - Set publishConnectionDetailsTo for external secret stores (Vault, AWS Secrets Manager)
+    - Use composite resource labels for grouping and policy enforcement
+    - Configure deletionPolicy (Delete or Orphan) based on resource lifecycle
+  context7Libraries:
+    - name: crossplane
+      query: "Crossplane CompositeResourceDefinition Composition Claims patches connectionDetails ProviderConfig managed resources readinessChecks composition functions"
+
+files:
+  - path: "{outputPath}/crossplane.yaml"
+    format: raw
+
+detection:
+  paths: ["**/crossplane/*.yaml", "**/crossplane/*.yml", "composition.yaml", "definition.yaml", "claim.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "kind"
+      required: true
+      message: "Crossplane manifest must have a kind (CompositeResourceDefinition, Composition, Claim, etc.)"
+    - path: "apiVersion"
+      required: true
+      message: "Crossplane manifest must have an apiVersion (apiextensions.crossplane.io/v1 or provider-specific)"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml", "**/crossplane/**/*.yaml", "**/crossplane/**/*.yml"]
+
+risk:
+  level: MEDIUM
+  rationale: "Crossplane compositions define cloud infrastructure provisioning behavior"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Crossplane
+
+## Prompt
+
+You are a Crossplane expert. Generate production-ready Crossplane compositions, XRDs, claims, and provider configurations for cloud infrastructure.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+crossplane, composition, xrd, claim, provider, managed resource,
+kubernetes, iac, cloud, aws, gcp, azure, patch, connection details,
+composite resource, provider config, function, infrastructure

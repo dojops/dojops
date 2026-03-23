@@ -29,6 +29,17 @@ context:
       - backend.tf — backend configuration (S3, GCS, etc.)
     Do NOT output raw HCL — use the JSON wrapper format for multi-file output.
 
+    Example — S3 bucket with DynamoDB table for Terraform state locking:
+    {
+      "files": {
+        "terraform.tf": "terraform {\n  required_version = \">= 1.5\"\n  required_providers {\n    aws = {\n      source  = \"hashicorp/aws\"\n      version = \"~> 5.0\"\n    }\n  }\n}\n",
+        "providers.tf": "provider \"aws\" {\n  region = var.aws_region\n}\n",
+        "variables.tf": "variable \"aws_region\" {\n  type    = string\n  default = \"us-east-1\"\n}\n\nvariable \"environment\" {\n  type    = string\n  default = \"dev\"\n}\n\nvariable \"project\" {\n  type = string\n}\n",
+        "main.tf": "resource \"aws_s3_bucket\" \"state\" {\n  bucket = \"${var.project}-${var.environment}-tfstate\"\n  tags = {\n    Project     = var.project\n    Environment = var.environment\n    ManagedBy   = \"terraform\"\n  }\n}\n\nresource \"aws_s3_bucket_versioning\" \"state\" {\n  bucket = aws_s3_bucket.state.id\n  versioning_configuration {\n    status = \"Enabled\"\n  }\n}\n\nresource \"aws_dynamodb_table\" \"lock\" {\n  name         = \"${var.project}-${var.environment}-tflock\"\n  billing_mode = \"PAY_PER_REQUEST\"\n  hash_key     = \"LockID\"\n  attribute {\n    name = \"LockID\"\n    type = \"S\"\n  }\n  tags = {\n    Project     = var.project\n    Environment = var.environment\n    ManagedBy   = \"terraform\"\n  }\n}\n",
+        "outputs.tf": "output \"bucket_arn\" {\n  value = aws_s3_bucket.state.arn\n}\n\noutput \"dynamodb_table_name\" {\n  value = aws_dynamodb_table.lock.name\n}\n"
+      }
+    }
+
     CRITICAL OUTPUT RULES:
     - Always output a JSON object with "files" key.
     - FLAT structure: All keys at root level (main.tf, variables.tf) — NEVER wrap in terraform/ or project/ subfolder.

@@ -17,6 +17,8 @@ export * from "./llm/fallback-provider";
 export * from "./llm/retry";
 export * from "./llm/redact";
 export * from "./llm/sanitizer";
+export * from "./llm/model-router";
+export * from "./llm/routing-provider";
 export * from "./agents";
 export * from "./scanner";
 export * from "./context";

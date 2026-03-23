@@ -1,6 +1,6 @@
 # Specialist Agents
 
-DojOps includes 17 built-in specialist agents for intelligent prompt routing, plus support for user-defined **custom agents**. Each agent is a domain expert with a tailored system prompt, keyword set, and optional tool dependencies.
+DojOps includes 32 built-in specialist agents for intelligent prompt routing, plus support for user-defined **custom agents**. Each agent is a domain expert with a tailored system prompt, keyword set, and optional tool dependencies.
 
 ---
 
@@ -38,6 +38,21 @@ The selected agent's system prompt is prepended to the LLM request, providing do
 | 15  | `shell-specialist`         | shell-scripting         | Bash/POSIX, ShellCheck, error handling, cron, automation, sed, awk, pipefail                         |
 | 16  | `python-specialist`        | python-scripting        | Type hints, pytest, Poetry, async, Flask, Django, FastAPI, mypy, ruff                                |
 | 17  | `devsecops-reviewer`       | devops-review           | Config review, version validation, deprecated syntax, security audit, Context7 docs                  |
+| 18  | `sre-specialist`           | site-reliability        | SLOs, SLIs, error budgets, incident management, capacity planning, toil reduction                    |
+| 19  | `cost-optimizer`           | cost-optimization       | Cloud cost analysis, right-sizing, FinOps, reserved instances, spot strategies                       |
+| 20  | `incident-response`        | incident-management     | Incident triage, severity classification, RCA, communication plans, escalation paths                 |
+| 21  | `remediation-specialist`   | remediation             | Vulnerability fixes, dependency updates, security patching, config hardening                         |
+| 22  | `performance-engineer`     | performance             | Load testing, profiling, bottleneck analysis, caching strategies, benchmarking                       |
+| 23  | `api-security-specialist`  | api-security            | OAuth, JWT, OWASP API Top 10, rate limiting, API gateway config, CORS                                |
+| 24  | `container-security`       | container-security      | Image scanning, runtime security, Falco, seccomp, rootless containers, supply chain                  |
+| 25  | `secret-management`        | secrets                 | Vault, KMS, secret rotation, External Secrets Operator, SOPS, credential lifecycle                   |
+| 26  | `log-analyzer`             | log-analysis            | ELK, Loki, Fluentd, structured logging, log parsing, anomaly detection                               |
+| 27  | `migration-specialist`     | migration               | Cloud migration, database migration, blue-green cutover, data pipelines                              |
+| 28  | `chaos-engineer`           | chaos-engineering       | Litmus, Chaos Mesh, Gremlin, game days, failure injection, resilience testing                        |
+| 29  | `platform-engineer`        | platform-engineering    | Internal developer platforms, Backstage, Crossplane, golden paths, self-service                      |
+| 30  | `change-impact-analyst`    | change-analysis         | Blast radius estimation, dependency tracing, risk scoring, rollback planning                         |
+| 31  | `runbook-generator`        | runbook-generation      | Operational runbooks, decision trees, escalation paths, procedure authoring                          |
+| 32  | `policy-engine-specialist` | policy-as-code          | OPA, Rego, Kyverno, Gatekeeper, admission control, policy testing                                    |
 
 ---
 
@@ -64,6 +79,21 @@ Each agent is matched by the following keyword sets:
 | `shell-specialist`         | bash, shell, shellcheck, sh, zsh, posix, script, cron, sed, awk, grep, pipefail, trap, shebang                                                                                  |
 | `python-specialist`        | python, pip, pytest, mypy, ruff, poetry, venv, asyncio, flask, django, fastapi, pep8, pylint, typer                                                                             |
 | `devsecops-reviewer`       | review, check, validate, verify, audit, outdated, deprecated, version, lint, best practices, config review, devsecops, devops review, security review, upgrade, update versions |
+| `sre-specialist`           | sre, reliability, slo, sli, error budget, incident, postmortem, capacity, toil, chaos, on-call, pager                                                                           |
+| `cost-optimizer`           | cost, optimize, expensive, budget, finops, right-size, reserved, spot, savings, spend, billing                                                                                  |
+| `incident-response`        | incident, outage, downtime, pagerduty, opsgenie, runbook, escalation, severity, rca, root cause                                                                                 |
+| `remediation-specialist`   | remediate, fix, patch, update, vulnerability, cve, upgrade, harden, mitigate, resolve                                                                                           |
+| `performance-engineer`     | performance, latency, throughput, load test, bottleneck, cache, optimize, slow, profile, benchmark                                                                              |
+| `api-security-specialist`  | api security, oauth, jwt, oidc, rate limit, cors, api gateway, api key, authorization, authentication                                                                           |
+| `container-security`       | container security, image scan, falco, seccomp, apparmor, rootless, distroless, trivy, grype, cosign, sbom                                                                      |
+| `secret-management`        | vault, secret, credential, rotate, kms, seal, unseal, secrets manager, external secrets, sops                                                                                   |
+| `log-analyzer`             | log, logging, elk, loki, fluentd, logstash, kibana, parse, aggregate, structured log, syslog                                                                                    |
+| `migration-specialist`     | migrate, migration, lift and shift, replatform, rearchitect, cutover, blue-green migration, data migration                                                                      |
+| `chaos-engineer`           | chaos, chaos engineering, litmus, chaos mesh, gremlin, game day, fault injection, resilience, blast radius                                                                      |
+| `platform-engineer`        | platform, idp, backstage, crossplane, golden path, developer experience, self-service, portal, scaffold                                                                         |
+| `change-impact-analyst`    | impact, blast radius, change risk, downstream, dependency, rollback plan, risk score, affected                                                                                  |
+| `runbook-generator`        | runbook, procedure, playbook, standard operating, escalation, decision tree, operational guide                                                                                  |
+| `policy-engine-specialist` | opa, rego, kyverno, gatekeeper, admission, policy, guardrail, constraint, enforce, conftest                                                                                     |
 
 ---
 
@@ -71,18 +101,19 @@ Each agent is matched by the following keyword sets:
 
 Some agents declare external tool dependencies that enhance their capabilities:
 
-| Agent                   | Tool Dependency               |
-| ----------------------- | ----------------------------- |
-| `terraform-specialist`  | `hcl2json`                    |
-| `kubernetes-specialist` | `yaml-lint`                   |
-| `cicd-specialist`       | `yaml-lint`                   |
-| `security-auditor`      | `snyk`                        |
-| `docker-specialist`     | `dockerfilelint`              |
-| `gitops-specialist`     | `yaml-lint`                   |
-| `compliance-auditor`    | `@open-policy-agent/opa-wasm` |
-| `appsec-specialist`     | `snyk`                        |
-| `shell-specialist`      | `shellcheck`                  |
-| `python-specialist`     | `pyright`                     |
+| Agent                      | Tool Dependency               |
+| -------------------------- | ----------------------------- |
+| `terraform-specialist`     | `hcl2json`                    |
+| `kubernetes-specialist`    | `yaml-lint`                   |
+| `cicd-specialist`          | `yaml-lint`                   |
+| `security-auditor`         | `snyk`                        |
+| `docker-specialist`        | `dockerfilelint`              |
+| `gitops-specialist`        | `yaml-lint`                   |
+| `compliance-auditor`       | `@open-policy-agent/opa-wasm` |
+| `appsec-specialist`        | `snyk`                        |
+| `shell-specialist`         | `shellcheck`                  |
+| `python-specialist`        | `pyright`                     |
+| `policy-engine-specialist` | `@open-policy-agent/opa-wasm` |
 
 ---
 
@@ -133,7 +164,7 @@ dojops plan "Set up end-to-end CI/CD with Docker and Kubernetes"
 
 ## Custom Agents
 
-In addition to the 17 built-in agents, you can create your own custom agents. Custom agents participate in the same keyword-based routing as built-in agents and can even override built-in agents by name.
+In addition to the 32 built-in agents, you can create your own custom agents. Custom agents participate in the same keyword-based routing as built-in agents and can even override built-in agents by name.
 
 ### Agent Definition Format
 
@@ -271,7 +302,7 @@ All agents include a `NO_FOLLOWUP_INSTRUCTION` suffix ensuring single-shot respo
 
 ## Specialized Analyzers
 
-In addition to the 17 routed agents, DojOps provides three specialized analyzers that are invoked directly (not via `AgentRouter`):
+In addition to the 32 routed agents, DojOps provides three specialized analyzers that are invoked directly (not via `AgentRouter`):
 
 | Analyzer       | Class               | Input                | Output Schema             | CLI Command           |
 | -------------- | ------------------- | -------------------- | ------------------------- | --------------------- |

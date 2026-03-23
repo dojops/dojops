@@ -49,6 +49,34 @@ export interface MemoryContext {
   errorWarnings: ErrorPattern[];
 }
 
+export interface SkillOutcome {
+  task_type: TaskType;
+  skill_name: string;
+  model: string;
+  tier: string;
+  status: TaskStatus;
+  quality_score: number;
+  duration_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_estimate: number;
+  repair_attempts: number;
+  error_summary: string;
+}
+
+export interface BestModelResult {
+  model: string;
+  tier: string;
+  avgQuality: number;
+  sampleSize: number;
+}
+
+export interface LearnedPreference {
+  key: string;
+  value: string;
+  confidence: number;
+}
+
 // ── Constants ──────────────────────────────────────────────────────
 
 const MEMORY_DIR = "memory";
@@ -104,6 +132,38 @@ CREATE INDEX IF NOT EXISTS idx_error_patterns_type
   ON error_patterns(task_type);
 CREATE INDEX IF NOT EXISTS idx_error_patterns_occurrences
   ON error_patterns(occurrences DESC);
+
+CREATE TABLE IF NOT EXISTS skill_outcomes (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp       TEXT    NOT NULL,
+  task_type       TEXT    NOT NULL,
+  skill_name      TEXT    NOT NULL,
+  model           TEXT    NOT NULL DEFAULT '',
+  tier            TEXT    NOT NULL DEFAULT '',
+  status          TEXT    NOT NULL,
+  quality_score   REAL    NOT NULL DEFAULT 0.0,
+  duration_ms     INTEGER NOT NULL DEFAULT 0,
+  input_tokens    INTEGER NOT NULL DEFAULT 0,
+  output_tokens   INTEGER NOT NULL DEFAULT 0,
+  cost_estimate   REAL    NOT NULL DEFAULT 0.0,
+  repair_attempts INTEGER NOT NULL DEFAULT 0,
+  error_summary   TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_skill_outcomes_skill
+  ON skill_outcomes(skill_name, model);
+CREATE INDEX IF NOT EXISTS idx_skill_outcomes_ts
+  ON skill_outcomes(timestamp DESC);
+
+CREATE TABLE IF NOT EXISTS learned_preferences (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  key         TEXT    NOT NULL UNIQUE,
+  value       TEXT    NOT NULL,
+  confidence  REAL    NOT NULL DEFAULT 0.5,
+  occurrences INTEGER NOT NULL DEFAULT 1,
+  updated_at  TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_learned_preferences_key
+  ON learned_preferences(key);
 `;
 
 // ── Memory config ──────────────────────────────────────────────────
@@ -391,6 +451,122 @@ export function resolveError(rootDir: string, id: number, resolution: string): b
     return result.changes > 0;
   } catch {
     return false;
+  }
+}
+
+// ── Skill outcomes (persistent learning) ─────────────────────────
+
+/** Record a skill execution outcome for learning. */
+export function recordOutcome(rootDir: string, outcome: SkillOutcome): void {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return;
+
+    db.prepare(
+      `INSERT INTO skill_outcomes
+        (timestamp, task_type, skill_name, model, tier, status,
+         quality_score, duration_ms, input_tokens, output_tokens,
+         cost_estimate, repair_attempts, error_summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      new Date().toISOString(),
+      outcome.task_type,
+      outcome.skill_name,
+      outcome.model,
+      outcome.tier,
+      outcome.status,
+      outcome.quality_score,
+      outcome.duration_ms,
+      outcome.input_tokens,
+      outcome.output_tokens,
+      outcome.cost_estimate,
+      outcome.repair_attempts,
+      outcome.error_summary.slice(0, 200),
+    );
+  } catch {
+    // silent — non-critical
+  }
+}
+
+/** Minimum samples before recommending a model for a skill. */
+const MIN_LEARNING_SAMPLES = 3;
+
+/**
+ * Find the best-performing model for a given skill based on historical outcomes.
+ * Returns null if fewer than MIN_LEARNING_SAMPLES successful outcomes exist.
+ */
+export function getBestModel(rootDir: string, skillName: string): BestModelResult | null {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return null;
+
+    const row = db
+      .prepare(
+        `SELECT model, tier,
+                AVG(quality_score) as avgQuality,
+                COUNT(*) as sampleSize
+         FROM skill_outcomes
+         WHERE skill_name = ? AND status = 'success' AND model != ''
+         GROUP BY model
+         HAVING COUNT(*) >= ?
+         ORDER BY avgQuality DESC, sampleSize DESC
+         LIMIT 1`,
+      )
+      .get(skillName, MIN_LEARNING_SAMPLES) as
+      | { model: string; tier: string; avgQuality: number; sampleSize: number }
+      | undefined;
+
+    return row ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Learned preferences ──────────────────────────────────────────
+
+/**
+ * Record or update a learned preference (Bayesian update).
+ * On conflict: increments confidence by 0.1 (capped at 1.0) and occurrence count.
+ */
+export function recordPreference(rootDir: string, key: string, value: string): void {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return;
+
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO learned_preferences (key, value, confidence, occurrences, updated_at)
+       VALUES (?, ?, 0.5, 1, ?)
+       ON CONFLICT(key) DO UPDATE SET
+         value = excluded.value,
+         confidence = MIN(confidence + 0.1, 1.0),
+         occurrences = occurrences + 1,
+         updated_at = excluded.updated_at`,
+    ).run(key, value, now);
+  } catch {
+    // silent — non-critical
+  }
+}
+
+/** Get learned preferences, optionally filtered by key prefix. */
+export function getPreferences(rootDir: string, prefix?: string): LearnedPreference[] {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return [];
+
+    if (prefix) {
+      return db
+        .prepare(
+          `SELECT key, value, confidence FROM learned_preferences
+           WHERE key LIKE ? ORDER BY confidence DESC`,
+        )
+        .all(`${prefix}%`) as LearnedPreference[];
+    }
+    return db
+      .prepare(`SELECT key, value, confidence FROM learned_preferences ORDER BY confidence DESC`)
+      .all() as LearnedPreference[];
+  } catch {
+    return [];
   }
 }
 
@@ -688,12 +864,30 @@ function formatRelevantNotes(notes: NoteRecord[] | undefined): string[] {
   return lines;
 }
 
+/** Format learned model preferences section. */
+function formatLearnedPreferences(rootDir?: string): string[] {
+  if (!rootDir) return [];
+  const prefs = getPreferences(rootDir, "model:");
+  const highConfidence = prefs.filter((p) => p.confidence >= 0.7);
+  if (highConfidence.length === 0) return [];
+  return [
+    "",
+    "Learned model preferences:",
+    ...highConfidence.map(
+      (p) =>
+        `  ${p.key.replace("model:", "")}: ${p.value} (confidence: ${p.confidence.toFixed(1)})`,
+    ),
+  ];
+}
+
 /**
  * Build a summarized operational memory string for LLM prompt injection.
  * Produces concise, actionable summaries instead of raw log lines.
  * Returns null if there's no useful history.
+ *
+ * @param rootDir - When provided, includes learned model preferences.
  */
-export function buildMemoryContextString(ctx: MemoryContext): string | null {
+export function buildMemoryContextString(ctx: MemoryContext, rootDir?: string): string | null {
   if (ctx.recentTasks.length === 0) return null;
 
   const lines: string[] = [
@@ -702,6 +896,7 @@ export function buildMemoryContextString(ctx: MemoryContext): string | null {
     ...formatFailedOps(ctx.recentTasks),
     ...formatErrorWarnings(ctx.errorWarnings),
     ...formatRelevantNotes(ctx.relevantNotes),
+    ...formatLearnedPreferences(rootDir),
     "",
     "Avoid repeating tasks already completed successfully.",
   ];

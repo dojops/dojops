@@ -1,0 +1,147 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: flux
+  version: 2.2.0
+  description: "Generate Flux GitOps manifests for continuous delivery on Kubernetes"
+  author: dojops
+  license: MIT
+  tags: [flux, gitops, kubernetes, cd]
+
+context:
+  technology: Flux
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid Flux CD custom resource YAML manifests.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    Use multi-document YAML (--- separator) when generating multiple resources.
+    The output must be valid kubectl-compatible YAML for Flux CRDs.
+
+    Generate appropriate Flux resources based on the request:
+    - **GitRepository**: Source definition pointing to a Git repo with branch, tag, or semver
+    - **Kustomization**: Reconciliation target with path, interval, prune, health checks
+    - **HelmRepository**: Helm chart repository source (OCI or HTTP)
+    - **HelmRelease**: Helm chart deployment with values, valuesFrom, dependsOn
+    - **ImageRepository**: Container image scanning source
+    - **ImagePolicy**: Semver/alphabetical/numerical image tag selection
+    - **ImageUpdateAutomation**: Auto-commit image tag updates to Git
+    - **Receiver**: Webhook receiver for push-based reconciliation
+    - **Alert/Provider**: Notification routing to Slack, Teams, GitHub, etc.
+
+    Structure each resource with:
+    - apiVersion: source.toolkit.fluxcd.io/v1 or kustomize.toolkit.fluxcd.io/v1 or helm.toolkit.fluxcd.io/v2
+    - metadata: name, namespace (flux-system), labels
+    - spec: Resource-specific configuration with intervals, refs, paths
+
+    Example output:
+    ---
+    apiVersion: source.toolkit.fluxcd.io/v1
+    kind: GitRepository
+    metadata:
+      name: app-repo
+      namespace: flux-system
+    spec:
+      interval: 5m
+      url: https://github.com/my-org/my-app
+      ref:
+        branch: main
+      secretRef:
+        name: git-credentials
+    ---
+    apiVersion: kustomize.toolkit.fluxcd.io/v1
+    kind: Kustomization
+    metadata:
+      name: app-production
+      namespace: flux-system
+    spec:
+      interval: 10m
+      sourceRef:
+        kind: GitRepository
+        name: app-repo
+      path: ./deploy/production
+      prune: true
+      targetNamespace: production
+      healthChecks:
+        - apiVersion: apps/v1
+          kind: Deployment
+          name: my-app
+          namespace: production
+      timeout: 3m
+  bestPractices:
+    - Use GitRepository with a specific branch or tag ref, not HEAD in production
+    - Set reconciliation intervals appropriate to change frequency (1m for critical, 10m for stable)
+    - Enable prune on Kustomization to remove deleted resources automatically
+    - Configure health checks in Kustomization to gate dependent deployments
+    - Use dependsOn in HelmRelease and Kustomization for ordering across resources
+    - Store sensitive values in Kubernetes Secrets and reference via valuesFrom
+    - Use ImagePolicy with semver range to auto-update container images
+    - Configure Alert and Provider for deployment status notifications
+    - "Set suspend: true on Kustomization when manual gating is needed"
+    - Use sourceRef consistently and avoid mixing Git sources per namespace
+    - Apply retention policies for HelmRelease history (maxHistory)
+    - Use OCI-based HelmRepository for registries that support it
+  context7Libraries:
+    - name: flux
+      query: "Flux GitRepository Kustomization HelmRelease HelmRepository ImagePolicy ImageUpdateAutomation, reconciliation interval prune health checks dependsOn notifications"
+
+files:
+  - path: "{outputPath}/flux.yaml"
+    format: raw
+
+detection:
+  paths: ["**/flux-system/*.yaml", "**/flux-system/*.yml", "gotk-components.yaml", "gotk-sync.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "kind"
+      required: true
+      message: "Flux manifest must have a kind (GitRepository, Kustomization, HelmRelease, etc.)"
+    - path: "apiVersion"
+      required: true
+      message: "Flux manifest must have a Flux toolkit apiVersion"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml", "**/flux-system/**/*.yaml", "**/flux-system/**/*.yml"]
+
+risk:
+  level: MEDIUM
+  rationale: "Flux configuration changes affect GitOps reconciliation and deployment pipelines"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Flux
+
+## Prompt
+
+You are a Flux CD and GitOps expert. Generate production-ready Flux manifests for continuous delivery on Kubernetes.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+flux, gitrepository, kustomization, helmrelease, image automation,
+gitops, kubernetes, cd, reconciliation, source, helm, prune,
+image policy, notification, alert, provider, continuous delivery

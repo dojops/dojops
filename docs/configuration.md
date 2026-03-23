@@ -1,6 +1,6 @@
 # Configuration
 
-DojOps supports 6 LLM providers with flexible configuration via CLI flags, environment variables, config files, and named profiles.
+DojOps supports 7 LLM providers with flexible configuration via CLI flags, environment variables, config files, and named profiles.
 
 ---
 
@@ -12,6 +12,7 @@ DojOps supports 6 LLM providers with flexible configuration via CLI flags, envir
 | Anthropic      | `anthropic`       | `ANTHROPIC_API_KEY`   | `claude-sonnet-4-5-20250929` | `@anthropic-ai/sdk`   |
 | Ollama         | `ollama`          | _(none -- local)_     | `llama3`                     | `ollama`              |
 | DeepSeek       | `deepseek`        | `DEEPSEEK_API_KEY`    | `deepseek-chat`              | `openai` (compatible) |
+| Mistral        | `mistral`         | `MISTRAL_API_KEY`     | `mistral-small`              | `openai` (compatible) |
 | Gemini         | `gemini`          | `GEMINI_API_KEY`      | `gemini-2.5-flash`           | `@google/genai`       |
 | GitHub Copilot | `github-copilot`  | _(OAuth Device Flow)_ | `gpt-4o`                     | `openai` (compatible) |
 
@@ -167,8 +168,9 @@ When running `dojops config`, DojOps calls the provider's `listModels()` API to 
 - **Anthropic** — Lists supported Claude models
 - **Ollama** — Lists locally installed models
 - **DeepSeek** — Lists available DeepSeek models
-- **Gemini** — Lists available Gemini models
-- **GitHub Copilot** — Lists models available to your Copilot subscription tier
+- **Mistral** - Lists available Mistral models
+- **Gemini** - Lists available Gemini models
+- **GitHub Copilot** - Lists models available to your Copilot subscription tier
 
 ---
 
@@ -230,6 +232,7 @@ dojops config profile use prod   # Uses OpenAI GPT-4o
 | `OPENAI_API_KEY`                 | OpenAI API key                         | --                       |
 | `ANTHROPIC_API_KEY`              | Anthropic API key                      | --                       |
 | `DEEPSEEK_API_KEY`               | DeepSeek API key                       | --                       |
+| `MISTRAL_API_KEY`                | Mistral API key                        | --                       |
 | `GEMINI_API_KEY`                 | Google Gemini API key                  | --                       |
 | `DOJOPS_API_PORT`                | API server port                        | `3000`                   |
 | `OLLAMA_HOST`                    | Ollama server URL                      | `http://localhost:11434` |

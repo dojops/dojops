@@ -32,6 +32,41 @@ context:
     - **Database**: Query latency, connections, cache hit ratio, replication lag
     - **Business metrics**: Custom application KPIs with stat panels
 
+    Example — application monitoring dashboard with stat and time series panels:
+    {
+      "title": "App Overview",
+      "tags": ["app", "prometheus"],
+      "timezone": "browser",
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s",
+      "templating": {
+        "list": [
+          { "name": "datasource", "type": "datasource", "query": "prometheus" },
+          { "name": "namespace", "type": "query", "datasource": "$datasource", "query": "label_values(up, namespace)" }
+        ]
+      },
+      "panels": [
+        {
+          "title": "Request rate",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "targets": [
+            { "expr": "sum(rate(http_requests_total{namespace=\"$namespace\"}[$__rate_interval]))", "legendFormat": "req/s" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "reqps", "thresholds": { "steps": [{ "value": 0, "color": "green" }, { "value": 1000, "color": "yellow" }] } } }
+        },
+        {
+          "title": "Latency p99",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+          "targets": [
+            { "expr": "histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "p99" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        }
+      ]
+    }
+
     Output ONLY the raw Grafana dashboard JSON object — no code fences, no "files" wrapper, no markdown. Start directly with {.
   bestPractices:
     - Organize panels into logical rows with descriptive titles

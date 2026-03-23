@@ -357,10 +357,12 @@ describe("skillsInstallCommand", () => {
     expect(mockFetch.mock.calls[0][0]).toContain("/api/packages/test-tool");
     expect(mockFetch.mock.calls[1][0]).toContain("/api/download/test-tool/1.0.0");
 
-    // Verify file was written
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
+    // Verify file was written (skill file + sha256 sidecar)
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
     const writtenPath = String(vi.mocked(fs.writeFileSync).mock.calls[0][0]);
     expect(writtenPath).toContain("test-tool.dops");
+    const sidecarPath = String(vi.mocked(fs.writeFileSync).mock.calls[1][0]);
+    expect(sidecarPath).toContain("test-tool.dops.sha256");
   });
 
   it("rejects when tool not found on hub (404)", async () => {
@@ -415,8 +417,8 @@ describe("skillsInstallCommand", () => {
 
     await skillsInstallCommand(["test-tool"], makeCtx());
 
-    // Should succeed — file written
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
+    // Should succeed — file written (skill file + sha256 sidecar)
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
   });
 
   it("warns when no publisher hash is available", async () => {

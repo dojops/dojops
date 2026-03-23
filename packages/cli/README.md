@@ -1,6 +1,6 @@
 # @dojops/cli
 
-CLI for [DojOps](https://github.com/dojops/dojops) — AI DevOps Automation Engine.
+CLI for [DojOps](https://github.com/dojops/dojops) — AI Automation Engine.
 
 Generate, validate, and execute infrastructure & CI/CD configurations using LLM providers from your terminal.
 

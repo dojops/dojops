@@ -15,8 +15,8 @@ export function createBanner(): string {
   const ver = pc.dim(`v${getVersion()}`);
   const lines = [
     "",
-    `  🥷 ${pc.bold(pc.cyan("DojOps"))}  ${ver}`,
-    `  ${pc.dim("AI DevOps Automation Engine")}`,
+    `  ⚡ ${pc.bold(pc.cyan("DojOps"))}  ${ver}`,
+    `  ${pc.dim("AI Automation Engine")}`,
     "",
   ];
   return lines.join("\n");

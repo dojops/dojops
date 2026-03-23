@@ -16,7 +16,7 @@ import crypto from "node:crypto";
 import { TOOL_FILE_MAP, readExistingToolFile } from "../tool-file-map";
 import { runHooks } from "../hooks";
 import { appendActivity } from "../dojops-md";
-import { recordTask, queryMemory, buildMemoryContextString } from "../memory";
+import { recordTask, recordOutcome, queryMemory, buildMemoryContextString } from "../memory";
 import { classifyTaskRisk } from "../risk-classifier";
 import { cliApprovalHandler } from "../approval";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
@@ -209,6 +209,10 @@ const SKILL_KEYWORDS: Record<string, string[]> = {
   pulumi: ["pulumi"],
   packer: ["packer", "machine image", "ami build", "golden image", "pkr.hcl", "vm image"],
   "otel-collector": ["opentelemetry", "otel", "collector", "telemetry"],
+  "azure-devops": ["azure devops", "azure pipeline", "ado pipeline", "azure-pipelines"],
+  "aws-codepipeline": ["codebuild", "buildspec", "codepipeline", "aws pipeline", "aws ci"],
+  circleci: ["circleci", "circle ci", "circle pipeline"],
+  "bitbucket-pipelines": ["bitbucket pipeline", "bitbucket ci", "bitbucket-pipelines"],
 };
 
 /**
@@ -378,6 +382,20 @@ function trackToolActivity(
     agent_or_skill: skillName,
     metadata: "{}",
   });
+  recordOutcome(projectRoot, {
+    task_type: "generate",
+    skill_name: skillName,
+    model: "",
+    tier: "",
+    status: "success",
+    quality_score: 1.0,
+    duration_ms: durationMs ?? 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    cost_estimate: 0,
+    repair_attempts: 0,
+    error_summary: "",
+  });
 }
 
 function outputWriteResult(
@@ -434,7 +452,7 @@ async function handleSkillDirect(
   const maxRepairAttempts = repairAttempts ? Number.parseInt(repairAttempts, 10) : 3;
 
   const critic = await buildCritic(skillCtx.provider);
-  const memoryPrompt = injectMemoryContext(prompt, skillCtx.projectRoot);
+  const memoryPrompt = sanitizeUserInput(injectMemoryContext(prompt, skillCtx.projectRoot));
 
   const safeExecutor = buildSafeExecutorForSkill(
     ctx,
@@ -845,6 +863,31 @@ interface AgentResultOpts {
   genDuration: number;
 }
 
+/** Lightweight content quality gate for agent-generated output before writing to disk. */
+function validateAgentOutput(content: string): string[] {
+  const issues: string[] = [];
+  const trimmed = content.trim();
+
+  if (trimmed.length < 10) {
+    issues.push("Output is too short (less than 10 characters) — likely incomplete.");
+  }
+
+  // Detect apology/refusal patterns that indicate the agent didn't produce real output
+  const refusalPatterns = [
+    /^I(?:'m| am) (?:sorry|unable|not able)/i,
+    /^(?:Sorry|Unfortunately),? I (?:can(?:'t|not)|don't)/i,
+    /^I (?:cannot|can't) (?:generate|create|produce|write)/i,
+  ];
+  for (const pattern of refusalPatterns) {
+    if (pattern.test(trimmed)) {
+      issues.push("Output appears to be a refusal rather than generated content.");
+      break;
+    }
+  }
+
+  return issues;
+}
+
 async function handleAgentResult(
   ctx: CLIContext,
   result: { content: string },
@@ -852,6 +895,16 @@ async function handleAgentResult(
   opts: AgentResultOpts,
 ): Promise<void> {
   const { prompt, projectRoot, writePath, allowAllPaths, genDuration } = opts;
+
+  // Validate agent output before writing
+  if (writePath) {
+    const issues = validateAgentOutput(result.content);
+    if (issues.length > 0) {
+      for (const issue of issues) {
+        p.log.warn(`${pc.yellow("⚠")} Agent output: ${issue}`);
+      }
+    }
+  }
 
   persistGeneration(projectRoot, prompt, result.content, {
     agentName: route.agent.name,

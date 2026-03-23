@@ -141,25 +141,30 @@ export class AnthropicProvider implements LLMProvider {
 
     const messages = mapToAnthropicMessages(req.messages);
 
+    // Extended thinking: map thinking level to budget_tokens
+    const thinkingParam = buildThinkingParam(req.thinking, req.maxTokens ?? 8192);
+
     let message: Anthropic.Message;
     try {
       message = await this.client.messages.create({
         model: this.model,
-        max_tokens: req.maxTokens ?? 8192,
+        max_tokens: thinkingParam ? thinkingParam.maxTokens : (req.maxTokens ?? 8192),
         system,
         messages,
         tools,
-        ...(req.temperature === undefined ? {} : { temperature: req.temperature }),
+        ...(thinkingParam ? { thinking: thinkingParam.thinking } : {}),
+        // temperature must be omitted when thinking is enabled (Anthropic requirement)
+        ...(thinkingParam || req.temperature === undefined ? {} : { temperature: req.temperature }),
       });
     } catch (err: unknown) {
       throw new Error(extractApiError(err), { cause: err });
     }
 
-    const { content, toolCalls } = extractAnthropicToolResponse(message);
+    const { content, toolCalls, thinking } = extractAnthropicToolResponse(message);
     const stopReason = mapAnthropicStopReason(message.stop_reason);
     const usage = this.extractUsage(message);
 
-    return { content, toolCalls, stopReason, usage };
+    return { content, toolCalls, stopReason, usage, thinking: thinking || undefined };
   }
 
   async listModels(): Promise<string[]> {
@@ -171,6 +176,20 @@ export class AnthropicProvider implements LLMProvider {
       return [];
     }
   }
+}
+
+/** Map thinking level to Anthropic extended thinking parameters. */
+function buildThinkingParam(
+  level: LLMToolRequest["thinking"],
+  baseMaxTokens: number,
+): { thinking: { type: "enabled"; budget_tokens: number }; maxTokens: number } | null {
+  if (!level || level === "none") return null;
+  // Budget tokens: low=2K, medium=8K, high=32K. Max tokens must be > budget.
+  const budgetMap: Record<string, number> = { low: 2048, medium: 8192, high: 32768 };
+  const budgetTokens = budgetMap[level] ?? 8192;
+  // Anthropic requires max_tokens > budget_tokens
+  const maxTokens = Math.max(baseMaxTokens, budgetTokens + 4096);
+  return { thinking: { type: "enabled", budget_tokens: budgetTokens }, maxTokens };
 }
 
 /** Map AgentMessages to Anthropic message format. */
@@ -216,12 +235,14 @@ function mapSingleAnthropicMessage(m: AgentMessage): Anthropic.MessageParam | nu
   return { role: m.role, content: m.content };
 }
 
-/** Extract text and tool_use blocks from an Anthropic message. */
+/** Extract text, tool_use, and thinking blocks from an Anthropic message. */
 function extractAnthropicToolResponse(message: Anthropic.Message): {
   content: string;
   toolCalls: ToolCall[];
+  thinking: string;
 } {
   let content = "";
+  let thinking = "";
   const toolCalls: ToolCall[] = [];
   for (const block of message.content) {
     if (block.type === "text") {
@@ -232,9 +253,11 @@ function extractAnthropicToolResponse(message: Anthropic.Message): {
         name: block.name,
         arguments: block.input as Record<string, unknown>,
       });
+    } else if (block.type === "thinking") {
+      thinking += (block as { type: "thinking"; thinking: string }).thinking;
     }
   }
-  return { content, toolCalls };
+  return { content, toolCalls, thinking };
 }
 
 /** Map Anthropic stop_reason to LLMToolResponse stopReason. */

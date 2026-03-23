@@ -136,7 +136,7 @@ jobs:
             ghcr.io/dojops/dojops:${{ steps.version.outputs.version }}
           labels: |
             org.opencontainers.image.title=DojOps
-            org.opencontainers.image.description=AI DevOps Automation Engine
+            org.opencontainers.image.description=AI Automation Engine
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.source=https://github.com/dojops/dojops
             org.opencontainers.image.licenses=MIT

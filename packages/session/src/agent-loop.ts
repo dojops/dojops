@@ -18,6 +18,16 @@ export interface AgentLoopOptions {
   maxIterations?: number;
   /** Maximum total tokens before stopping (default: 200_000). */
   maxTotalTokens?: number;
+  /** Reasoning effort level for extended thinking (Anthropic). */
+  thinking?: "none" | "low" | "medium" | "high";
+  /**
+   * Called when the agent declares "done". Returns a list of validation issues.
+   * If non-empty, the loop continues with the issues injected as feedback
+   * instead of terminating. This gates output on validation passing.
+   */
+  validateBeforeDone?: () => Promise<string[]>;
+  /** When set, enables progressive summarization to keep context focused. */
+  summarizationProvider?: LLMProvider;
   onIteration?: (iteration: number, message: AgentMessage) => void;
   onToolCall?: (call: ToolCall) => void;
   onToolResult?: (result: ToolResult) => void;
@@ -32,6 +42,8 @@ export interface AgentLoopResult {
   toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>;
   filesWritten: string[];
   filesModified: string[];
+  /** Accumulated reasoning trace from extended thinking (when enabled). */
+  reasoningTrace?: string;
 }
 
 /**
@@ -113,6 +125,10 @@ export class AgentLoop {
   private readonly maxIterations: number;
   private readonly maxTotalTokens: number;
   private totalTokens = 0;
+  /** Sliding window of recent tool call signatures for stale-loop detection. */
+  private readonly recentCallSignatures: string[] = [];
+  /** Number of consecutive repeated signatures before injecting reassessment. */
+  private static readonly STALE_THRESHOLD = 3;
 
   constructor(private readonly opts: AgentLoopOptions) {
     this.maxIterations = opts.maxIterations ?? 50;
@@ -122,6 +138,7 @@ export class AgentLoop {
   async run(userPrompt: string): Promise<AgentLoopResult> {
     const messages: AgentMessage[] = [{ role: "user", content: userPrompt }];
     const allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
+    const thinkingParts: string[] = [];
     let summary = "";
     let success = false;
     let iterationCount = 0;
@@ -129,6 +146,11 @@ export class AgentLoop {
     for (let iteration = 0; iteration < this.maxIterations; iteration++) {
       iterationCount++;
       const response = await this.generateWithTools(messages);
+
+      // Capture reasoning trace from extended thinking
+      if (response.thinking) {
+        thinkingParts.push(response.thinking);
+      }
 
       if (response.usage) {
         this.totalTokens += response.usage.totalTokens;
@@ -143,24 +165,92 @@ export class AgentLoop {
       // Check stop conditions
       const stopResult = this.checkStopConditions(response, allToolCalls, iteration);
       if (stopResult) {
+        // Output validation gate: verify work before declaring success
+        if (stopResult.success && this.opts.validateBeforeDone) {
+          const issues = await this.opts.validateBeforeDone();
+          if (issues.length > 0) {
+            // Don't terminate — feed issues back so the agent can fix them
+            messages.push({
+              role: "user",
+              content:
+                "Before completing, validation found issues with the generated files:\n" +
+                issues.map((i) => `- ${i}`).join("\n") +
+                "\n\nFix these issues, then call 'done' again when resolved.",
+            });
+            continue;
+          }
+        }
         summary = stopResult.summary;
         success = stopResult.success;
         break;
       }
 
       // If LLM returned text-only without using tools, nudge it to use tools
-      if (response.toolCalls.length === 0 && allToolCalls.length === 0) {
-        messages.push({
-          role: "user",
-          content:
-            "You must use the provided tools (write_file, edit_file, run_command, etc.) to complete this task. " +
-            "Do not output file contents as text. Use write_file to create each file on disk.",
-        });
+      if (response.toolCalls.length === 0) {
+        if (allToolCalls.length === 0) {
+          messages.push({
+            role: "user",
+            content:
+              "You must use the provided tools (write_file, edit_file, run_command, etc.) to complete this task. " +
+              "Do not output file contents as text. Use write_file to create each file on disk.",
+          });
+        } else {
+          // Agent made tool calls before but stopped outputting text without tools.
+          // Nudge it to continue working — it may have described intent without acting.
+          const hasFileWrites =
+            this.opts.toolExecutor.getFilesWritten().length > 0 ||
+            this.opts.toolExecutor.getFilesModified().length > 0;
+          if (!hasFileWrites) {
+            messages.push({
+              role: "user",
+              content:
+                "You have not written any files to disk yet. Use write_file to create the requested files. " +
+                "If you used run_skill, the generated content was returned as text — you must write it to disk with write_file. " +
+                "Do not call done until all requested files exist on disk.",
+            });
+          } else {
+            messages.push({
+              role: "user",
+              content:
+                "Continue working. If all requested files have been created, call 'done' with a summary. " +
+                "Otherwise, create the remaining files with write_file.",
+            });
+          }
+        }
         continue;
       }
 
       // Execute tool calls
       await this.executeToolCalls(response.toolCalls, messages, allToolCalls);
+
+      // Escalating stall detection: progressively stronger interventions
+      const staleLevel = this.detectStaleLevel(response.toolCalls);
+      if (staleLevel === "terminate") {
+        const lastSig =
+          this.recentCallSignatures[this.recentCallSignatures.length - 1] ?? "unknown";
+        const toolName = lastSig.split(":")[0];
+        summary = `Terminated: stuck in loop on ${toolName}`;
+        success = false;
+        break;
+      } else if (staleLevel === "restrict") {
+        const lastSig =
+          this.recentCallSignatures[this.recentCallSignatures.length - 1] ?? "unknown";
+        const toolName = lastSig.split(":")[0];
+        messages.push({
+          role: "user",
+          content:
+            `Do NOT call ${toolName} with these arguments again. ` +
+            "Try a completely different approach or call 'done' if the task is finished.",
+        });
+      } else if (staleLevel === "nudge") {
+        messages.push({
+          role: "user",
+          content:
+            "You appear to be repeating the same action. Stop and reassess: " +
+            "Is there a different approach? Are you stuck in a loop? " +
+            "If the task is complete, call 'done'. If you need a different strategy, explain your reasoning.",
+        });
+      }
 
       // Check token budget
       if (this.totalTokens >= this.maxTotalTokens) {
@@ -168,6 +258,7 @@ export class AgentLoop {
         break;
       }
 
+      await this.maybeSummarize(messages);
       this.compactMessages(messages);
     }
 
@@ -183,6 +274,7 @@ export class AgentLoop {
       toolCalls: allToolCalls,
       filesWritten: this.opts.toolExecutor.getFilesWritten(),
       filesModified: this.opts.toolExecutor.getFilesModified(),
+      reasoningTrace: thinkingParts.length > 0 ? thinkingParts.join("\n\n---\n\n") : undefined,
     };
   }
 
@@ -257,6 +349,46 @@ export class AgentLoop {
     }
   }
 
+  /** Consecutive signature thresholds for stall escalation. */
+  private static readonly RESTRICT_THRESHOLD = 5;
+  private static readonly TERMINATE_THRESHOLD = 7;
+
+  /**
+   * Detect stall severity by counting consecutive identical tool call signatures.
+   * Returns escalating levels: nudge (3), restrict (5), terminate (7).
+   */
+  private detectStaleLevel(toolCalls: ToolCall[]): "none" | "nudge" | "restrict" | "terminate" {
+    for (const call of toolCalls) {
+      const sig =
+        call.name === "write_file" || call.name === "edit_file"
+          ? `${call.name}:${call.arguments.path ?? ""}`
+          : `${call.name}:${JSON.stringify(call.arguments)}`;
+      this.recentCallSignatures.push(sig);
+    }
+
+    // Keep only the last 10 signatures
+    while (this.recentCallSignatures.length > 10) {
+      this.recentCallSignatures.shift();
+    }
+
+    if (this.recentCallSignatures.length < AgentLoop.STALE_THRESHOLD) return "none";
+
+    const last = this.recentCallSignatures[this.recentCallSignatures.length - 1];
+    let consecutiveCount = 0;
+    for (let i = this.recentCallSignatures.length - 1; i >= 0; i--) {
+      if (this.recentCallSignatures[i] === last) {
+        consecutiveCount++;
+      } else {
+        break;
+      }
+    }
+
+    if (consecutiveCount >= AgentLoop.TERMINATE_THRESHOLD) return "terminate";
+    if (consecutiveCount >= AgentLoop.RESTRICT_THRESHOLD) return "restrict";
+    if (consecutiveCount >= AgentLoop.STALE_THRESHOLD) return "nudge";
+    return "none";
+  }
+
   /**
    * Call LLM with tools — uses native generateWithTools if available,
    * falls back to prompt-based tool calling otherwise.
@@ -267,6 +399,7 @@ export class AgentLoop {
         system: this.opts.systemPrompt,
         messages,
         tools: this.opts.tools,
+        thinking: this.opts.thinking,
       });
     }
 
@@ -302,6 +435,59 @@ export class AgentLoop {
     const result = parseToolCallsFromContent(response.content);
     result.usage = response.usage;
     return result;
+  }
+
+  /**
+   * Estimate token count using word-based heuristic (same approach as MemoryManager).
+   */
+  private estimateTokens(messages: AgentMessage[]): number {
+    let totalChars = 0;
+    for (const msg of messages) {
+      if (msg.content) totalChars += msg.content.length;
+    }
+    // ~4 chars per token on average
+    return Math.ceil(totalChars / 4);
+  }
+
+  /**
+   * Progressive summarization: when context exceeds 60% of budget, summarize
+   * the oldest third of messages (preserving the initial user message).
+   */
+  private async maybeSummarize(messages: AgentMessage[]): Promise<void> {
+    if (!this.opts.summarizationProvider) return;
+    if (messages.length < 6) return; // too few messages to summarize
+
+    const estimated = this.estimateTokens(messages);
+    const threshold = this.maxTotalTokens * 0.6;
+    if (estimated <= threshold) return;
+
+    // Summarize the oldest third of messages (skip index 0 — initial user message)
+    const summarizeCount = Math.max(2, Math.floor((messages.length - 1) / 3));
+    const toSummarize = messages.slice(1, 1 + summarizeCount);
+
+    const summaryText = toSummarize
+      .map((m) => {
+        const prefix = m.role === "tool" ? `[tool ${m.callId}]` : `[${m.role}]`;
+        const content = (m.content ?? "").slice(0, 500);
+        return `${prefix} ${content}`;
+      })
+      .join("\n");
+
+    try {
+      const result = await this.opts.summarizationProvider.generate({
+        system:
+          "Summarize these tool interactions concisely. Focus on: files read/written, commands run, what succeeded/failed, key decisions. Output only the summary.",
+        prompt: summaryText,
+      });
+
+      // Replace summarized messages with a single system message
+      messages.splice(1, summarizeCount, {
+        role: "user",
+        content: `[Context summary of earlier interactions]\n${result.content}`,
+      });
+    } catch {
+      // Summarization failure is non-fatal — fall through to compactMessages
+    }
   }
 
   /**

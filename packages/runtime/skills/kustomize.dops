@@ -1,0 +1,139 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: kustomize
+  version: 2.2.0
+  description: "Generate Kustomize overlays, patches, and base configurations"
+  author: dojops
+  license: MIT
+  tags: [kustomize, kubernetes, overlay, patch]
+
+context:
+  technology: Kustomize
+  fileFormat: json
+  outputGuidance: |
+    Generate Kustomize configuration with base and overlay structure.
+    Output a JSON object with file paths as keys and YAML content as string values.
+    Format: { "files": { "base/kustomization.yaml": "...", "base/deployment.yaml": "...", "overlays/production/kustomization.yaml": "..." } }
+    Each file content must be valid YAML.
+
+    Always include these files:
+      - base/kustomization.yaml — Resources list, commonLabels, commonAnnotations
+      - base/ resource files — Deployment, Service, ConfigMap as referenced
+    Optionally include when needed:
+      - overlays/<env>/kustomization.yaml — Environment-specific patches and config
+      - overlays/<env>/patches/ — Strategic merge patches or JSON patches
+      - components/ — Reusable Kustomize components
+    Do NOT output raw YAML — use the JSON wrapper format for multi-file output.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - Use base/ and overlays/ directory structure in file keys.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty valid YAML content.
+
+    Generate appropriate Kustomize features based on the request:
+    - **Base**: Common resources shared across environments
+    - **Overlays**: Environment-specific customizations (dev, staging, production)
+    - **Patches**: Strategic merge patches or JSON 6902 patches
+    - **Components**: Reusable cross-cutting add-ons (monitoring, logging)
+    - **Generators**: ConfigMapGenerator, SecretGenerator with envs or literals
+    - **Transformers**: namePrefix, nameSuffix, commonLabels, images
+
+    Example output:
+    {
+      "files": {
+        "base/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - deployment.yaml\n  - service.yaml\ncommonLabels:\n  app: my-app\n  managed-by: kustomize\n",
+        "base/deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: my-app\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: my-app\n  template:\n    metadata:\n      labels:\n        app: my-app\n    spec:\n      containers:\n        - name: my-app\n          image: my-app:latest\n          ports:\n            - containerPort: 8080\n",
+        "overlays/production/kustomization.yaml": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - ../../base\nnamespace: production\npatches:\n  - target:\n      kind: Deployment\n      name: my-app\n    patch: |-\n      - op: replace\n        path: /spec/replicas\n        value: 3\nimages:\n  - name: my-app\n    newTag: v1.2.0\n"
+      }
+    }
+  bestPractices:
+    - Use a base/ directory for shared resources and overlays/ for environment variants
+    - Prefer strategic merge patches over full resource replacement
+    - Use commonLabels and commonAnnotations in kustomization.yaml for consistency
+    - Use ConfigMapGenerator and SecretGenerator instead of raw ConfigMap/Secret resources
+    - Set namespace in overlay kustomization.yaml, not in individual resources
+    - Pin image tags using the images transformer rather than patching deployment specs
+    - Use components for cross-cutting concerns shared between overlays (monitoring sidecars, etc.)
+    - Keep patches small and focused on a single concern
+    - Use namePrefix or nameSuffix to distinguish resources across environments
+    - Reference resources by relative path in kustomization.yaml
+    - Validate output with kubectl kustomize before applying
+    - Use replacements (Kustomize 5+) instead of deprecated vars for value substitution
+  context7Libraries:
+    - name: kustomize
+      query: "Kustomize kustomization.yaml overlays patches components ConfigMapGenerator SecretGenerator images transformer strategic merge patch replacements"
+
+files:
+  - path: "{outputPath}/base/kustomization.yaml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/base/deployment.yaml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/base/service.yaml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/overlays/production/kustomization.yaml"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/overlays/staging/kustomization.yaml"
+    format: raw
+    conditional: true
+
+detection:
+  paths: ["kustomization.yaml", "**/kustomize/**", "**/overlays/**/kustomization.yaml", "**/base/kustomization.yaml"]
+  updateMode: true
+
+verification:
+  binary:
+    command: "kubectl kustomize ."
+    parser: kubectl-stderr
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["**/kustomization.yaml", "**/*.yaml", "**/*.yml", "**/base/**", "**/overlays/**", "**/components/**"]
+
+risk:
+  level: LOW
+  rationale: "Kustomize generates declarative Kubernetes configs without direct cluster changes"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Kustomize
+
+## Prompt
+
+You are a Kustomize expert. Generate production-ready Kustomize configurations with base and overlay structure for Kubernetes deployments.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+kustomize, overlay, patch, base, component, kustomization,
+kubernetes, k8s, configmapgenerator, secretgenerator, images,
+nameprefix, namespace, strategic merge, json patch, replacements

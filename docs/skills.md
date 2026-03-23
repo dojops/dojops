@@ -1,6 +1,6 @@
 # DevOps Skills
 
-DojOps includes 18 built-in DevOps skills covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All skills follow a consistent pattern built on the `BaseSkill<T>` abstract class. Additionally, a **custom skill system** lets you extend DojOps with custom `.dops v2` skills.
+DojOps includes 31 built-in DevOps skills covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All skills follow a consistent pattern built on the `BaseSkill<T>` abstract class. Additionally, a **custom skill system** lets you extend DojOps with custom `.dops v2` skills.
 
 > **As of v2.0.0, only `.dops v2` format is supported.** The legacy v1 format and `tool.yaml` manifests have been removed.
 
@@ -8,32 +8,45 @@ DojOps includes 18 built-in DevOps skills covering CI/CD, infrastructure-as-code
 
 ## Skill Overview
 
-| Skill          | Output Format         | Output Files                        | Detector | Verifier             |
-| -------------- | --------------------- | ----------------------------------- | -------- | -------------------- |
-| GitHub Actions | YAML (raw)            | `.github/workflows/ci.yml`          | Yes      | Structure lint       |
-| Terraform      | HCL (raw)             | `main.tf`, `variables.tf`           | Yes      | `terraform validate` |
-| Kubernetes     | YAML (raw)            | K8s manifests                       | --       | `kubectl --dry-run`  |
-| Helm           | YAML (raw)            | `Chart.yaml`, `values.yaml`         | --       | --                   |
-| Ansible        | YAML (raw)            | `{name}.yml`                        | --       | --                   |
-| Docker Compose | YAML (raw)            | `docker-compose.yml`                | Yes      | --                   |
-| Dockerfile     | Dockerfile (raw)      | `Dockerfile`, `.dockerignore`       | Yes      | `hadolint`           |
-| Nginx          | Nginx conf (raw)      | `nginx.conf`                        | --       | --                   |
-| Makefile       | Make syntax (raw)     | `Makefile`                          | Yes      | --                   |
-| GitLab CI      | YAML (raw)            | `.gitlab-ci.yml`                    | Yes      | Structure lint       |
-| Prometheus     | YAML (raw)            | `prometheus.yml`, `alert-rules.yml` | --       | --                   |
-| Systemd        | INI (raw)             | `{name}.service`                    | --       | --                   |
-| Jenkinsfile    | Groovy (raw)          | `Jenkinsfile`                       | Yes      | --                   |
-| Grafana        | JSON (raw)            | Grafana dashboard JSON              | --       | --                   |
-| CloudFormation | YAML (raw)            | `template.yaml`                     | --       | Structure lint       |
-| ArgoCD         | YAML (raw)            | ArgoCD Application manifests        | --       | --                   |
-| Pulumi         | YAML/TypeScript (raw) | Pulumi IaC files                    | --       | --                   |
-| OTel Collector | YAML (raw)            | `otel-collector-config.yaml`        | --       | Structure lint       |
+| Skill          | Output Format         | Output Files                              | Detector | Verifier             |
+| -------------- | --------------------- | ----------------------------------------- | -------- | -------------------- |
+| GitHub Actions | YAML (raw)            | `.github/workflows/ci.yml`                | Yes      | Structure lint       |
+| Terraform      | HCL (raw)             | `main.tf`, `variables.tf`                 | Yes      | `terraform validate` |
+| Kubernetes     | YAML (raw)            | K8s manifests                             | --       | `kubectl --dry-run`  |
+| Helm           | YAML (raw)            | `Chart.yaml`, `values.yaml`               | --       | --                   |
+| Ansible        | YAML (raw)            | `{name}.yml`                              | --       | --                   |
+| Docker Compose | YAML (raw)            | `docker-compose.yml`                      | Yes      | --                   |
+| Dockerfile     | Dockerfile (raw)      | `Dockerfile`, `.dockerignore`             | Yes      | `hadolint`           |
+| Nginx          | Nginx conf (raw)      | `nginx.conf`                              | --       | --                   |
+| Makefile       | Make syntax (raw)     | `Makefile`                                | Yes      | --                   |
+| GitLab CI      | YAML (raw)            | `.gitlab-ci.yml`                          | Yes      | Structure lint       |
+| Prometheus     | YAML (raw)            | `prometheus.yml`, `alert-rules.yml`       | --       | --                   |
+| Systemd        | INI (raw)             | `{name}.service`                          | --       | --                   |
+| Jenkinsfile    | Groovy (raw)          | `Jenkinsfile`                             | Yes      | --                   |
+| Grafana        | JSON (raw)            | Grafana dashboard JSON                    | --       | --                   |
+| CloudFormation | YAML (raw)            | `template.yaml`                           | --       | Structure lint       |
+| ArgoCD         | YAML (raw)            | ArgoCD Application manifests              | --       | --                   |
+| Pulumi         | YAML/TypeScript (raw) | Pulumi IaC files                          | --       | --                   |
+| OTel Collector | YAML (raw)            | `otel-collector-config.yaml`              | --       | Structure lint       |
+| Vault          | JSON (raw)            | Vault policies, secret engines            | --       | --                   |
+| Istio          | YAML (raw)            | VirtualServices, DestinationRules         | --       | Structure lint       |
+| Kustomize      | YAML (raw)            | Kustomization overlays, patches           | --       | --                   |
+| Crossplane     | YAML (raw)            | Compositions, managed resources           | --       | --                   |
+| Terragrunt     | HCL (raw)             | Terragrunt configs, dependency blocks     | --       | --                   |
+| Flux           | YAML (raw)            | GitRepository, Kustomization, HelmRelease | --       | Structure lint       |
+| Falco          | YAML (raw)            | Runtime security rules, macros            | --       | --                   |
+| OPA Gatekeeper | YAML (raw)            | ConstraintTemplates, Constraints          | --       | --                   |
+| AWS CDK        | TypeScript (raw)      | CDK constructs, stacks                    | --       | --                   |
+| EKS            | YAML (raw)            | EKS cluster configs, node groups          | --       | --                   |
+| Cert Manager   | YAML (raw)            | ClusterIssuers, Certificates              | --       | --                   |
+| Trivy Operator | YAML (raw)            | VulnerabilityReports, policies            | --       | --                   |
+| Packer         | JSON/HCL (raw)        | Machine image build definitions           | --       | `packer validate`    |
 
 ---
 
 ## Skill Pattern
 
-All 18 built-in skills are defined as `.dops v2` skill files in `packages/runtime/skills/`. Each skill is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
+All 31 built-in skills are defined as `.dops v2` skill files in `packages/runtime/skills/`. Each skill is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
 
 ```
 packages/runtime/skills/
@@ -55,6 +68,19 @@ packages/runtime/skills/
   argocd.dops            ArgoCD Application manifest generator
   pulumi.dops            Pulumi infrastructure as code generator
   otel-collector.dops    OpenTelemetry Collector config generator
+  vault.dops             HashiCorp Vault policy generator
+  istio.dops             Istio service mesh config generator
+  kustomize.dops         Kustomize overlay generator
+  crossplane.dops        Crossplane composition generator
+  terragrunt.dops        Terragrunt config generator
+  flux.dops              Flux GitOps manifest generator
+  falco.dops             Falco runtime security rules generator
+  opa-gatekeeper.dops    OPA Gatekeeper policy generator
+  aws-cdk.dops           AWS CDK construct generator
+  eks.dops               Amazon EKS cluster config generator
+  cert-manager.dops      cert-manager certificate generator
+  trivy-operator.dops    Trivy Operator config generator
+  packer.dops            HashiCorp Packer template generator
 ```
 
 ### BaseSkill Abstract Class
@@ -109,7 +135,7 @@ Verification runs by default in CLI commands. Use `--skip-verify` to disable. Bu
 
 ### Existing Config Auto-Detection
 
-All 18 skills auto-detect existing config files and switch to update mode when found. Each skill knows its output file path and reads existing content automatically:
+All 31 skills auto-detect existing config files and switch to update mode when found. Each skill knows its output file path and reads existing content automatically:
 
 | Skill          | Auto-Detect Path                                                       |
 | -------------- | ---------------------------------------------------------------------- |
@@ -420,25 +446,38 @@ After the closing `---` delimiter, markdown sections define prompts:
 
 ### Built-in Skill Risk Levels
 
-| Skill          | Risk   | Rationale                                             |
-| -------------- | ------ | ----------------------------------------------------- |
-| terraform      | MEDIUM | Infrastructure changes may affect cloud resources     |
-| kubernetes     | MEDIUM | Cluster configuration changes affect running services |
-| helm           | MEDIUM | Chart changes affect Kubernetes deployments           |
-| dockerfile     | MEDIUM | Build image changes may affect production runtime     |
-| docker-compose | LOW    | Compose changes are local development configurations  |
-| ansible        | MEDIUM | Playbook changes execute on remote hosts              |
-| nginx          | MEDIUM | Web server config changes affect traffic routing      |
-| systemd        | MEDIUM | Service unit changes affect system processes          |
-| github-actions | LOW    | CI/CD workflow changes require PR review              |
-| gitlab-ci      | LOW    | CI/CD pipeline changes require MR review              |
-| makefile       | LOW    | Build automation changes are local                    |
-| prometheus     | LOW    | Monitoring config changes are observable              |
-| grafana        | LOW    | Dashboard JSON changes are observable                 |
-| cloudformation | MEDIUM | CloudFormation changes affect AWS infrastructure      |
-| argocd         | MEDIUM | ArgoCD changes affect Kubernetes deployments          |
-| pulumi         | MEDIUM | Infrastructure changes may affect cloud resources     |
-| otel-collector | LOW    | Collector config changes affect telemetry pipeline    |
+| Skill          | Risk   | Rationale                                                      |
+| -------------- | ------ | -------------------------------------------------------------- |
+| terraform      | MEDIUM | Infrastructure changes may affect cloud resources              |
+| kubernetes     | MEDIUM | Cluster configuration changes affect running services          |
+| helm           | MEDIUM | Chart changes affect Kubernetes deployments                    |
+| dockerfile     | MEDIUM | Build image changes may affect production runtime              |
+| docker-compose | LOW    | Compose changes are local development configurations           |
+| ansible        | MEDIUM | Playbook changes execute on remote hosts                       |
+| nginx          | MEDIUM | Web server config changes affect traffic routing               |
+| systemd        | MEDIUM | Service unit changes affect system processes                   |
+| github-actions | LOW    | CI/CD workflow changes require PR review                       |
+| gitlab-ci      | LOW    | CI/CD pipeline changes require MR review                       |
+| makefile       | LOW    | Build automation changes are local                             |
+| prometheus     | LOW    | Monitoring config changes are observable                       |
+| grafana        | LOW    | Dashboard JSON changes are observable                          |
+| cloudformation | MEDIUM | CloudFormation changes affect AWS infrastructure               |
+| argocd         | MEDIUM | ArgoCD changes affect Kubernetes deployments                   |
+| pulumi         | MEDIUM | Infrastructure changes may affect cloud resources              |
+| otel-collector | LOW    | Collector config changes affect telemetry pipeline             |
+| vault          | HIGH   | Vault policy changes affect secret access control              |
+| istio          | MEDIUM | Service mesh changes affect traffic routing                    |
+| kustomize      | MEDIUM | Kustomize overlay changes affect Kubernetes manifests          |
+| crossplane     | MEDIUM | Crossplane changes affect cloud infrastructure                 |
+| terragrunt     | MEDIUM | Terragrunt changes affect infrastructure modules               |
+| flux           | MEDIUM | Flux configuration changes affect GitOps reconciliation        |
+| falco          | LOW    | Falco rules define detection logic without modifying workloads |
+| opa-gatekeeper | MEDIUM | Gatekeeper policies enforce admission control                  |
+| aws-cdk        | MEDIUM | CDK changes affect AWS infrastructure                          |
+| eks            | MEDIUM | EKS changes affect cluster configuration                       |
+| cert-manager   | MEDIUM | Certificate changes affect TLS configuration                   |
+| trivy-operator | LOW    | Trivy operator configs affect scanning policies                |
+| packer         | MEDIUM | Packer templates affect machine image builds                   |
 
 ---
 

@@ -139,6 +139,58 @@ function discoverAvailableBinaries(): string[] {
   });
 }
 
+/**
+ * Correct validation commands for available CLI tools.
+ * The LLM hallucinates flags (e.g. "docker build --dry-run") when not guided,
+ * so we provide the exact commands to use.
+ */
+const VALIDATION_COMMANDS: Record<string, { cmd: string; note?: string }> = {
+  docker: {
+    cmd: "docker build -f <file> . --no-cache --progress=plain 2>&1 | head -20",
+    note: "Docker has NO --dry-run flag. Use build to verify syntax.",
+  },
+  "docker-compose": {
+    cmd: "docker-compose -f <file> config --quiet",
+    note: "Validates syntax. Requires referenced .env files to exist — skip if .env is missing.",
+  },
+  terraform: { cmd: "terraform validate" },
+  kubectl: { cmd: "kubectl apply -f <file> --dry-run=client" },
+  helm: { cmd: "helm lint <chart-dir>" },
+  ansible: { cmd: "ansible-playbook --syntax-check <file>" },
+  "ansible-playbook": { cmd: "ansible-playbook --syntax-check <file>" },
+  nginx: { cmd: "nginx -t -c <file>" },
+  make: { cmd: "make -n -f <file>", note: "-n prints commands without executing" },
+  actionlint: {
+    cmd: "actionlint -shellcheck= <file>",
+    note: "-shellcheck= disables shellcheck dependency",
+  },
+  hadolint: { cmd: "hadolint <file>" },
+  shellcheck: { cmd: "shellcheck <file>" },
+  promtool: { cmd: "promtool check config <file>" },
+  trivy: { cmd: "trivy config <file>" },
+  checkov: { cmd: "checkov -f <file>" },
+};
+
+/**
+ * Build a validation cheatsheet section for the system prompt.
+ * Only includes commands for tools that are actually available.
+ */
+function buildValidationCheatsheet(availableBinaries: string[]): string {
+  const lines: string[] = [];
+  for (const bin of availableBinaries) {
+    const entry = VALIDATION_COMMANDS[bin];
+    if (!entry) continue;
+    const line = entry.note
+      ? `- ${bin}: \`${entry.cmd}\` — ${entry.note}`
+      : `- ${bin}: \`${entry.cmd}\``;
+    lines.push(line);
+  }
+  if (lines.length === 0) return "";
+  return `\n\nValidation commands — use ONLY these exact commands (do NOT invent flags):
+${lines.join("\n")}
+Do NOT use python/pip for YAML validation. Do NOT add flags not listed above (e.g. no --dry-run for docker build).`;
+}
+
 /** Build the system prompt for autonomous agent mode. */
 function buildAutoSystemPrompt(
   cwd: string,
@@ -157,20 +209,41 @@ Do NOT call tools by any other name. To use a DojOps skill, call run_skill with 
 
 Workflow:
 1. Use search_files and read_file to understand the project structure
-2. Create files with write_file or modify them with edit_file
-3. Run commands (build, test, lint, validate) to verify your changes
-4. Use run_skill to generate DevOps configurations (e.g. run_skill with skill="dockerfile", not a tool called "dockerfile")
-5. Call "done" with a summary when the task is complete
+2. For each requested DevOps config: call run_skill to generate it, then IMMEDIATELY write the output to disk with write_file. run_skill returns text — it does NOT create files.
+3. For non-DevOps files: create with write_file or modify with edit_file
+4. Optionally run commands (build, test, lint) to verify your changes
+5. Once ALL requested files are written to disk, call "done" with a summary of every file created
+
+Example for run_skill: run_skill({ skill: "dockerfile", input: { prompt: "Create Dockerfile for Node.js 20 app with multi-stage build" } }) → then write_file the result
+
+Before EACH tool call, briefly state:
+1. What you're about to do and why
+2. What you expect to happen
+3. How this advances the overall goal
+This reasoning trace helps with debugging and ensures deliberate action.
 
 Rules:
 - Always read relevant files before making changes
 - Prefer edit_file over write_file for modifying existing files
 - Create directories with run_command (mkdir -p) before writing files into them
 - Be precise with edits: old_string must match the file content exactly
-- If a command fails, read the error output and adapt your approach
+- If a command fails, read the error output and adapt your approach — do NOT retry the same action
 - Verify your changes work by running build/test/lint commands
 - Call "done" when finished, with a clear summary of what was created or changed
-- If search_files returns "No files found", the file does not exist — do NOT retry with different argument formats`;
+- If search_files returns "No files found", the file does not exist — do NOT retry with different argument formats
+- If you notice you are repeating the same action, STOP and reassess your approach
+
+Efficiency rules (save tokens, avoid wasted iterations):
+- ONLY use CLI tools listed in "Available CLI tools" below. If a tool is NOT listed, it is NOT installed — do NOT attempt to use it, do NOT try to install it. You will get a "[TOOL NOT INSTALLED]" error if you try.
+- For validation, use ONLY the exact commands in "Validation commands" below. Do NOT invent flags, do NOT add flags not listed.
+- Do NOT use python/pip for YAML/JSON validation (pyyaml may not be installed). Use the listed validation tools or skip validation.
+- Do NOT install packages globally (no "pip install", "npm install -g", "gem install", "apt-get install"). Work with what is available.
+- Do NOT write or modify .env files — they are blocked by security policy. If the project needs environment variables, document them in a README or docker-compose.yml instead.
+- When edit_file fails with "old_string not unique" or "not found", read the file first to see the exact content before retrying.
+- Prefer run_skill over manual file writing for DevOps configs — skills produce validated, best-practice output.
+- IMPORTANT: run_skill returns generated content as TEXT — it does NOT write files to disk. You MUST use write_file to save the content after run_skill.
+- Do NOT call "done" until ALL requested files have been written to disk with write_file. The system will reject premature done calls if no files were created.
+- Complete ALL parts of the user's request before calling "done". If the user asks for 3 files, create all 3.`;
 
   if (skillNames.length > 0) {
     prompt += `\n\nAvailable DojOps skills (use with run_skill tool — use these EXACT names):
@@ -179,9 +252,14 @@ Do NOT invent skill names or add suffixes like "-chart", "-config", "-file". Use
   }
 
   if (availableBinaries.length > 0) {
-    prompt += `\n\nAvailable CLI tools (use with run_command):
+    prompt += `\n\nAvailable CLI tools (use with run_command) — ONLY these are installed:
 ${availableBinaries.join(", ")}
-Use these for validation (e.g. terraform validate, helm lint, kubectl --dry-run), builds, tests, and deployments.`;
+Do NOT attempt to use any CLI tool not in this list — it will fail and waste an iteration.`;
+
+    // Build a validation command cheatsheet from available binaries
+    prompt += buildValidationCheatsheet(availableBinaries);
+  } else {
+    prompt += `\n\nNo external CLI tools are installed. Do NOT attempt to run validation tools (hadolint, shellcheck, yamllint, etc.) — they will fail. Rely on run_skill for generating validated configurations.`;
   }
 
   return prompt;
@@ -478,6 +556,69 @@ function buildToolExecutor(
   });
 }
 
+// ── Output validation gate ──────────────────────────────────────
+
+/** File-to-skill mapping for completion validation (mirrors tool-executor.ts). */
+const COMPLETION_SKILL_PATTERNS: Array<{ pattern: RegExp; skill: string }> = [
+  { pattern: /^Dockerfile(\..*)?$/, skill: "dockerfile" },
+  { pattern: /^docker-compose[\w.-]*\.ya?ml$/, skill: "docker-compose" },
+  { pattern: /\.tf$/, skill: "terraform" },
+  { pattern: /^\.github\/workflows\/.*\.ya?ml$/, skill: "github-actions" },
+  { pattern: /^\.gitlab-ci\.yml$/, skill: "gitlab-ci" },
+  { pattern: /^Jenkinsfile$/, skill: "jenkinsfile" },
+  { pattern: /^Chart\.yaml$/, skill: "helm" },
+  { pattern: /^Makefile$/, skill: "makefile" },
+  { pattern: /^nginx\.conf$/, skill: "nginx" },
+];
+
+/**
+ * Validate all files written by the agent before declaring done.
+ * Runs skill.verify() on files matching known patterns and returns issue descriptions.
+ */
+async function validateWrittenFiles(
+  toolExecutor: ToolExecutor,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  skillsMap: Map<string, any>,
+  cwd: string,
+): Promise<string[]> {
+  const allFiles = [...toolExecutor.getFilesWritten(), ...toolExecutor.getFilesModified()];
+  if (allFiles.length === 0) {
+    return [
+      "No files were written to disk. You must use write_file to create each requested file before calling done.",
+      "If you used run_skill, the output is returned as text — you still need to write it to disk with write_file.",
+    ];
+  }
+
+  const issues: string[] = [];
+  for (const filePath of allFiles) {
+    const relPath = path.relative(cwd, filePath);
+    const basename = path.basename(filePath);
+
+    for (const { pattern, skill: skillName } of COMPLETION_SKILL_PATTERNS) {
+      if (!pattern.test(basename) && !pattern.test(relPath)) continue;
+      const skill = skillsMap.get(skillName);
+      if (!skill?.verify) break;
+
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const result = await skill.verify({ content, filePath });
+        if (!result.passed) {
+          const errorIssues = result.issues
+            .filter((i: { severity: string }) => i.severity === "error")
+            .slice(0, 3);
+          for (const i of errorIssues) {
+            issues.push(`${relPath}: ${i.message}`);
+          }
+        }
+      } catch {
+        // Verification is best-effort
+      }
+      break;
+    }
+  }
+  return issues;
+}
+
 // ── System prompt + memory ──────────────────────────────────────
 
 function buildSystemPromptWithMemory(
@@ -700,6 +841,8 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     tools: allTools,
     systemPrompt,
     maxIterations,
+    thinking: ctx.globalOpts.thinking,
+    validateBeforeDone: () => validateWrittenFiles(toolExecutor, skillsMap, cwd),
     onThinking: (text) => {
       if (!text) return;
       const trimmed = text.trim();

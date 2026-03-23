@@ -85,11 +85,11 @@ describe("factory", () => {
   });
 
   describe("createTools", () => {
-    it("creates all built-in tools (19 .dops skills + any global)", () => {
+    it("creates all built-in tools (31 .dops skills + any global)", () => {
       process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const tools = createTools(provider);
-      expect(tools.length).toBeGreaterThanOrEqual(19);
+      expect(tools.length).toBeGreaterThanOrEqual(31);
       const names = tools.map((t) => t.name);
       expect(names).toContain("github-actions");
       expect(names).toContain("terraform");
@@ -109,6 +109,18 @@ describe("factory", () => {
       expect(names).toContain("pulumi");
       expect(names).toContain("argocd");
       expect(names).toContain("cloudformation");
+      expect(names).toContain("vault");
+      expect(names).toContain("istio");
+      expect(names).toContain("kustomize");
+      expect(names).toContain("crossplane");
+      expect(names).toContain("terragrunt");
+      expect(names).toContain("flux");
+      expect(names).toContain("falco");
+      expect(names).toContain("opa-gatekeeper");
+      expect(names).toContain("aws-cdk");
+      expect(names).toContain("eks");
+      expect(names).toContain("cert-manager");
+      expect(names).toContain("trivy-operator");
     });
   });
 

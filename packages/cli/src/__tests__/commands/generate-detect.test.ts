@@ -60,11 +60,11 @@ describe("autoDetectInstalledSkill", () => {
 
   it("detects installed module by name match", () => {
     mockDiscoverUserDopsFiles.mockReturnValue([
-      { filePath: "/project/.dojops/tools/circleci.dops", location: "project" },
+      { filePath: "/project/.dojops/tools/drone.dops", location: "project" },
     ]);
 
-    const result = autoDetectInstalledSkill("Create a CircleCI pipeline for this app", "/project");
-    expect(result).toBe("circleci");
+    const result = autoDetectInstalledSkill("Create a Drone pipeline for this app", "/project");
+    expect(result).toBe("drone");
   });
 
   it("detects installed module with hyphenated name via spaces", () => {

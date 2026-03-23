@@ -6,11 +6,18 @@ export interface InputValidationResult {
 }
 
 /**
- * Estimates token count from a character count by dividing by 4.
- * This is a rough heuristic (1 token ~ 4 characters for English text).
+ * Estimates token count from text content using a hybrid heuristic.
+ * Uses word-based counting (BPE averages ~1.4 tokens/word) for normal text,
+ * with a character-based floor (chars/4) for content without whitespace
+ * (minified code, encoded data, long identifiers).
  */
-function estimateTokens(charCount: number): number {
-  return Math.ceil(charCount / 4);
+function estimateTokensFromText(text: string): number {
+  if (!text) return 0;
+  const words = text.split(/\s+/).filter(Boolean);
+  const wordEstimate = Math.ceil(words.length * 1.4);
+  // Character-based floor catches long strings with few/no spaces
+  const charEstimate = Math.ceil(text.length / 4);
+  return Math.max(wordEstimate, charEstimate);
 }
 
 /**
@@ -25,21 +32,21 @@ export function validateRequestSize(
   req: LLMRequest,
   maxTokens: number = 100_000,
 ): InputValidationResult {
-  let totalChars = 0;
+  const parts: string[] = [];
 
   if (req.system) {
-    totalChars += req.system.length;
+    parts.push(req.system);
   }
 
-  totalChars += req.prompt.length;
+  parts.push(req.prompt);
 
   if (req.messages) {
     for (const msg of req.messages) {
-      totalChars += msg.content.length;
+      parts.push(msg.content);
     }
   }
 
-  const estimatedTokens = estimateTokens(totalChars);
+  const estimatedTokens = estimateTokensFromText(parts.join(" "));
 
   if (estimatedTokens > maxTokens) {
     return {

@@ -25,6 +25,39 @@ context:
     - **Worker/daemon**: Type=simple, Restart=always, watchdog support
     - **Timer-based**: Generate both .service and .timer unit files
     - **Socket-activated**: Type=simple with socket activation, generate .socket file
+
+    EXAMPLE — Node.js web application service:
+    [Unit]
+    Description=My Node.js Application
+    Documentation=https://example.com/docs
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    Type=simple
+    User=nodeapp
+    Group=nodeapp
+    WorkingDirectory=/opt/myapp
+    ExecStart=/usr/bin/node dist/index.js
+    Restart=on-failure
+    RestartSec=5
+    StandardOutput=journal
+    StandardError=journal
+    SyslogIdentifier=myapp
+    EnvironmentFile=/opt/myapp/.env
+    TimeoutStartSec=30
+    TimeoutStopSec=30
+    LimitNOFILE=65536
+
+    # Security hardening
+    ProtectSystem=strict
+    ProtectHome=yes
+    PrivateTmp=yes
+    NoNewPrivileges=yes
+    ReadWritePaths=/opt/myapp/data
+
+    [Install]
+    WantedBy=multi-user.target
   bestPractices:
     - Set appropriate restart policies (on-failure, always)
     - Run services as dedicated non-root users

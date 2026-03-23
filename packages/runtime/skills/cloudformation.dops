@@ -32,6 +32,52 @@ context:
     - **Database**: RDS, DynamoDB, ElastiCache, Aurora
     - **Networking**: VPC, subnets, security groups, ALB, CloudFront
     - **Serverless**: Lambda, API Gateway, Step Functions, EventBridge
+
+    Example — S3 bucket with bucket policy and outputs:
+    AWSTemplateFormatVersion: '2010-09-09'
+    Description: S3 bucket with restricted access policy
+    Parameters:
+      Environment:
+        Type: String
+        Default: dev
+        AllowedValues: [dev, staging, prod]
+      ProjectName:
+        Type: String
+    Resources:
+      AppBucket:
+        Type: AWS::S3::Bucket
+        DeletionPolicy: Retain
+        Properties:
+          BucketName: !Sub '${ProjectName}-${Environment}-assets'
+          VersioningConfiguration:
+            Status: Enabled
+          Tags:
+            - Key: Environment
+              Value: !Ref Environment
+            - Key: ManagedBy
+              Value: CloudFormation
+      AppBucketPolicy:
+        Type: AWS::S3::BucketPolicy
+        Properties:
+          Bucket: !Ref AppBucket
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DenyInsecureTransport
+                Effect: Deny
+                Principal: '*'
+                Action: 's3:*'
+                Resource: !Sub '${AppBucket.Arn}/*'
+                Condition:
+                  Bool:
+                    aws:SecureTransport: 'false'
+    Outputs:
+      BucketArn:
+        Value: !GetAtt AppBucket.Arn
+        Export:
+          Name: !Sub '${AWS::StackName}-BucketArn'
+      BucketName:
+        Value: !Ref AppBucket
   bestPractices:
     - Use Parameters with constraints for environment-specific values
     - Set DeletionPolicy to Retain or Snapshot for stateful resources (RDS, S3)

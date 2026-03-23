@@ -220,6 +220,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "secrets",
     "learn",
     "backup",
+    "arise",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([

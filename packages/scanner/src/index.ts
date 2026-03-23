@@ -18,6 +18,16 @@ export {
   scanTrivyImage,
   scanTrivyLicense,
 } from "./scanners";
+export {
+  generateRemediationPlan,
+  remediateNpmFindings,
+  remediatePipFindings,
+  remediateIacFindings,
+  remediateSecretFindings,
+  remediateHadolintFindings,
+  remediateShellcheckFindings,
+} from "./remediate";
+export type { RemediationAction, AutoRemediationPlan } from "./remediate";
 export { mapFindingsToCompliance, getSupportedFrameworks } from "./compliance";
 export type {
   ComplianceReport,

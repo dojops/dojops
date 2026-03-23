@@ -43,6 +43,16 @@ export function createTaskGraphSchema(
 /** Base type inferred from the Zod schema (LLM output). */
 type TaskNodeBase = z.infer<typeof TaskNodeSchema>;
 
+/** Programmatic success criteria for a task (set by caller, not by LLM). */
+export interface TaskSuccessCriteria {
+  /** Minimum output length in characters. */
+  minOutputLength?: number;
+  /** Regex patterns that must appear in the output. */
+  requiredPatterns?: string[];
+  /** Regex patterns that must NOT appear (e.g., "TODO", "FIXME"). */
+  forbiddenPatterns?: string[];
+}
+
 /** Extended TaskNode with optional tool metadata (enriched after decomposition). */
 export type TaskNode = TaskNodeBase & {
   toolType?: "built-in" | "custom";
@@ -50,6 +60,8 @@ export type TaskNode = TaskNodeBase & {
   toolHash?: string;
   toolSource?: "global" | "project";
   systemPromptHash?: string;
+  /** Optional success criteria for programmatic validation of output. */
+  successCriteria?: TaskSuccessCriteria;
 };
 
 export type TaskGraph = Omit<z.infer<typeof TaskGraphSchema>, "tasks"> & {
@@ -65,8 +77,32 @@ export interface TaskResult {
   error?: string;
 }
 
+/** Aggregate quality metrics for a completed plan execution. */
+export interface PlanQuality {
+  /** 0.0 to 1.0 — ratio of completed tasks. */
+  score: number;
+  /** Task IDs that were skipped. */
+  skippedTasks: string[];
+  /** Human-readable summary string. */
+  summary: string;
+}
+
+/** Snapshot of coordinator state at plan completion. */
+export interface CoordinatorSnapshot {
+  contextKeys: string[];
+  pendingMessages: number;
+  pendingHandoffs: number;
+}
+
 export interface PlannerResult {
   goal: string;
   results: TaskResult[];
   success: boolean;
+  /** When tasks fail, provides context for cross-task replanning.
+   *  The caller can feed this back into the decomposer for a revised plan. */
+  replanContext?: string;
+  /** Aggregate quality metrics for the plan execution. */
+  quality?: PlanQuality;
+  /** Coordinator state snapshot (only present when coordinator was used). */
+  coordinatorSnapshot?: CoordinatorSnapshot;
 }

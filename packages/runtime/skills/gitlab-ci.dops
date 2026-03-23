@@ -25,6 +25,61 @@ context:
     - **Go**: go build, go test, golang image, cache go/pkg/mod
     - **Docker**: docker build/push with DinD or kaniko, multi-stage
     - **Monorepo**: changes: keyword for path-based triggers, child pipelines
+
+    EXAMPLE — Node.js CI/CD pipeline:
+    stages:
+      - build
+      - test
+      - deploy
+
+    variables:
+      NODE_VERSION: "20"
+
+    .node-cache: &node-cache
+      cache:
+        key:
+          files:
+            - package-lock.json
+        paths:
+          - node_modules/
+
+    build:
+      stage: build
+      image: node:${NODE_VERSION}
+      <<: *node-cache
+      script:
+        - npm ci
+        - npm run build
+      artifacts:
+        paths:
+          - dist/
+        expire_in: 1 hour
+
+    test:
+      stage: test
+      image: node:${NODE_VERSION}
+      <<: *node-cache
+      needs: [build]
+      script:
+        - npm ci
+        - npm test -- --coverage
+      coverage: '/Lines\s*:\s*(\d+\.?\d*)%/'
+      artifacts:
+        reports:
+          coverage_report:
+            coverage_format: cobertura
+            path: coverage/cobertura-coverage.xml
+
+    deploy-staging:
+      stage: deploy
+      needs: [test]
+      environment:
+        name: staging
+        url: https://staging.example.com
+      rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      script:
+        - echo "Deploy to staging"
   bestPractices:
     - Define clear pipeline stages (build, test, deploy)
     - Use caching to speed up dependency installation

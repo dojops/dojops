@@ -236,7 +236,7 @@ export function resolveAlias(model: string, config: DojOpsConfig): string {
 
 /**
  * Resolves the LLM temperature to use.
- * Priority: CLI flag > DOJOPS_TEMPERATURE env > config defaultTemperature > undefined
+ * Priority: CLI flag > DOJOPS_TEMPERATURE env > config defaultTemperature > 0.2
  */
 export function resolveTemperature(
   cliFlag: number | undefined,
@@ -252,7 +252,7 @@ export function resolveTemperature(
       return parsed;
     }
   }
-  return config.defaultTemperature ?? undefined;
+  return config.defaultTemperature ?? 0.2;
 }
 
 /**

@@ -1,6 +1,6 @@
 # DojOps Documentation
 
-Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps is an enterprise-grade AI DevOps automation system that generates, validates, and executes infrastructure and CI/CD configurations using LLM providers — with structured output enforcement, sandboxed execution, approval workflows, and hash-chained audit trails.
+Welcome to the **DojOps — AI Automation Engine** documentation. DojOps is an enterprise-grade AI automation system that generates, validates, and executes infrastructure and CI/CD configurations using LLM providers - with structured output enforcement, 32 specialist agents, 31 built-in skills, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 
@@ -36,8 +36,8 @@ Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps 
 
 | Document                                  | Description                                                                                            |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [Specialist Agents](agents.md)            | 17 built-in + custom agents — routing, domains, keywords, confidence scoring, custom agent creation    |
-| [DevOps Skills](skills.md)                | All 18 built-in skills + custom skill system — schemas, detectors, verifiers, auto-detection           |
+| [Specialist Agents](agents.md)            | 32 built-in + custom agents - routing, domains, keywords, confidence scoring, custom agent creation    |
+| [DevOps Skills](skills.md)                | All 31 built-in skills + custom skill system - schemas, detectors, verifiers, auto-detection           |
 | [Security Scanning](security-scanning.md) | 10 scanners, scan types, remediation, SBOM, license compliance, scan comparison, dashboard integration |
 | [Execution Engine](execution-engine.md)   | SafeExecutor, policies, approval workflows, sandboxed fs, audit trail                                  |
 | [Task Planner](planner.md)                | Goal decomposition, task graphs, topological execution, resume                                         |

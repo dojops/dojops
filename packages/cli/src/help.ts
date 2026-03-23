@@ -13,62 +13,74 @@ export function printHelp(): void {
   console.log(`  ${pc.dim("$")} dojops [command] [options] <prompt>`);
   console.log();
   console.log(pc.bold("COMMANDS"));
-  console.log(`  ${pc.cyan("plan")}               Decompose goal into task graph`);
+
+  console.log(`\n  ${pc.dim("Workflow")}`);
   console.log(`  ${pc.cyan("generate")}           Generate DevOps config ${pc.dim("(default)")}`);
+  console.log(`  ${pc.cyan("plan")}               Decompose goal into task graph`);
   console.log(`  ${pc.cyan("apply")}              Execute a saved plan`);
   console.log(`  ${pc.cyan("validate")}           Validate plan against schemas`);
+  console.log(`  ${pc.cyan("auto")}               Autonomous: plan + execute with self-repair`);
+  console.log(`  ${pc.cyan("arise")}              Generate complete CI/CD pipeline from scratch`);
   console.log(`  ${pc.cyan("explain")}            LLM explains a plan`);
+
+  console.log(`\n  ${pc.dim("Analysis & quality")}`);
   console.log(`  ${pc.cyan("debug ci")}           Diagnose CI/CD log failures`);
   console.log(`  ${pc.cyan("analyze diff")}       Analyze infrastructure diff for risk`);
   console.log(`  ${pc.cyan("review")}             DevSecOps review with tool validation`);
-  console.log(
-    `  ${pc.cyan("auto")}               Autonomous mode: plan + execute with self-repair`,
-  );
-  console.log(`  ${pc.cyan("inspect")}            Inspect config and session state`);
-  console.log(`  ${pc.cyan("agents")}             Manage specialist agents (built-in + custom)`);
-  console.log(`  ${pc.cyan("verify")}             Verify a configuration file`);
-  console.log(`  ${pc.cyan("history")}            View execution history`);
-  console.log(`  ${pc.cyan("history verify")}     Verify audit log hash chain integrity`);
-  console.log(`  ${pc.cyan("history audit")}      View audit log entries`);
-  console.log(`  ${pc.cyan("history export")}     Export audit log (json, csv, syslog)`);
-  console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
-  console.log(`  ${pc.cyan("provider")}           Manage LLM providers (list/add/remove/default)`);
-  console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
-  console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);
-  console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
   console.log(`  ${pc.cyan("check")}              LLM-powered DevOps config quality check`);
+  console.log(`  ${pc.cyan("verify")}             Verify a configuration file`);
   console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
-  console.log(`  ${pc.cyan("skills")}             Manage DevOps skills (custom + marketplace)`);
-  console.log(`  ${pc.cyan("skills update")}      Update installed skills from Hub`);
-  console.log(`  ${pc.cyan("skills export")}      Export skills to offline bundle`);
-  console.log(`  ${pc.cyan("skills import")}      Import skills from offline bundle`);
-  console.log(`  ${pc.cyan("toolchain")}          Manage system toolchain (~/.dojops/toolchain/)`);
-  console.log(
-    `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
-  );
-  console.log(`  ${pc.cyan("init")}               Initialize .dojops/ + scan repo context`);
-  console.log(`  ${pc.cyan("clean")}              Remove generated artifacts from a plan`);
-  console.log(`  ${pc.dim("  destroy")}            ${pc.dim("Deprecated alias for clean")}`);
-  console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
-  console.log(`  ${pc.cyan("cron")}               Manage scheduled jobs`);
-  console.log(`  ${pc.cyan("upgrade")}            Check for and install CLI updates`);
-  console.log(`  ${pc.cyan("tokens")}             Show LLM token usage and cost analytics`);
-  console.log(`  ${pc.cyan("insights")}           Actionable suggestions from execution history`);
-  console.log(
-    `  ${pc.cyan("memory")}             Manage persistent project notes (add/search/remove)`,
-  );
-  console.log(`  ${pc.cyan("runs")}               Manage background agent runs (list/show/clean)`);
-  console.log(`  ${pc.cyan("mcp")}                Manage MCP servers (list/add/remove)`);
-  console.log(`  ${pc.cyan("checkpoint")}         Create/manage project checkpoints`);
-  console.log(`  ${pc.cyan("trust")}              Trust workspace configs (agents/MCP/skills)`);
-  console.log(`  ${pc.cyan("untrust")}            Remove trust for current workspace`);
+
+  console.log(`\n  ${pc.dim("Infrastructure")}`);
   console.log(`  ${pc.cyan("cost")}               Estimate infrastructure costs (Infracost)`);
   console.log(`  ${pc.cyan("drift")}              Detect infrastructure drift (Terraform/K8s)`);
   console.log(`  ${pc.cyan("fix-deps")}           Auto-remediate dependency vulnerabilities`);
   console.log(`  ${pc.cyan("secrets")}            Manage encrypted secrets (set/get/list/remove)`);
+
+  console.log(`\n  ${pc.dim("Management")}`);
+  console.log(`  ${pc.cyan("agents")}             Manage specialist agents (built-in + custom)`);
+  console.log(`  ${pc.cyan("skills")}             Manage DevOps skills (custom + marketplace)`);
+  console.log(`    ${pc.cyan("skills update")}    Update installed skills from Hub`);
+  console.log(`    ${pc.cyan("skills export")}    Export skills to offline bundle`);
+  console.log(`    ${pc.cyan("skills import")}    Import skills from offline bundle`);
+  console.log(`  ${pc.cyan("toolchain")}          Manage system toolchain (~/.dojops/toolchain/)`);
+  console.log(`  ${pc.cyan("history")}            View execution history`);
+  console.log(`    ${pc.cyan("history verify")}   Verify audit log hash chain integrity`);
+  console.log(`    ${pc.cyan("history audit")}    View audit log entries`);
+  console.log(`    ${pc.cyan("history export")}   Export audit log (json, csv, syslog)`);
+  console.log(`  ${pc.cyan("runs")}               Manage background agent runs (list/show/clean)`);
+  console.log(`  ${pc.cyan("mcp")}                Manage MCP servers (list/add/remove)`);
+  console.log(`  ${pc.cyan("inspect")}            Inspect config and session state`);
+
+  console.log(`\n  ${pc.dim("Learning & data")}`);
+  console.log(`  ${pc.cyan("memory")}             Persistent project notes (add/search/remove)`);
+  console.log(`  ${pc.cyan("tokens")}             LLM token usage and cost analytics`);
+  console.log(`  ${pc.cyan("insights")}           Actionable suggestions from execution history`);
   console.log(`  ${pc.cyan("learn")}              View execution patterns and learned rules`);
+  console.log(`  ${pc.cyan("checkpoint")}         Create/manage project checkpoints`);
   console.log(`  ${pc.cyan("backup")}             Backup/restore .dojops/ project data`);
+
+  console.log(`\n  ${pc.dim("Configuration & setup")}`);
+  console.log(`  ${pc.cyan("init")}               Initialize .dojops/ + scan repo context`);
+  console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
+  console.log(`  ${pc.cyan("provider")}           Manage LLM providers (list/add/remove/default)`);
+  console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
+  console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);
+  console.log(`  ${pc.cyan("chat")}               Interactive AI session`);
+  console.log(`  ${pc.cyan("trust")}              Trust workspace configs (agents/MCP/skills)`);
+  console.log(`  ${pc.cyan("untrust")}            Remove trust for current workspace`);
+  console.log(
+    `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
+  );
+  console.log(`  ${pc.cyan("cron")}               Manage scheduled jobs`);
+  console.log(`  ${pc.cyan("upgrade")}            Check for and install CLI updates`);
   console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
+  console.log(`  ${pc.cyan("version")}            Show CLI version`);
+
+  console.log(`\n  ${pc.dim("Cleanup")}`);
+  console.log(`  ${pc.cyan("clean")}              Remove generated artifacts from a plan`);
+  console.log(`  ${pc.dim("  destroy")}            ${pc.dim("Deprecated alias for clean")}`);
+  console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
   console.log(
@@ -228,11 +240,13 @@ export function printHelp(): void {
   console.log();
   console.log(pc.bold("MODELS"));
   console.log(`  ${pc.dim("OpenAI:")}    gpt-4o, gpt-4o-mini`);
-  console.log(`  ${pc.dim("Anthropic:")} claude-sonnet-4-5-20250929, claude-haiku-4-5-20251001`);
+  console.log(
+    `  ${pc.dim("Anthropic:")} claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001`,
+  );
   console.log(`  ${pc.dim("Ollama:")}    llama3, mistral, codellama`);
   console.log(`  ${pc.dim("DeepSeek:")} deepseek-chat, deepseek-reasoner`);
   console.log(`  ${pc.dim("Gemini:")}   gemini-2.5-flash, gemini-2.5-pro`);
-  console.log(`  ${pc.dim("Copilot:")}  gpt-4o, claude-3.5-sonnet, o1-mini (via GitHub Copilot)`);
+  console.log(`  ${pc.dim("Copilot:")}  gpt-4o, claude-sonnet-4-6, o1-mini (via GitHub Copilot)`);
   console.log();
   console.log(pc.bold("EXIT CODES"));
   console.log(`  0    Success`);
@@ -908,7 +922,7 @@ function printCoreCommandHelp(command: string): boolean {
 function printExtendedCommandHelp(command: string): boolean {
   switch (command) {
     case "chat":
-      console.log(`\n${pc.bold("dojops chat")} — Interactive AI DevOps session`);
+      console.log(`\n${pc.bold("dojops chat")} — Interactive AI session`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} dojops chat`);
       console.log(`  ${pc.dim("$")} dojops chat --session <name>`);
@@ -1218,6 +1232,38 @@ function printExtendedCommandHelp(command: string): boolean {
       console.log(`  ${pc.dim("$")} dojops auto --max-iterations 10 "Fix the linting errors"`);
       console.log(`  ${pc.dim("$")} dojops auto --commit "Add health check endpoint"`);
       console.log(`  ${pc.dim("$")} dojops auto --voice`);
+      console.log();
+      break;
+
+    case "arise":
+      console.log(`\n${pc.bold("dojops arise")} — Generate a complete CI/CD pipeline from scratch`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops arise`);
+      console.log(`  ${pc.dim("$")} dojops arise --yes`);
+      console.log(`  ${pc.dim("$")} dojops arise --dry-run`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(
+        `  ${pc.cyan("--yes")}                  Use smart defaults, skip prompts, auto-approve`,
+      );
+      console.log(
+        `  ${pc.cyan("--dry-run")}              Show pipeline diagram and planned files, then exit`,
+      );
+      console.log(`  ${pc.cyan("--skip-verify")}          Skip verification of generated files`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Scans your codebase, asks what you want in your CI/CD pipeline,`);
+      console.log(`  displays a visual pipeline diagram, then generates all artifacts`);
+      console.log(`  (CI config, Dockerfile, Helm chart, deploy manifests, security`);
+      console.log(`  configs) in parallel using specialist skills and agents.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(
+        `  ${pc.dim("$")} dojops arise                  ${pc.dim("# interactive setup")}`,
+      );
+      console.log(
+        `  ${pc.dim("$")} dojops arise --yes             ${pc.dim("# auto-detect everything")}`,
+      );
+      console.log(
+        `  ${pc.dim("$")} dojops arise --dry-run         ${pc.dim("# preview without generating")}`,
+      );
       console.log();
       break;
 
@@ -1532,6 +1578,17 @@ function printExtendedCommandHelp(command: string): boolean {
       console.log(
         `  ${pc.dim("$")} dojops backup restore dojops-backup-2026-03-22.tar.gz --verify`,
       );
+      console.log();
+      break;
+
+    case "version":
+      console.log(`\n${pc.bold("dojops version")} — Show CLI version`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops version`);
+      console.log(`  ${pc.dim("$")} dojops --version`);
+      console.log(`  ${pc.dim("$")} dojops -v`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Prints the installed DojOps CLI version and exits.`);
       console.log();
       break;
 

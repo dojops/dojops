@@ -1089,4 +1089,60 @@ describe("SafeExecutor", () => {
       expect(state.lastFeedback).not.toContain("Critic Analysis");
     });
   });
+
+  describe("output file completeness check", () => {
+    class WritingTool extends BaseSkill<MockInput> {
+      name = "writing-tool";
+      description = "Writes files";
+      inputSchema = MockInputSchema;
+      async generate(): Promise<SkillOutput> {
+        return { success: true, data: { result: "generated" } };
+      }
+      async execute(): Promise<SkillOutput & { filesWritten?: string[] }> {
+        return {
+          success: true,
+          data: { result: "executed" },
+          filesWritten: ["/out/Dockerfile", "/out/docker-compose.yml"],
+        };
+      }
+    }
+
+    it("adds no warning when all expected files are written", async () => {
+      const executor = new SafeExecutor({
+        policy: { allowWrite: true, allowedWritePaths: ["/out"], timeoutMs: 5000 },
+      });
+      const result = await executor.executeTask(
+        "complete",
+        new WritingTool(),
+        { value: "test" },
+        { expectedFiles: ["Dockerfile", "docker-compose.yml"] },
+      );
+      expect(result.status).toBe("completed");
+      const meta = result.metadata as Record<string, unknown> | undefined;
+      expect(meta?._completenessWarning).toBeUndefined();
+    });
+
+    it("adds warning when expected files are missing", async () => {
+      const executor = new SafeExecutor({
+        policy: { allowWrite: true, allowedWritePaths: ["/out"], timeoutMs: 5000 },
+      });
+      const result = await executor.executeTask(
+        "incomplete",
+        new WritingTool(),
+        { value: "test" },
+        { expectedFiles: ["Dockerfile", "docker-compose.yml", "nginx.conf"] },
+      );
+      expect(result.status).toBe("completed");
+      const meta = result.metadata as Record<string, unknown> | undefined;
+      expect(meta?._completenessWarning).toContain("nginx.conf");
+    });
+
+    it("skips check when no expectedFiles in metadata", async () => {
+      const executor = new SafeExecutor({
+        policy: { allowWrite: true, allowedWritePaths: ["/out"], timeoutMs: 5000 },
+      });
+      const result = await executor.executeTask("no-meta", new WritingTool(), { value: "test" });
+      expect(result.status).toBe("completed");
+    });
+  });
 });

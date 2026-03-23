@@ -1,0 +1,134 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: vault
+  version: 2.2.0
+  description: "Generate HashiCorp Vault server configs, policies, secret engines, and auth methods"
+  author: dojops
+  license: MIT
+  tags: [vault, secrets, security, hashicorp]
+
+context:
+  technology: Vault
+  fileFormat: json
+  outputGuidance: |
+    Generate HashiCorp Vault HCL configuration split into standard files.
+    Output a JSON object with file paths as keys and HCL content as string values.
+    Format: { "files": { "vault.hcl": "...", "policies/admin.hcl": "...", "secret-engines.hcl": "..." } }
+    Each file content must be valid HCL that Vault can parse.
+    Always include these files:
+      - vault.hcl — Main server configuration (listener, storage, seal, telemetry)
+    Optionally include when needed:
+      - policies/*.hcl — ACL policy files (admin, app, readonly)
+      - secret-engines.hcl — Secret engine mount and configuration
+      - auth-methods.hcl — Auth method enablement and configuration
+    Do NOT output raw HCL — use the JSON wrapper format for multi-file output.
+
+    CRITICAL OUTPUT RULES:
+    - Always output a JSON object with "files" key.
+    - FLAT structure: All keys at root level (vault.hcl, policies/admin.hcl) — NEVER wrap in vault/ or config/ subfolder.
+    - Do NOT generate .gitkeep files, directory-only paths, or empty files.
+    - Every file value must be non-empty valid HCL content.
+
+    Generate appropriate resources based on the request:
+    - **Server config**: listener (tcp), storage (raft, consul, file), seal (awskms, transit, shamir)
+    - **Policies**: ACL policies with path-based rules and capabilities (create, read, update, delete, list, sudo)
+    - **Secret engines**: KV v2, Transit, PKI, Database, AWS, SSH
+    - **Auth methods**: AppRole, Kubernetes, LDAP, OIDC, Token, Userpass
+
+    Example — server config, policy, and agent config:
+    {
+      "files": {
+        "vault.hcl": "listener \"tcp\" {\n  address       = \"0.0.0.0:8200\"\n  tls_cert_file = \"/opt/vault/tls/cert.pem\"\n  tls_key_file  = \"/opt/vault/tls/key.pem\"\n}\n\nstorage \"raft\" {\n  path    = \"/opt/vault/data\"\n  node_id = \"vault-1\"\n}\n\napi_addr     = \"https://vault.example.com:8200\"\ncluster_addr = \"https://vault.example.com:8201\"\nui           = true\n\nseal \"awskms\" {\n  region     = \"us-east-1\"\n  kms_key_id = \"alias/vault-unseal\"\n}\n\ntelemetry {\n  prometheus_retention_time = \"24h\"\n  disable_hostname         = true\n}\n",
+        "policies/app.hcl": "# Read-only access to application secrets\npath \"secret/data/myapp/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\n# Allow the app to renew and revoke its own token\npath \"auth/token/renew-self\" {\n  capabilities = [\"update\"]\n}\n\npath \"auth/token/revoke-self\" {\n  capabilities = [\"update\"]\n}\n",
+        "agent.hcl": "vault {\n  address = \"https://vault.example.com:8200\"\n}\n\nauto_auth {\n  method \"approle\" {\n    config = {\n      role_id_file_path   = \"/etc/vault/role-id\"\n      secret_id_file_path = \"/etc/vault/secret-id\"\n    }\n  }\n  sink \"file\" {\n    config = {\n      path = \"/tmp/vault-token\"\n    }\n  }\n}\n\ntemplate {\n  source      = \"/etc/vault/templates/app.ctmpl\"\n  destination = \"/etc/app/config.env\"\n}\n"
+      }
+    }
+  bestPractices:
+    - Use Raft integrated storage for production high-availability clusters
+    - Enable TLS on all listeners with valid certificates
+    - Use auto-unseal (AWS KMS, Azure Key Vault, Transit) instead of Shamir keys in production
+    - Follow least-privilege principle in ACL policies — deny by default
+    - Enable audit logging on at least two backends for tamper evidence
+    - Use KV v2 (versioned) over v1 for secret engines
+    - Rotate encryption keys and credentials on a regular schedule
+    - Use AppRole or Kubernetes auth for machine-to-machine authentication
+    - Set max_lease_ttl and default_lease_ttl appropriate to the use case
+    - Configure telemetry for Prometheus or StatsD monitoring
+    - Namespace secret paths by environment and application
+    - Use response wrapping for initial secret distribution
+  context7Libraries:
+    - name: vault
+      query: "Vault server configuration HCL, ACL policies capabilities, secret engines KV Transit PKI, auth methods AppRole Kubernetes, auto-unseal, Raft storage"
+
+files:
+  - path: "{outputPath}/vault.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/policies/admin.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/policies/app.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/secret-engines.hcl"
+    format: raw
+    conditional: true
+  - path: "{outputPath}/auth-methods.hcl"
+    format: raw
+    conditional: true
+
+detection:
+  paths: ["vault.hcl", "**/vault/*.hcl", "**/vault/policies/*.hcl"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "listener"
+      required: false
+      message: "Vault server config should include a listener block"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.hcl", "**/policies/**/*.hcl"]
+
+risk:
+  level: HIGH
+  rationale: "Vault configuration changes affect secrets management and security posture"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Vault
+
+## Prompt
+
+You are a HashiCorp Vault expert. Generate production-ready Vault server configurations, ACL policies, secret engines, and auth methods.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+vault, secret, seal, unseal, policy, auth method, secret engine,
+kv, transit, pki, approle, kubernetes auth, raft, consul, storage,
+acl, token, lease, audit, tls, hashicorp, encryption

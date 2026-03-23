@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FallbackProvider } from "../../llm/fallback-provider";
 import { LLMProvider, LLMResponse } from "../../llm/provider";
 
@@ -260,6 +260,157 @@ describe("FallbackProvider", () => {
       await fb.listModels();
       expect(p1.listModels).toHaveBeenCalledTimes(1);
       expect(p2.listModels).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("circuit breaker", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("opens circuit after 3 consecutive failures, skipping provider on 4th call", async () => {
+      const p1 = createMockProvider("openai", {
+        generate: vi.fn().mockRejectedValue(new Error("fail")),
+      });
+      const p2 = createMockProvider("anthropic");
+      const fb = new FallbackProvider([p1, p2]);
+
+      // Fail 3 times to trip the circuit
+      for (let i = 0; i < 3; i++) {
+        await fb.generate({ prompt: "test" });
+      }
+      expect(p1.generate).toHaveBeenCalledTimes(3);
+
+      // 4th call: p1 should be skipped (circuit open), goes straight to p2
+      (p1.generate as ReturnType<typeof vi.fn>).mockClear();
+      (p2.generate as ReturnType<typeof vi.fn>).mockClear();
+      const result = await fb.generate({ prompt: "test" });
+      expect(p1.generate).not.toHaveBeenCalled();
+      expect(p2.generate).toHaveBeenCalledTimes(1);
+      expect(result.content).toBe("response from anthropic");
+    });
+
+    it("transitions to half-open after reset timer expires, allowing one probe", async () => {
+      const p1 = createMockProvider("openai", {
+        generate: vi.fn().mockRejectedValue(new Error("fail")),
+      });
+      const p2 = createMockProvider("anthropic");
+      const fb = new FallbackProvider([p1, p2]);
+
+      // Trip the circuit
+      for (let i = 0; i < 3; i++) {
+        await fb.generate({ prompt: "test" });
+      }
+
+      // Advance past the 60s reset window
+      vi.advanceTimersByTime(61_000);
+
+      // Now p1 should get a half-open probe attempt
+      (p1.generate as ReturnType<typeof vi.fn>).mockClear();
+      (p1.generate as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("still failing"));
+      await fb.generate({ prompt: "test" });
+      expect(p1.generate).toHaveBeenCalledTimes(1); // probe was allowed
+    });
+
+    it("resets to closed on success during half-open probe", async () => {
+      let failCount = 0;
+      const p1 = createMockProvider("openai", {
+        generate: vi.fn(async () => {
+          failCount++;
+          if (failCount <= 3) throw new Error("fail");
+          return { content: "recovered" };
+        }),
+      });
+      const p2 = createMockProvider("anthropic");
+      const fb = new FallbackProvider([p1, p2]);
+
+      // Trip the circuit with 3 failures
+      for (let i = 0; i < 3; i++) {
+        await fb.generate({ prompt: "test" });
+      }
+
+      // Advance past reset
+      vi.advanceTimersByTime(61_000);
+
+      // Half-open probe succeeds (failCount is now 4, which won't throw)
+      const result = await fb.generate({ prompt: "test" });
+      expect(result.content).toBe("recovered");
+
+      // Circuit should be closed — next call goes to p1 again
+      const result2 = await fb.generate({ prompt: "test" });
+      expect(result2.content).toBe("recovered");
+    });
+
+    it("re-opens circuit on failure during half-open probe", async () => {
+      const p1 = createMockProvider("openai", {
+        generate: vi.fn().mockRejectedValue(new Error("fail")),
+      });
+      const p2 = createMockProvider("anthropic");
+      const fb = new FallbackProvider([p1, p2]);
+
+      // Trip the circuit
+      for (let i = 0; i < 3; i++) {
+        await fb.generate({ prompt: "test" });
+      }
+
+      // Advance past reset → half-open
+      vi.advanceTimersByTime(61_000);
+
+      // Half-open probe fails → circuit re-opens
+      (p1.generate as ReturnType<typeof vi.fn>).mockClear();
+      (p2.generate as ReturnType<typeof vi.fn>).mockClear();
+      await fb.generate({ prompt: "test" });
+      expect(p1.generate).toHaveBeenCalledTimes(1); // probe attempted
+
+      // Next call: p1 should be skipped again (re-opened)
+      (p1.generate as ReturnType<typeof vi.fn>).mockClear();
+      (p2.generate as ReturnType<typeof vi.fn>).mockClear();
+      await fb.generate({ prompt: "test" });
+      expect(p1.generate).not.toHaveBeenCalled();
+      expect(p2.generate).toHaveBeenCalledTimes(1);
+    });
+
+    it("tracks circuit state independently per provider", async () => {
+      const p1 = createMockProvider("openai", {
+        generate: vi.fn().mockRejectedValue(new Error("fail")),
+      });
+      const p2 = createMockProvider("anthropic"); // always succeeds
+      const p3 = createMockProvider("ollama");
+      const fb = new FallbackProvider([p1, p2, p3]);
+
+      // Trip p1's circuit (p2 always succeeds so it handles all requests)
+      for (let i = 0; i < 3; i++) {
+        await fb.generate({ prompt: "test" });
+      }
+
+      // p1 circuit is open, p2 circuit is closed
+      (p1.generate as ReturnType<typeof vi.fn>).mockClear();
+      (p2.generate as ReturnType<typeof vi.fn>).mockClear();
+      const result = await fb.generate({ prompt: "test" });
+      expect(p1.generate).not.toHaveBeenCalled(); // skipped (open)
+      expect(p2.generate).toHaveBeenCalledTimes(1); // used (closed)
+      expect(result.content).toBe("response from anthropic");
+    });
+
+    it("does not open circuit before reaching failure threshold", async () => {
+      const p1 = createMockProvider("openai", {
+        generate: vi.fn().mockRejectedValue(new Error("fail")),
+      });
+      const p2 = createMockProvider("anthropic");
+      const fb = new FallbackProvider([p1, p2]);
+
+      // Only 2 failures — below threshold of 3
+      await fb.generate({ prompt: "test" });
+      await fb.generate({ prompt: "test" });
+
+      // p1 should still be attempted (circuit not yet open)
+      (p1.generate as ReturnType<typeof vi.fn>).mockClear();
+      await fb.generate({ prompt: "test" });
+      expect(p1.generate).toHaveBeenCalledTimes(1);
     });
   });
 });

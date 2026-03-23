@@ -25,6 +25,59 @@ context:
     - **Microservices**: Multiple application services + message broker (RabbitMQ/Kafka) + API gateway
     - **Development**: Hot-reload volumes, debug ports, seed/migration containers
     - **Monitoring stack**: Prometheus + Grafana + exporters
+
+    EXAMPLE — Node.js app with PostgreSQL and Redis:
+    services:
+      app:
+        build:
+          context: .
+          dockerfile: Dockerfile
+        ports:
+          - "3000:3000"
+        environment:
+          DATABASE_URL: postgresql://app:secret@db:5432/appdb
+          REDIS_URL: redis://cache:6379
+        depends_on:
+          db:
+            condition: service_healthy
+          cache:
+            condition: service_healthy
+        restart: unless-stopped
+        healthcheck:
+          test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+
+      db:
+        image: postgres:16-alpine
+        volumes:
+          - pgdata:/var/lib/postgresql/data
+        environment:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: appdb
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U app"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+        restart: unless-stopped
+
+      cache:
+        image: redis:7-alpine
+        volumes:
+          - redisdata:/data
+        healthcheck:
+          test: ["CMD", "redis-cli", "ping"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+        restart: unless-stopped
+
+    volumes:
+      pgdata:
+      redisdata:
   bestPractices:
     - Use named volumes for persistent data
     - Define health checks for all services

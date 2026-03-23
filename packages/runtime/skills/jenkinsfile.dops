@@ -33,6 +33,13 @@ context:
     Always output a JSON object with "files" key. Each value must be valid Groovy/Jenkinsfile content.
     Do NOT output raw Groovy — use the JSON wrapper for all output modes.
 
+    Example — Node.js project with build, test, and deploy stages:
+    {
+      "files": {
+        "Jenkinsfile": "pipeline {\n  agent any\n  tools {\n    nodejs 'node-20'\n  }\n  environment {\n    REGISTRY = credentials('docker-registry-url')\n    IMAGE    = \"${REGISTRY}/myapp\"\n  }\n  options {\n    buildDiscarder(logRotator(numToKeepStr: '10'))\n    timestamps()\n    timeout(time: 30, unit: 'MINUTES')\n  }\n  stages {\n    stage('Install') {\n      steps {\n        sh 'npm ci'\n      }\n    }\n    stage('Lint & Test') {\n      parallel {\n        stage('Lint') {\n          steps { sh 'npm run lint' }\n        }\n        stage('Test') {\n          steps { sh 'npm test' }\n        }\n      }\n    }\n    stage('Build') {\n      steps {\n        sh 'npm run build'\n      }\n    }\n    stage('Deploy') {\n      when { branch 'main' }\n      steps {\n        sh \"docker build -t ${IMAGE}:${BUILD_NUMBER} .\"\n        sh \"docker push ${IMAGE}:${BUILD_NUMBER}\"\n      }\n    }\n  }\n  post {\n    always {\n      cleanWs()\n    }\n    failure {\n      mail to: 'team@example.com', subject: \"Build failed: ${currentBuild.fullDisplayName}\"\n    }\n  }\n}\n"
+      }
+    }
+
     CRITICAL OUTPUT RULES:
     - Always output a JSON object with "files" key.
     - FLAT structure: Jenkinsfile at root, shared libraries in vars/ and src/ — NEVER wrap in jenkins/ or pipeline/ subfolder.

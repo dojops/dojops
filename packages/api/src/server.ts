@@ -11,6 +11,8 @@ import {
   createDebugger,
   createDiffAnalyzer,
 } from "./factory";
+import type { LLMProvider } from "@dojops/core";
+import { FallbackProvider } from "@dojops/core";
 
 function loadServerApiKey(): string | undefined {
   const envKey = process.env.DOJOPS_API_KEY;
@@ -25,7 +27,28 @@ function loadServerApiKey(): string | undefined {
   }
 }
 
-const provider = createProvider();
+let provider: LLMProvider = createProvider();
+
+// Wire fallback provider chain if DOJOPS_FALLBACK_PROVIDER is set
+const fallbackSpec = process.env.DOJOPS_FALLBACK_PROVIDER;
+if (fallbackSpec) {
+  const fallbackNames = fallbackSpec
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const chain: LLMProvider[] = [provider];
+  for (const name of fallbackNames) {
+    try {
+      chain.push(createProvider({ provider: name, model: "" }));
+    } catch {
+      // Skip misconfigured fallback providers
+    }
+  }
+  if (chain.length > 1) {
+    provider = new FallbackProvider(chain);
+  }
+}
+
 const tools = createTools(provider);
 const { router, customAgentNames } = createRouter(provider);
 const debugger_ = createDebugger(provider);

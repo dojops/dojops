@@ -1,7 +1,7 @@
 {
   "name": "dojops",
   "private": true,
-  "description": "DojOps — AI DevOps Automation Engine",
+  "description": "DojOps - AI Automation Engine",
   "license": "MIT",
   "repository": {
     "type": "git",

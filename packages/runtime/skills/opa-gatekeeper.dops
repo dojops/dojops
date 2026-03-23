@@ -1,0 +1,167 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: opa-gatekeeper
+  version: 2.2.0
+  description: "Generate OPA Gatekeeper constraint templates, constraints, and configs for Kubernetes admission control"
+  author: dojops
+  license: MIT
+  tags: [opa, gatekeeper, policy, kubernetes, admission]
+
+context:
+  technology: OPA/Gatekeeper
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid OPA Gatekeeper YAML manifests for Kubernetes admission control.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    Use multi-document YAML (--- separator) when generating multiple resources.
+    The output must be valid kubectl-compatible YAML for Gatekeeper CRDs.
+
+    Generate appropriate Gatekeeper resources based on the request:
+    - **ConstraintTemplate**: Rego policy logic with CRD parameters schema
+    - **Constraint**: Instantiation of a template with specific parameters and match criteria
+    - **Config**: Gatekeeper sync config for replicating resources into OPA cache
+    - **Assign/AssignMetadata**: Mutation policies for defaulting values
+    - **Provider**: External data provider configuration
+
+    Structure ConstraintTemplate with:
+    - apiVersion: templates.gatekeeper.sh/v1
+    - kind: ConstraintTemplate
+    - metadata.name: lowercase template name
+    - spec.crd: OpenAPI v3 schema for parameters
+    - spec.targets[].rego: Rego policy code with violation[msg] rule
+
+    Structure Constraint with:
+    - apiVersion: constraints.gatekeeper.sh/v1beta1
+    - kind: matching ConstraintTemplate name
+    - spec.match: kinds, namespaces, excludedNamespaces, labelSelector
+    - spec.parameters: values matching template CRD schema
+    - spec.enforcementAction: deny (default), dryrun, or warn
+
+    Example output:
+    ---
+    apiVersion: templates.gatekeeper.sh/v1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredlabels
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredLabels
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                labels:
+                  type: array
+                  items:
+                    type: string
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredlabels
+
+            violation[{"msg": msg}] {
+              provided := {l | input.review.object.metadata.labels[l]}
+              required := {l | l := input.parameters.labels[_]}
+              missing := required - provided
+              count(missing) > 0
+              msg := sprintf("Missing required labels: %v on %v/%v", [missing, input.review.object.kind, input.review.object.metadata.name])
+            }
+    ---
+    apiVersion: constraints.gatekeeper.sh/v1beta1
+    kind: K8sRequiredLabels
+    metadata:
+      name: all-must-have-owner
+    spec:
+      enforcementAction: deny
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Namespace"]
+        excludedNamespaces:
+          - kube-system
+          - gatekeeper-system
+      parameters:
+        labels:
+          - owner
+          - team
+  bestPractices:
+    - Write ConstraintTemplates with clear violation messages that include the resource name
+    - Use dryrun enforcementAction during rollout to audit before enforcing
+    - Define parameter schemas in ConstraintTemplate CRD spec for type-safe constraint configs
+    - Match constraints to specific resource kinds and namespaces to limit blast radius
+    - Use excludedNamespaces to skip system namespaces (kube-system, gatekeeper-system)
+    - Keep Rego policies simple and testable — one concern per ConstraintTemplate
+    - Configure Config sync for resources your policies need to reference (e.g., Namespaces, Ingresses)
+    - Use labels and annotations in Constraints for grouping and documentation
+    - Test Rego policies with conftest or OPA unit tests before deploying
+    - Provide meaningful violation messages with resource name and namespace interpolation
+    - Use AssignMetadata for defaulting labels and annotations instead of writing Rego
+    - Version ConstraintTemplates to allow gradual migration
+  context7Libraries:
+    - name: opa-gatekeeper
+      query: "OPA Gatekeeper ConstraintTemplate Constraint Rego violation policy, admission control enforcementAction dryrun match kinds parameters, Config sync AssignMetadata"
+
+files:
+  - path: "{outputPath}/gatekeeper.yaml"
+    format: raw
+
+detection:
+  paths: ["**/gatekeeper/*.yaml", "**/gatekeeper/*.yml", "constraint*.yaml", "**/policies/*.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "kind"
+      required: true
+      message: "Gatekeeper manifest must have a kind (ConstraintTemplate, Constraint, Config, etc.)"
+    - path: "apiVersion"
+      required: true
+      message: "Gatekeeper manifest must have an apiVersion (templates.gatekeeper.sh or constraints.gatekeeper.sh)"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml", "**/gatekeeper/**/*.yaml", "**/policies/**/*.yaml"]
+
+risk:
+  level: MEDIUM
+  rationale: "Gatekeeper policies control Kubernetes admission and can block deployments"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# OPA Gatekeeper
+
+## Prompt
+
+You are an OPA Gatekeeper and Rego policy expert. Generate production-ready Gatekeeper constraint templates, constraints, and configs for Kubernetes admission control.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+opa, gatekeeper, rego, constraint, template, admission, policy,
+kubernetes, k8s, violation, deny, dryrun, warn, enforce,
+constrainttemplate, config, sync, mutation, assign

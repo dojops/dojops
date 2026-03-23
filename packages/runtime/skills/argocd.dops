@@ -37,6 +37,61 @@ context:
     - Cluster generator (multi-cluster)
     - Matrix/Merge generators (combinations)
     - List generator (explicit environments)
+
+    Example — Application with automated sync and an ApplicationSet with git generator:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: myapp-dev
+      namespace: argocd
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/org/myapp.git
+        targetRevision: main
+        path: deploy/overlays/dev
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: myapp-dev
+      syncPolicy:
+        automated:
+          selfHeal: true
+          prune: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            maxDuration: 3m
+            factor: 2
+    ---
+    apiVersion: argoproj.io/v1alpha1
+    kind: ApplicationSet
+    metadata:
+      name: myapp-envs
+      namespace: argocd
+    spec:
+      generators:
+        - git:
+            repoURL: https://github.com/org/myapp.git
+            revision: main
+            directories:
+              - path: deploy/overlays/*
+      template:
+        metadata:
+          name: 'myapp-{{path.basename}}'
+        spec:
+          project: default
+          source:
+            repoURL: https://github.com/org/myapp.git
+            targetRevision: main
+            path: '{{path}}'
+          destination:
+            server: https://kubernetes.default.svc
+            namespace: 'myapp-{{path.basename}}'
   bestPractices:
     - Use the app-of-apps pattern for managing multiple applications
     - Enable automated sync with self-heal and prune for GitOps workflows

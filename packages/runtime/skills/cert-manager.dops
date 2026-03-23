@@ -1,0 +1,146 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: cert-manager
+  version: 2.2.0
+  description: "Generate cert-manager Issuers, Certificates, and ACME configurations"
+  author: dojops
+  license: MIT
+  tags: [cert-manager, tls, certificates, kubernetes, letsencrypt]
+
+context:
+  technology: cert-manager
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid cert-manager custom resource YAML manifests.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    Use multi-document YAML (--- separator) when generating multiple resources.
+    The output must be valid kubectl-compatible YAML for cert-manager CRDs.
+
+    Generate appropriate cert-manager resources based on the request:
+    - **Issuer**: Namespace-scoped certificate issuer (ACME, CA, SelfSigned, Vault)
+    - **ClusterIssuer**: Cluster-wide certificate issuer
+    - **Certificate**: TLS certificate request with secretName, dnsNames, duration
+    - **CertificateRequest**: Low-level CSR (rarely used directly)
+
+    For ACME (Let's Encrypt) issuers, configure:
+    - server: production (acme-v02) or staging (acme-staging-v02) endpoint
+    - privateKeySecretRef: Secret storing the ACME account key
+    - solvers: HTTP01 (ingress class) or DNS01 (Route53, CloudDNS, Cloudflare, etc.)
+
+    Structure each resource with:
+    - apiVersion: cert-manager.io/v1
+    - kind: Issuer, ClusterIssuer, or Certificate
+    - metadata: name, namespace, labels
+    - spec: Issuer-specific or certificate-specific configuration
+
+    Example output:
+    ---
+    apiVersion: cert-manager.io/v1
+    kind: ClusterIssuer
+    metadata:
+      name: letsencrypt-prod
+    spec:
+      acme:
+        server: https://acme-v02.api.letsencrypt.org/directory
+        email: ops@example.com
+        privateKeySecretRef:
+          name: letsencrypt-prod-account-key
+        solvers:
+          - http01:
+              ingress:
+                ingressClassName: nginx
+    ---
+    apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: app-tls
+      namespace: default
+    spec:
+      secretName: app-tls-secret
+      issuerRef:
+        name: letsencrypt-prod
+        kind: ClusterIssuer
+      dnsNames:
+        - app.example.com
+        - api.example.com
+      duration: 2160h
+      renewBefore: 720h
+  bestPractices:
+    - Use ClusterIssuer for shared TLS across namespaces, Issuer for namespace isolation
+    - Start with Let's Encrypt staging to validate configuration before switching to production
+    - Use DNS01 challenge solver for wildcard certificates
+    - Configure Certificate renewBefore to allow buffer time (default 30 days before expiry)
+    - Set certificate duration appropriate to use case (90d for web, 8760h for internal CA)
+    - Store ACME account keys in a dedicated Secret referenced by privateKeySecretRef
+    - Use cert-manager annotations on Ingress for automatic certificate provisioning
+    - Configure multiple solvers with selector matching for different domains
+    - Use SelfSigned issuer only for bootstrapping internal CA chains, not production
+    - Set revisionHistoryLimit on Certificates to manage old CertificateRequest resources
+    - Use Vault issuer for internal PKI with HashiCorp Vault as the CA backend
+    - Monitor certificate expiry with Prometheus metrics (certmanager_certificate_expiration_timestamp_seconds)
+  context7Libraries:
+    - name: cert-manager
+      query: "cert-manager Issuer ClusterIssuer Certificate ACME Let's Encrypt, HTTP01 DNS01 solvers, renewBefore duration secretName dnsNames, Vault CA SelfSigned"
+
+files:
+  - path: "{outputPath}/cert-manager.yaml"
+    format: raw
+
+detection:
+  paths: ["**/cert-manager/*.yaml", "**/cert-manager/*.yml", "issuer.yaml", "clusterissuer.yaml", "certificate.yaml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "kind"
+      required: true
+      message: "cert-manager manifest must have a kind (Issuer, ClusterIssuer, or Certificate)"
+    - path: "apiVersion"
+      required: true
+      message: "cert-manager manifest must have apiVersion: cert-manager.io/v1"
+
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ["**/*.yaml", "**/*.yml", "**/cert-manager/**/*.yaml", "**/cert-manager/**/*.yml"]
+
+risk:
+  level: LOW
+  rationale: "cert-manager configs define certificate requests without direct cluster state changes"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# cert-manager
+
+## Prompt
+
+You are a cert-manager and TLS expert. Generate production-ready cert-manager Issuers, ClusterIssuers, and Certificate resources for Kubernetes.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+cert-manager, certificate, issuer, clusterissuer, letsencrypt, acme, tls,
+http01, dns01, solver, wildcard, renewal, secret, ingress,
+vault, ca, selfsigned, pki, x509, expiry

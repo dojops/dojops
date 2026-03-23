@@ -193,7 +193,9 @@ function mapToOpenAIToolMessages(
   for (const m of messages) {
     if (m.role === "system") continue; // Already added above
     if (m.role === "tool") {
-      result.push({ role: "tool", tool_call_id: m.callId, content: m.content });
+      // OpenAI API has no isError field — prefix error content so the LLM recognizes failures
+      const content = m.isError ? `[TOOL ERROR] ${m.content}` : m.content;
+      result.push({ role: "tool", tool_call_id: m.callId, content });
     } else if (m.role === "assistant" && m.toolCalls?.length) {
       result.push({
         role: "assistant",

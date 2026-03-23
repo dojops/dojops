@@ -1,6 +1,6 @@
 # @dojops/runtime
 
-18 built-in DevOps tools for [DojOps](https://github.com/dojops/dojops) — AI DevOps Automation Engine.
+18 built-in DevOps tools for [DojOps](https://github.com/dojops/dojops) — AI Automation Engine.
 
 ## Built-in Tools
 

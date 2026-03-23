@@ -26,13 +26,13 @@ The serve command:
 
 The dashboard has 5 tabs organized in a sidebar:
 
-| Tab      | Category   | Auto-Refresh | Description                                                 |
-| -------- | ---------- | ------------ | ----------------------------------------------------------- |
-| Overview | Metrics    | 30s          | Plan/execution/scan aggregates and activity timeline        |
-| Security | Metrics    | 30s          | Scan findings, severity trends, category breakdown          |
-| Audit    | Metrics    | 30s          | Hash chain integrity, command distribution, timeline        |
-| Agents   | Operations | --           | Browse and search all specialist agents (built-in + custom) |
-| History  | Operations | --           | Execution history with type filtering                       |
+| Tab      | Category   | Auto-Refresh | Description                                                    |
+| -------- | ---------- | ------------ | -------------------------------------------------------------- |
+| Overview | Metrics    | 30s          | Plan/execution/scan aggregates and activity timeline           |
+| Security | Metrics    | 30s          | Scan findings, severity trends, category breakdown             |
+| Audit    | Metrics    | 30s          | Hash chain integrity, command distribution, timeline           |
+| Agents   | Operations | --           | Browse and search all 32 specialist agents (built-in + custom) |
+| History  | Operations | --           | Execution history with type filtering                          |
 
 A visual divider separates the metrics tabs (Overview, Security, Audit) from the operational tabs (Agents, History).
 

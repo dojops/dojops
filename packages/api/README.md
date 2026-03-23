@@ -1,6 +1,6 @@
 # @dojops/api
 
-REST API server and web dashboard for [DojOps](https://github.com/dojops/dojops) — AI DevOps Automation Engine.
+REST API server and web dashboard for [DojOps](https://github.com/dojops/dojops) — AI Automation Engine.
 
 Exposes all DojOps capabilities over HTTP with a built-in web dashboard for monitoring and interaction.
 

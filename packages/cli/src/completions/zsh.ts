@@ -32,7 +32,7 @@ _dojops() {
     'modules:Manage skills (deprecated alias)'
     'toolchain:Manage system toolchain'
     'scan:Security scan'
-    'chat:Interactive AI DevOps session'
+    'chat:Interactive AI session'
     'check:LLM-powered config quality check'
     'verify:Verify a configuration file'
     'provider:Manage LLM providers'

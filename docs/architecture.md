@@ -1,6 +1,6 @@
 # Architecture
 
-DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 18 built-in DevOps skills, a custom skill system for extending with additional skills, 17 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
+DojOps is designed as a modular, layered DevOps agent system - not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 31 built-in DevOps skills, a custom skill system for extending with additional skills, 32 specialist agents, 7 LLM providers with tiered model routing, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 
@@ -13,13 +13,13 @@ User
 CLI (@clack/prompts TUI) / REST API (Express)
  |
  v
-Agent Router (17 specialist agents, keyword confidence scoring)
+Agent Router (32 specialist agents, keyword confidence scoring)
  |
  v
 Planner Engine (LLM -> TaskGraph -> topological execution)
  |
  v
-Skill Registry (18 built-in skills + custom skills, unified discovery)
+Skill Registry (31 built-in skills + custom skills, unified discovery)
  |
  v
 Skill SDK Layer (BaseSkill<T>, Zod validation)
@@ -43,11 +43,11 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
 @dojops/mcp            MCP (Model Context Protocol) client — server lifecycle, tool discovery, dispatcher
-@dojops/runtime        18 built-in DevOps skills as .dops v2 files (DopsRuntime)
+@dojops/runtime        31 built-in DevOps skills as .dops v2 files (DopsRuntime)
 @dojops/scanner        10 security scanners + remediation engine
 @dojops/session        Chat session management + autonomous agent loop (AgentLoop) + memory + context injection
 @dojops/context        Context7 documentation augmentation for v2 skills
-@dojops/core           LLM abstraction + 7 providers + 17 specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/core           LLM abstraction + 7 providers + 32 specialist agents + tiered model routing + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseSkill<T> abstract class with Zod validation + optional verify() + file-reader utilities
 ```
 
@@ -92,7 +92,7 @@ cli -> mcp -> core (optional, dynamic import)
 
 ### 1. LLM Layer (`@dojops/core`)
 
-Abstraction over six LLM providers with structured JSON output:
+Abstraction over seven LLM providers with structured JSON output and tiered model routing:
 
 | Provider       | JSON Mode Mechanism                                     | SDK                 |
 | -------------- | ------------------------------------------------------- | ------------------- |
@@ -100,8 +100,23 @@ Abstraction over six LLM providers with structured JSON output:
 | Anthropic      | JSON prefill technique                                  | `@anthropic-ai/sdk` |
 | Ollama         | `format: "json"`                                        | `ollama`            |
 | DeepSeek       | OpenAI-compatible API with custom `baseURL`             | `openai`            |
+| Mistral        | OpenAI-compatible API with custom `baseURL`             | `openai`            |
 | Gemini         | `responseMimeType: "application/json"`                  | `@google/genai`     |
 | GitHub Copilot | OpenAI-compatible API with Copilot `baseURL` + JWT auth | `openai`            |
+
+**Tiered model routing** (`ModelRouter`) automatically selects the right model size based on task complexity:
+
+| Provider       | Fast tier        | Standard tier     | Premium tier      |
+| -------------- | ---------------- | ----------------- | ----------------- |
+| OpenAI         | gpt-4o-mini      | gpt-4o            | o1                |
+| Anthropic      | claude-haiku-4-5 | claude-sonnet-4-6 | claude-opus-4-6   |
+| Ollama (local) | llama3.2:3b      | llama3.1:8b       | llama3.1:70b      |
+| DeepSeek       | deepseek-chat    | deepseek-chat     | deepseek-reasoner |
+| Mistral        | mistral-small    | mistral-medium    | mistral-large     |
+| Gemini         | gemini-2.0-flash | gemini-2.5-pro    | gemini-2.5-pro    |
+| GitHub Copilot | gpt-4o-mini      | gpt-4o            | o1                |
+
+Simple prompts (makefiles, basic configs) use the fast tier. Complex prompts (multi-service architectures, security hardening) use the premium tier. Agent routing always uses the fast tier to keep costs low.
 
 Key interface:
 
@@ -120,15 +135,17 @@ All responses pass through `parseAndValidate()` — strips markdown fences, `JSO
 
 ### 2. Multi-Agent System (`@dojops/core`)
 
-17 built-in specialist agents with keyword-based routing and confidence scoring, plus support for custom agents. The `AgentRouter` scores prompts against each agent's keyword list and routes to the highest-confidence match. If no agent exceeds the threshold, it falls back to the general-purpose `DevOpsAgent`.
+32 built-in specialist agents with keyword-based routing and confidence scoring, plus support for custom agents. The `AgentRouter` scores prompts against each agent's keyword list and routes to the highest-confidence match. If no agent exceeds the threshold, it falls back to the general-purpose `DevOpsAgent`.
 
 Custom agents are defined as structured `README.md` files in `.dojops/agents/<name>/` (project) or `~/.dojops/agents/<name>/` (global). They can be created via LLM (`dojops agents create "description"`) or manually (`dojops agents create --manual`). Custom agents participate in the same keyword-based routing as built-in agents and can override built-in agents by name. Discovery is handled by `@dojops/skill-registry`.
 
 Additionally, three specialized analyzers (not routed via `AgentRouter`) provide structured analysis:
 
-- **`CIDebugger`** — CI log diagnosis producing `CIDiagnosis` (error type, root cause, fixes)
-- **`InfraDiffAnalyzer`** — Infrastructure diff analysis producing `InfraDiffAnalysis` (risk, cost, security)
-- **`DevOpsChecker`** — DevOps config quality analysis producing `CheckReport` (score 0-100, findings, missing files)
+- **`CIDebugger`** - CI log diagnosis producing `CIDiagnosis` (error type, root cause, fixes)
+- **`InfraDiffAnalyzer`** - Infrastructure diff analysis producing `InfraDiffAnalysis` (risk, cost, security) with heuristic risk scoring via `DiffRiskClassifier`
+- **`DevOpsChecker`** - DevOps config quality analysis producing `CheckReport` (score 0-100, findings, missing files)
+
+**Diff risk classification** (`DiffRiskClassifier` in `@dojops/api`) scores changes heuristically based on file paths and content patterns. Critical paths (Dockerfile, Terraform state, secrets, IAM) receive higher risk scores. The classifier suggests reviewers and produces a risk summary for each change set.
 
 See [Specialist Agents](agents.md) for the full agent list.
 
@@ -179,13 +196,13 @@ The DOPS runtime processes `.dops v2` skill files — a declarative format combi
 
 ### 5. DevOps Skills (`@dojops/runtime`)
 
-18 built-in skills covering CI/CD, IaC, containers, monitoring, and system services. All 18 are `.dops v2` skills in `packages/runtime/skills/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All skills support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
+31 built-in skills covering CI/CD, IaC, containers, monitoring, security, service mesh, cloud, and system services. All 31 are `.dops v2` skills in `packages/runtime/skills/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All skills support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
 
 See [DevOps Skills](skills.md) for the full skill list.
 
 ### 5b. Skill Registry (`@dojops/skill-registry`)
 
-Unified registry layer between consumers (Planner, Executor, CLI, API) and skill implementations. Combines all 18 built-in skills with custom skills discovered from disk:
+Unified registry layer between consumers (Planner, Executor, CLI, API) and skill implementations. Combines all 31 built-in skills with custom skills discovered from disk:
 
 - **`.dops` skill discovery** — Discovers `.dops v2` skills from `~/.dojops/skills/` (global) and `.dojops/skills/` (project)
 - **Skill validation** — Zod schema validates `.dops` frontmatter
@@ -203,7 +220,7 @@ See [Execution Engine](execution-engine.md) for details.
 
 ### 7. Security Scanner (`@dojops/scanner`)
 
-10 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom, trivy-license, semgrep) with LLM-powered remediation, scan comparison (`--compare`), and license compliance checking.
+10 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom, trivy-license, semgrep) with LLM-powered auto-remediation pipeline, scan comparison (`--compare`), and license compliance checking. The `RemediationEngine` generates confidence-scored fix suggestions for HIGH/CRITICAL findings and can auto-apply safe fixes.
 
 See [Security Scanning](security-scanning.md) for details.
 
@@ -255,7 +272,7 @@ The MCP (Model Context Protocol) package enables the autonomous agent to call to
 
 ### 8d. Streaming Output
 
-All 6 LLM providers support `generateStream()` for real-time token streaming. The `LLMProvider` interface includes an optional `generateStream?(request, onChunk)` method:
+All 7 LLM providers support `generateStream()` for real-time token streaming. The `LLMProvider` interface includes an optional `generateStream?(request, onChunk)` method:
 
 | Provider       | Streaming Mechanism                                          |
 | -------------- | ------------------------------------------------------------ |

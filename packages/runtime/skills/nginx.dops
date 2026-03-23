@@ -25,6 +25,63 @@ context:
     - **SSL/TLS termination**: listen 443 ssl, certificate paths, modern TLS protocols, HSTS
     - **API gateway**: Multiple location blocks, rate limiting, CORS headers, WebSocket upgrade
     - **WebSocket proxy**: proxy_http_version 1.1, Upgrade/Connection headers, map directive
+
+    EXAMPLE — Reverse proxy with SSL:
+    worker_processes auto;
+    events {
+        worker_connections 1024;
+    }
+    http {
+        upstream backend {
+            server 127.0.0.1:3000;
+        }
+        server {
+            listen 80;
+            server_name example.com;
+            return 301 https://$host$request_uri;
+        }
+        server {
+            listen 443 ssl http2;
+            server_name example.com;
+            ssl_certificate /etc/ssl/certs/example.com.pem;
+            ssl_certificate_key /etc/ssl/private/example.com.key;
+            ssl_protocols TLSv1.2 TLSv1.3;
+            add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+            add_header X-Frame-Options DENY always;
+            add_header X-Content-Type-Options nosniff always;
+            location / {
+                proxy_pass http://backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+        }
+    }
+
+    EXAMPLE — Static SPA with gzip:
+    worker_processes auto;
+    events {
+        worker_connections 1024;
+    }
+    http {
+        include /etc/nginx/mime.types;
+        gzip on;
+        gzip_types text/plain text/css application/json application/javascript text/xml;
+        server {
+            listen 80;
+            server_name _;
+            root /usr/share/nginx/html;
+            index index.html;
+            location / {
+                try_files $uri $uri/ /index.html;
+            }
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+            }
+        }
+    }
   bestPractices:
     - Enable gzip compression for text-based content types (text/plain, text/css, application/json, application/javascript)
     - Set worker_processes auto and worker_connections appropriate to expected load (1024+)

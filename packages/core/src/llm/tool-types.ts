@@ -33,6 +33,8 @@ export interface LLMToolRequest {
   tools: ToolDefinition[];
   temperature?: number;
   maxTokens?: number;
+  /** Reasoning effort level for providers that support extended thinking. */
+  thinking?: "none" | "low" | "medium" | "high";
 }
 
 /** Response from tool-calling generation. */
@@ -41,4 +43,6 @@ export interface LLMToolResponse {
   toolCalls: ToolCall[]; // Tool calls to execute (empty = done)
   stopReason: "end_turn" | "tool_use" | "max_tokens";
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  /** Reasoning trace from providers that support extended thinking (e.g. Anthropic). */
+  thinking?: string;
 }

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.9] - 2026-03-23
+
+### Added
+
+- **Skill trust boundary (5-layer defense)**: Custom skills from Hub or user directories are wrapped in a controlled envelope so they serve as supplementary guidance, not authoritative system overrides. Includes data isolation via XML boundaries, injection detection at load time, and SHA-256 sidecar verification for hub-installed skills
+- **Auto agent validation cheatsheet**: System prompt now includes exact validation commands for 14 CLI tools (docker, terraform, kubectl, helm, actionlint, etc.) built dynamically from discovered binaries, preventing hallucinated flags like `docker build --dry-run`
+- **`[TOOL NOT INSTALLED]` executor guard**: Tool executor detects exit code 127 (command not found) and returns a clear, non-retriable error message telling the agent to stop and use `run_skill` instead
+- **Auto agent premature-done prevention**: `validateBeforeDone` now rejects `done` calls when no files have been written to disk, and the agent loop nudges the LLM to use `write_file` after `run_skill`
+- **Auto agent efficiency rules**: System prompt blocks global package installs, `.env` writes, unlisted CLI tools, and python-based YAML validation to reduce token waste
+
+### Fixed
+
+- **Auto agent not writing files to disk**: `run_skill` returns generated content as text but the agent would call `done` without using `write_file`. Workflow now explicitly states `run_skill` does NOT create files and the validation gate catches zero-file completions
+- **`run_skill` validation failures**: Tool schema was opaque (`additionalProperties: true` with no listed properties). Now has explicit `prompt` (required), `existingContent`, and `outputPath` properties with descriptions
+- **OpenAI `is_error` gap**: OpenAI API has no `is_error` field on tool messages so error flags were silently dropped. Error tool results now prefixed with `[TOOL ERROR]` for OpenAI-compatible providers
+- **actionlint shellcheck dependency**: actionlint fails with cryptic JSON parse error when shellcheck is not installed. Fixed across all three usage paths: review-tool-map (`-shellcheck=`), github-actions.dops verification command, and auto agent cheatsheet
+- **Model routing default**: `DOJOPS_MODEL_ROUTING` changed from opt-in (`=== "true"`) to default-on (`!== "false"`) with NoopProvider guard
+
+### Changed
+
+- **Auto agent workflow rewritten**: Steps now emphasize: generate with `run_skill` → write to disk with `write_file` → repeat for all files → then `done`. Previously workflow was ambiguous about the write step
+- **Auto agent text-only nudge expanded**: When the LLM stops emitting tool calls without writing files, a targeted nudge message is injected explaining that `run_skill` output must be persisted with `write_file`
+- **Prompt compiler data boundaries**: Variable substitutions (`{context7Docs}`, `{projectContext}`, `{existingContent}`) now wrapped in `<data label="...">` XML tags so the LLM treats them as content, not instructions
+
 ## [1.1.8] - 2026-03-22
 
 ### Fixed

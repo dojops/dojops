@@ -41,10 +41,10 @@ packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
   skill-registry/   Skill registry + custom skill system (built-in + custom skill discovery)
-  core/             LLM providers (6) + specialist agents (16) + CI debugger + infra diff + DevOps checker
+  core/             LLM providers (7) + specialist agents (32) + tiered model routing + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
-  runtime/          18 built-in DevOps skills as .dops v2 files
+  runtime/          31 built-in DevOps skills as .dops v2 files
   scanner/          10 security scanners + remediation engine
   session/          Chat session management + memory + context injection
   sdk/              BaseSkill<T> abstract class + Zod re-export + verification types + file-reader utilities

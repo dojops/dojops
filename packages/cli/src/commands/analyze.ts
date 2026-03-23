@@ -1,11 +1,12 @@
 import * as fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createDiffAnalyzer } from "@dojops/api";
+import { createDiffAnalyzer, classifyDiffRisk } from "@dojops/api";
+import type { DiffRiskReport, FileRiskScore } from "@dojops/api";
 import { CLIContext } from "../types";
 import { formatConfidence, riskColor, changeColor, wrapForNote } from "../formatter";
 import { ExitCode, CLIError } from "../exit-codes";
-import { extractFlagValue } from "../parser";
+import { extractFlagValue, hasFlag } from "../parser";
 import { readStdin } from "../stdin";
 
 /** Known CLI flags that can appear in analyze diff args. */
@@ -16,6 +17,7 @@ const ANALYZE_FLAGS = new Set([
   "--debug",
   "--no-color",
   "--output",
+  "--risk",
 ]);
 
 /** Resolve diff content from --diff-file, stdin, or positional args. */
@@ -82,13 +84,97 @@ function formatAnalysis(analysis: {
   return lines;
 }
 
+// ── Risk classification display ───────────────────────────────────
+
+function riskLevelLabel(level: string): string {
+  switch (level) {
+    case "CRITICAL":
+      return pc.bold(pc.red(level));
+    case "HIGH":
+      return pc.red(level);
+    case "MEDIUM":
+      return pc.yellow(level);
+    case "LOW":
+      return pc.dim(level);
+    default:
+      return pc.dim(level);
+  }
+}
+
+function changeTypeLabel(changeType: FileRiskScore["changeType"]): string {
+  switch (changeType) {
+    case "added":
+      return pc.green("ADD");
+    case "modified":
+      return pc.yellow("MOD");
+    case "deleted":
+      return pc.red("DEL");
+    case "renamed":
+      return pc.blue("REN");
+  }
+}
+
+function formatRiskReport(report: DiffRiskReport): string[] {
+  const lines: string[] = [];
+
+  lines.push(`${pc.bold("Overall Risk:")} ${riskLevelLabel(report.overallRisk)}`);
+  lines.push(`${pc.bold("Summary:")}      ${report.summary}`);
+  lines.push("");
+
+  if (report.files.length > 0) {
+    lines.push(pc.bold("Files:"));
+    // Sort by risk: CRITICAL first
+    const sorted = [...report.files].sort((a, b) => {
+      const order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"];
+      return order.indexOf(a.risk) - order.indexOf(b.risk);
+    });
+
+    for (const file of sorted) {
+      const risk = riskLevelLabel(file.risk);
+      const change = changeTypeLabel(file.changeType);
+      const lineCount = pc.dim(`(${file.linesChanged} lines)`);
+      lines.push(`  ${risk}  ${change}  ${file.path} ${lineCount}`);
+      for (const reason of file.reasons) {
+        lines.push(`         ${pc.dim("-")} ${pc.dim(reason)}`);
+      }
+    }
+  }
+
+  if (report.suggestedReviewers.length > 0) {
+    lines.push("");
+    lines.push(pc.bold("Suggested reviewers:"));
+    for (const reviewer of report.suggestedReviewers) {
+      lines.push(`  ${pc.cyan("-")} ${reviewer}`);
+    }
+  }
+
+  return lines;
+}
+
+// ── Command handler ───────────────────────────────────────────────
+
 export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const riskMode = hasFlag(args, "--risk");
+
   const content = resolveDiffContent(args);
   if (!content?.trim()) {
     p.log.info(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
     p.log.info(`  ${pc.dim("$")} dojops analyze diff --diff-file <path>`);
     p.log.info(`  ${pc.dim("$")} cat diff.txt | dojops analyze diff`);
+    p.log.info(`  ${pc.dim("$")} dojops analyze diff --risk --diff-file <path>`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No diff content provided.");
+  }
+
+  if (riskMode) {
+    const report = classifyDiffRisk(content);
+
+    if (ctx.globalOpts.output === "json") {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+
+    p.note(wrapForNote(formatRiskReport(report).join("\n")), "Diff Risk Classification");
+    return;
   }
 
   const provider = ctx.getProvider();

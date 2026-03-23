@@ -35,6 +35,15 @@ context:
     - Use HCL2 syntax exclusively (NOT legacy JSON template format).
     - File extensions must be .pkr.hcl (NOT .tf or .json).
 
+    Example — Amazon EBS AMI build with shell provisioner:
+    {
+      "files": {
+        "main.pkr.hcl": "packer {\n  required_plugins {\n    amazon = {\n      source  = \"github.com/hashicorp/amazon\"\n      version = \"~> 1.3\"\n    }\n  }\n}\n\nbuild {\n  sources = [\"source.amazon-ebs.base\"]\n\n  provisioner \"shell\" {\n    inline = [\n      \"sudo apt-get update -y\",\n      \"sudo apt-get install -y nginx\",\n      \"sudo systemctl enable nginx\"\n    ]\n  }\n\n  post-processor \"manifest\" {\n    output = \"build-manifest.json\"\n  }\n}\n",
+        "variables.pkr.hcl": "variable \"aws_region\" {\n  type    = string\n  default = \"us-east-1\"\n}\n\nvariable \"instance_type\" {\n  type    = string\n  default = \"t3.micro\"\n}\n\nvariable \"ami_name_prefix\" {\n  type    = string\n  default = \"myapp\"\n}\n",
+        "source.pkr.hcl": "source \"amazon-ebs\" \"base\" {\n  ami_name      = \"${var.ami_name_prefix}-{{timestamp}}\"\n  instance_type = var.instance_type\n  region        = var.aws_region\n  source_ami_filter {\n    filters = {\n      name                = \"ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*\"\n      root-device-type    = \"ebs\"\n      virtualization-type = \"hvm\"\n    }\n    most_recent = true\n    owners      = [\"099720109477\"]\n  }\n  ssh_username = \"ubuntu\"\n  tags = {\n    Name      = \"${var.ami_name_prefix}-base\"\n    ManagedBy = \"packer\"\n  }\n}\n"
+      }
+    }
+
     PROVISIONER AND POST-PROCESSOR RULES:
     - Always declare every plugin used in a required_plugins block inside the packer {} block.
     - The ONLY provisioners you may use are: shell, shell-local, file, powershell, windows-shell, windows-restart, breakpoint.

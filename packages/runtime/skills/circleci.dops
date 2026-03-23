@@ -1,0 +1,174 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: circleci
+  version: 2.2.0
+  description: "Generate CircleCI pipeline configurations"
+  author: dojops
+  license: MIT
+  tags: [circleci, ci, cd, pipeline, workflow]
+
+context:
+  technology: CircleCI
+  fileFormat: yaml
+  outputGuidance: |
+    Generate a valid CircleCI configuration file.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid .circleci/config.yml that CircleCI can parse.
+    Always include version: 2.1 at the top.
+
+    Detect the project type from context and generate the appropriate config:
+    - **Node.js**: node orb or cimg/node image, npm ci, npm test, cache restore/save
+    - **Python**: python orb or cimg/python image, pip install, pytest
+    - **Java/Maven**: maven orb or cimg/openjdk image, mvn verify
+    - **Go**: go orb or cimg/go image, go test ./...
+    - **Docker**: setup_remote_docker, docker build/push
+    - **Multi-platform**: matrix jobs with parameters
+
+    EXAMPLE — Node.js CI with orbs and workflows:
+    version: 2.1
+
+    orbs:
+      node: circleci/node@5
+
+    jobs:
+      build-and-test:
+        docker:
+          - image: cimg/node:20.11
+        steps:
+          - checkout
+          - node/install-packages:
+              pkg-manager: npm
+          - run:
+              name: Run tests
+              command: npm test -- --coverage
+          - run:
+              name: Build
+              command: npm run build
+          - store_test_results:
+              path: test-results
+          - store_artifacts:
+              path: coverage
+          - persist_to_workspace:
+              root: .
+              paths:
+                - dist/
+
+      deploy:
+        docker:
+          - image: cimg/node:20.11
+        steps:
+          - attach_workspace:
+              at: .
+          - run:
+              name: Deploy to staging
+              command: echo "Deploying..."
+
+    workflows:
+      build-deploy:
+        jobs:
+          - build-and-test
+          - deploy:
+              requires:
+                - build-and-test
+              filters:
+                branches:
+                  only: main
+
+    EXAMPLE — Docker build with remote Docker:
+    version: 2.1
+
+    jobs:
+      docker-build:
+        docker:
+          - image: cimg/base:current
+        steps:
+          - checkout
+          - setup_remote_docker:
+              version: default
+          - run:
+              name: Build and push
+              command: |
+                docker build -t myapp:$CIRCLE_SHA1 .
+                echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                docker push myapp:$CIRCLE_SHA1
+
+    workflows:
+      main:
+        jobs:
+          - docker-build
+  bestPractices:
+    - Use version 2.1 to enable orbs, reusable commands, and parameters
+    - Use official CircleCI orbs for common tools (node, python, docker, aws-cli)
+    - Use cimg/* convenience images (cimg/node, cimg/python) for faster startup
+    - Cache dependencies with restore_cache/save_cache or orb caching
+    - Use workflows for parallel job execution and fan-in/fan-out patterns
+    - Use persist_to_workspace/attach_workspace to pass artifacts between jobs
+    - Use store_test_results for test summary in CircleCI UI
+    - Use filters on workflows to control which branches trigger jobs
+    - Use contexts for shared environment variables across projects
+    - Use setup_remote_docker for Docker-in-Docker builds
+    - Use resource_class to right-size job compute (small, medium, large, xlarge)
+    - Use parameters for reusable job configurations
+  context7Libraries:
+    - name: circleci
+      query: "CircleCI config.yml syntax version 2.1 orbs jobs workflows, caching restore_cache save_cache, persist_to_workspace, store_test_results, setup_remote_docker, resource_class, parameters, contexts, filters"
+
+files:
+  - path: ".circleci/config.yml"
+    format: raw
+
+detection:
+  paths: [".circleci/config.yml"]
+  updateMode: true
+
+verification:
+  binary:
+    command: "yamllint -d relaxed {entryFile}"
+    parser: generic-stderr
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: [".circleci/config.yml"]
+
+risk:
+  level: LOW
+  rationale: "CI/CD configuration changes require code review"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# CircleCI
+
+## Prompt
+
+You are a CircleCI expert specializing in pipeline configuration, orbs, workflows, and CI/CD optimization.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+circleci, circle, ci, cd, pipeline, workflow, orb, job,
+config, build, test, deploy, workspace, cache, artifacts

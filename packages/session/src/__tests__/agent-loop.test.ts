@@ -353,4 +353,263 @@ describe("AgentLoop", () => {
     expect(result.success).toBe(true);
     expect(result.summary).toBe("All done.");
   });
+
+  describe("escalating stall detection", () => {
+    /** Build N identical tool call responses followed by a done response. */
+    function repeatedCallResponses(count: number, name = "read_file", path = "same.ts") {
+      const repeated: Array<{
+        content: string;
+        toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+        stopReason: string;
+      }> = [];
+      for (let i = 0; i < count; i++) {
+        repeated.push({
+          content: "",
+          toolCalls: [{ id: `c${i}`, name, arguments: { path } }],
+          stopReason: "tool_use",
+        });
+      }
+      // Terminal done response (may or may not be reached)
+      repeated.push({
+        content: "",
+        toolCalls: [{ id: "done1", name: "done", arguments: { summary: "finished" } }],
+        stopReason: "tool_use",
+      });
+      return repeated;
+    }
+
+    it("injects nudge message at 3 consecutive identical calls", async () => {
+      // 3 identical + done = 4 responses
+      const responses = repeatedCallResponses(3);
+      const provider = mockProvider(responses);
+      const loop = new AgentLoop({
+        provider,
+        toolExecutor: mockToolExecutor(),
+        tools,
+        systemPrompt: "Test",
+        maxIterations: 10,
+      });
+
+      const result = await loop.run("Task");
+      expect(result.success).toBe(true);
+      // The provider should have been called 4 times (3 repeated + done after nudge)
+      expect(provider.generateWithTools).toHaveBeenCalledTimes(4);
+
+      // Verify the nudge was injected by checking the 4th call's messages
+      const fourthCallArgs = (provider.generateWithTools as ReturnType<typeof vi.fn>).mock
+        .calls[3][0];
+      const userMessages = fourthCallArgs.messages.filter(
+        (m: { role: string; content?: string }) =>
+          m.role === "user" && m.content?.includes("repeating the same action"),
+      );
+      expect(userMessages.length).toBeGreaterThan(0);
+    });
+
+    it("injects restrict message at 5 consecutive identical calls", async () => {
+      const responses = repeatedCallResponses(5);
+      const provider = mockProvider(responses);
+      const loop = new AgentLoop({
+        provider,
+        toolExecutor: mockToolExecutor(),
+        tools,
+        systemPrompt: "Test",
+        maxIterations: 10,
+      });
+
+      const result = await loop.run("Task");
+      expect(result.success).toBe(true);
+
+      // Check that a "Do NOT call" restrict message was injected
+      const allCalls = (provider.generateWithTools as ReturnType<typeof vi.fn>).mock.calls;
+      const lastCallMessages = allCalls[allCalls.length - 1][0].messages;
+      const restrictMessages = lastCallMessages.filter(
+        (m: { role: string; content?: string }) =>
+          m.role === "user" && m.content?.includes("Do NOT call"),
+      );
+      expect(restrictMessages.length).toBeGreaterThan(0);
+    });
+
+    it("terminates loop at 7 consecutive identical calls with success=false", async () => {
+      const responses = repeatedCallResponses(7);
+      const provider = mockProvider(responses);
+      const loop = new AgentLoop({
+        provider,
+        toolExecutor: mockToolExecutor(),
+        tools,
+        systemPrompt: "Test",
+        maxIterations: 20,
+      });
+
+      const result = await loop.run("Task");
+      expect(result.success).toBe(false);
+      expect(result.summary).toContain("Terminated");
+      expect(result.summary).toContain("stuck in loop");
+      expect(result.summary).toContain("read_file");
+    });
+
+    it("resets stale counter when different calls are interleaved", async () => {
+      // 2 identical + 1 different + 2 identical + done = no escalation beyond nudge
+      const provider = mockProvider([
+        {
+          content: "",
+          toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "a.ts" } }],
+          stopReason: "tool_use",
+        },
+        {
+          content: "",
+          toolCalls: [{ id: "c2", name: "read_file", arguments: { path: "a.ts" } }],
+          stopReason: "tool_use",
+        },
+        // Different call breaks the streak
+        {
+          content: "",
+          toolCalls: [{ id: "c3", name: "read_file", arguments: { path: "b.ts" } }],
+          stopReason: "tool_use",
+        },
+        {
+          content: "",
+          toolCalls: [{ id: "c4", name: "read_file", arguments: { path: "a.ts" } }],
+          stopReason: "tool_use",
+        },
+        {
+          content: "",
+          toolCalls: [{ id: "c5", name: "read_file", arguments: { path: "a.ts" } }],
+          stopReason: "tool_use",
+        },
+        {
+          content: "",
+          toolCalls: [{ id: "done1", name: "done", arguments: { summary: "ok" } }],
+          stopReason: "tool_use",
+        },
+      ]);
+
+      const loop = new AgentLoop({
+        provider,
+        toolExecutor: mockToolExecutor(),
+        tools,
+        systemPrompt: "Test",
+        maxIterations: 20,
+      });
+
+      const result = await loop.run("Task");
+      expect(result.success).toBe(true);
+      // Should NOT have been terminated — the interleaved different call reset the streak
+      expect(result.summary).toBe("ok");
+    });
+  });
+
+  describe("progressive summarization", () => {
+    it("does not summarize without summarizationProvider", async () => {
+      // Many iterations but no summarization provider — should just work normally
+      const provider = mockProvider([
+        {
+          content: "",
+          toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "a.ts" } }],
+          stopReason: "tool_use",
+          usage: { promptTokens: 50000, completionTokens: 50000, totalTokens: 100000 },
+        },
+        {
+          content: "",
+          toolCalls: [{ id: "c2", name: "done", arguments: { summary: "done" } }],
+          stopReason: "tool_use",
+        },
+      ]);
+
+      const loop = new AgentLoop({
+        provider,
+        toolExecutor: mockToolExecutor(),
+        tools,
+        systemPrompt: "Test",
+      });
+
+      const result = await loop.run("Task");
+      expect(result.success).toBe(true);
+    });
+
+    it("triggers summarization when token estimate exceeds 60% of budget", async () => {
+      const summarizationProvider: LLMProvider = {
+        name: "summarizer",
+        generate: vi.fn(async () => ({
+          content: "Summary: read file a.ts, executed command, succeeded.",
+        })),
+      };
+
+      // Build enough messages to exceed 60% of a small budget.
+      // With maxTotalTokens=1000, threshold=600 tokens. Each tool result adds chars.
+      // We need the provider to report enough usage to trigger the check.
+      const responses = [];
+      for (let i = 0; i < 8; i++) {
+        responses.push({
+          content: "x".repeat(400), // ~100 tokens worth of content per message
+          toolCalls: [{ id: `c${i}`, name: "read_file", arguments: { path: `file${i}.ts` } }],
+          stopReason: "tool_use" as const,
+          usage: { promptTokens: 50, completionTokens: 50, totalTokens: 100 },
+        });
+      }
+      responses.push({
+        content: "",
+        toolCalls: [{ id: "done1", name: "done", arguments: { summary: "complete" } }],
+        stopReason: "tool_use" as const,
+      });
+
+      const provider = mockProvider(responses);
+      const loop = new AgentLoop({
+        provider,
+        toolExecutor: mockToolExecutor(
+          new Map([["read_file", "x".repeat(500)]]), // large tool results to inflate context
+        ),
+        tools,
+        systemPrompt: "Test",
+        maxTotalTokens: 1000, // small budget so 60% threshold is easily exceeded
+        summarizationProvider,
+      });
+
+      const result = await loop.run("Task");
+      expect(result.success).toBe(true);
+      expect(summarizationProvider.generate).toHaveBeenCalled();
+    });
+
+    it("preserves initial user message after summarization", async () => {
+      const summarizationProvider: LLMProvider = {
+        name: "summarizer",
+        generate: vi.fn(async () => ({
+          content: "Summary of prior work.",
+        })),
+      };
+
+      const responses = [];
+      for (let i = 0; i < 8; i++) {
+        responses.push({
+          content: "x".repeat(400),
+          toolCalls: [{ id: `c${i}`, name: "read_file", arguments: { path: `f${i}.ts` } }],
+          stopReason: "tool_use" as const,
+          usage: { promptTokens: 50, completionTokens: 50, totalTokens: 100 },
+        });
+      }
+      responses.push({
+        content: "",
+        toolCalls: [{ id: "done1", name: "done", arguments: { summary: "all done" } }],
+        stopReason: "tool_use" as const,
+      });
+
+      const provider = mockProvider(responses);
+      const loop = new AgentLoop({
+        provider,
+        toolExecutor: mockToolExecutor(new Map([["read_file", "x".repeat(500)]])),
+        tools,
+        systemPrompt: "Test",
+        maxTotalTokens: 1000,
+        summarizationProvider,
+      });
+
+      await loop.run("My original task prompt");
+
+      // Verify the provider always sees the original user message first.
+      // Check the last call to generateWithTools — messages[0] should be the original prompt.
+      const allCalls = (provider.generateWithTools as ReturnType<typeof vi.fn>).mock.calls;
+      const lastCallMessages = allCalls[allCalls.length - 1][0].messages;
+      expect(lastCallMessages[0].role).toBe("user");
+      expect(lastCallMessages[0].content).toBe("My original task prompt");
+    });
+  });
 });

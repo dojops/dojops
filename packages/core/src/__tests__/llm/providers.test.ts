@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { z } from "zod";
 import { OpenAIProvider } from "../../llm/openai";
 import { AnthropicProvider } from "../../llm/anthropic";
@@ -480,6 +480,22 @@ describe("OllamaProvider", () => {
   // ---------------------------------------------------------------
 
   describe("request timeout", () => {
+    const savedOllamaTimeout = process.env.OLLAMA_TIMEOUT;
+    const savedRequestTimeout = process.env.DOJOPS_REQUEST_TIMEOUT;
+
+    beforeEach(() => {
+      delete process.env.OLLAMA_TIMEOUT;
+      delete process.env.DOJOPS_REQUEST_TIMEOUT;
+    });
+
+    afterEach(() => {
+      if (savedOllamaTimeout !== undefined) process.env.OLLAMA_TIMEOUT = savedOllamaTimeout;
+      else delete process.env.OLLAMA_TIMEOUT;
+      if (savedRequestTimeout !== undefined)
+        process.env.DOJOPS_REQUEST_TIMEOUT = savedRequestTimeout;
+      else delete process.env.DOJOPS_REQUEST_TIMEOUT;
+    });
+
     it("passes timeout config to axios.post for generate", async () => {
       const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
       expect(call[2]).toEqual({ timeout: 300_000 });
@@ -512,14 +528,12 @@ describe("OllamaProvider", () => {
       process.env.OLLAMA_TIMEOUT = "600";
       const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
       expect(call[2]).toEqual({ timeout: 600_000 });
-      delete process.env.OLLAMA_TIMEOUT;
     });
 
     it("respects DOJOPS_REQUEST_TIMEOUT env var as fallback", async () => {
       process.env.DOJOPS_REQUEST_TIMEOUT = "900";
       const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
       expect(call[2]).toEqual({ timeout: 900_000 });
-      delete process.env.DOJOPS_REQUEST_TIMEOUT;
     });
 
     it("OLLAMA_TIMEOUT takes precedence over DOJOPS_REQUEST_TIMEOUT", async () => {
@@ -527,8 +541,6 @@ describe("OllamaProvider", () => {
       process.env.DOJOPS_REQUEST_TIMEOUT = "900";
       const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
       expect(call[2]).toEqual({ timeout: 600_000 });
-      delete process.env.OLLAMA_TIMEOUT;
-      delete process.env.DOJOPS_REQUEST_TIMEOUT;
     });
 
     it("throws timeout error with helpful message on ECONNABORTED", async () => {

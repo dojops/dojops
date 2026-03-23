@@ -1,0 +1,204 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: azure-devops
+  version: 2.2.0
+  description: "Generate Azure DevOps Pipelines (YAML) for CI/CD"
+  author: dojops
+  license: MIT
+  tags: [azure, devops, pipeline, ci, cd, ado, microsoft]
+
+context:
+  technology: Azure DevOps Pipelines
+  fileFormat: yaml
+  outputGuidance: |
+    Generate a valid Azure DevOps Pipeline YAML file.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid azure-pipelines.yml that Azure DevOps can parse.
+
+    Detect the project type from context and generate the appropriate pipeline:
+    - **Node.js**: npm ci, npm test, node image, cache node_modules, PublishBuildArtifacts
+    - **Python**: pip install, pytest, python image, cache pip
+    - **.NET**: dotnet restore/build/test/publish, NuGet cache, artifact publish
+    - **Java/Maven**: maven goal, cache .m2, JUnit test results
+    - **Docker**: Docker@2 task for build/push to ACR/Docker Hub
+    - **Terraform**: TerraformInstaller, TerraformTaskV4 (init/plan/apply)
+    - **Multi-stage**: Separate Build and Deploy stages with environment approvals
+
+    EXAMPLE — Node.js CI/CD with stages:
+    trigger:
+      branches:
+        include:
+          - main
+          - develop
+      paths:
+        exclude:
+          - '*.md'
+
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    variables:
+      nodeVersion: '20'
+
+    stages:
+      - stage: Build
+        displayName: 'Build and Test'
+        jobs:
+          - job: BuildJob
+            displayName: 'Build'
+            steps:
+              - task: NodeTool@0
+                inputs:
+                  versionSpec: $(nodeVersion)
+                displayName: 'Install Node.js'
+
+              - task: Cache@2
+                inputs:
+                  key: 'npm | "$(Agent.OS)" | package-lock.json'
+                  path: $(npm_config_cache)
+                displayName: 'Cache npm'
+
+              - script: npm ci
+                displayName: 'Install dependencies'
+
+              - script: npm run build
+                displayName: 'Build'
+
+              - script: npm test -- --coverage
+                displayName: 'Test'
+
+              - task: PublishTestResults@2
+                inputs:
+                  testResultsFormat: 'JUnit'
+                  testResultsFiles: 'junit.xml'
+                condition: always()
+
+              - task: PublishBuildArtifacts@1
+                inputs:
+                  pathToPublish: 'dist'
+                  artifactName: 'build'
+
+      - stage: Deploy
+        displayName: 'Deploy to Staging'
+        dependsOn: Build
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+        jobs:
+          - deployment: DeployStaging
+            displayName: 'Deploy'
+            environment: staging
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - download: current
+                      artifact: build
+                    - script: echo "Deploy to staging"
+                      displayName: 'Deploy'
+
+    EXAMPLE — Docker build and push to ACR:
+    trigger:
+      - main
+
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    variables:
+      imageRepository: 'myapp'
+      containerRegistry: 'myacr.azurecr.io'
+      tag: '$(Build.BuildId)'
+
+    steps:
+      - task: Docker@2
+        displayName: 'Build and push'
+        inputs:
+          containerRegistry: 'MyACRServiceConnection'
+          repository: $(imageRepository)
+          command: buildAndPush
+          Dockerfile: '**/Dockerfile'
+          tags: |
+            $(tag)
+            latest
+  bestPractices:
+    - Use trigger/pr sections to control when pipelines run
+    - Define stages for logical pipeline grouping (Build, Test, Deploy)
+    - Use Cache@2 task for dependency caching (npm, pip, maven, NuGet)
+    - Use environments with approval gates for deployment stages
+    - Use variable groups for shared configuration across pipelines
+    - Use templates (extends/parameters) for reusable pipeline logic
+    - Publish test results with PublishTestResults@2 for dashboard integration
+    - Use deployment jobs with strategy (runOnce, rolling, canary) for deployments
+    - Set condition on stages/jobs for conditional execution
+    - Use service connections for external service authentication (ACR, AWS, etc.)
+    - Pin task versions (e.g., NodeTool@0, Docker@2) for reproducibility
+    - Use dependsOn for explicit stage ordering beyond sequential
+  context7Libraries:
+    - name: azure-devops
+      query: "Azure DevOps Pipelines YAML syntax trigger stages jobs steps, tasks NodeTool Docker Cache PublishBuildArtifacts, templates extends parameters, environments deployment strategy, variable groups service connections"
+
+files:
+  - path: "azure-pipelines.yml"
+    format: raw
+
+detection:
+  paths: ["azure-pipelines.yml", ".azure-pipelines/*.yml"]
+  updateMode: true
+
+verification:
+  structural:
+    - path: "trigger"
+      required: false
+      message: "Pipeline should define trigger configuration"
+    - path: "pool"
+      required: false
+      message: "Pipeline should define an agent pool"
+  binary:
+    command: "yamllint -d relaxed {entryFile}"
+    parser: generic-stderr
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["azure-pipelines.yml", ".azure-pipelines/*.yml"]
+
+risk:
+  level: LOW
+  rationale: "CI/CD pipeline changes require pull request review"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Azure DevOps Pipelines
+
+## Prompt
+
+You are an Azure DevOps expert specializing in YAML pipelines, multi-stage deployments, and Azure service integrations.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+azure, devops, pipeline, ado, azure-pipelines, stages, jobs,
+tasks, deployment, environment, trigger, pool, vmimage,
+artifacts, service-connection, template, variable-group

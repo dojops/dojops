@@ -1,6 +1,6 @@
 # Provider Management
 
-DojOps supports 6 LLM providers. The `dojops provider` command provides a dedicated interface for managing them — adding tokens, switching defaults, and viewing status.
+DojOps supports 7 LLM providers. The `dojops provider` command provides a dedicated interface for managing them - adding tokens, switching defaults, and viewing status.
 
 ---
 
@@ -11,6 +11,7 @@ DojOps supports 6 LLM providers. The `dojops provider` command provides a dedica
 | OpenAI         | `openai`         | Yes               | `gpt-4o-mini`                |
 | Anthropic      | `anthropic`      | Yes               | `claude-sonnet-4-5-20250929` |
 | DeepSeek       | `deepseek`       | Yes               | `deepseek-chat`              |
+| Mistral        | `mistral`        | Yes               | `mistral-small`              |
 | Gemini         | `gemini`         | Yes               | `gemini-2.5-flash`           |
 | Ollama         | `ollama`         | No (local)        | `llama3`                     |
 | GitHub Copilot | `github-copilot` | OAuth Device Flow | `gpt-4o`                     |

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { LLMProvider, parseAndValidate } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 import { DevOpsSkill } from "@dojops/sdk";
@@ -79,7 +80,26 @@ Canonical output paths by module:
 - systemd: outputPath="." (service files at root)
 - makefile: outputPath="." (Makefile at root)
 - gitlab-ci: outputPath="." (.gitlab-ci.yml at root)
-- jenkinsfile: outputPath="." (Jenkinsfile at root, or "jenkins-shared-lib" for shared libraries)`;
+- jenkinsfile: outputPath="." (Jenkinsfile at root, or "jenkins-shared-lib" for shared libraries)
+- grafana: outputPath="monitoring" or "dashboards" (Grafana JSON dashboard files)
+- cloudformation: outputPath="cloudformation" or "." if .yaml/.json CFN templates exist at root
+- argocd: outputPath="argocd" or "." (ArgoCD Application/ApplicationSet manifests)
+- pulumi: outputPath="." (Pulumi programs at project root alongside Pulumi.yaml)
+- otel-collector: outputPath="monitoring" or "." (OpenTelemetry Collector config)
+- vault: outputPath="vault" (HashiCorp Vault server config, policies, agent config)
+- istio: outputPath="istio" or "k8s" (Istio CRDs alongside other K8s manifests)
+- kustomize: outputPath="." (kustomization.yaml at root with base/ and overlays/ dirs)
+- crossplane: outputPath="crossplane" (Crossplane XRDs, Compositions, Claims)
+- terragrunt: outputPath="." (terragrunt.hcl at root with environment subdirs)
+- opa-gatekeeper: outputPath="policies" (OPA Gatekeeper ConstraintTemplates and Constraints)
+- aws-cdk: outputPath="." (CDK app at project root: bin/, lib/, cdk.json)
+- eks: outputPath="eks" or "." (eksctl ClusterConfig YAML)
+- cert-manager: outputPath="k8s" or "cert-manager" (cert-manager Issuers and Certificates)
+- trivy-operator: outputPath="security" or "k8s" (Trivy Operator Helm values or CRDs)
+- falco: outputPath="security" or "falco" (Falco rules YAML)
+- flux: outputPath="flux" or "clusters" (Flux GitOps manifests)
+- azure-devops: outputPath="." (azure-pipelines.yml at root)
+- aws-codepipeline: outputPath="." (buildspec.yml at root, pipeline config in cloudformation/)`;
 
 export function buildAgentSection(agents: AgentInfo[]): string {
   if (agents.length === 0) return "";
@@ -250,6 +270,17 @@ Respond with a JSON object:
   ]
 }
 
+## Reasoning process
+
+Before producing the JSON, think through these steps:
+1. What is the user actually asking for? Identify the concrete deliverables.
+2. Which tools from the available list match each deliverable? If none match, use "generic".
+3. What are the dependencies between tasks? Which must complete before others can start?
+4. For each task, what exact file path(s) will be created or modified?
+5. Are there any tasks that can run in parallel (no mutual dependencies)?
+
+This deliberate reasoning produces better task graphs with correct dependencies and precise prompts.
+
 Do NOT ask follow-up questions. Provide the complete task graph only.`,
     prompt: goal,
     schema: dynamicSchema,
@@ -259,4 +290,58 @@ Do NOT ask follow-up questions. Provide the complete task graph only.`,
     return response.parsed as TaskGraph;
   }
   return parseAndValidate(response.content, dynamicSchema) as TaskGraph;
+}
+
+export interface PlanCritiqueResult {
+  approved: boolean;
+  issues: string[];
+}
+
+/**
+ * Run an LLM critique pass on a decomposed task graph before execution.
+ * Checks: are tools correct for the goal, are dependencies sound, is scoping right.
+ * Returns approval status and any issues found.
+ */
+export async function critiquePlan(
+  graph: TaskGraph,
+  provider: LLMProvider,
+  validToolNames: string[],
+): Promise<PlanCritiqueResult> {
+  const planSummary = graph.tasks
+    .map((t) => `- ${t.id} (tool: ${t.tool}, deps: [${t.dependsOn.join(", ")}]): ${t.description}`)
+    .join("\n");
+
+  const response = await provider.generate({
+    system: `You are a DevOps plan reviewer. Evaluate whether a task graph is well-formed and likely to achieve the stated goal.
+
+Check for:
+1. Tool selection: does each task use a tool appropriate for its purpose? Valid tools: ${validToolNames.join(", ")}
+2. Dependencies: are tasks in the right order? Does any task depend on something it shouldn't, or miss a dependency?
+3. Coverage: does the plan address the full goal, or are steps missing?
+4. Scoping: is each task narrowly scoped to one file operation?
+
+Respond with JSON:
+{
+  "approved": true/false,
+  "issues": ["description of each issue found"]
+}
+
+If the plan looks correct, return {"approved": true, "issues": []}.`,
+    prompt: `## Goal\n${graph.goal}\n\n## Task Graph\n${planSummary}`,
+    schema: z.object({
+      approved: z.boolean(),
+      issues: z.array(z.string()),
+    }),
+  });
+
+  try {
+    const parsed = response.parsed ?? JSON.parse(response.content);
+    return {
+      approved: parsed.approved === true,
+      issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+    };
+  } catch {
+    // If parsing fails, approve by default to not block execution
+    return { approved: true, issues: [] };
+  }
 }

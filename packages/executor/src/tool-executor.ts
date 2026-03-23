@@ -19,6 +19,27 @@ export interface McpToolDispatcher {
 /** Maximum tool output size before truncation (32KB). */
 const MAX_OUTPUT_BYTES = 32_768;
 
+/**
+ * Static mapping: file basename patterns → skill names.
+ * Used to detect when write_file produces a file that a skill can verify.
+ */
+const FILE_TO_SKILL: Array<{ pattern: RegExp; skill: string }> = [
+  { pattern: /^Dockerfile(\..*)?$/, skill: "dockerfile" },
+  { pattern: /^\.dockerignore$/, skill: "dockerfile" },
+  { pattern: /^docker-compose[\w.-]*\.ya?ml$/, skill: "docker-compose" },
+  { pattern: /\.tf$/, skill: "terraform" },
+  { pattern: /^\.github\/workflows\/.*\.ya?ml$/, skill: "github-actions" },
+  { pattern: /^\.gitlab-ci\.yml$/, skill: "gitlab-ci" },
+  { pattern: /^Jenkinsfile$/, skill: "jenkinsfile" },
+  { pattern: /^Chart\.yaml$/, skill: "helm" },
+  { pattern: /^values\.yaml$/, skill: "helm" },
+  { pattern: /^Makefile$/, skill: "makefile" },
+  { pattern: /^nginx\.conf$/, skill: "nginx" },
+  { pattern: /^playbook[\w.-]*\.ya?ml$/, skill: "ansible" },
+  { pattern: /^prometheus[\w.-]*\.ya?ml$/, skill: "prometheus" },
+  { pattern: /^.*\.service$/, skill: "systemd" },
+];
+
 /** Maximum allowed search pattern length. */
 const MAX_PATTERN_LENGTH = 200;
 
@@ -134,6 +155,8 @@ export interface ToolExecutorOptions {
   onPolicyWarning?: (message: string) => void;
   /** Skip secret scanning on write/edit operations. Default false. */
   skipSecretScan?: boolean;
+  /** Max repair attempts for skill verification failures (default 0 = no retry). */
+  skillRepairAttempts?: number;
 }
 
 /** Truncate output to fit within the context budget. */
@@ -319,6 +342,41 @@ export class ToolExecutor {
     return path.isAbsolute(filePath) ? filePath : path.resolve(this.opts.cwd, filePath);
   }
 
+  /**
+   * After writing a file, check if it matches a known skill pattern.
+   * If so, run verify() and return advisory feedback for the agent.
+   */
+  private async verifyWrittenFile(filePath: string): Promise<string | null> {
+    if (!this.opts.skills || this.opts.policy.skipVerification) return null;
+
+    const relPath = path.relative(this.opts.cwd, filePath);
+    const basename = path.basename(filePath);
+
+    for (const { pattern, skill: skillName } of FILE_TO_SKILL) {
+      // Match against both basename and relative path (for .github/workflows/*)
+      if (!pattern.test(basename) && !pattern.test(relPath)) continue;
+
+      const skill = this.opts.skills.get(skillName);
+      if (!skill?.verify) continue;
+
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const result = await skill.verify({ content, filePath });
+        if (!result.passed && result.issues.length > 0) {
+          const issueLines = result.issues
+            .slice(0, 5)
+            .map((i) => `  - ${i.message ?? i}`)
+            .join("\n");
+          return `\nVerification (${skillName}): ${result.issues.length} issue(s)\n${issueLines}`;
+        }
+      } catch {
+        // Verification is advisory — don't block on failure
+      }
+      break;
+    }
+    return null;
+  }
+
   private async readFile(call: ToolCall): Promise<ToolResult> {
     const filePath = this.resolvePath(call.arguments.path as string);
     const offset = call.arguments.offset as number | undefined;
@@ -392,7 +450,15 @@ export class ToolExecutor {
       this.filesWritten.add(filePath);
     }
 
-    return { callId: call.id, output: `${existed ? "Updated" : "Created"} ${filePath}` };
+    let output = `${existed ? "Updated" : "Created"} ${filePath}`;
+
+    // Run skill verification if the file matches a known pattern
+    const verifyFeedback = await this.verifyWrittenFile(filePath);
+    if (verifyFeedback) {
+      output += verifyFeedback;
+    }
+
+    return { callId: call.id, output };
   }
 
   private async editFile(call: ToolCall): Promise<ToolResult> {
@@ -508,11 +574,29 @@ export class ToolExecutor {
         status?: number;
         message?: string;
       };
-      const output =
+      const rawOutput =
         [execErr.stdout, execErr.stderr].filter(Boolean).join("\n") ||
         execErr.message ||
         "Command failed";
-      return { callId: call.id, output: truncateOutput(output), isError: true };
+
+      // Detect "command not found" (exit code 127) — give the agent a clear, non-retriable error
+      if (
+        execErr.status === 127 ||
+        /command not found|not found in PATH|No such file or directory.*exec/i.test(rawOutput)
+      ) {
+        const bin = command.trim().split(/\s+/)[0];
+        return {
+          callId: call.id,
+          output: [
+            `[TOOL NOT INSTALLED] "${bin}" is not available on this system.`,
+            `Do NOT retry this command or attempt to install "${bin}".`,
+            `Use run_skill for DevOps config generation, or skip this validation step.`,
+          ].join("\n"),
+          isError: true,
+        };
+      }
+
+      return { callId: call.id, output: truncateOutput(rawOutput), isError: true };
     }
   }
 
@@ -549,13 +633,59 @@ export class ToolExecutor {
       if (!validation.valid) {
         return {
           callId: call.id,
-          output: `Validation failed: ${validation.error ?? "unknown error"}`,
+          output: [
+            `ERROR: Validation failed for skill "${skillName}".`,
+            ``,
+            `The "input" object must contain a "prompt" field (string, required).`,
+            `Correct usage: run_skill({ skill: "${skillName}", input: { prompt: "describe what to generate" } })`,
+            ``,
+            `You provided: ${JSON.stringify(input)}`,
+            `Zod error: ${validation.error ?? "unknown"}`,
+          ].join("\n"),
           isError: true,
         };
       }
 
-      const result = await skill.generate(input);
-      const output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+      const maxRetries = this.opts.skillRepairAttempts ?? 1;
+      let currentInput = input;
+      let result = await skill.generate(currentInput);
+      let output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+
+      // Run skill verification with optional retry loop
+      if (skill.verify && !this.opts.policy.skipVerification) {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            const vResult = await skill.verify(result);
+            if (vResult.passed || vResult.issues.length === 0) break;
+
+            const errorIssues = vResult.issues.filter(
+              (i) => i.severity === "error" || i.severity === "warning",
+            );
+            const issueLines = errorIssues
+              .slice(0, 5)
+              .map((i) => `  - ${i.message ?? i}`)
+              .join("\n");
+
+            if (attempt < maxRetries && errorIssues.length > 0) {
+              // Retry: inject verification errors as repair context
+              currentInput = {
+                ...currentInput,
+                _repairContext: `Verification failed (attempt ${attempt + 1}/${maxRetries}). Fix these issues:\n${issueLines}`,
+              };
+              result = await skill.generate(currentInput);
+              output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+              continue;
+            }
+
+            // Final attempt or only warnings — append issues as advisory
+            output += `\n\nVerification (${skill.name}): ${vResult.issues.length} issue(s)\n${issueLines}`;
+          } catch {
+            // Verification is advisory
+            break;
+          }
+        }
+      }
+
       return { callId: call.id, output: truncateOutput(output) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

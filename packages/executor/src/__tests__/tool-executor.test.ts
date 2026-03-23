@@ -162,6 +162,16 @@ describe("ToolExecutor", () => {
       );
       expect(result.output.trim()).toBe("found");
     });
+
+    it("returns TOOL NOT INSTALLED error for missing binaries", async () => {
+      const result = await executor.execute(
+        makeCall("run_command", { command: "hadolint_nonexistent_binary Dockerfile" }),
+      );
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("[TOOL NOT INSTALLED]");
+      expect(result.output).toContain("hadolint_nonexistent_binary");
+      expect(result.output).toContain("Do NOT retry");
+    });
   });
 
   describe("run_skill", () => {

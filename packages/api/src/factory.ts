@@ -14,6 +14,7 @@ import {
   InfraDiffAnalyzer,
   DevSecOpsReviewer,
   withRetry,
+  RoutingProvider,
 } from "@dojops/core";
 import { NoopProvider } from "./noop-provider";
 import { DevOpsSkill } from "@dojops/sdk";
@@ -103,7 +104,21 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   const model = options?.model || process.env.DOJOPS_MODEL || undefined;
   const allowMissing = options?.allowMissing ?? false;
 
-  return buildKeyedProvider(providerName, model, options, allowMissing);
+  const provider = buildKeyedProvider(providerName, model, options, allowMissing);
+
+  // Model routing: auto-select model tier per request based on complexity (on by default)
+  // Skip for NoopProvider (missing API key with allowMissing) and explicit model override
+  if (
+    process.env.DOJOPS_MODEL_ROUTING !== "false" &&
+    !process.env.DOJOPS_MODEL &&
+    provider.name !== "noop"
+  ) {
+    return new RoutingProvider(provider, {
+      providerFactory: (m: string) => buildKeyedProvider(providerName, m, options, allowMissing),
+    });
+  }
+
+  return provider;
 }
 
 /** Duck-typed DocProvider for v2 .dops skills (avoids hard import on @dojops/context) */

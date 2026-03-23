@@ -36,6 +36,22 @@ context:
     - **PHP**: php:8.3-fpm or php:8.3-apache, composer install
     - **Static site**: node for build, nginx:alpine for serving
 
+    EXAMPLE — Node.js multi-stage Dockerfile:
+    {
+      "files": {
+        "Dockerfile": "FROM node:20-slim AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\n\nFROM node:20-slim AS runner\nWORKDIR /app\nRUN addgroup --system app && adduser --system --ingroup app app\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nCOPY --from=builder /app/package.json ./\nUSER app\nEXPOSE 3000\nHEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost:3000/health || exit 1\nENTRYPOINT [\"node\"]\nCMD [\"dist/index.js\"]",
+        ".dockerignore": "node_modules\ndist\n.git\n.gitignore\n.env*\n*.md\nLICENSE\n.dockerignore\nDockerfile\ncoverage\n.next\n.turbo"
+      }
+    }
+
+    EXAMPLE — Go static binary:
+    {
+      "files": {
+        "Dockerfile": "FROM golang:1.22-alpine AS builder\nWORKDIR /app\nCOPY go.mod go.sum ./\nRUN go mod download\nCOPY . .\nRUN CGO_ENABLED=0 GOOS=linux go build -ldflags='-s -w' -o /app/server ./cmd/server\n\nFROM scratch\nCOPY --from=builder /app/server /server\nCOPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/\nEXPOSE 8080\nENTRYPOINT [\"/server\"]",
+        ".dockerignore": ".git\n*.md\nLICENSE\n.env*\n.dockerignore\nDockerfile\nvendor\n*_test.go"
+      }
+    }
+
     Generate .dockerignore with project-appropriate patterns:
     - Always: .git, .gitignore, .env*, *.md, LICENSE, .dockerignore, Dockerfile
     - Node.js: node_modules, dist, coverage, .next
