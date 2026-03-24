@@ -126,4 +126,8 @@ export interface ExecutionAuditEntry {
   toolVersion?: string;
   toolHash?: string;
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  /** SHA-256 hash of this entry (computed over all other fields). */
+  hash?: string;
+  /** SHA-256 hash of the previous entry in the chain, or "GENESIS" for the first. */
+  previousHash?: string;
 }

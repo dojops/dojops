@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { runBin } from "../safe-exec";
+import { runBin } from "@dojops/sdk";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { DeterministicProvider } from "@dojops/core";
@@ -8,7 +8,7 @@ import { appendActivity } from "../dojops-md";
 import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { createSkillRegistry } from "@dojops/skill-registry";
-import { PlannerExecutor, critiquePlan } from "@dojops/planner";
+import { PlannerExecutor, AgentCoordinator, critiquePlan } from "@dojops/planner";
 import { ALL_SPECIALIST_CONFIGS } from "@dojops/core";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";
@@ -626,6 +626,7 @@ function createExecutorWithCallbacks(
       return {
         ...(generateTimeoutMs ? { generateTimeoutMs } : {}),
         agentConfigs,
+        coordinator: new AgentCoordinator(),
       };
     })(),
   );

@@ -1,6 +1,9 @@
+import { type RiskLevel as ExecutorRiskLevel, classifyPathRisk } from "@dojops/executor";
+
 // ── Types ─────────────────────────────────────────────────────────
 
-export type RiskLevel = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
+/** Extends the canonical executor RiskLevel with "INFO" for unclassified/no-risk diff entries. */
+export type RiskLevel = ExecutorRiskLevel | "INFO";
 
 export interface FileRiskScore {
   path: string;
@@ -242,6 +245,14 @@ const LOW_OVERRIDE_PATTERNS = [
   /\.editorconfig$/i,
 ];
 
+/** Map executor risk levels to numeric scores for comparison with local scoring. */
+const EXECUTOR_RISK_SCORE: Record<ExecutorRiskLevel, number> = {
+  LOW: 1,
+  MEDIUM: 2,
+  HIGH: 3,
+  CRITICAL: 4,
+};
+
 function scoreFile(file: ParsedFile): FileRiskScore {
   const reasons: string[] = [];
   let maxScore = 0;
@@ -254,6 +265,16 @@ function scoreFile(file: ParsedFile): FileRiskScore {
       reasons.push(rule.reason);
       if (rule.score > maxScore) maxScore = rule.score;
     }
+  }
+
+  // Cross-check with executor's path risk classifier to prevent coherence gaps.
+  // If the executor classifies a path as higher risk than our local rules,
+  // the executor's opinion wins (it controls execution policy).
+  const executorRisk = classifyPathRisk(file.path);
+  const executorScore = EXECUTOR_RISK_SCORE[executorRisk];
+  if (executorScore > maxScore) {
+    maxScore = executorScore;
+    reasons.push(`Executor policy: ${executorRisk}`);
   }
 
   // Test/doc files get capped at score 1 even if they match higher rules

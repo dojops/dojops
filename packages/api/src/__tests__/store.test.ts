@@ -369,12 +369,13 @@ describe("HistoryStore", () => {
     it("redacts GitHub personal access tokens", () => {
       const entry = store.add({
         type: "generate",
-        request: { prompt: "token: ghp_abc123XYZ456" },
+        request: { prompt: "token: ghp_abc123XYZ456defghij7890klmno" },
         response: {},
         durationMs: 10,
         success: true,
       });
-      expect((entry.request as { prompt: string }).prompt).toBe("token: ghp_***REDACTED***");
+      expect((entry.request as { prompt: string }).prompt).toContain("gh*_***REDACTED***");
+      expect((entry.request as { prompt: string }).prompt).not.toContain("abc123XYZ456");
     });
 
     it("redacts OpenAI-style API keys", () => {
@@ -391,7 +392,7 @@ describe("HistoryStore", () => {
     it("redacts Bearer tokens", () => {
       const entry = store.add({
         type: "generate",
-        request: { prompt: "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.test" },
+        request: { prompt: "header Bearer eyJhbGciOiJIUzI1NiJ9.test" },
         response: {},
         durationMs: 10,
         success: true,
@@ -417,9 +418,10 @@ describe("HistoryStore", () => {
         response: null,
         durationMs: 10,
         success: false,
-        error: "failed with ghp_secrettoken123",
+        error: "failed with ghp_secrettoken123abcdefghij",
       });
-      expect(entry.error).toBe("failed with ghp_***REDACTED***");
+      expect(entry.error).toContain("gh*_***REDACTED***");
+      expect(entry.error).not.toContain("secrettoken123");
     });
 
     it("handles nested objects", () => {
@@ -442,7 +444,9 @@ describe("redactSecrets", () => {
   });
 
   it("redacts GitHub token pattern", () => {
-    expect(redactSecrets("ghp_abcdef123456")).toBe("ghp_***REDACTED***");
+    const result = redactSecrets("ghp_abcdef123456abcdefghij");
+    expect(result).toContain("gh*_***REDACTED***");
+    expect(result).not.toContain("abcdef123456");
   });
 
   it("redacts sk- pattern with 20+ chars", () => {
@@ -459,8 +463,11 @@ describe("redactSecrets", () => {
   });
 
   it("redacts multiple secrets in one string", () => {
-    const text = "aws=AKIAIOSFODNN7EXAMPLE gh=ghp_token123456";
+    const text = "aws=AKIAIOSFODNN7EXAMPLE gh=ghp_token123456abcdefghij";
     const result = redactSecrets(text);
-    expect(result).toBe("aws=AKIA***REDACTED*** gh=ghp_***REDACTED***");
+    expect(result).toContain("AKIA***REDACTED***");
+    expect(result).toContain("gh*_***REDACTED***");
+    expect(result).not.toContain("IOSFODNN7EXAMPLE");
+    expect(result).not.toContain("token123456");
   });
 });

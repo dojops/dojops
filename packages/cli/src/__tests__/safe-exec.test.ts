@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { runBin, runShellCmd } from "../safe-exec";
+import { runBin } from "@dojops/sdk";
+import { runShellCmd } from "../safe-exec";
 
 describe("safe-exec", () => {
   it("runBin executes a binary with array args", () => {

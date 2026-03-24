@@ -8,7 +8,7 @@
  * Execution: uses `runBin()` (execFileSync) — no shell injection possible.
  */
 import * as path from "node:path";
-import { runBin } from "./safe-exec";
+import { runBin } from "@dojops/sdk";
 import { ALLOWED_VERIFICATION_BINARIES } from "./binary-verifier";
 import { getParser } from "./parsers/index";
 import type { ReviewToolSpec, ToolValidationResult } from "@dojops/core";

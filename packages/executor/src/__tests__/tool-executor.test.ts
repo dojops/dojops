@@ -145,12 +145,13 @@ describe("ToolExecutor", () => {
       expect(result.output.trim()).toBe("hello");
     });
 
-    it("captures stderr on failure", async () => {
+    it("blocks commands with shell metacharacters", async () => {
       const result = await executor.execute(
         makeCall("run_command", { command: "ls /nonexistent_path_xyz 2>&1 || true" }),
       );
-      // Command runs successfully (|| true), but stderr is captured
-      expect(result.isError).toBeUndefined();
+      // Shell metacharacters (|, &, >, etc.) are blocked to prevent injection
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("shell metacharacters");
     });
 
     it("uses custom cwd", async () => {

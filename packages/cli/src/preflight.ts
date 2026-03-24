@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import nodePath from "node:path";
-import { runBin, runShellCmd } from "./safe-exec";
+import { runBin } from "@dojops/sdk";
+import { runShellCmd } from "./safe-exec";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import {

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { LLMProvider } from "@dojops/core";
@@ -94,8 +95,8 @@ export function createAutoRouter(
         requireApproval: false,
         skipVerification: false,
         maxVerifyRetries: 0,
-        approvalMode: "never",
-        autoApproveRiskLevel: "MEDIUM",
+        approvalMode: "risk-based",
+        autoApproveRiskLevel: "LOW",
         maxRepairAttempts: 0,
       },
       cwd,
@@ -124,6 +125,28 @@ Rules:
 - Complete ALL parts of the request before calling "done". If the user asks for 3 files, create all 3.
 - Do NOT call "done" until all requested files have been written to disk with write_file.`,
       maxIterations,
+      validateBeforeDone: async () => {
+        const allFiles = [...toolExecutor.getFilesWritten(), ...toolExecutor.getFilesModified()];
+        if (allFiles.length === 0) {
+          return [
+            "No files were written to disk. Use write_file to create each requested file before calling done.",
+            "If you used run_skill, the output is text — you still need to write it with write_file.",
+          ];
+        }
+        // Verify written files still exist and are non-empty
+        const issues: string[] = [];
+        for (const filePath of allFiles) {
+          try {
+            const stat = fs.statSync(filePath);
+            if (stat.size === 0) {
+              issues.push(`${path.relative(cwd, filePath)}: file is empty`);
+            }
+          } catch {
+            issues.push(`${path.relative(cwd, filePath)}: file no longer exists on disk`);
+          }
+        }
+        return issues;
+      },
     });
 
     const start = Date.now();
@@ -218,6 +241,11 @@ Rules:
 
   // ── GET /runs/:id — check background run status ─────────────────
   router.get("/runs/:id", (req, res) => {
+    // M-5: Require authentication for run status (may contain sensitive paths/outputs)
+    if (!res.locals.authenticated) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
     const run = backgroundRuns.get(req.params.id);
     if (!run) {
       res.status(404).json({ error: "Run not found" });

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { ExecutionPolicy } from "./types";
-import { checkWriteAllowed, checkFileSize } from "./policy";
+import { checkWriteAllowed, checkFileSize, isPathWithin } from "./policy";
 import { scanForSecrets } from "./secret-scanner";
 import type { ToolCall, ToolResult, ToolDefinition } from "@dojops/core";
 import { resolveToolName } from "@dojops/sdk";
@@ -103,6 +103,48 @@ function findBlockedNetworkCommand(command: string): string | null {
     if (new RegExp(`\\b${netCmd}\\b`).test(command)) return netCmd;
   }
   return null;
+}
+
+/**
+ * Parse a command string into an array of arguments, respecting quoted strings.
+ * Does NOT invoke a shell — the caller uses execFileSync(binary, args).
+ */
+function parseCommandArgs(command: string): string[] {
+  const args: string[] = [];
+  let current = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+
+    if (inSingleQuote) {
+      if (ch === "'") {
+        inSingleQuote = false;
+      } else {
+        current += ch;
+      }
+    } else if (inDoubleQuote) {
+      if (ch === '"') {
+        inDoubleQuote = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === "'") {
+      inSingleQuote = true;
+    } else if (ch === '"') {
+      inDoubleQuote = true;
+    } else if (/\s/.test(ch)) {
+      if (current.length > 0) {
+        args.push(current);
+        current = "";
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current.length > 0) args.push(current);
+  return args;
 }
 
 function validateSearchPatterns(
@@ -206,18 +248,21 @@ function normalizeSearchPattern(
   return { pattern: filePattern, searchPath: basePath };
 }
 
-/** Search for files by name pattern using find. Falls back to -path for glob patterns. */
+/** Search for files by name pattern using find with safe array args (no shell). */
 function searchByFilePattern(pattern: string, searchPath: string): string[] {
   try {
     const output = execFileSync(
-      "/bin/sh",
-      [
-        "-c",
-        `find ${JSON.stringify(searchPath)} -type f -name ${JSON.stringify(pattern)} 2>/dev/null | head -${MAX_SEARCH_RESULTS}`,
-      ],
-      { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
+      "find",
+      [searchPath, "-type", "f", "-name", pattern, "-maxdepth", "10"],
+      {
+        encoding: "utf-8",
+        timeout: 10_000,
+        maxBuffer: MAX_OUTPUT_BYTES,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
     );
-    if (output.trim()) return [`Files matching "${pattern}":\n${output.trim()}`];
+    const lines = output.trim().split("\n").filter(Boolean).slice(0, MAX_SEARCH_RESULTS);
+    if (lines.length > 0) return [`Files matching "${pattern}":\n${lines.join("\n")}`];
     return [];
   } catch {
     return searchByPathPattern(pattern, searchPath);
@@ -227,34 +272,38 @@ function searchByFilePattern(pattern: string, searchPath: string): string[] {
 /** Fallback file search using -path for glob/wildcard patterns. */
 function searchByPathPattern(pattern: string, searchPath: string): string[] {
   try {
+    // Ensure pattern has wildcard prefix for -path matching
+    const pathPattern = pattern.startsWith("*") ? pattern : `*${pattern}`;
     const output = execFileSync(
-      "/bin/sh",
-      [
-        "-c",
-        `find ${JSON.stringify(searchPath)} -type f -path ${JSON.stringify(pattern)} 2>/dev/null | head -${MAX_SEARCH_RESULTS}`,
-      ],
-      { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
+      "find",
+      [searchPath, "-type", "f", "-path", pathPattern, "-maxdepth", "10"],
+      {
+        encoding: "utf-8",
+        timeout: 10_000,
+        maxBuffer: MAX_OUTPUT_BYTES,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
     );
-    if (output.trim()) return [`Files matching "${pattern}":\n${output.trim()}`];
+    const lines = output.trim().split("\n").filter(Boolean).slice(0, MAX_SEARCH_RESULTS);
+    if (lines.length > 0) return [`Files matching "${pattern}":\n${lines.join("\n")}`];
     return [];
   } catch {
     return [`No files found matching "${pattern}"`];
   }
 }
 
-/** Search for files containing a given content pattern using grep. */
+/** Search for files containing a given content pattern using grep with safe array args (no shell). */
 function searchByContent(contentPattern: string, searchPath: string): string[] {
   try {
-    const output = execFileSync(
-      "/bin/sh",
-      [
-        "-c",
-        `grep -rl ${JSON.stringify(contentPattern)} ${JSON.stringify(searchPath)} 2>/dev/null | head -${MAX_SEARCH_RESULTS}`,
-      ],
-      { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
-    );
-    if (output.trim()) {
-      return [`Files containing "${contentPattern}":\n${output.trim()}`];
+    const output = execFileSync("grep", ["-rl", "--", contentPattern, searchPath], {
+      encoding: "utf-8",
+      timeout: 10_000,
+      maxBuffer: MAX_OUTPUT_BYTES,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const lines = output.trim().split("\n").filter(Boolean).slice(0, MAX_SEARCH_RESULTS);
+    if (lines.length > 0) {
+      return [`Files containing "${contentPattern}":\n${lines.join("\n")}`];
     }
     return [`No files containing "${contentPattern}"`];
   } catch {
@@ -381,6 +430,21 @@ export class ToolExecutor {
     const filePath = this.resolvePath(call.arguments.path as string);
     const offset = call.arguments.offset as number | undefined;
     const limit = call.arguments.limit as number | undefined;
+
+    // H-3: Path containment — resolve symlinks and verify within cwd
+    try {
+      const realPath = fs.realpathSync(filePath);
+      const realCwd = fs.realpathSync(this.opts.cwd);
+      if (!isPathWithin(realPath, realCwd)) {
+        return {
+          callId: call.id,
+          output: `Read blocked: ${filePath} is outside the project directory`,
+          isError: true,
+        };
+      }
+    } catch {
+      // realpathSync fails if file doesn't exist — fall through to existsSync check
+    }
 
     if (!fs.existsSync(filePath)) {
       return { callId: call.id, output: `File not found: ${filePath}`, isError: true };
@@ -558,7 +622,23 @@ export class ToolExecutor {
     }
 
     try {
-      const output = execFileSync("/bin/sh", ["-c", command], {
+      // Parse command into binary + args to avoid shell injection.
+      // Simple commands: split on whitespace. Compound commands (pipes, redirects, &&, ||)
+      // are blocked since they require shell interpretation and are injection vectors.
+      const shellMetachars = /[|;&`$(){}!<>]/;
+      if (shellMetachars.test(command)) {
+        return {
+          callId: call.id,
+          output:
+            `Command blocked: shell metacharacters are not allowed (|, ;, &, \`, $, etc.). ` +
+            `Use simple commands like "terraform validate" or "docker-compose config".`,
+          isError: true,
+        };
+      }
+
+      const args = parseCommandArgs(command);
+      const binary = args.shift()!;
+      const output = execFileSync(binary, args, {
         cwd,
         encoding: "utf-8",
         timeout,
@@ -579,10 +659,10 @@ export class ToolExecutor {
         execErr.message ||
         "Command failed";
 
-      // Detect "command not found" (exit code 127) — give the agent a clear, non-retriable error
+      // Detect "command not found" (exit code 127 or ENOENT) — give the agent a clear, non-retriable error
       if (
         execErr.status === 127 ||
-        /command not found|not found in PATH|No such file or directory.*exec/i.test(rawOutput)
+        /command not found|not found in PATH|No such file or directory|ENOENT/i.test(rawOutput)
       ) {
         const bin = command.trim().split(/\s+/)[0];
         return {

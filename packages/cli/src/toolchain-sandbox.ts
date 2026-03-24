@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import https from "node:https";
-import { runBin } from "./safe-exec";
+import { runBin } from "@dojops/sdk";
 import { mkdirExecutable, chmodExecutable } from "./secure-fs";
 import {
   SystemTool,

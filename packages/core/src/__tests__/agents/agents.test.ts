@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { SpecialistAgent, SpecialistConfig } from "../../agents/specialist";
+import { SpecialistAgent, SpecialistConfig, AgenticToolExecutor } from "../../agents/specialist";
 import { AgentRouter } from "../../agents/router";
 import { ALL_SPECIALIST_CONFIGS } from "../../agents/specialists";
 import { LLMProvider, LLMResponse } from "../../llm/provider";
 import { ToolDependency } from "../../agents/tool-deps";
+import { AGENT_TOOLS } from "../../llm/tool-defs";
+import type { LLMToolResponse, ToolCall, ToolResult } from "../../llm/tool-types";
 
 function mockProvider(response: string): LLMProvider {
   return {
@@ -532,6 +534,317 @@ describe("SpecialistAgent retry and timeout", () => {
     });
 
     await expect(agent.run({ prompt: "hello" }, { timeoutMs: 100 })).rejects.toThrow("timed out");
+  });
+});
+
+describe("SpecialistAgent.runAgentic", () => {
+  function mockToolExecutor(results?: Map<string, string>): AgenticToolExecutor {
+    const filesWritten: string[] = [];
+    const filesModified: string[] = [];
+    return {
+      execute: vi.fn().mockImplementation(async (call: ToolCall): Promise<ToolResult> => {
+        if (call.name === "write_file") filesWritten.push(call.arguments.path as string);
+        if (call.name === "edit_file") filesModified.push(call.arguments.path as string);
+        const output = results?.get(call.name) ?? `Executed ${call.name}`;
+        return { callId: call.id, output, isError: false };
+      }),
+      getFilesWritten: () => filesWritten,
+      getFilesModified: () => filesModified,
+    };
+  }
+
+  function mockToolCallingProvider(responses: LLMToolResponse[]): LLMProvider {
+    let callIndex = 0;
+    return {
+      name: "mock-tool-provider",
+      generate: vi.fn().mockResolvedValue({
+        content: "",
+        model: "mock",
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      }),
+      generateWithTools: vi.fn().mockImplementation(async () => {
+        const resp = responses[callIndex] ?? responses[responses.length - 1];
+        callIndex++;
+        return resp;
+      }),
+    };
+  }
+
+  it("completes when LLM calls the done tool", async () => {
+    const provider = mockToolCallingProvider([
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "main.tf" } }],
+        stopReason: "tool_use",
+        usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      },
+      {
+        content: "",
+        toolCalls: [
+          { id: "c2", name: "done", arguments: { summary: "Read the file successfully" } },
+        ],
+        stopReason: "end_turn",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+    ]);
+
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+    const result = await agent.runAgentic("Read main.tf", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toBe("Read the file successfully");
+    expect(result.toolCalls).toHaveLength(2); // read_file + done
+    expect(result.toolCalls[0].name).toBe("read_file");
+    expect(result.toolCalls[1].name).toBe("done");
+  });
+
+  it("completes when LLM returns end_turn with no tool calls after work", async () => {
+    const provider = mockToolCallingProvider([
+      {
+        content: "",
+        toolCalls: [
+          { id: "c1", name: "write_file", arguments: { path: "out.tf", content: "resource {}" } },
+        ],
+        stopReason: "tool_use",
+        usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      },
+      {
+        content: "Generated Terraform config.",
+        toolCalls: [],
+        stopReason: "end_turn",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+    ]);
+
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+    const result = await agent.runAgentic("Create terraform", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toBe("Generated Terraform config.");
+    expect(result.filesWritten).toEqual(["out.tf"]);
+  });
+
+  it("stops at max iterations", async () => {
+    // Provider always returns a tool call, never done
+    const provider = mockToolCallingProvider([
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "a.txt" } }],
+        stopReason: "tool_use",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+      {
+        content: "",
+        toolCalls: [{ id: "c2", name: "read_file", arguments: { path: "b.txt" } }],
+        stopReason: "tool_use",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+      {
+        content: "",
+        toolCalls: [{ id: "c3", name: "read_file", arguments: { path: "c.txt" } }],
+        stopReason: "tool_use",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+    ]);
+
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+    const result = await agent.runAgentic("Keep reading", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+      maxIterations: 3,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain("maximum iterations");
+  });
+
+  it("stops at token budget", async () => {
+    const provider = mockToolCallingProvider([
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "a.txt" } }],
+        stopReason: "tool_use",
+        usage: { promptTokens: 500, completionTokens: 500, totalTokens: 1000 },
+      },
+    ]);
+
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+    const result = await agent.runAgentic("Expensive task", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+      maxTotalTokens: 500, // Below the 1000 from first call
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain("token budget exhausted");
+    expect(result.totalTokens).toBe(1000);
+  });
+
+  it("terminates on stale loop (identical tool calls)", async () => {
+    const sameCall: LLMToolResponse = {
+      content: "",
+      toolCalls: [{ id: "cx", name: "read_file", arguments: { path: "same.txt" } }],
+      stopReason: "tool_use",
+      usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+    };
+    const provider = mockToolCallingProvider([sameCall, sameCall, sameCall, sameCall]);
+
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+    const result = await agent.runAgentic("Stuck task", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+      maxIterations: 10,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain("stuck in loop");
+  });
+
+  it("fires onToolCall and onToolResult callbacks", async () => {
+    const provider = mockToolCallingProvider([
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "search_files", arguments: { pattern: "*.tf" } }],
+        stopReason: "tool_use",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+      {
+        content: "",
+        toolCalls: [{ id: "c2", name: "done", arguments: { summary: "Found files" } }],
+        stopReason: "end_turn",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+    ]);
+
+    const toolCallSpy = vi.fn();
+    const toolResultSpy = vi.fn();
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+
+    await agent.runAgentic("Find terraform files", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+      onToolCall: toolCallSpy,
+      onToolResult: toolResultSpy,
+    });
+
+    expect(toolCallSpy).toHaveBeenCalledOnce();
+    expect(toolCallSpy).toHaveBeenCalledWith(expect.objectContaining({ name: "search_files" }));
+    expect(toolResultSpy).toHaveBeenCalledOnce();
+  });
+
+  it("uses prompt-based fallback when generateWithTools is unavailable", async () => {
+    // Provider without generateWithTools — only generate
+    const provider: LLMProvider = {
+      name: "basic-mock",
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce({
+          content: '{"tool_calls":[{"name":"read_file","arguments":{"path":"test.txt"}}]}',
+          model: "mock",
+          usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+        })
+        .mockResolvedValueOnce({
+          content: '{"tool_calls":[{"name":"done","arguments":{"summary":"Done via fallback"}}]}',
+          model: "mock",
+          usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+        }),
+    };
+
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+    const result = await agent.runAgentic("Test fallback", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toBe("Done via fallback");
+    // The generate call should have the augmented system prompt with tool descriptions
+    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.system).toContain("Available Tools");
+  });
+
+  it("nudges agent when first iteration has no tool calls", async () => {
+    const provider = mockToolCallingProvider([
+      {
+        content: "Let me think about this...",
+        toolCalls: [],
+        stopReason: "end_turn",
+        usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      },
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "done", arguments: { summary: "Done after nudge" } }],
+        stopReason: "end_turn",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+    ]);
+
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+    const result = await agent.runAgentic("Do something", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toBe("Done after nudge");
+    // generateWithTools called twice (once for initial, once after nudge)
+    expect(provider.generateWithTools).toHaveBeenCalledTimes(2);
+  });
+
+  it("tracks files written and modified", async () => {
+    const provider = mockToolCallingProvider([
+      {
+        content: "",
+        toolCalls: [
+          { id: "c1", name: "write_file", arguments: { path: "new.tf", content: "resource {}" } },
+        ],
+        stopReason: "tool_use",
+        usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      },
+      {
+        content: "",
+        toolCalls: [
+          {
+            id: "c2",
+            name: "edit_file",
+            arguments: { path: "existing.tf", old_string: "old", new_string: "new" },
+          },
+        ],
+        stopReason: "tool_use",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+      {
+        content: "",
+        toolCalls: [{ id: "c3", name: "done", arguments: { summary: "Created and edited" } }],
+        stopReason: "end_turn",
+        usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+      },
+    ]);
+
+    const executor = mockToolExecutor();
+    const agent = new SpecialistAgent(provider, testConfig);
+    const result = await agent.runAgentic("Create and edit", {
+      toolExecutor: executor,
+      tools: AGENT_TOOLS,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.filesWritten).toEqual(["new.tf"]);
+    expect(result.filesModified).toEqual(["existing.tf"]);
   });
 });
 

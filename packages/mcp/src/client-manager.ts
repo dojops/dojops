@@ -164,15 +164,51 @@ export class McpClientManager {
     config: McpServerConfig,
   ): StdioClientTransport | StreamableHTTPClientTransport {
     if (config.transport === "stdio") {
-      // Sanitize env: strip sensitive vars, then merge config.env overrides
-      const sanitized = sanitizeEnvForMcp(
-        process.env,
-        (config as StdioServerConfig).allowEnvPassthrough,
-      );
+      const stdioConfig = config as StdioServerConfig;
+
+      // H-2: Restrict MCP commands to known-safe binaries
+      const ALLOWED_MCP_COMMANDS = new Set([
+        "npx",
+        "uvx",
+        "node",
+        "python3",
+        "python",
+        "deno",
+        "bun",
+      ]);
+      const commandBase = config.command.split("/").pop() ?? config.command;
+      if (!ALLOWED_MCP_COMMANDS.has(commandBase)) {
+        throw new Error(
+          `MCP command "${config.command}" is not in the allowlist. ` +
+            `Allowed: ${[...ALLOWED_MCP_COMMANDS].join(", ")}`,
+        );
+      }
+
+      // Sanitize env: strip sensitive vars from process.env
+      const sanitized = sanitizeEnvForMcp(process.env, stdioConfig.allowEnvPassthrough);
+
+      // H-6: Also sanitize config.env overrides and block dangerous env vars
+      const BLOCKED_ENV_KEYS = new Set([
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        "NODE_OPTIONS",
+      ]);
+      let mergedEnv = sanitized;
+      if (config.env) {
+        const sanitizedConfigEnv = sanitizeEnvForMcp(config.env as Record<string, string>);
+        // Remove blocked keys from config.env
+        for (const key of BLOCKED_ENV_KEYS) {
+          delete sanitizedConfigEnv[key];
+        }
+        mergedEnv = { ...sanitized, ...sanitizedConfigEnv };
+      }
+
       return new StdioClientTransport({
         command: config.command,
         args: config.args,
-        env: config.env ? { ...sanitized, ...config.env } : sanitized,
+        env: mergedEnv,
       });
     }
     return new StreamableHTTPClientTransport(new URL(config.url), {

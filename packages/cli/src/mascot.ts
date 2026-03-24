@@ -1,33 +1,31 @@
 import pc from "picocolors";
 
 /**
- * DojOps CLI mascot — 10x10 pixel art slime blob, ANSI half-block art.
- * Friendly cyan slime with the DojOps brand color.
+ * DojOps CLI mascot — 12x10 pixel art robot, ANSI half-block art.
+ * Matches the dojops-mascot-flat.svg brand mascot with mismatched eyes.
  */
 
-// Color map: slime palette
+// Color map: robot palette
 const C: Record<string, string | null> = {
   ".": null,
-  S: "#06b6d4", // slime body (brand cyan)
-  s: "#22d3ee", // slime highlight (bright cyan)
-  d: "#0e7490", // dark outline / shadow
-  W: "#e8edf5", // eye whites
-  P: "#0f172a", // pupils
-  m: "#67e8f9", // mouth / shine
+  b: "#3b82f6", // blue body
+  A: "#0ea5e9", // sky blue accents (antenna tips, toe highlights)
+  M: "#d946ef", // fuchsia (left eye, right hand)
+  C: "#06b6d4", // cyan (right eye, left hand)
 };
 
-// 10x10 slime — friendly blob with DojOps cyan
+// 12x10 robot — brand mascot with antenna, mismatched eyes, arms
 const FRAME = [
-  "...dSSd...", // top bump
-  "..dSSSSd..", // head
-  ".dSSSSSSd.", // wide face
-  ".dSWPWPSd.", // eyes (white + pupil)
-  ".dSSmmSSd.", // mouth
-  ".dSSSSSSd.", // body
-  "dSSSsSSSsd", // body with shine
-  "dSSSSSSSSd", // wide base
-  ".dSSSSSsd.", // base edge + shine
-  "..dddddd..", // shadow/ground
+  "............", // padding
+  "..A......A..", // antenna tips
+  "...b....b...", // antenna stems
+  "..bbbbbbbb..", // head
+  ".bbMbbbbCbb.", // face (pink + cyan eyes)
+  "bbbbbbbbbbbb", // wide body
+  "b.bbbbbbbb.b", // body + arms
+  "C..b....b..M", // hands (cyan left, pink right)
+  "...bbA.bbA..", // feet with highlights
+  "............", // padding
 ];
 
 function hexToRgb(hex: string): [number, number, number] {

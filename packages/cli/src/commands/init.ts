@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { runBin } from "../safe-exec";
+import { runBin } from "@dojops/sdk";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { scanRepo, enrichWithLLM } from "@dojops/core";

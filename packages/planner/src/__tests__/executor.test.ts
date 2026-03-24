@@ -635,6 +635,87 @@ describe("PlannerExecutor", () => {
     });
   });
 
+  describe("verifyFn integration", () => {
+    it("rejects output when verifyFn fails and retries with verification errors", async () => {
+      let generateCount = 0;
+      class FixableTool extends BaseSkill<Record<string, unknown>> {
+        name = "fixable-tool";
+        description = "Generates twice";
+        inputSchema = PassthroughSchema;
+        async generate(input: Record<string, unknown>): Promise<SkillOutput> {
+          generateCount++;
+          return {
+            success: true,
+            data: { content: generateCount === 1 ? "bad" : "good", ...input },
+          };
+        }
+      }
+
+      const verifyFn = vi.fn().mockImplementation(async (_tool, output) => {
+        const data = output as { content: string };
+        if (data.content === "bad") {
+          return { passed: false, errors: ["content must not be 'bad'"] };
+        }
+        return { passed: true, errors: [] };
+      });
+
+      const graph = makeGraph("verify test", [
+        { id: "t1", tool: "fixable-tool", description: "needs verification" },
+      ]);
+
+      const executor = new PlannerExecutor([new FixableTool()], undefined, {
+        maxRepairAttempts: 1,
+        verifyFn,
+      });
+      const result = await executor.execute(graph);
+
+      expect(generateCount).toBe(2);
+      expect(result.success).toBe(true);
+      expect(result.results[0].status).toBe("completed");
+      expect(verifyFn).toHaveBeenCalledTimes(2);
+    });
+
+    it("fails task when verifyFn fails on all attempts", async () => {
+      class AlwaysBadTool extends BaseSkill<Record<string, unknown>> {
+        name = "always-bad-tool";
+        description = "Output always fails verification";
+        inputSchema = PassthroughSchema;
+        async generate(): Promise<SkillOutput> {
+          return { success: true, data: { content: "bad" } };
+        }
+      }
+
+      const verifyFn = vi.fn().mockResolvedValue({
+        passed: false,
+        errors: ["output is invalid"],
+      });
+
+      const graph = makeGraph("verify fail test", [
+        { id: "t1", tool: "always-bad-tool", description: "will fail" },
+      ]);
+
+      const executor = new PlannerExecutor([new AlwaysBadTool()], undefined, {
+        maxRepairAttempts: 1,
+        verifyFn,
+      });
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(false);
+      expect(result.results[0].status).toBe("failed");
+      expect(result.results[0].error).toContain("Verification failed");
+    });
+
+    it("does not call verifyFn when not provided", async () => {
+      const graph = makeGraph("no verify", [{ id: "t1", description: "simple task" }]);
+
+      const executor = new PlannerExecutor([new SuccessTool()]);
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(true);
+      expect(result.results[0].status).toBe("completed");
+    });
+  });
+
   describe("logger integration", () => {
     it("calls taskStart and taskEnd with correct arguments for each task", async () => {
       const logger: PlannerLogger = {

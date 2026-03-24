@@ -51,7 +51,7 @@ describe("scanForSecrets", () => {
 
   describe("detects generic API keys", () => {
     it("detects sk- prefixed API keys", () => {
-      const content = 'api_key = "sk-abcdefghijklmnopqrstuvwxyz"';
+      const content = 'token = "sk-abcdefghijklmnopqrstuvwxyz"';
       const matches = scanForSecrets(content);
       expect(matches).toHaveLength(1);
       expect(matches[0].pattern).toBe("Generic API Key (sk-)");

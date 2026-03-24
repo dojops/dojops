@@ -1,4 +1,4 @@
-import { runBin } from "../safe-exec";
+import { runBin } from "@dojops/sdk";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

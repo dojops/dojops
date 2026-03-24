@@ -7,6 +7,8 @@ import {
   loadConfig,
   saveConfig,
   getConfigPath,
+  readConfigFile,
+  DojOpsConfigSchema,
   resolveProvider,
   resolveModel,
   resolveToken,
@@ -594,6 +596,77 @@ describe("config", () => {
         .mockReturnValueOnce(JSON.stringify(defaultConfig));
 
       expect(loadProfileConfig()).toEqual(defaultConfig);
+    });
+  });
+
+  describe("config schema validation", () => {
+    it("accepts a fully valid config", () => {
+      const result = DojOpsConfigSchema.safeParse({
+        defaultProvider: "anthropic",
+        defaultModel: "claude-3-opus",
+        defaultTemperature: 0.5,
+        aliases: { fast: "gpt-4o-mini" },
+        ollamaHost: "http://localhost:11434",
+        ollamaTlsRejectUnauthorized: true,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects invalid provider name", () => {
+      const result = DojOpsConfigSchema.safeParse({ defaultProvider: "invalid-llm" });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects negative temperature", () => {
+      const result = DojOpsConfigSchema.safeParse({ defaultTemperature: -1 });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects temperature above 2", () => {
+      const result = DojOpsConfigSchema.safeParse({ defaultTemperature: 3 });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects malformed ollamaHost (not a URL)", () => {
+      const result = DojOpsConfigSchema.safeParse({ ollamaHost: "not-a-url" });
+      expect(result.success).toBe(false);
+    });
+
+    it("readConfigFile strips invalid fields and keeps valid ones", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const data = {
+        defaultProvider: "openai",
+        defaultTemperature: -5,
+        defaultModel: "gpt-4o",
+      };
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(data));
+      vi.mocked(fs.statSync).mockReturnValue({ mode: 0o600 } as fs.Stats);
+
+      const config = readConfigFile(configFile);
+      expect(config.defaultProvider).toBe("openai");
+      expect(config.defaultModel).toBe("gpt-4o");
+      expect(config.defaultTemperature).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("defaultTemperature"));
+      warnSpy.mockRestore();
+    });
+
+    it("accepts empty config object", () => {
+      const result = DojOpsConfigSchema.safeParse({});
+      expect(result.success).toBe(true);
+    });
+
+    it("validates modelRouting shape", () => {
+      const result = DojOpsConfigSchema.safeParse({
+        modelRouting: { enabled: true, rules: [{ match: "simple", model: "gpt-4o-mini" }] },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects invalid modelRouting match value", () => {
+      const result = DojOpsConfigSchema.safeParse({
+        modelRouting: { enabled: true, rules: [{ match: "unknown", model: "gpt-4o" }] },
+      });
+      expect(result.success).toBe(false);
     });
   });
 });

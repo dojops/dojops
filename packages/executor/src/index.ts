@@ -8,3 +8,4 @@ export { ToolExecutor, isDangerousCommand } from "./tool-executor";
 export type { ToolExecutorOptions, McpToolDispatcher } from "./tool-executor";
 export { scanForSecrets } from "./secret-scanner";
 export type { SecretMatch } from "./secret-scanner";
+export { AuditPersistence, computeAuditHash } from "./audit";

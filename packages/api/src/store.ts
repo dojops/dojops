@@ -1,6 +1,9 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { redactSecrets } from "@dojops/core";
+
+export { redactSecrets };
 
 export interface HistoryEntry {
   id: string;
@@ -11,36 +14,6 @@ export interface HistoryEntry {
   durationMs: number;
   success: boolean;
   error?: string;
-}
-
-// ── G-10: Secret redaction patterns ──────────────────────────────────
-
-const SECRET_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
-  { pattern: /AKIA[0-9A-Z]{16}/g, replacement: "AKIA***REDACTED***" },
-  { pattern: /ghp_[a-zA-Z0-9]+/g, replacement: "ghp_***REDACTED***" },
-  { pattern: /sk-[a-zA-Z0-9]{20,}/g, replacement: "sk-***REDACTED***" },
-  { pattern: /Bearer\s+[a-zA-Z0-9._-]+/gi, replacement: "Bearer ***REDACTED***" },
-  // CS-07: Additional patterns matching executor's secret-scanner coverage
-  { pattern: /sk-ant-[a-zA-Z0-9_-]+/g, replacement: "sk-ant-***REDACTED***" },
-  { pattern: /-----BEGIN[A-Z ]*PRIVATE KEY-----/g, replacement: "***REDACTED_PRIVATE_KEY***" },
-  { pattern: /password\s*=\s*['"][^'"]+['"]/gi, replacement: "password=***REDACTED***" },
-  { pattern: /secret\s*=\s*['"][^'"]+['"]/gi, replacement: "secret=***REDACTED***" },
-  {
-    pattern: /api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_-]{8,}['"]?/gi,
-    replacement: "api_key=***REDACTED***",
-  },
-];
-
-/**
- * Redact known secret patterns from a string.
- * Masks AWS keys, GitHub tokens, OpenAI-style keys, and Bearer tokens.
- */
-export function redactSecrets(text: string): string {
-  let result = text;
-  for (const { pattern, replacement } of SECRET_PATTERNS) {
-    result = result.replace(pattern, replacement);
-  }
-  return result;
 }
 
 /** Deep-clone a value and redact secrets in all string fields. */

@@ -1,31 +1,9 @@
 /**
- * Centralized child_process wrappers for the CLI package.
- * All OS command execution is routed through these helpers so that
- * security audit tools (SonarCloud S4721) need only review this single file.
- *
- * Safety guarantees:
- * - execFileSync uses array args (no shell interpolation)
- * - execSync is only used for npm config queries (no user input)
+ * CLI-specific shell command wrapper.
+ * `runBin()` has been consolidated into `@dojops/sdk` — import it from there.
+ * This file retains only `runShellCmd` which is CLI-specific (uses execSync).
  */
-import {
-  execFileSync,
-  execSync,
-  type ExecFileSyncOptions,
-  type ExecSyncOptions,
-} from "node:child_process";
-
-/**
- * Run a binary with array arguments (no shell injection possible).
- * Wraps `execFileSync` — the binary name and each argument are passed
- * as separate argv entries, never through a shell.
- */
-export function runBin(
-  binary: string,
-  args: readonly string[],
-  options?: ExecFileSyncOptions,
-): Buffer | string {
-  return execFileSync(binary, args, options ?? {}); // NOSONAR
-}
+import { execSync, type ExecSyncOptions } from "node:child_process";
 
 /**
  * Run a hardcoded shell command string.

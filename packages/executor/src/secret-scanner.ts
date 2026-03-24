@@ -46,13 +46,42 @@ interface SecretPattern {
 }
 
 const SECRET_PATTERNS: SecretPattern[] = [
+  // AWS
   { regex: /AKIA[0-9A-Z]{16}/, name: "AWS Access Key ID", severity: "error" },
+  // GitHub tokens
   { regex: /ghp_[a-zA-Z0-9]{36}/, name: "GitHub Personal Access Token", severity: "error" },
   { regex: /gho_[a-zA-Z0-9]{36}/, name: "GitHub OAuth Token", severity: "error" },
   { regex: /ghs_[a-zA-Z0-9]{36}/, name: "GitHub App Token", severity: "error" },
   { regex: /github_pat_[a-zA-Z0-9_]{22,}/, name: "GitHub Fine-Grained PAT", severity: "error" },
+  // Generic API keys
   { regex: /sk-[a-zA-Z0-9]{20,}/, name: "Generic API Key (sk-)", severity: "error" },
+  // Private keys
   { regex: /-----BEGIN[A-Z ]*PRIVATE KEY-----/, name: "Private Key", severity: "error" },
+  // GCP service account
+  { regex: /"type"\s*:\s*"service_account"/, name: "GCP Service Account JSON", severity: "error" },
+  // Azure connection strings
+  {
+    regex: /DefaultEndpointsProtocol=https;AccountName=/,
+    name: "Azure Connection String",
+    severity: "error",
+  },
+  // Stripe keys
+  { regex: /sk_live_[a-zA-Z0-9]{24,}/, name: "Stripe Live Secret Key", severity: "error" },
+  { regex: /rk_live_[a-zA-Z0-9]{24,}/, name: "Stripe Live Restricted Key", severity: "error" },
+  // JWT tokens (3 base64 segments with dots)
+  {
+    regex: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
+    name: "JWT Token",
+    severity: "warning",
+  },
+  // HashiCorp Vault
+  { regex: /hvs\.[a-zA-Z0-9_-]{24,}/, name: "HashiCorp Vault Token", severity: "error" },
+  // Slack tokens
+  { regex: /xoxb-[0-9]{10,}-[a-zA-Z0-9]+/, name: "Slack Bot Token", severity: "error" },
+  { regex: /xoxp-[0-9]{10,}-[a-zA-Z0-9]+/, name: "Slack User Token", severity: "error" },
+  // Anthropic keys
+  { regex: /sk-ant-[a-zA-Z0-9_-]{20,}/, name: "Anthropic API Key", severity: "error" },
+  // Hardcoded credentials (check for placeholders)
   {
     regex: /password\s*=\s*['"][^'"]+['"]/,
     name: "Hardcoded password",
@@ -62,6 +91,12 @@ const SECRET_PATTERNS: SecretPattern[] = [
   {
     regex: /secret\s*=\s*['"][^'"]+['"]/,
     name: "Hardcoded secret",
+    severity: "warning",
+    checkPlaceholder: true,
+  },
+  {
+    regex: /api_key\s*=\s*['"][^'"]+['"]/,
+    name: "Hardcoded API key",
     severity: "warning",
     checkPlaceholder: true,
   },

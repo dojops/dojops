@@ -52,6 +52,7 @@
     "@dojops/api": "workspace:*",
     "@dojops/context": "workspace:*",
     "@dojops/core": "workspace:*",
+    "@dojops/sdk": "workspace:*",
     "@dojops/runtime": "workspace:*",
     "@dojops/executor": "workspace:*",
     "@dojops/mcp": "workspace:*",

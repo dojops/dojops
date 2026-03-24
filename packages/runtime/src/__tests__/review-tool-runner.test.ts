@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReviewToolSpec } from "@dojops/core";
 
-// Mock safe-exec before importing the module under test
-vi.mock("../safe-exec", () => ({
+// Mock @dojops/sdk's runBin before importing the module under test
+vi.mock("@dojops/sdk", () => ({
   runBin: vi.fn(),
 }));
 
 import { runReviewTool, runReviewTools } from "../review-tool-runner";
-import { runBin } from "../safe-exec";
+import { runBin } from "@dojops/sdk";
 
 const mockedRunBin = vi.mocked(runBin);
 

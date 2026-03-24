@@ -411,4 +411,23 @@ describe("classifyDiffRisk", () => {
     const report = classifyDiffRisk(diff);
     expect(report.suggestedReviewers).toContain("observability-specialist");
   });
+
+  it("cross-checks with executor classifyPathRisk for coherence", () => {
+    // .env files are HIGH in executor's path classification but not in
+    // diff-risk's local rules when the path doesn't match the secrets pattern.
+    // The cross-check elevates them from INFO to HIGH.
+    const diff = [
+      "diff --git a/.env b/.env",
+      "--- a/.env",
+      "+++ b/.env",
+      "@@ -1 +1 @@",
+      "-DB_PASS=old",
+      "+DB_PASS=new",
+    ].join("\n");
+
+    const report = classifyDiffRisk(diff);
+    // Executor classifies .env as HIGH; cross-check should lift the score
+    expect(["HIGH", "CRITICAL"]).toContain(report.overallRisk);
+    expect(report.files[0].reasons).toContain("Executor policy: HIGH");
+  });
 });

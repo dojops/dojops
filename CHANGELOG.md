@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.9] - 2026-03-23
+## [1.1.9] - 2026-03-24
 
 ### Added
 
@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`[TOOL NOT INSTALLED]` executor guard**: Tool executor detects exit code 127 (command not found) and returns a clear, non-retriable error message telling the agent to stop and use `run_skill` instead
 - **Auto agent premature-done prevention**: `validateBeforeDone` now rejects `done` calls when no files have been written to disk, and the agent loop nudges the LLM to use `write_file` after `run_skill`
 - **Auto agent efficiency rules**: System prompt blocks global package installs, `.env` writes, unlisted CLI tools, and python-based YAML validation to reduce token waste
+- **Hash-chained audit persistence**: `AuditPersistence` writes execution audit entries to `.dojops/audit.jsonl` as newline-delimited JSON with SHA-256 hash chains (each entry links to previous via `previousHash`, first entry uses `GENESIS`). Includes `verify()` for tamper detection
+- **Zod config schema validation**: `DojOpsConfigSchema` validates `.dojops/config.yaml` at load time with graceful degradation — invalid fields are stripped with warnings, valid fields preserved
+- **Multi-agent coordinator**: `AgentCoordinator` enables inter-task shared context, message passing, and handoff queues during plan execution. Wired into `--execute` and `/api/plan` routes
+- **16 specialist agent system prompts**: All specialist agents now carry domain-specific system prompts with output format rules, tool awareness, and best practice guidelines for autonomous operation
+- **Secret scanning in tool executor**: Generated output is scanned for leaked credentials (AWS keys, private keys, tokens) before being written to disk
+- **LLM output redaction**: API key patterns and secrets in LLM responses are detected and masked before display
 
 ### Fixed
 
@@ -24,12 +30,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenAI `is_error` gap**: OpenAI API has no `is_error` field on tool messages so error flags were silently dropped. Error tool results now prefixed with `[TOOL ERROR]` for OpenAI-compatible providers
 - **actionlint shellcheck dependency**: actionlint fails with cryptic JSON parse error when shellcheck is not installed. Fixed across all three usage paths: review-tool-map (`-shellcheck=`), github-actions.dops verification command, and auto agent cheatsheet
 - **Model routing default**: `DOJOPS_MODEL_ROUTING` changed from opt-in (`=== "true"`) to default-on (`!== "false"`) with NoopProvider guard
+- **HistoryStore unbounded growth**: Store now enforces a max-entries cap (default 500) and prunes oldest entries on write
+- **Diff risk scoring edge cases**: `computeDiffRisk()` handles empty diffs and single-line changes without crashing
+- **MCP client timeout handling**: `McpClientManager` properly cleans up stale connections and avoids hanging on unresponsive servers
+- **Tool executor child process cleanup**: Spawned processes are killed on timeout instead of leaving orphans
+- **Safe-exec `cp` removed from runtime and skill-registry**: Replaced inline shell wrappers with direct `node:child_process` calls to eliminate command injection surface
 
 ### Changed
 
 - **Auto agent workflow rewritten**: Steps now emphasize: generate with `run_skill` → write to disk with `write_file` → repeat for all files → then `done`. Previously workflow was ambiguous about the write step
 - **Auto agent text-only nudge expanded**: When the LLM stops emitting tool calls without writing files, a targeted nudge message is injected explaining that `run_skill` output must be persisted with `write_file`
 - **Prompt compiler data boundaries**: Variable substitutions (`{context7Docs}`, `{projectContext}`, `{existingContent}`) now wrapped in `<data label="...">` XML tags so the LLM treats them as content, not instructions
+- **Planner executor supports coordinator injection**: `PlannerExecutor` accepts optional `AgentCoordinator` in options for shared context between tasks during wave-based execution
 
 ## [1.1.8] - 2026-03-22
 

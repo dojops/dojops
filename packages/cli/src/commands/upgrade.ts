@@ -1,4 +1,4 @@
-import { runBin } from "../safe-exec";
+import { runBin } from "@dojops/sdk";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";

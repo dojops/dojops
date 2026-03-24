@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { z } from "zod";
 import { isCopilotAuthenticated } from "@dojops/core";
 import { mkdirOwnerOnly, writeFileOwnerOnly } from "./secure-fs";
 import { encryptTokens, decryptTokens } from "./vault";
@@ -48,6 +49,66 @@ const TOKEN_ENV_MAP: Record<string, string> = {
   gemini: "GEMINI_API_KEY",
   "github-copilot": "GITHUB_COPILOT_TOKEN",
 };
+
+// ── Config schema validation ──────────────────────────────────────
+
+const ModelRoutingRuleSchema = z.object({
+  match: z.enum(["simple", "complex", "code", "review", "analysis"]),
+  model: z.string().min(1),
+  provider: z.string().optional(),
+});
+
+const ModelRoutingConfigSchema = z.object({
+  enabled: z.boolean(),
+  rules: z.array(ModelRoutingRuleSchema),
+});
+
+export const DojOpsConfigSchema = z.object({
+  defaultProvider: z.enum(VALID_PROVIDERS as unknown as [string, ...string[]]).optional(),
+  defaultModel: z.string().min(1).optional(),
+  defaultTemperature: z.number().min(0).max(2).optional(),
+  tokens: z.record(z.string(), z.string()).optional(),
+  aliases: z.record(z.string(), z.string()).optional(),
+  ollamaHost: z.string().url().optional(),
+  ollamaTlsRejectUnauthorized: z.boolean().optional(),
+  modelRouting: ModelRoutingConfigSchema.optional(),
+});
+
+/**
+ * Validates a parsed config object against the schema. Returns the validated
+ * config (unknown keys stripped). Logs warnings for invalid fields — returns
+ * a partial config with only the valid fields rather than rejecting entirely.
+ */
+function validateConfig(raw: Record<string, unknown>): DojOpsConfig {
+  const result = DojOpsConfigSchema.safeParse(raw);
+  if (result.success) return result.data as DojOpsConfig;
+
+  // Build a partial config with only the fields that parse correctly
+  const partial: Record<string, unknown> = {};
+  const badKeys = new Set<string>();
+
+  for (const issue of result.error.issues) {
+    if (issue.path.length > 0) {
+      badKeys.add(String(issue.path[0]));
+    }
+  }
+
+  for (const [key, value] of Object.entries(raw)) {
+    if (!badKeys.has(key)) {
+      partial[key] = value;
+    }
+  }
+
+  // Warn once per invalid field (not per sub-issue)
+  for (const key of badKeys) {
+    const issues = result.error.issues
+      .filter((i) => String(i.path[0]) === key)
+      .map((i) => i.message);
+    console.warn(`[dojops] Config: invalid "${key}" (${issues.join("; ")}), ignoring.`);
+  }
+
+  return partial as DojOpsConfig;
+}
 
 function globalConfigDir(): string {
   return path.join(os.homedir(), ".dojops");
@@ -118,7 +179,7 @@ export function readConfigFile(filePath: string): DojOpsConfig {
       return {};
     }
     checkConfigPermissions(filePath);
-    const config = parsed as DojOpsConfig;
+    const config = validateConfig(parsed as Record<string, unknown>);
     // Decrypt tokens transparently on read
     if (config.tokens) {
       config.tokens = decryptTokens(config.tokens);

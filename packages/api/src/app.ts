@@ -317,7 +317,7 @@ export function createApp(deps: AppDependencies): Express {
     app.use(`${prefix}/history`, historyRouter);
     app.use(`${prefix}/scan`, scanLimiter, scanRouter);
     app.use(`${prefix}/chat`, llmLimiter, promptValidation, budgetMiddleware, chatRouter);
-    app.use(`${prefix}/review`, llmLimiter, budgetMiddleware, reviewRouter);
+    app.use(`${prefix}/review`, llmLimiter, promptValidation, budgetMiddleware, reviewRouter);
     app.use(`${prefix}/auto`, planLimiter, promptValidation, budgetMiddleware, autoRouter);
   };
 

@@ -69,6 +69,39 @@ describe("redactSecrets", () => {
     expect(result).not.toContain(shouldNotContain);
   });
 
+  it("redacts AWS access key IDs", () => {
+    const msg = "Found credential AKIAIOSFODNN7EXAMPLE in config";
+    const result = redactSecrets(msg);
+    expect(result).toContain("AKIA***REDACTED***");
+    expect(result).not.toContain("IOSFODNN7EXAMPLE");
+  });
+
+  it("redacts PEM private key headers", () => {
+    const msg = "Leaked: -----BEGIN RSA PRIVATE KEY-----";
+    expect(redactSecrets(msg)).toContain("***REDACTED_PRIVATE_KEY***");
+  });
+
+  it("redacts password assignments", () => {
+    const msg = 'db_config: password="super_secret_123"';
+    const result = redactSecrets(msg);
+    expect(result).toContain("password=***REDACTED***");
+    expect(result).not.toContain("super_secret_123");
+  });
+
+  it("redacts secret assignments", () => {
+    const msg = "secret='my_client_secret_value'";
+    const result = redactSecrets(msg);
+    expect(result).toContain("secret=***REDACTED***");
+    expect(result).not.toContain("my_client_secret_value");
+  });
+
+  it("redacts api_key assignments", () => {
+    const msg = "api_key=abcdef123456789012";
+    const result = redactSecrets(msg);
+    expect(result).toContain("api_key=***REDACTED***");
+    expect(result).not.toContain("abcdef123456789012");
+  });
+
   it("returns plain messages unchanged", () => {
     const msg = "Connection refused: ECONNREFUSED 127.0.0.1:11434";
     expect(redactSecrets(msg)).toBe(msg);

@@ -132,6 +132,9 @@ importers:
       '@dojops/scanner':
         specifier: workspace:*
         version: link:../scanner
+      '@dojops/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@dojops/session':
         specifier: workspace:*
         version: link:../session

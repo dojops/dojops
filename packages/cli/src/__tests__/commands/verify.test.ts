@@ -19,7 +19,7 @@ vi.mock("@dojops/runtime", () => ({
 }));
 
 // Mock runBin so terraform/helm calls don't depend on installed binaries
-vi.mock("../../safe-exec", () => ({
+vi.mock("@dojops/sdk", () => ({
   runBin: vi.fn().mockImplementation(() => {
     const err = new Error("command not found") as NodeJS.ErrnoException;
     err.code = "ENOENT";

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { runBin } from "./safe-exec";
+import { runBin } from "@dojops/sdk";
 import { writeFileOwnerOnly } from "./secure-fs";
 import { encrypt as vaultEncrypt, decrypt as vaultDecrypt, isEncrypted } from "./vault";
 import { RepoContextSchemaV1, RepoContextSchemaV2, parseDojopsMdString } from "@dojops/core";

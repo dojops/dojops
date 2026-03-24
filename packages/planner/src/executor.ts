@@ -206,6 +206,21 @@ async function executeWithSemaphore<T>(
   });
 }
 
+/** Result from verifying a task's output. */
+export interface PlannerVerifyResult {
+  /** Whether the output passed verification. */
+  passed: boolean;
+  /** Human-readable error messages when verification fails. */
+  errors: string[];
+}
+
+/** Optional verification callback injected from the execution layer. */
+export type PlannerVerifyFn = (
+  tool: DevOpsSkill,
+  output: unknown,
+  taskId: string,
+) => Promise<PlannerVerifyResult>;
+
 export interface PlannerExecutorOptions {
   /** Timeout in ms for each tool.generate() call (default: unlimited) */
   generateTimeoutMs?: number;
@@ -217,6 +232,9 @@ export interface PlannerExecutorOptions {
   coordinator?: AgentCoordinator;
   /** Result aggregation rules for combining wave outputs. */
   aggregationRules?: AggregationRule[];
+  /** Optional post-generate verification. When provided, the repair loop uses
+   *  verification errors instead of raw generate errors for targeted feedback. */
+  verifyFn?: PlannerVerifyFn;
 }
 
 export class PlannerExecutor {
@@ -226,6 +244,7 @@ export class PlannerExecutor {
   private readonly maxRepairAttempts: number;
   private readonly coordinator: AgentCoordinator | undefined;
   private readonly aggregator: ResultAggregator | undefined;
+  private readonly verifyFn: PlannerVerifyFn | undefined;
 
   constructor(
     tools: DevOpsSkill[],
@@ -240,6 +259,7 @@ export class PlannerExecutor {
     this.aggregator = options?.aggregationRules
       ? new ResultAggregator(options.aggregationRules)
       : undefined;
+    this.verifyFn = options?.verifyFn;
   }
 
   private recordResult(
@@ -406,6 +426,17 @@ export class PlannerExecutor {
             const violations = evaluateSuccessCriteria(task.successCriteria, data);
             if (violations.length > 0) {
               lastError = `Success criteria failed: ${violations.join("; ")}`;
+              if (attempt < this.maxRepairAttempts) continue;
+              this.recordResult(task, "failed", results, failed, lastError);
+              return;
+            }
+          }
+
+          // Run verification when available — drives repair with richer feedback
+          if (this.verifyFn) {
+            const verifyResult = await this.verifyFn(tool, data, task.id);
+            if (!verifyResult.passed) {
+              lastError = `Verification failed: ${verifyResult.errors.join("; ")}`;
               if (attempt < this.maxRepairAttempts) continue;
               this.recordResult(task, "failed", results, failed, lastError);
               return;

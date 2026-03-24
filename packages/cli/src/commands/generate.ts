@@ -779,10 +779,8 @@ function trySkillDirectPath(
   context7Provider: Context7Provider | undefined,
   projectContextStr: string | undefined,
 ): { skillName: string; skillCtx: SkillDirectContext; registryHasSkill: boolean } | null {
-  const skillName =
-    ctx.globalOpts.skill ??
-    autoDetectSkill(prompt) ??
-    autoDetectInstalledSkill(prompt, projectRoot);
+  // --skill flag is handled earlier in generateCommand(); here we only auto-detect
+  const skillName = autoDetectSkill(prompt) ?? autoDetectInstalledSkill(prompt, projectRoot);
   if (!skillName) return null;
 
   const skillCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
@@ -1062,6 +1060,39 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const { docAugmenter, context7Provider } = await initContext7();
   const projectContextStr = buildProjectContextString(projectRoot);
 
+  // Explicit --skill flag: user override takes top priority (unchanged)
+  if (ctx.globalOpts.skill) {
+    const skillCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
+    await handleSkillDirect(
+      ctx,
+      args,
+      prompt,
+      writePath,
+      allowAllPaths,
+      ctx.globalOpts.skill,
+      skillCtx,
+    );
+    return;
+  }
+
+  // Agent-first routing: let agents decide before falling back to skill auto-detection.
+  // Agents are domain specialists with project context awareness; skills are template
+  // generators. Routing to agents first gives them authority over their domain while
+  // skills remain available as tools (via run_skill) and as fallback.
+  const { router } = createRouter(provider, projectRoot, docAugmenter);
+  const projectDomains: string[] = projectRoot
+    ? (freshContext(projectRoot)?.relevantDomains ?? [])
+    : [];
+
+  const route = resolveRoute(ctx, router, prompt, projectDomains);
+
+  // High-confidence agent match (>= 0.4 = router threshold) → agent handles
+  if (route.confidence >= 0.4) {
+    await runAgentPath(ctx, args, route, prompt, projectRoot, writePath, allowAllPaths);
+    return;
+  }
+
+  // Low agent confidence → fall back to skill auto-detection for generation tasks
   const skillDirect = trySkillDirectPath(
     ctx,
     prompt,
@@ -1084,7 +1115,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     return;
   }
 
-  // Intelligent skill fallback: hub search + Context7 before agent routing
+  // No skill match either — try hub search fallback
   const fallbackResult = await trySkillFallback(
     ctx,
     prompt,
@@ -1098,7 +1129,6 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   );
   if (fallbackResult === "handled") return;
 
-  // Hub skill was installed — retry skill matching
   if (fallbackResult === "retry") {
     const retrySkill = trySkillDirectPath(
       ctx,
@@ -1121,16 +1151,22 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
       );
       return;
     }
-    // Installed skill not detected — fall through to agent routing
   }
 
-  const { router } = createRouter(provider, projectRoot, docAugmenter);
-  const projectDomains: string[] = projectRoot
-    ? (freshContext(projectRoot)?.relevantDomains ?? [])
-    : [];
+  // Final fallback: agent handles with default/low confidence
+  await runAgentPath(ctx, args, route, prompt, projectRoot, writePath, allowAllPaths);
+}
 
-  const route = resolveRoute(ctx, router, prompt, projectDomains);
-
+/** Run the agent routing path: preflight check, generation, result handling. */
+async function runAgentPath(
+  ctx: CLIContext,
+  args: string[],
+  route: ReturnType<typeof resolveRoute>,
+  prompt: string,
+  projectRoot: string | undefined,
+  writePath: string | undefined,
+  allowAllPaths: boolean,
+): Promise<void> {
   const canProceed = preflightCheck(route.agent.name, route.agent.toolDependencies, {
     quiet: ctx.globalOpts.quiet || ctx.globalOpts.output === "json",
   });

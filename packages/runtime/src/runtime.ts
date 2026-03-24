@@ -1,9 +1,9 @@
-import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as yaml from "js-yaml";
 import { LLMProvider } from "@dojops/core";
 import type { DevOpsSkill, SkillOutput, VerificationResult, VerificationIssue } from "@dojops/sdk";
+import { sha256 } from "@dojops/sdk";
 import { z } from "zod";
 import { DopsExecution, DopsSkill, DopsRisk, FileSpecV2, Context7LibraryRef } from "./spec";
 import { compilePromptV2, PromptContextV2 } from "./prompt-compiler";
@@ -11,11 +11,6 @@ import { validateStructure } from "./structural-validator";
 import { runVerification } from "./binary-verifier";
 import { detectExistingContent, resolveFilePath, matchesScopePattern } from "./file-writer";
 import { auditAgainstDocs } from "./context7-doc-auditor";
-
-/** Compute SHA-256 hex hash of a string. */
-function sha256(content: string): string {
-  return crypto.createHash("sha256").update(content).digest("hex");
-}
 
 /** Compute hashes for a DopsSkill. */
 function computeSkillHashes(module: { sections: { prompt: string }; raw: string }): {

@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { LLMProvider } from "@dojops/core";
 import { DevOpsSkill } from "@dojops/sdk";
-import { decompose, PlannerExecutor, TaskGraph, PlannerResult, AgentInfo } from "@dojops/planner";
+import {
+  decompose,
+  PlannerExecutor,
+  AgentCoordinator,
+  TaskGraph,
+  PlannerResult,
+  AgentInfo,
+} from "@dojops/planner";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import type { CriticCallback } from "@dojops/executor";
 import { HistoryStore, logRouteError } from "../store";
@@ -101,7 +108,10 @@ async function executePlanWithTimeout(
 
   let planResult: PlannerResult;
   try {
-    const executor = new PlannerExecutor(tools, undefined, { agentConfigs });
+    const executor = new PlannerExecutor(tools, undefined, {
+      agentConfigs,
+      coordinator: new AgentCoordinator(),
+    });
     planResult = await executor.execute(graph);
 
     if (autoApprove && !controller.signal.aborted) {

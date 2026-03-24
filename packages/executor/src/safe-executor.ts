@@ -12,6 +12,7 @@ import {
 import { ApprovalHandler, AutoApproveHandler, buildPreview } from "./approval";
 import { DEFAULT_POLICY, PolicyViolationError, checkWriteAllowed } from "./policy";
 import { withTimeout } from "./sandbox";
+import type { AuditPersistence } from "./audit";
 
 /** Critique callback for the self-repair loop (injected from @dojops/core). */
 export interface CriticCallback {
@@ -41,6 +42,8 @@ export interface SafeExecutorOptions {
   proactiveCritic?: CriticCallback;
   /** Optional progress callback for UI feedback during repair loops. */
   progress?: ExecutorProgressCallback;
+  /** Optional audit persistence for hash-chained JSONL logging to disk. */
+  auditPersistence?: AuditPersistence;
 }
 
 /** Options for the internal runExecution method. */
@@ -82,6 +85,7 @@ export class SafeExecutor {
   private readonly critic: CriticCallback | undefined;
   private readonly proactiveCritic: CriticCallback | undefined;
   private readonly progress: ExecutorProgressCallback | undefined;
+  private readonly auditPersistence: AuditPersistence | undefined;
   private readonly auditLog: ExecutionAuditEntry[] = [];
   private readonly tokenUsage = { prompt: 0, completion: 0, total: 0 };
 
@@ -91,6 +95,7 @@ export class SafeExecutor {
     this.progress = options.progress;
     this.critic = options.critic;
     this.proactiveCritic = options.proactiveCritic;
+    this.auditPersistence = options.auditPersistence;
   }
 
   private handleTimeoutError(
@@ -722,6 +727,15 @@ export class SafeExecutor {
       if (meta.toolHash) auditEntry.toolHash = meta.toolHash as string;
     }
     this.auditLog.push(auditEntry);
+
+    // Persist to disk with hash chain if configured
+    if (this.auditPersistence) {
+      try {
+        this.auditPersistence.append(auditEntry);
+      } catch {
+        // Persistence is best-effort — don't block execution
+      }
+    }
 
     return {
       taskId,
