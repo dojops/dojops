@@ -48,7 +48,7 @@
     "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
   },
   "dependencies": {
-    "@clack/prompts": "^0.11.0",
+    "@clack/prompts": "^1.1.0",
     "@dojops/api": "workspace:*",
     "@dojops/context": "workspace:*",
     "@dojops/core": "workspace:*",
@@ -59,7 +59,7 @@
     "@dojops/scanner": "workspace:*",
     "@dojops/session": "workspace:*",
     "@dojops/skill-registry": "workspace:*",
-    "better-sqlite3": "^11.9.1",
+    "better-sqlite3": "^12.8.0",
     "dotenv": "^17.0.0",
     "js-yaml": "^4.1.0",
     "picocolors": "^1.1.1",
