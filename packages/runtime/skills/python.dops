@@ -1,0 +1,163 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: python
+  version: 1.2.0
+  description: "Generate production-ready Python scripts and utilities"
+  author: dojops
+  license: MIT
+  tags: [python, script, automation, utility, devops]
+
+context:
+  technology: Python
+  fileFormat: raw
+  outputGuidance: |
+    Generate a complete, production-ready Python script.
+    Output raw Python content directly -- do NOT wrap in JSON, code fences, or any other format.
+    The script MUST start with a shebang line: #!/usr/bin/env python3
+
+    CRITICAL OUTPUT RULES:
+    - First line MUST be #!/usr/bin/env python3
+    - Include a module docstring describing purpose and usage
+    - Use `if __name__ == "__main__":` guard
+    - Use argparse for CLI argument parsing
+    - Use type hints on all function signatures
+    - Use pathlib.Path instead of os.path where possible
+    - Target Python 3.10+ (use match/case, union types with |)
+    - Use only standard library unless the prompt explicitly requests third-party packages
+    - Include logging setup with configurable verbosity
+
+    Script type detection from prompt:
+    - **CLI tool**: argparse, subcommands, rich output
+    - **Data processing**: csv/json reading, pathlib, generators
+    - **API client**: urllib.request or requests, retry logic, error handling
+    - **Automation**: subprocess.run, shlex, platform detection
+    - **DevOps utility**: yaml/toml parsing, file manipulation, template rendering
+
+    EXAMPLE -- CLI utility:
+    #!/usr/bin/env python3
+    """Rotate log files older than N days.
+
+    Usage:
+        ./rotate-logs.py /var/log/app --days 30 --compress
+    """
+
+    from __future__ import annotations
+
+    import argparse
+    import gzip
+    import logging
+    import shutil
+    import sys
+    from datetime import datetime, timedelta
+    from pathlib import Path
+
+    logger = logging.getLogger(__name__)
+
+    def rotate_logs(log_dir: Path, max_age_days: int, compress: bool) -> int:
+        cutoff = datetime.now() - timedelta(days=max_age_days)
+        count = 0
+        for log_file in log_dir.glob("*.log"):
+            mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
+            if mtime < cutoff:
+                if compress:
+                    with open(log_file, "rb") as f_in:
+                        with gzip.open(f"{log_file}.gz", "wb") as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                log_file.unlink()
+                count += 1
+                logger.info("Rotated: %s", log_file.name)
+        return count
+
+    def main() -> None:
+        parser = argparse.ArgumentParser(description=__doc__)
+        parser.add_argument("directory", type=Path, help="Log directory")
+        parser.add_argument("--days", type=int, default=30, help="Max age in days")
+        parser.add_argument("--compress", action="store_true", help="Compress before removing")
+        parser.add_argument("-v", "--verbose", action="store_true")
+        args = parser.parse_args()
+        logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+        count = rotate_logs(args.directory, args.days, args.compress)
+        print(f"Rotated {count} log files")
+
+    if __name__ == "__main__":
+        main()
+  bestPractices:
+    - Start with #!/usr/bin/env python3 shebang for portability
+    - Use `if __name__ == "__main__":` to allow both import and direct execution
+    - Add type hints to all function signatures and return types
+    - Use argparse for command-line argument parsing with help text
+    - Prefer pathlib.Path over os.path for file operations
+    - Use logging module instead of print() for diagnostic output
+    - Handle exceptions with specific types, not bare except
+    - Use context managers (with) for file and resource handling
+    - Follow PEP 8 naming (snake_case functions, UPPER_CASE constants)
+    - Include a module docstring with usage examples
+    - Use sys.exit() with appropriate exit codes (0 = success, 1 = error)
+    - Validate inputs early and fail with clear messages
+    - Use subprocess.run() with check=True for external commands
+    - Prefer f-strings for string formatting
+    - Keep imports organized (stdlib, third-party, local) with blank lines between groups
+  context7Libraries:
+    - name: python
+      query: "Python argparse, pathlib, logging, subprocess, typing hints, dataclasses, context managers"
+
+files:
+  - path: "{outputFile}"
+    format: raw
+
+detection:
+  paths: ["*.py"]
+  updateMode: true
+
+verification:
+  binary:
+    command: "python3 -m py_compile {entryFile}"
+    parser: generic-stderr
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["**/*.py"]
+
+risk:
+  level: LOW
+  rationale: "Python scripts affect local automation only"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Python Script
+
+## Prompt
+
+You are an expert Python developer specializing in production-ready scripts, automation tools, and DevOps utilities.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+python, py, script, automation, utility, tool, cli,
+migrate, transform, parse, process, generate, validate,
+boto3, aws, gcp, azure, fabric, invoke, click

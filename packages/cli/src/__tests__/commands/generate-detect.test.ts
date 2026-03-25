@@ -45,6 +45,25 @@ describe("autoDetectSkill", () => {
     expect(autoDetectSkill("Tell me about the nginx config")).toBeUndefined();
   });
 
+  it("detects shell skill from script prompts", () => {
+    expect(autoDetectSkill("Write a bash script to backup my database")).toBe("shell");
+    expect(autoDetectSkill("Create a deploy script for production")).toBe("shell");
+    expect(autoDetectSkill("Generate a setup script for the dev environment")).toBe("shell");
+    expect(autoDetectSkill("I need a cron script for log rotation")).toBe("shell");
+  });
+
+  it("detects python skill from Python prompts", () => {
+    expect(autoDetectSkill("Write a Python script to parse CSV files")).toBe("python");
+    expect(autoDetectSkill("Create a Python CLI tool for data migration")).toBe("python");
+    expect(autoDetectSkill("Generate a boto3 script for S3 bucket management")).toBe("python");
+  });
+
+  it("detects powershell skill from PowerShell prompts", () => {
+    expect(autoDetectSkill("Write a PowerShell script for AD user management")).toBe("powershell");
+    expect(autoDetectSkill("Create a ps1 script to configure IIS")).toBe("powershell");
+    expect(autoDetectSkill("Generate a cmdlet for Azure resource cleanup")).toBe("powershell");
+  });
+
   it("still detects modules for generation prompts with action verbs", () => {
     expect(autoDetectSkill("Create a GitHub Actions workflow")).toBe("github-actions");
     expect(autoDetectSkill("Generate terraform config for S3")).toBe("terraform");

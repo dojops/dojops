@@ -15,7 +15,8 @@ function mockProvider(): LLMProvider {
 
 /**
  * Formula: confidence = min(matchedKeywords * 0.25 + matchRatio * 0.25 + (matchedKeywords >= 3 ? 0.15 : 0), 1.0)
- * where matchRatio = matchedKeywords.length / agent.keywords.length
+ * where matchRatio = matchedKeywords.length / max(agent.keywords.length, 10)
+ * The denominator is capped at min 10 to prevent bias toward agents with few keywords.
  */
 describe("Router confidence formula (H-3)", () => {
   describe("basic calculation", () => {
@@ -34,37 +35,37 @@ describe("Router confidence formula (H-3)", () => {
       },
     ];
 
-    it("single keyword match (4-keyword agent): confidence ≈ 0.3125", () => {
+    it("single keyword match (4-keyword agent): confidence ≈ 0.275", () => {
       const router = new AgentRouter(mockProvider(), configs);
-      // "alpha" matches 1 of 4 keywords
-      // confidence = 1 * 0.25 + (1/4) * 0.25 + 0 = 0.25 + 0.0625 = 0.3125
+      // "alpha" matches 1 of 4 keywords, denominator capped at 10
+      // confidence = 1 * 0.25 + (1/10) * 0.25 + 0 = 0.25 + 0.025 = 0.275
       const result = router.route("alpha something else");
       // Low confidence < 0.4, should fall to orchestrator
-      expect(result.confidence).toBeCloseTo(0.3125, 4);
+      expect(result.confidence).toBeCloseTo(0.275, 4);
       expect(result.agent.domain).toBe("orchestration");
     });
 
-    it("two keyword matches (4-keyword agent): confidence = 0.625", () => {
+    it("two keyword matches (4-keyword agent): confidence = 0.55", () => {
       const router = new AgentRouter(mockProvider(), configs);
-      // "alpha beta" matches 2 of 4 keywords
-      // confidence = 2 * 0.25 + (2/4) * 0.25 + 0 = 0.5 + 0.125 = 0.625
+      // "alpha beta" matches 2 of 4 keywords, denominator capped at 10
+      // confidence = 2 * 0.25 + (2/10) * 0.25 + 0 = 0.5 + 0.05 = 0.55
       const result = router.route("alpha and beta together");
-      expect(result.confidence).toBeCloseTo(0.625, 4);
+      expect(result.confidence).toBeCloseTo(0.55, 4);
       expect(result.agent.domain).toBe("testing");
     });
 
     it("three keyword matches → bonus applied", () => {
       const router = new AgentRouter(mockProvider(), configs);
-      // "alpha beta gamma" matches 3 of 4 keywords
-      // confidence = 3 * 0.25 + (3/4) * 0.25 + 0.15 = 0.75 + 0.1875 + 0.15 = min(1.0875, 1.0) = 1.0
+      // "alpha beta gamma" matches 3 of 4 keywords, denominator capped at 10
+      // confidence = 3 * 0.25 + (3/10) * 0.25 + 0.15 = 0.75 + 0.075 + 0.15 = 0.975
       const result = router.route("alpha beta gamma query");
-      expect(result.confidence).toBe(1);
+      expect(result.confidence).toBeCloseTo(0.975, 4);
       expect(result.agent.domain).toBe("testing");
     });
 
     it("all keywords match → capped at 1.0", () => {
       const router = new AgentRouter(mockProvider(), configs);
-      // 4 of 4: confidence = 4*0.25 + 1.0*0.25 + 0.15 = 1.0 + 0.25 + 0.15 = min(1.4, 1.0) = 1.0
+      // 4 of 4: confidence = 4*0.25 + (4/10)*0.25 + 0.15 = 1.0 + 0.1 + 0.15 = min(1.25, 1.0) = 1.0
       const result = router.route("alpha beta gamma delta");
       expect(result.confidence).toBe(1);
       expect(result.agent.domain).toBe("testing");
@@ -145,9 +146,9 @@ describe("Router confidence formula (H-3)", () => {
 
     it("routes to orchestrator when top 2 within 0.1 (different domains)", () => {
       const router = new AgentRouter(mockProvider(), configs);
-      // "terraform hcl" matches agent-a: 2/3 -> 2*0.25 + (2/3)*0.25 = 0.5 + 0.1667 = 0.6667
-      // "kubernetes deployment" matches agent-b: 2/4 -> 2*0.25 + (2/4)*0.25 = 0.5 + 0.125 = 0.625
-      // Difference: 0.6667 - 0.625 = 0.0417 < 0.1 -> ambiguity
+      // "terraform hcl" matches agent-a: 2 of 3 (capped to 10) -> 2*0.25 + (2/10)*0.25 = 0.55
+      // "kubernetes deployment" matches agent-b: 2 of 4 (capped to 10) -> 2*0.25 + (2/10)*0.25 = 0.55
+      // Difference: 0.0 < 0.1 -> ambiguity
       const result = router.route("terraform hcl kubernetes deployment");
       expect(result.agent.domain).toBe("orchestration");
       expect(result.reason).toContain("Ambiguous");
@@ -184,7 +185,7 @@ describe("Router confidence formula (H-3)", () => {
 
     it("no ambiguity when gap exceeds 0.1", () => {
       const router = new AgentRouter(mockProvider(), configs);
-      // "terraform hcl infrastructure" matches agent-a: 3/3 -> 3*0.25 + 1.0*0.25 + 0.15 = 1.15 capped at 1.0
+      // "terraform hcl infrastructure" matches agent-a: 3 of 3 (capped to 10) -> 3*0.25 + (3/10)*0.25 + 0.15 = 0.975
       // No match for agent-b -> gap > 0.1
       const result = router.route("terraform hcl infrastructure only");
       expect(result.agent.domain).toBe("domain-a");
@@ -220,7 +221,7 @@ describe("Router confidence formula (H-3)", () => {
   });
 
   describe("formula edge cases", () => {
-    it("single-keyword agent with match → confidence 0.5", () => {
+    it("single-keyword agent with match → confidence 0.275 (capped denominator)", () => {
       const configs: SpecialistConfig[] = [
         {
           name: "fallback",
@@ -236,11 +237,12 @@ describe("Router confidence formula (H-3)", () => {
         },
       ];
       const router = new AgentRouter(mockProvider(), configs);
-      // "unique" matches 1 of 1 keywords
-      // confidence = 1*0.25 + (1/1)*0.25 + 0 = 0.25 + 0.25 = 0.5
+      // "unique" matches 1 of 1 keywords, denominator capped at 10
+      // confidence = 1*0.25 + (1/10)*0.25 + 0 = 0.25 + 0.025 = 0.275
+      // Below 0.4 threshold -> falls to orchestrator
       const result = router.route("a unique query");
-      expect(result.confidence).toBeCloseTo(0.5, 4);
-      expect(result.agent.domain).toBe("tiny");
+      expect(result.confidence).toBeCloseTo(0.275, 4);
+      expect(result.agent.domain).toBe("orchestration");
     });
 
     it("keywords matched case-insensitively", () => {

@@ -87,7 +87,8 @@ export class GeminiProvider implements LLMProvider {
     try {
       response = await this.callApi(this.model, body);
     } catch (err: unknown) {
-      throw new Error((err as Error).message, { cause: err });
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(msg, { cause: err });
     }
 
     const content = extractText(response);
@@ -131,7 +132,8 @@ export class GeminiProvider implements LLMProvider {
     try {
       response = await this.callApi(this.model, body);
     } catch (err: unknown) {
-      throw new Error((err as Error).message, { cause: err });
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(msg, { cause: err });
     }
 
     const { content, toolCalls } = extractToolResponse(response);
@@ -229,21 +231,32 @@ function mapToGeminiContents(
   messages: AgentMessage[],
 ): Array<{ role: string; parts: Array<Record<string, unknown>> }> {
   const contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [];
+  // Build callId → function name lookup for tool result mapping
+  const callIdToName = new Map<string, string>();
+  for (const m of messages) {
+    if (m.role === "assistant" && m.toolCalls) {
+      for (const tc of m.toolCalls) callIdToName.set(tc.id, tc.name);
+    }
+  }
   for (const m of messages) {
     if (m.role === "system") continue;
-    contents.push(mapSingleContent(m));
+    contents.push(mapSingleContent(m, callIdToName));
   }
   return contents;
 }
 
-function mapSingleContent(m: AgentMessage): {
+function mapSingleContent(
+  m: AgentMessage,
+  callIdToName: Map<string, string>,
+): {
   role: string;
   parts: Array<Record<string, unknown>>;
 } {
   if (m.role === "tool") {
+    const fnName = callIdToName.get(m.callId) ?? "tool";
     return {
       role: "function",
-      parts: [{ functionResponse: { name: "tool", response: { result: m.content } } }],
+      parts: [{ functionResponse: { name: fnName, response: { result: m.content } } }],
     };
   }
 

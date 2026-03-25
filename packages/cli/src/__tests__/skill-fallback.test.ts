@@ -36,10 +36,15 @@ vi.mock("../commands/skills", () => ({
   resolveInstallDir: vi.fn(() => "/tmp/test-skills"),
 }));
 
-// Mock generate.ts outputFormatted
-vi.mock("../commands/generate", () => ({
-  outputFormatted: vi.fn(),
-}));
+// Mock generate.ts exports used by skill-fallback
+vi.mock("../commands/generate", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../commands/generate")>();
+  return {
+    ...actual,
+    outputFormatted: vi.fn(),
+    handleWriteOutput: vi.fn(),
+  };
+});
 
 // Mock fs
 vi.mock("node:fs", async () => {

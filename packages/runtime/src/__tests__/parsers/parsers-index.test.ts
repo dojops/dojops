@@ -45,7 +45,7 @@ describe("getAvailableParsers", () => {
     expect(parsers).toContain("nginx-stderr");
   });
 
-  it("returns 14 parsers", () => {
-    expect(getAvailableParsers()).toHaveLength(14);
+  it("returns 15 parsers", () => {
+    expect(getAvailableParsers()).toHaveLength(15);
   });
 });

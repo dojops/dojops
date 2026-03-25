@@ -362,11 +362,10 @@ export class SpecialistAgent {
         });
       }
 
-      // Stall detection: terminate if the same call repeats consecutively
-      for (const call of actionCalls) {
-        const sig = `${call.name}:${JSON.stringify(call.arguments)}`;
-        recentSignatures.push(sig);
-      }
+      // Stall detection: combine all calls into one per-iteration signature
+      // so repeated multi-call patterns (e.g., read+write 3x) are detected
+      const iterSig = actionCalls.map((c) => `${c.name}:${JSON.stringify(c.arguments)}`).join("|");
+      recentSignatures.push(iterSig);
       while (recentSignatures.length > 10) recentSignatures.shift();
       if (this.isStale(recentSignatures)) {
         summary = `Terminated: stuck in loop on ${actionCalls[0]?.name ?? "unknown"}.`;

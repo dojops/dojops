@@ -249,10 +249,16 @@ export async function openaiCompatGenerateWithTools(
   const content = choice.message.content ?? "";
   const toolCalls: ToolCall[] = (choice.message.tool_calls ?? []).map((tc) => {
     const fn = (tc as { id: string; function: { name: string; arguments: string } }).function;
+    let args: Record<string, unknown> = {};
+    try {
+      args = JSON.parse(fn.arguments || "{}") as Record<string, unknown>;
+    } catch {
+      // LLM may produce truncated or invalid JSON in tool call arguments
+    }
     return {
       id: tc.id,
       name: fn.name,
-      arguments: JSON.parse(fn.arguments || "{}") as Record<string, unknown>,
+      arguments: args,
     };
   });
 

@@ -13,6 +13,7 @@ import { parseAnsibleSyntax } from "./ansible-syntax";
 import { parseDockerComposeConfig } from "./docker-compose-config";
 import { parseActionlint } from "./actionlint";
 import { parsePackerValidate } from "./packer-validate";
+import { parseShellcheckJson } from "./shellcheck-json";
 
 export type VerificationParser = (
   output: string,
@@ -40,6 +41,7 @@ const PARSERS: Record<string, VerificationParser> = {
   "docker-compose-config": parseDockerComposeConfig,
   actionlint: parseActionlint,
   "packer-validate": parsePackerValidate,
+  "shellcheck-json": parseShellcheckJson,
 };
 
 export function getParser(name: string): VerificationParser | undefined {

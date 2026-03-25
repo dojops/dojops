@@ -80,6 +80,26 @@ function resolveInputRefs(
   return resolved;
 }
 
+/** Construct a RegExp from an LLM-generated pattern, rejecting ReDoS-prone patterns. */
+function safeRegExp(pattern: string): RegExp | null {
+  // Reject patterns with adjacent quantifiers (e.g. (a+)+, a**, a*+)
+  for (let i = 1; i < pattern.length; i++) {
+    const prev = pattern[i - 1];
+    const cur = pattern[i];
+    if (
+      (prev === "+" || prev === "*" || prev === "}") &&
+      (cur === "+" || cur === "*" || cur === "{")
+    ) {
+      return null;
+    }
+  }
+  try {
+    return new RegExp(pattern);
+  } catch {
+    return null;
+  }
+}
+
 /** Evaluate programmatic success criteria against task output. Returns a list of violations. */
 function evaluateSuccessCriteria(criteria: TaskSuccessCriteria, data: unknown): string[] {
   const violations: string[] = [];
@@ -90,13 +110,19 @@ function evaluateSuccessCriteria(criteria: TaskSuccessCriteria, data: unknown): 
   }
 
   for (const pattern of criteria.requiredPatterns ?? []) {
-    if (!new RegExp(pattern).test(text)) {
+    const re = safeRegExp(pattern);
+    if (!re) {
+      violations.push(`Invalid or unsafe required pattern: ${pattern}`);
+    } else if (!re.test(text)) {
       violations.push(`Required pattern not found: ${pattern}`);
     }
   }
 
   for (const pattern of criteria.forbiddenPatterns ?? []) {
-    if (new RegExp(pattern).test(text)) {
+    const re = safeRegExp(pattern);
+    if (!re) {
+      violations.push(`Invalid or unsafe forbidden pattern: ${pattern}`);
+    } else if (re.test(text)) {
       violations.push(`Forbidden pattern found: ${pattern}`);
     }
   }
@@ -170,6 +196,7 @@ export interface PlannerExecuteOptions {
 /**
  * Semaphore-based concurrency pool: starts a new task the instant any slot
  * frees up, instead of waiting for an entire fixed-size chunk to complete.
+ * Collects all errors instead of fail-fast so other tasks in the wave complete.
  */
 async function executeWithSemaphore<T>(
   items: T[],
@@ -180,24 +207,31 @@ async function executeWithSemaphore<T>(
 
   let running = 0;
   let index = 0;
+  const errors: unknown[] = [];
 
-  return new Promise<void>((resolve, reject) => {
-    let rejected = false;
+  return new Promise<void>((resolve) => {
+    function done(): void {
+      if (errors.length > 0) {
+        // Log but don't reject — task failures are tracked via recordResult
+        console.error(`[planner] ${errors.length} task(s) threw unexpectedly in wave`);
+      }
+      resolve();
+    }
     function startNext(): void {
-      while (!rejected && running < maxConcurrency && index < items.length) {
+      while (running < maxConcurrency && index < items.length) {
         const item = items[index++];
         running++;
         fn(item).then(
           () => {
             running--;
-            if (index >= items.length && running === 0) resolve();
+            if (index >= items.length && running === 0) done();
             else startNext();
           },
           (err) => {
-            if (!rejected) {
-              rejected = true;
-              reject(err);
-            }
+            errors.push(err);
+            running--;
+            if (index >= items.length && running === 0) done();
+            else startNext();
           },
         );
       }
@@ -402,17 +436,23 @@ export class PlannerExecutor {
         }
 
         const generatePromise = tool.generate(resolvedInput);
-        const output = this.generateTimeoutMs
-          ? await Promise.race([
-              generatePromise,
-              new Promise<never>((_, reject) =>
-                setTimeout(
-                  () => reject(new Error(`Generate timed out after ${this.generateTimeoutMs}ms`)),
-                  this.generateTimeoutMs,
-                ),
-              ),
-            ])
-          : await generatePromise;
+        let output: Awaited<ReturnType<typeof tool.generate>>;
+        if (this.generateTimeoutMs) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error(`Generate timed out after ${this.generateTimeoutMs}ms`)),
+              this.generateTimeoutMs,
+            );
+          });
+          try {
+            output = await Promise.race([generatePromise, timeoutPromise]);
+          } finally {
+            if (timer !== undefined) clearTimeout(timer);
+          }
+        } else {
+          output = await generatePromise;
+        }
 
         if (output.success) {
           // Embed usage in data so SafeExecutor can accumulate token counts

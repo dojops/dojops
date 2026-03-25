@@ -70,6 +70,16 @@ export const DEVOPS_WRITE_ALLOWLIST: string[] = [
   "packer/**",
   "*.pkr.hcl",
   "*.pkr.json",
+  // Script files
+  "*.sh",
+  "*.bash",
+  "*.zsh",
+  "*.py",
+  "*.ps1",
+  "*.psm1",
+  "*.bat",
+  "*.cmd",
+  "scripts/**",
 ];
 
 /** Match a string against a simple glob pattern with `*` wildcards (no regex). */
@@ -162,6 +172,7 @@ export function isDevOpsFile(filePath: string): boolean {
       "systemd",
       "terraform",
       "jenkins",
+      "scripts",
     ]);
     const rootIdx = segments.findIndex((s) => devopsRoots.has(s));
     if (rootIdx >= 0) {
@@ -175,12 +186,43 @@ export function isDevOpsFile(filePath: string): boolean {
   return DEVOPS_WRITE_ALLOWLIST.some((pattern) => matchesAllowlistPattern(relative, pattern));
 }
 
+/**
+ * Credential/system paths that are never writable, regardless of policy or flags.
+ * Resolved relative to the user's home directory at check time.
+ */
+const CRITICAL_DENYLIST_SUFFIXES = [
+  "/.ssh/",
+  "/.gnupg/",
+  "/.aws/credentials",
+  "/.aws/config",
+  "/.kube/config",
+  "/.docker/config.json",
+  "/.npmrc",
+  "/.netrc",
+  "/id_rsa",
+  "/id_ed25519",
+  "/authorized_keys",
+];
+
+function isCriticalPath(resolved: string): boolean {
+  const normalized = resolved.replaceAll("\\", "/");
+  return CRITICAL_DENYLIST_SUFFIXES.some((suffix) => normalized.includes(suffix));
+}
+
 export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy): void {
   if (!policy.allowWrite) {
     throw new PolicyViolationError(`Write operations are not allowed by policy`, "allowWrite");
   }
 
   const resolved = path.resolve(filePath);
+
+  // Non-bypassable denylist for credential and system paths
+  if (isCriticalPath(resolved)) {
+    throw new PolicyViolationError(
+      `Write to ${resolved} is blocked: credential/system path is never writable`,
+      "criticalDenylist",
+    );
+  }
 
   for (const denied of policy.deniedWritePaths) {
     if (isPathWithin(resolved, denied)) {

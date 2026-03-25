@@ -1,0 +1,154 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: powershell
+  version: 1.2.0
+  description: "Generate production-ready PowerShell scripts and modules"
+  author: dojops
+  license: MIT
+  tags: [powershell, script, windows, automation, pwsh]
+
+context:
+  technology: PowerShell
+  fileFormat: raw
+  outputGuidance: |
+    Generate a complete, production-ready PowerShell script.
+    Output raw PowerShell content directly -- do NOT wrap in JSON, code fences, or any other format.
+    The script MUST start with a shebang line for cross-platform use: #!/usr/bin/env pwsh
+
+    CRITICAL OUTPUT RULES:
+    - First line MUST be #!/usr/bin/env pwsh (for Linux/macOS compatibility)
+    - Include #Requires -Version 7.0 after the shebang
+    - Use Set-StrictMode -Version Latest and $ErrorActionPreference = 'Stop'
+    - Use approved verbs for function names (Get-, Set-, New-, Remove-, Invoke-)
+    - Include comment-based help (<# .SYNOPSIS .DESCRIPTION .EXAMPLE #>) for public functions
+    - Use [CmdletBinding()] and param() blocks for all functions
+    - Use [Parameter()] attributes with Mandatory, Position, HelpMessage
+    - Target PowerShell 7+ (cross-platform pwsh)
+
+    Script type detection from prompt:
+    - **Windows admin**: Registry, services, WMI/CIM, Active Directory
+    - **Azure**: Az module, resource groups, ARM templates
+    - **CI/CD**: Build tasks, artifact handling, environment setup
+    - **System config**: DSC, package management, firewall rules
+    - **Cross-platform**: File ops, process management, REST APIs
+
+    EXAMPLE -- Deployment script:
+    #!/usr/bin/env pwsh
+    #Requires -Version 7.0
+    Set-StrictMode -Version Latest
+    $ErrorActionPreference = 'Stop'
+
+    <#
+    .SYNOPSIS
+        Deploy application to target servers.
+    .DESCRIPTION
+        Copies build artifacts and restarts the application service.
+    .PARAMETER Server
+        Target server hostname or IP.
+    .PARAMETER ArtifactPath
+        Path to the build artifact zip file.
+    .EXAMPLE
+        ./deploy.ps1 -Server web01 -ArtifactPath ./dist/app.zip
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0, HelpMessage = 'Target server')]
+        [string]$Server,
+
+        [Parameter(Mandatory, Position = 1, HelpMessage = 'Build artifact path')]
+        [ValidateScript({ Test-Path $_ })]
+        [string]$ArtifactPath,
+
+        [Parameter()]
+        [switch]$Force
+    )
+
+    function Deploy-Artifact {
+        [CmdletBinding()]
+        param([string]$Server, [string]$Path)
+        Write-Host "Deploying $Path to $Server..." -ForegroundColor Cyan
+        # deployment logic here
+    }
+
+    Deploy-Artifact -Server $Server -Path $ArtifactPath
+    Write-Host 'Deployment complete.' -ForegroundColor Green
+  bestPractices:
+    - Use Set-StrictMode -Version Latest to catch common errors
+    - Set $ErrorActionPreference = 'Stop' for fail-fast behavior
+    - Use approved verbs (Get-Verb) for function names
+    - Include comment-based help with .SYNOPSIS, .DESCRIPTION, .PARAMETER, .EXAMPLE
+    - Use [CmdletBinding()] on all functions for common parameters (-Verbose, -WhatIf)
+    - Use [Parameter()] attributes with Mandatory, Position, and HelpMessage
+    - Prefer Write-Host with -ForegroundColor for user output, Write-Verbose for debug
+    - Use try/catch/finally for error handling with specific exception types
+    - Use splatting (@params) for long parameter lists
+    - Test paths with Test-Path before file operations
+    - Use Join-Path instead of string concatenation for file paths
+    - Prefer PowerShell 7+ features (ternary operator, null-coalescing, parallel foreach)
+    - Use #Requires for version and module dependencies
+    - Return typed objects, not formatted strings
+    - Use Write-Error -ErrorAction Stop for terminating errors
+  context7Libraries:
+    - name: powershell
+      query: "PowerShell 7 scripting CmdletBinding param blocks, error handling, comment-based help, approved verbs, pipeline input"
+
+files:
+  - path: "{outputFile}"
+    format: raw
+
+detection:
+  paths: ["*.ps1", "*.psm1"]
+  updateMode: true
+
+verification:
+  binary:
+    command: "pwsh -NoProfile -Command \"$null = [System.Management.Automation.Language.Parser]::ParseFile('{entryFile}', [ref]$null, [ref]$errors); if($errors.Count -gt 0){$errors | ForEach-Object { Write-Error $_.Message }; exit 1}\""
+    parser: generic-stderr
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["**/*.ps1", "**/*.psm1"]
+
+risk:
+  level: LOW
+  rationale: "PowerShell scripts affect local automation only"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# PowerShell Script
+
+## Prompt
+
+You are an expert PowerShell developer specializing in production-ready scripts, modules, and automation for Windows, Azure, and cross-platform environments.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+powershell, pwsh, ps1, psm1, cmdlet, windows, azure,
+active-directory, dsc, winrm, remoting, scheduled-task,
+iis, service, registry, group-policy, exchange

@@ -912,6 +912,7 @@ export async function downloadAndVerify(
   slug: string,
   version: string,
   skillName: string,
+  allowUnverified = false,
 ): Promise<{ fileBuffer: Buffer; actualHash: string; expectedHash: string | null }> {
   const downloadRes = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${version}`);
   if (!downloadRes.ok) {
@@ -937,8 +938,13 @@ export async function downloadAndVerify(
         `This may indicate the file was tampered with. Aborting install.`,
     );
   }
-  if (!expectedHash) {
-    p.log.warn("No publisher hash available — skipping integrity verification.");
+  if (!expectedHash && !allowUnverified) {
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `Hub did not provide a SHA-256 checksum for this download. Refusing to install.\n` +
+        `This may indicate a misconfigured hub or a network-level attack stripping integrity headers.\n` +
+        `Use --allow-unverified to bypass this check if you trust the source.`,
+    );
   }
 
   return { fileBuffer, actualHash, expectedHash };
@@ -1044,10 +1050,12 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
     }
 
     spinner.message(`Downloading ${pc.cyan(skillName)} v${version}...`);
+    const allowUnverified = args.includes("--allow-unverified");
     const { fileBuffer, actualHash, expectedHash } = await downloadAndVerify(
       slug,
       version,
       skillName,
+      allowUnverified,
     );
 
     spinner.message("Validating...");

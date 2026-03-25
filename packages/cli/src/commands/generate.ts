@@ -21,8 +21,16 @@ import { classifyTaskRisk } from "../risk-classifier";
 import { cliApprovalHandler } from "../approval";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
 import { buildFileTree } from "@dojops/session";
+import { stripCodeFences } from "@dojops/runtime";
 import { emitStreamEvent } from "../stream-json";
 import { trySkillFallback } from "../skill-fallback";
+import {
+  makeExecutable,
+  checkShebang,
+  validateScript,
+  isScriptFile,
+  cleanScriptContent,
+} from "../script-utils";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 type Context7Provider = {
@@ -43,7 +51,7 @@ async function initContext7(): Promise<{
   docAugmenter?: DocAugmenter;
   context7Provider?: Context7Provider;
 }> {
-  if (process.env.DOJOPS_CONTEXT_ENABLED === "false") {
+  if (process.env.DOJOPS_CONTEXT_ENABLED !== "true") {
     return {};
   }
   try {
@@ -205,7 +213,7 @@ const SKILL_KEYWORDS: Record<string, string[]> = {
   makefile: ["makefile", "make target"],
   grafana: ["grafana", "dashboard", "visualization", "panel"],
   cloudformation: ["cloudformation", "cfn", "aws template", "aws stack"],
-  argocd: ["argocd", "argo cd", "gitops", "argo"],
+  argocd: ["argocd", "argo cd", "argo rollout", "argo"],
   pulumi: ["pulumi"],
   packer: ["packer", "machine image", "ami build", "golden image", "pkr.hcl", "vm image"],
   "otel-collector": ["opentelemetry", "otel", "collector", "telemetry"],
@@ -213,13 +221,54 @@ const SKILL_KEYWORDS: Record<string, string[]> = {
   "aws-codepipeline": ["codebuild", "buildspec", "codepipeline", "aws pipeline", "aws ci"],
   circleci: ["circleci", "circle ci", "circle pipeline"],
   "bitbucket-pipelines": ["bitbucket pipeline", "bitbucket ci", "bitbucket-pipelines"],
+  // PowerShell MUST come before shell — "powershell script" contains "shell script"
+  powershell: [
+    "powershell script",
+    "powershell file",
+    "ps1 script",
+    "ps1 file",
+    "pwsh script",
+    "powershell module",
+    "cmdlet",
+  ],
+  python: [
+    "python script",
+    "python file",
+    "py script",
+    ".py file",
+    "python utility",
+    "python tool",
+    "python automation",
+    "python cli",
+    "boto3 script",
+    "fabric script",
+  ],
+  shell: [
+    "bash script",
+    "shell script",
+    "sh script",
+    "zsh script",
+    "bash file",
+    "shell file",
+    ".sh file",
+    "write a script",
+    "create a script",
+    "generate a script",
+    "entrypoint script",
+    "init script",
+    "setup script",
+    "deploy script",
+    "backup script",
+    "cron script",
+    "wrapper script",
+  ],
 };
 
 /**
  * Detect if the prompt is asking for analysis/review rather than generation.
- * Analysis prompts should route to specialist agents, not modules.
+ * Analysis prompts should route to specialist agents, not skills.
  */
-function isAnalysisIntent(prompt: string): boolean {
+export function isAnalysisIntent(prompt: string): boolean {
   const lower = prompt.toLowerCase();
   // Question patterns — user is asking about existing infrastructure
   const questionPatterns = [
@@ -233,8 +282,8 @@ function isAnalysisIntent(prompt: string): boolean {
 }
 
 /**
- * Auto-detect a module from the prompt based on keyword matching.
- * Returns the module name if a strong match is found, undefined otherwise.
+ * Auto-detect a skill from the prompt based on keyword matching.
+ * Returns the skill name if a strong match is found, undefined otherwise.
  * Skips detection when the prompt is an analysis/review question.
  */
 export function autoDetectSkill(prompt: string): string | undefined {
@@ -249,7 +298,7 @@ export function autoDetectSkill(prompt: string): string | undefined {
 }
 
 /**
- * Auto-detect an installed (hub/custom) module by matching .dops filenames against the prompt.
+ * Auto-detect an installed (hub/custom) skill by matching .dops filenames against the prompt.
  * Only checks names not already covered by SKILL_KEYWORDS.
  */
 export function autoDetectInstalledSkill(
@@ -539,11 +588,11 @@ function routeWithSpinner(
   prompt: string,
   projectDomains: string[],
 ) {
-  const isStructured = ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml";
+  const structured = isStructuredOutput(ctx);
   const s = p.spinner();
-  if (!isStructured) s.start("Routing to specialist agent...");
+  if (!structured) s.start("Routing to specialist agent...");
   const route = router.route(prompt, { projectDomains });
-  if (!isStructured) {
+  if (!structured) {
     const msg =
       route.confidence > 0
         ? `Routed to ${pc.bold(route.agent.name)} — ${route.reason}`
@@ -721,7 +770,7 @@ function persistGeneration(
   });
 }
 
-async function handleWriteOutput(
+export async function handleWriteOutput(
   ctx: CLIContext,
   writePath: string,
   allowAllPaths: boolean,
@@ -749,14 +798,60 @@ async function handleWriteOutput(
     outputFormatted(ctx.globalOpts.output, "agent", agentName, content);
     return;
   }
-  const action = writeFileContent(writePath, content);
+  // Strip code fences and LLM preamble before writing (all file types)
+  let cleaned = stripCodeFences(content);
+  // Additional script-specific cleaning (handles edge cases for .sh/.py/.ps1 etc.)
+  cleaned = cleanScriptContent(cleaned, writePath);
+  const action = writeFileContent(writePath, cleaned);
   if (ctx.globalOpts.output === "json") {
-    console.log(JSON.stringify({ agent: agentName, content, written: writePath, action }));
+    console.log(JSON.stringify({ agent: agentName, content: cleaned, written: writePath, action }));
   } else if (action === "unchanged") {
     p.log.info(`${pc.dim("○")} ${pc.underline(writePath)} ${pc.dim("(unchanged)")}`);
   } else {
     const label = action === "created" ? pc.green("+ created") : pc.yellow("~ modified");
     p.log.success(`${label} ${pc.underline(writePath)}`);
+  }
+
+  // Script post-write handling: chmod, shebang check, validation
+  if (action !== "unchanged") {
+    runScriptPostWrite(writePath, cleaned);
+  }
+}
+
+/**
+ * Post-write handling for script files: set executable permissions,
+ * check for missing shebang, and run available validators.
+ */
+function runScriptPostWrite(writePath: string, content: string): void {
+  if (!isScriptFile(writePath)) return;
+
+  // 1. chmod +x for shell scripts
+  const madeExecutable = makeExecutable(writePath);
+  if (madeExecutable) {
+    p.log.info(`${pc.dim("chmod")} +x ${pc.underline(path.basename(writePath))}`);
+  }
+
+  // 2. Shebang verification
+  const shebangWarning = checkShebang(content, writePath);
+  if (shebangWarning) {
+    p.log.warn(`${pc.yellow("\u26A0")} ${shebangWarning}`);
+  }
+
+  // 3. Post-generation validation (ShellCheck, py_compile)
+  const validation = validateScript(writePath);
+  if (validation) {
+    if (!validation.available) {
+      p.log.info(
+        `${pc.dim("tip")} Install ${pc.bold(validation.tool)} for automatic script validation`,
+      );
+    } else if (validation.passed) {
+      p.log.success(`${pc.green("\u2713")} ${validation.tool} passed`);
+    } else {
+      p.log.warn(`${pc.yellow("\u26A0")} ${validation.tool} found issues:`);
+      for (const issue of validation.issues) {
+        p.log.warn(`  ${pc.dim("\u2502")} ${issue}`);
+      }
+    }
   }
 }
 

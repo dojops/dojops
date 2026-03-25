@@ -33,7 +33,7 @@ import {
  * Returns install hint text if found, undefined otherwise.
  */
 async function lookupInstallHint(skillName: string): Promise<string | undefined> {
-  if (process.env.DOJOPS_CONTEXT_ENABLED === "false") return undefined;
+  if (process.env.DOJOPS_CONTEXT_ENABLED !== "true") return undefined;
   try {
     const { Context7Client } = await import("@dojops/context");
     const client = new Context7Client({ apiKey: process.env.DOJOPS_CONTEXT7_API_KEY });

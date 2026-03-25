@@ -153,11 +153,17 @@ export function stripCodeFences(content: string): string {
   // Match ```<optional-lang>\n...\n``` or ~~~<optional-lang>\n...\n~~~ (anchored to start/end)
   const fenceMatch = /^(?:```|~~~)\w*\n([\s\S]*?)\n(?:```|~~~)$/.exec(trimmed);
   if (fenceMatch) {
-    return fenceMatch[1];
+    const inner = fenceMatch[1];
+    // If the captured content still contains fence markers, the LLM returned
+    // multiple code blocks. Fall through to extract only the first block.
+    if (!/(?:```|~~~)/.test(inner)) {
+      return inner;
+    }
   }
 
-  // Ollama/local models often include preamble text before/after fenced code blocks.
-  // Extract the fenced block from anywhere in the output.
+  // Extract the first fenced block (non-greedy). Handles:
+  // - Ollama/local models with preamble text before/after blocks
+  // - Multi-block output where only the first block is the target content
   const innerMatch = /(?:```|~~~)\w*\n([\s\S]*?)\n(?:```|~~~)/.exec(trimmed);
   if (innerMatch) {
     return innerMatch[1];
@@ -709,7 +715,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     }
   }
 
-  /** Whether this module uses multi-file JSON output (multiple file specs + JSON format). */
+  /** Whether this skill uses multi-file JSON output (multiple file specs + JSON format). */
   private isMultiFileOutput(): boolean {
     return (
       this.skill.frontmatter.files.length > 1 &&

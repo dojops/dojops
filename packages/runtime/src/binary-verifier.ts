@@ -175,12 +175,15 @@ function writeFilesToTmpDir(
   content: string,
 ): void {
   if (files && Object.keys(files).length > 0) {
+    const resolvedTmpDir = path.resolve(tmpDir);
     for (const [fname, fcontent] of Object.entries(files)) {
       // Skip directory-only paths (trailing /) — these cause EISDIR errors
       if (fname.endsWith("/")) continue;
       // Skip .gitkeep/.keep placeholders
       if (/\.(gitkeep|keep)$/.test(fname)) continue;
-      const filePath = path.join(tmpDir, fname);
+      const filePath = path.resolve(resolvedTmpDir, fname);
+      // Prevent LLM-controlled path traversal outside the temp directory
+      if (!filePath.startsWith(resolvedTmpDir + path.sep)) continue;
       const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(filePath, fcontent, "utf-8");

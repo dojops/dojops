@@ -67,6 +67,7 @@ const KNOWN_VERIFICATION_PARSERS = new Set([
   "generic-stderr",
   "generic-json",
   "packer-validate",
+  "shellcheck-json",
 ]);
 
 /** Validate required sections exist. */

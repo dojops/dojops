@@ -727,6 +727,18 @@ describe("stripCodeFences", () => {
     const input = "  \n  content with spaces  \n  ";
     expect(stripCodeFences(input)).toBe("content with spaces");
   });
+
+  it("extracts only the first block when LLM returns multiple code blocks", () => {
+    const input =
+      '```javascript\nconst app = express();\napp.listen(3000);\n```\n\n```json\n{"name": "test"}\n```';
+    expect(stripCodeFences(input)).toBe("const app = express();\napp.listen(3000);");
+  });
+
+  it("extracts first block with preamble text before multiple blocks", () => {
+    const input =
+      'Here is the server:\n\n```bash\n#!/bin/bash\necho "hello"\n```\n\nAnd the config:\n\n```yaml\nkey: value\n```';
+    expect(stripCodeFences(input)).toBe('#!/bin/bash\necho "hello"');
+  });
 });
 
 describe("parseRawContent", () => {

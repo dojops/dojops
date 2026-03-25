@@ -1,0 +1,153 @@
+---
+dops: v2
+kind: tool
+
+meta:
+  name: shell
+  version: 1.2.0
+  description: "Generate production-ready shell scripts (Bash, POSIX sh, Zsh)"
+  author: dojops
+  license: MIT
+  tags: [shell, bash, script, automation, posix, zsh]
+
+context:
+  technology: Shell
+  fileFormat: raw
+  outputGuidance: |
+    Generate a complete, production-ready shell script.
+    Output raw script content directly -- do NOT wrap in JSON, code fences, or any other format.
+    The script MUST start with a shebang line (#!/usr/bin/env bash, #!/bin/sh, or #!/usr/bin/env zsh).
+
+    CRITICAL OUTPUT RULES:
+    - First line MUST be a shebang (#!/usr/bin/env bash for Bash, #!/bin/sh for POSIX)
+    - Include `set -euo pipefail` immediately after shebang for Bash scripts
+    - Include `set -eu` for POSIX sh scripts (pipefail is a bashism)
+    - Add a brief header comment describing the script's purpose, usage, and author
+    - Use functions for any logic longer than 10 lines
+    - Include a main() function pattern for non-trivial scripts
+    - Quote all variable expansions: "$var" not $var
+    - Use `readonly` for constants
+    - Include usage/help output via a usage() function
+
+    Script type detection from prompt:
+    - **Backup**: trap cleanup, date-stamped filenames, compression, rotation
+    - **Deployment**: health checks, rollback, zero-downtime patterns
+    - **CI/CD helper**: exit codes, artifact handling, log grouping
+    - **System admin**: privilege checks, logging, lock files
+    - **Data processing**: input validation, progress indicators, temp files
+
+    EXAMPLE -- Backup script:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Database backup script
+    # Usage: ./backup.sh [--db NAME] [--output DIR]
+
+    readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    readonly DEFAULT_OUTPUT="/var/backups"
+
+    usage() {
+      cat <<EOF
+    Usage: $(basename "$0") [OPTIONS]
+      --db NAME      Database name (required)
+      --output DIR   Output directory (default: $DEFAULT_OUTPUT)
+      --help         Show this help
+    EOF
+    }
+
+    main() {
+      local db="" output="$DEFAULT_OUTPUT"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --db) db="$2"; shift 2 ;;
+          --output) output="$2"; shift 2 ;;
+          --help) usage; exit 0 ;;
+          *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
+        esac
+      done
+      [[ -z "$db" ]] && { echo "Error: --db is required" >&2; usage; exit 1; }
+      local timestamp; timestamp="$(date +%Y%m%d_%H%M%S)"
+      local backup_file="${output}/${db}_${timestamp}.sql.gz"
+      mkdir -p "$output"
+      pg_dump "$db" | gzip > "$backup_file"
+      echo "Backup saved: $backup_file"
+    }
+
+    main "$@"
+  bestPractices:
+    - Start every script with a shebang line (#!/usr/bin/env bash for portability)
+    - Use `set -euo pipefail` to fail on errors, undefined vars, and pipe failures
+    - Quote all variable expansions to prevent word splitting and globbing
+    - Use local variables inside functions to avoid polluting global scope
+    - Prefer $() over backticks for command substitution (nestable, readable)
+    - Use `[[ ]]` for conditionals in Bash (safer than `[ ]`)
+    - Clean up temporary files with trap EXIT handlers
+    - Log to stderr (>&2) for diagnostic messages, stdout for data output
+    - Use readonly for constants that should never change
+    - Validate all inputs and provide clear error messages
+    - Include a usage() function that documents all options
+    - Use long option names (--verbose) alongside short ones (-v) for clarity
+    - Prefer printf over echo for portable output
+    - Check for required commands with command -v before using them
+    - Use shellcheck-clean code (no SC warnings)
+  context7Libraries:
+    - name: bash
+      query: "Bash scripting best practices, set -euo pipefail, trap EXIT, parameter expansion, arrays, functions, getopts"
+
+files:
+  - path: "{outputFile}"
+    format: raw
+
+detection:
+  paths: ["*.sh", "*.bash"]
+  updateMode: true
+
+verification:
+  binary:
+    command: "shellcheck --format=json {entryFile}"
+    parser: shellcheck-json
+    timeout: 30000
+    cwd: output
+
+permissions:
+  filesystem: write
+  child_process: required
+  network: none
+
+scope:
+  write: ["**/*.sh", "**/*.bash", "**/*.zsh"]
+
+risk:
+  level: LOW
+  rationale: "Shell scripts affect local automation only"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# Shell Script
+
+## Prompt
+
+You are an expert shell scripting engineer specializing in production-ready, portable, and secure scripts.
+
+{outputGuidance}
+
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
+
+## Keywords
+
+bash, shell, sh, zsh, script, automation, cron, backup,
+deploy, install, setup, init, bootstrap, cleanup, wrapper,
+entrypoint, hook, pre-commit, post-deploy, shellcheck

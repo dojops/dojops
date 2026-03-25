@@ -81,6 +81,12 @@ export class OllamaProvider implements LLMProvider {
     let content: string;
     let usage: LLMUsage | undefined;
 
+    // Build Ollama options: temperature + num_predict (maxTokens)
+    const ollamaOptions: Record<string, unknown> = {};
+    if (req.temperature !== undefined) ollamaOptions.temperature = req.temperature;
+    if (req.maxTokens !== undefined) ollamaOptions.num_predict = req.maxTokens;
+    const optionsPayload = Object.keys(ollamaOptions).length > 0 ? { options: ollamaOptions } : {};
+
     try {
       if (req.messages?.length) {
         const chatMessages = [
@@ -94,7 +100,7 @@ export class OllamaProvider implements LLMProvider {
             messages: chatMessages,
             stream: false,
             ...(format ? { format } : {}),
-            ...(req.temperature === undefined ? {} : { options: { temperature: req.temperature } }),
+            ...optionsPayload,
             keep_alive: this.keepAlive,
           },
           this.getAxiosConfig(),
@@ -110,7 +116,7 @@ export class OllamaProvider implements LLMProvider {
             system,
             stream: false,
             ...(format ? { format } : {}),
-            ...(req.temperature === undefined ? {} : { options: { temperature: req.temperature } }),
+            ...optionsPayload,
             keep_alive: this.keepAlive,
           },
           this.getAxiosConfig(),
@@ -126,7 +132,9 @@ export class OllamaProvider implements LLMProvider {
   }
 
   private wrapError(err: unknown): Error {
-    if (!axios.isAxiosError(err)) throw err;
+    if (!axios.isAxiosError(err)) {
+      return err instanceof Error ? err : new Error(String(err));
+    }
     if (err.response?.status === 404) {
       return new Error(
         `Model "${this.model}" not found on Ollama. Run: ollama pull ${this.model}`,

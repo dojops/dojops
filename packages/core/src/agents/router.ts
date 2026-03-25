@@ -72,7 +72,8 @@ export class AgentRouter {
       const matchedKeywords = agent.keywords.filter((kw) => this.matchesKeyword(lower, kw));
       if (matchedKeywords.length === 0) continue;
 
-      const matchRatio = matchedKeywords.length / agent.keywords.length;
+      // Cap denominator at 10 to prevent bias toward agents with few keywords
+      const matchRatio = matchedKeywords.length / Math.max(agent.keywords.length, 10);
 
       // Primary keyword bonus: each matched primary keyword adds +0.1 confidence
       const primarySet = new Set(agent.primaryKeywords);
@@ -182,9 +183,15 @@ export class AgentRouter {
         return this.route(prompt, options);
       }
 
+      // Compute keyword-based confidence for the LLM-selected agent
+      // so downstream consumers get a meaningful score, not always 1.0
+      const kwResult = this.route(prompt, options);
+      const kwConfidence = kwResult.agent.name === matched.name ? kwResult.confidence : 0;
+      const confidence = Math.max(kwConfidence, 0.85);
+
       return {
         agent: matched,
-        confidence: 1,
+        confidence,
         reason: `LLM routing: ${parsed.reason}`,
       };
     } catch {

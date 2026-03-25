@@ -373,21 +373,21 @@ describe("Primary keywords boost", () => {
   it("boosts confidence when primary keyword matches", () => {
     const router = createRouter(configs);
     // "terraform hcl" matches 2/5 keywords, both are primary
-    // base = 2*0.25 + (2/5)*0.25 = 0.5 + 0.1 = 0.6
+    // base = 2*0.25 + (2/max(5,10))*0.25 = 0.5 + 0.05 = 0.55
     // primaryBonus = 2 * 0.1 = 0.2
-    // total = 0.8
+    // total = 0.75
     const result = router.route("terraform hcl query");
-    expect(result.confidence).toBeCloseTo(0.8, 4);
+    expect(result.confidence).toBeCloseTo(0.75, 4);
     expect(result.agent.domain).toBe("infrastructure");
   });
 
   it("no boost when matched keywords are not primary", () => {
     const router = createRouter(configs);
-    // "infrastructure module" matches 2/5 keywords, none primary
-    // base = 2*0.25 + (2/5)*0.25 = 0.6
+    // "infrastructure module" matches 2/5 keywords, none primary, denominator capped at 10
+    // base = 2*0.25 + (2/10)*0.25 = 0.55
     // primaryBonus = 0
     const result = router.route("infrastructure module query");
-    expect(result.confidence).toBeCloseTo(0.6, 4);
+    expect(result.confidence).toBeCloseTo(0.55, 4);
   });
 
   it("unchanged behavior with no primaryKeywords defined", () => {
@@ -406,10 +406,10 @@ describe("Primary keywords boost", () => {
       },
     ];
     const router = createRouter(noPrimaryConfigs);
-    // "alpha beta" matches 2/3, no primaryKeywords
-    // base = 2*0.25 + (2/3)*0.25 = 0.5 + 0.1667 = 0.6667
+    // "alpha beta" matches 2/3, no primaryKeywords, denominator capped at 10
+    // base = 2*0.25 + (2/10)*0.25 = 0.5 + 0.05 = 0.55
     const result = router.route("alpha beta query");
-    expect(result.confidence).toBeCloseTo(0.6667, 3);
+    expect(result.confidence).toBeCloseTo(0.55, 3);
   });
 });
 

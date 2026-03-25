@@ -97,16 +97,21 @@ export class FallbackProvider implements LLMProvider {
 
   async generateStream(request: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> {
     let lastError: unknown;
+    let chunksEmitted = false;
     for (let i = 0; i < this.providers.length; i++) {
       if (this.isCircuitOpen(i)) continue;
       const provider = this.providers[i];
       try {
         let response: LLMResponse;
         if (provider.generateStream) {
-          response = await provider.generateStream(request, onChunk);
+          response = await provider.generateStream(request, (chunk) => {
+            chunksEmitted = true;
+            onChunk(chunk);
+          });
         } else {
           // Provider lacks streaming — fall back to non-streaming
           response = await provider.generate(request);
+          chunksEmitted = true;
           onChunk(response.content);
         }
         this.recordSuccess(i);
@@ -123,6 +128,10 @@ export class FallbackProvider implements LLMProvider {
       } catch (err) {
         this.recordFailure(i);
         lastError = err;
+        // If chunks were already emitted, the stream is corrupted — don't retry
+        if (chunksEmitted) {
+          throw err;
+        }
       }
     }
     throw lastError ?? new Error("All providers failed");

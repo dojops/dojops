@@ -293,19 +293,6 @@ export function warnNoSkill(searchTerms: string): void {
   );
 }
 
-/** Check if the prompt is asking for analysis/review rather than generation. */
-function isAnalysisIntent(prompt: string): boolean {
-  const lower = prompt.toLowerCase();
-  const questionPatterns = [
-    /^(what|how|why|is|are|do|does|can|could|should|would|tell|explain|describe|show)\b/,
-    /\b(analy[sz]e|review|check|evaluate|audit|inspect|assess|examine|look at)\b/,
-    /\b(think about|opinion|feedback|improve|missing|wrong|issue|problem)\b/,
-    /\b(good|bad|correct|best practice|recommend)\b.*\?/,
-    /\?\s*$/,
-  ];
-  return questionPatterns.some((p) => p.test(lower));
-}
-
 /**
  * Two-tier fallback between skill matching and agent routing.
  *
@@ -319,7 +306,7 @@ export async function trySkillFallback(
   ctx: CLIContext,
   prompt: string,
   writePath: string | undefined,
-  _allowAllPaths: boolean,
+  allowAllPaths: boolean,
   _projectRoot: string | undefined,
   provider: LLMProvider,
   docAugmenter: DocAugmenter | undefined,
@@ -327,6 +314,7 @@ export async function trySkillFallback(
   projectContextStr: string | undefined,
 ): Promise<"handled" | "retry" | "skip"> {
   // Analysis/review prompts should route to specialist agents
+  const { isAnalysisIntent } = await import("./commands/generate");
   if (isAnalysisIntent(prompt)) return "skip";
 
   const searchTerms = extractSearchTerms(prompt);
@@ -393,7 +381,10 @@ export async function trySkillFallback(
   if (!structured) s2.stop("Done.");
 
   if (content) {
-    if (ctx.globalOpts.raw) {
+    if (writePath) {
+      const { handleWriteOutput } = await import("./commands/generate");
+      await handleWriteOutput(ctx, writePath, allowAllPaths, content, "context7-llm");
+    } else if (ctx.globalOpts.raw) {
       process.stdout.write(content);
       if (!content.endsWith("\n")) process.stdout.write("\n");
     } else {

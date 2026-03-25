@@ -57,6 +57,26 @@ describe("checkWriteAllowed", () => {
     expect(() => checkWriteAllowed("/tmp/ok.txt", policy)).not.toThrow();
     expect(() => checkWriteAllowed("/tmp/secret/key", policy)).toThrow(PolicyViolationError);
   });
+
+  it("blocks credential paths regardless of policy", () => {
+    const permissive: ExecutionPolicy = {
+      ...DEFAULT_POLICY,
+      allowWrite: true,
+      allowedWritePaths: ["/"],
+    };
+    expect(() => checkWriteAllowed("/home/user/.ssh/id_rsa", permissive)).toThrow(
+      "credential/system path",
+    );
+    expect(() => checkWriteAllowed("/home/user/.aws/credentials", permissive)).toThrow(
+      "credential/system path",
+    );
+    expect(() => checkWriteAllowed("/home/user/.gnupg/private-keys-v1.d/key", permissive)).toThrow(
+      "credential/system path",
+    );
+    expect(() => checkWriteAllowed("/home/user/.kube/config", permissive)).toThrow(
+      "credential/system path",
+    );
+  });
 });
 
 describe("checkFileSize", () => {
@@ -97,6 +117,18 @@ describe("DEVOPS_WRITE_ALLOWLIST", () => {
     expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.tf");
     expect(DEVOPS_WRITE_ALLOWLIST).toContain("Dockerfile");
     expect(DEVOPS_WRITE_ALLOWLIST).toContain("Makefile");
+  });
+
+  it("contains script file patterns", () => {
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.sh");
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.bash");
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.zsh");
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.py");
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.ps1");
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.psm1");
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.bat");
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("*.cmd");
+    expect(DEVOPS_WRITE_ALLOWLIST).toContain("scripts/**");
   });
 });
 
@@ -147,6 +179,19 @@ describe("isDevOpsFile", () => {
     expect(isDevOpsFile("packer/main.pkr.hcl")).toBe(true);
     expect(isDevOpsFile("main.pkr.hcl")).toBe(true);
     expect(isDevOpsFile("packer/variables.pkr.json")).toBe(true);
+  });
+
+  it("recognizes script files", () => {
+    expect(isDevOpsFile("backup.sh")).toBe(true);
+    expect(isDevOpsFile("deploy.bash")).toBe(true);
+    expect(isDevOpsFile("init.zsh")).toBe(true);
+    expect(isDevOpsFile("migrate.py")).toBe(true);
+    expect(isDevOpsFile("setup.ps1")).toBe(true);
+    expect(isDevOpsFile("utils.psm1")).toBe(true);
+    expect(isDevOpsFile("build.bat")).toBe(true);
+    expect(isDevOpsFile("run.cmd")).toBe(true);
+    expect(isDevOpsFile("scripts/deploy.sh")).toBe(true);
+    expect(isDevOpsFile("scripts/nested/test.py")).toBe(true);
   });
 
   it("rejects non-DevOps files", () => {

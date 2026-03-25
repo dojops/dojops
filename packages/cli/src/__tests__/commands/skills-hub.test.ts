@@ -421,18 +421,29 @@ describe("skillsInstallCommand", () => {
     expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
   });
 
-  it("warns when no publisher hash is available", async () => {
+  it("rejects when no publisher hash is available", async () => {
     setupInstallFsMocks();
     mockPackageInfoResponse("test-tool", "1.0.0");
     // No x-checksum-sha256 header
     mockDownloadResponse(sampleArrayBuffer());
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
-    await skillsInstallCommand(["test-tool"], makeCtx());
-
-    expect(mockLog.warn).toHaveBeenCalledWith(
-      expect.stringContaining("No publisher hash available"),
+    await expect(skillsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
+      "Hub did not provide a SHA-256 checksum",
     );
+  });
+
+  it("allows missing hash with --allow-unverified flag", async () => {
+    setupInstallFsMocks();
+    mockPackageInfoResponse("test-tool", "1.0.0");
+    // No x-checksum-sha256 header
+    mockDownloadResponse(sampleArrayBuffer());
+    vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
+
+    await skillsInstallCommand(["test-tool", "--allow-unverified"], makeCtx());
+
+    // Skill file + sha256 sidecar written — install succeeded
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
   });
 
   it("uses --version flag to install specific version", async () => {

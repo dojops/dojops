@@ -71,10 +71,16 @@ function applyFixContent(fixContent: string, root: string): number {
   const fileRegex = /FILE:\s*(.+?)\n```[^\n]*\n([\s\S]*?)```/g; // NOSONAR
   let match;
   let filesFixed = 0;
+  const resolvedRoot = path.resolve(root);
   while ((match = fileRegex.exec(fixContent)) !== null) {
     const filePath = match[1].trim();
     const content = match[2];
-    const absPath = path.join(root, filePath);
+    const absPath = path.resolve(resolvedRoot, filePath);
+    // Prevent LLM-controlled path traversal outside project root
+    if (!absPath.startsWith(resolvedRoot + path.sep) && absPath !== resolvedRoot) {
+      p.log.warn(`Skipping unsafe path outside project root: ${pc.cyan(filePath)}`);
+      continue;
+    }
     try {
       fs.writeFileSync(absPath, content, "utf-8");
       p.log.success(`Fixed: ${pc.cyan(filePath)}`);

@@ -48,7 +48,7 @@ function detectGitBranch(rootDir: string): string | undefined {
 }
 
 async function loadDocAugmenter(): Promise<DocAugmenter | undefined> {
-  if (process.env.DOJOPS_CONTEXT_ENABLED === "false") return undefined;
+  if (process.env.DOJOPS_CONTEXT_ENABLED !== "true") return undefined;
   try {
     const { createDocAugmenter } = await import("@dojops/context");
     return createDocAugmenter({ apiKey: process.env.DOJOPS_CONTEXT7_API_KEY });
