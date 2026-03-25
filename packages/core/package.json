@@ -1,6 +1,6 @@
 {
   "name": "@dojops/core",
-  "version": "1.1.9",
+  "version": "1.2.0",
   "description": "LLM providers, multi-agent routing, CI debugger, and infra diff analysis for DojOps",
   "license": "MIT",
   "repository": {
@@ -44,7 +44,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
-    "@google/genai": "^1.43.0",
     "axios": "^1.13.6",
     "js-yaml": "^4.1.0",
     "openai": "^6.0.0",

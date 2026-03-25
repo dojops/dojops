@@ -7,6 +7,7 @@ import type { ChatSessionState } from "@dojops/session";
 import { HistoryStore, logRouteError } from "../store";
 import { ChatRequestSchema, ChatSessionRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
+import { initSSE, wantsSSE } from "../sse";
 
 // ── Session ID validation (A6: path traversal prevention) ────────
 
@@ -170,6 +171,36 @@ export function createChatRouter(
     try {
       const { sessionId, message, agent } = req.body;
       const session = getOrCreateSession(sessionId, agent);
+
+      // SSE streaming mode
+      if (wantsSSE(req)) {
+        const sse = initSSE(res);
+        try {
+          const result = await session.sendStream(message, (chunk: string) => {
+            sse.send("chunk", { content: chunk });
+          });
+          persistSession(rootDir, session);
+
+          sse.send("done", {
+            content: result.content,
+            agent: result.agent,
+            sessionId: session.id,
+          });
+
+          store.add({
+            type: "chat",
+            request: { sessionId: session.id, message },
+            response: { content: result.content, agent: result.agent, sessionId: session.id },
+            durationMs: Date.now() - start,
+            success: true,
+          });
+
+          sse.done();
+        } catch (err) {
+          sse.error(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
 
       let result;
       try {

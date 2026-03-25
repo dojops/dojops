@@ -12,6 +12,8 @@ import { scanTrivySbom } from "./scanners/trivy-sbom";
 import { scanTrivyLicense } from "./scanners/trivy-license";
 import { scanSemgrep } from "./scanners/semgrep";
 import { loadScanPolicy, evaluatePolicy } from "./scan-policy";
+import type { ScanBaseline } from "./baseline";
+import { filterBaselined } from "./baseline";
 
 interface ScannerEntry {
   name: string;
@@ -131,6 +133,7 @@ export async function runScan(
   projectPath: string,
   scanType: ScanType,
   context?: RepoContext,
+  options?: { baseline?: ScanBaseline },
 ): Promise<ScanReport> {
   const startTime = Date.now();
 
@@ -192,13 +195,33 @@ export async function runScan(
   // Deduplicate findings that share the same CVE
   const dedupedFindings = deduplicateByCve(allFindings);
 
-  // Recompute summary after deduplication
+  // Apply baseline filtering if provided
+  let finalFindings = dedupedFindings;
+  let baselineApplied = false;
+  let baselineFilteredCount = 0;
+  if (options?.baseline) {
+    const originalCount = dedupedFindings.length;
+    // Map ScanFinding[] to the shape filterBaselined expects
+    const mapped = dedupedFindings.map((f) => ({
+      ...f,
+      scanner: f.tool,
+      ruleId: f.cve ?? f.id,
+    }));
+    const filtered = filterBaselined(mapped, options.baseline);
+    // Recover original ScanFinding objects by matching
+    const filteredSet = new Set(filtered.map((f) => f.id as string));
+    finalFindings = dedupedFindings.filter((f) => filteredSet.has(f.id));
+    baselineApplied = true;
+    baselineFilteredCount = originalCount - finalFindings.length;
+  }
+
+  // Recompute summary after deduplication and baseline filtering
   const dedupedSummary = {
-    total: dedupedFindings.length,
-    critical: dedupedFindings.filter((f) => f.severity === "CRITICAL").length,
-    high: dedupedFindings.filter((f) => f.severity === "HIGH").length,
-    medium: dedupedFindings.filter((f) => f.severity === "MEDIUM").length,
-    low: dedupedFindings.filter((f) => f.severity === "LOW").length,
+    total: finalFindings.length,
+    critical: finalFindings.filter((f) => f.severity === "CRITICAL").length,
+    high: finalFindings.filter((f) => f.severity === "HIGH").length,
+    medium: finalFindings.filter((f) => f.severity === "MEDIUM").length,
+    low: finalFindings.filter((f) => f.severity === "LOW").length,
   };
 
   const report: ScanReport = {
@@ -206,13 +229,14 @@ export async function runScan(
     projectPath,
     timestamp: new Date().toISOString(),
     scanType,
-    findings: dedupedFindings,
+    findings: finalFindings,
     summary: dedupedSummary,
     scannersRun,
     scannersSkipped,
     durationMs: Date.now() - startTime,
     ...(sbomOutputs.length > 0 ? { sbomOutputs } : {}),
     ...(errors.length > 0 ? { errors } : {}),
+    ...(baselineApplied ? { baselineApplied, baselineFilteredCount } : {}),
   };
 
   // Evaluate scan policy if present

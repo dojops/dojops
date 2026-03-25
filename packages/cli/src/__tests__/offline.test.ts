@@ -24,6 +24,7 @@ import {
   skillCacheDir,
   ensureSkillCache,
   findCachedSkill,
+  listCachedSkills,
   exportSkillBundle,
   importSkillBundle,
 } from "../offline";
@@ -143,6 +144,54 @@ describe("findCachedSkill", () => {
 
     const result = findCachedSkill("/project", "terraform");
     expect(result).toBeNull();
+  });
+});
+
+describe("listCachedSkills", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns empty array when cache directory does not exist", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const result = listCachedSkills("/project");
+    expect(result).toEqual([]);
+  });
+
+  it("returns only .dops files with name, path, and size", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readdirSync).mockReturnValue([
+      "terraform.dops",
+      "k8s.dops",
+      "readme.md",
+    ] as unknown as ReturnType<typeof fs.readdirSync>);
+    vi.mocked(fs.statSync).mockReturnValue({ size: 2048 } as fs.Stats);
+
+    const result = listCachedSkills("/project");
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({
+      name: "terraform",
+      path: path.join("/project", ".dojops", "skill-cache", "terraform.dops"),
+      sizeBytes: 2048,
+    });
+    expect(result[1]).toEqual({
+      name: "k8s",
+      path: path.join("/project", ".dojops", "skill-cache", "k8s.dops"),
+      sizeBytes: 2048,
+    });
+  });
+
+  it("returns empty array when cache has no .dops files", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readdirSync).mockReturnValue([
+      "manifest.json",
+      "readme.md",
+    ] as unknown as ReturnType<typeof fs.readdirSync>);
+
+    const result = listCachedSkills("/project");
+    expect(result).toEqual([]);
   });
 });
 

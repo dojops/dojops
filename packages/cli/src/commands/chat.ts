@@ -257,8 +257,13 @@ function displayResumedHistory(session: ChatSession): void {
 function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown): void {
   const sessionState = session.getState();
   const msgCount = sessionState.messages.length;
-  const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
-  const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+  const hasProvider = session.hasProvider();
+  const provider = hasProvider
+    ? (ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai")
+    : pc.yellow("(not configured)");
+  const model = hasProvider
+    ? (ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)")
+    : pc.dim("—");
 
   // Fresh session: show mascot alongside status info
   if (msgCount === 0) {
@@ -268,6 +273,9 @@ function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown
       `${pc.dim("Provider:")} ${pc.white(provider)}  ${pc.dim("Model:")} ${pc.white(model)}`,
       `${pc.dim("Session:")} ${pc.white(sessionState.id.slice(0, 8))}`,
       contextInfo ? `${pc.green("●")} ${pc.dim("Project context loaded")}` : "",
+      !hasProvider
+        ? pc.yellow("Run /config to set up a provider, /init to initialize your project.")
+        : "",
       "",
       pc.dim("Type a message to chat, or ") + pc.cyan("/help") + pc.dim(" for commands."),
     ].filter(Boolean);
@@ -679,6 +687,9 @@ const HELP_ENTRIES: Array<{ cmd: string; args?: string; desc: string }> = [
   { cmd: "/restore", args: "<id|name>", desc: "Restore files from a checkpoint" },
   { cmd: "/rewind", args: "[n] [--code]", desc: "Undo last n turns (--code also restores files)" },
   { cmd: "/voice", desc: "Push-to-talk voice input (requires whisper.cpp + sox)" },
+  { cmd: "/config", desc: "Configure LLM provider and API keys" },
+  { cmd: "/init", desc: "Initialize .dojops/ project in current directory" },
+  { cmd: "/verify-connexion", desc: "Test connection to the configured LLM provider" },
   { cmd: "!", args: "<command>", desc: "Run a shell command (e.g. !git status)" },
 ];
 
@@ -699,6 +710,76 @@ function handleHelpCommand(): void {
   console.log(`\n  ${pc.dim("Use @path/to/file to inject file contents inline.")}`);
   console.log(`  ${pc.dim("Use !command to run shell commands inline.")}`);
   console.log(divider);
+}
+
+// ── Setup commands (no provider needed) ─────────────────────────
+
+async function handleChatConfigCommand(
+  session: ChatSession,
+  rootDir: string,
+  ctx: CLIContext,
+  docAugmenter: DocAugmenter | undefined,
+): Promise<void> {
+  try {
+    const { configCommand } = await import("./config-cmd");
+    await configCommand([], ctx);
+
+    // After config, try to activate the provider if it wasn't available before
+    if (!session.hasProvider()) {
+      try {
+        const provider = ctx.getProvider();
+        const skipCustomConfigs = await resolveTrustCheck(rootDir, ctx.globalOpts.nonInteractive);
+        const { router } = createRouter(provider, rootDir, docAugmenter, skipCustomConfigs);
+        session.setProvider(provider);
+        session.setRouter(router);
+        p.log.success("Provider activated — you can now send messages.");
+      } catch {
+        p.log.info(
+          pc.dim("Provider not yet available. Use /provider to switch, or re-run /config."),
+        );
+      }
+    }
+  } catch (err) {
+    p.log.error(`Config failed: ${formatError(err)}`);
+  }
+}
+
+async function handleChatInitCommand(rootDir: string, ctx: CLIContext): Promise<void> {
+  try {
+    const { initCommand } = await import("./init");
+    await initCommand([], ctx);
+  } catch (err) {
+    p.log.error(`Init failed: ${formatError(err)}`);
+  }
+}
+
+async function handleVerifyConnexionCommand(ctx: CLIContext): Promise<void> {
+  const providerName = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER;
+  if (!providerName) {
+    p.log.warn("No provider configured. Run /config first.");
+    return;
+  }
+
+  const s = p.spinner();
+  s.start(`Testing connection to ${providerName}...`);
+
+  try {
+    const provider = ctx.getProvider();
+    const response = await provider.generate({
+      prompt: "Reply with only the word: OK",
+      messages: [{ role: "user", content: "Reply with only the word: OK" }],
+    });
+    if (response.content) {
+      s.stop(pc.green(`Connection to ${pc.bold(providerName)} successful`));
+      p.log.info(pc.dim(`Response: "${response.content.slice(0, 50).trim()}"`));
+    } else {
+      s.stop(pc.yellow("Connected but received empty response."));
+    }
+  } catch (err) {
+    s.stop(pc.red(`Connection to ${providerName} failed`));
+    p.log.error(formatError(err));
+    p.log.info(pc.dim("Check your API key with /config, or try /provider to switch providers."));
+  }
 }
 
 // ── Slash command router ────────────────────────────────────────
@@ -841,6 +922,20 @@ async function handleAsyncSlashCommand(
   docAugmenter?: DocAugmenter,
   voiceConfig?: VoiceConfig,
 ): Promise<boolean> {
+  // Setup commands — no provider needed
+  if (trimmed === "/config") {
+    await handleChatConfigCommand(session, rootDir, ctx, docAugmenter);
+    return true;
+  }
+  if (trimmed === "/init") {
+    await handleChatInitCommand(rootDir, ctx);
+    return true;
+  }
+  if (trimmed === "/verify-connexion") {
+    await handleVerifyConnexionCommand(ctx);
+    return true;
+  }
+  // Provider-dependent commands
   if (trimmed === "/model") {
     await handleModelCommand(ctx);
     return true;
@@ -978,6 +1073,11 @@ async function processLoopInput(
   if (trimmed.startsWith("/")) {
     const cmd = trimmed.split(/\s/)[0];
     p.log.warn(`Unknown command ${pc.cyan(cmd)}. Type ${pc.cyan("/help")} for available commands.`);
+    return;
+  }
+
+  if (!session.hasProvider()) {
+    p.log.warn(`No LLM provider configured. Run ${pc.cyan("/config")} to set up a provider first.`);
     return;
   }
 
@@ -1160,13 +1260,8 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   const agentFlag = ctx.globalOpts.agent ?? extractFlagValue(args, "--agent");
   const messageFlag = extractFlagValue(args, "--message") ?? extractFlagValue(args, "-m");
 
-  const rootDir = findProjectRoot(ctx.cwd);
-  if (!rootDir) {
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      "No .dojops/ project found. Run `dojops init` first.",
-    );
-  }
+  // Allow chat to start without a .dojops/ project — needed for /config and /init
+  const rootDir = findProjectRoot(ctx.cwd) ?? ctx.cwd;
 
   let voiceConfig: VoiceConfig | undefined;
   if (voiceFlag) {
@@ -1183,10 +1278,20 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     }
   }
 
-  const provider = ctx.getProvider();
+  // Defer provider creation — chat must work without a configured provider
+  // so users can run /config, /init, /verify-connexion right after installation.
+  let provider: ReturnType<typeof ctx.getProvider> | undefined;
+  let router: ReturnType<typeof createRouter>["router"] | undefined;
   const docAugmenter = await loadDocAugmenter();
-  const skipCustomConfigs = await resolveTrustCheck(rootDir, ctx.globalOpts.nonInteractive);
-  const { router } = createRouter(provider, rootDir, docAugmenter, skipCustomConfigs);
+
+  try {
+    provider = ctx.getProvider();
+    const skipCustomConfigs = await resolveTrustCheck(rootDir, ctx.globalOpts.nonInteractive);
+    const routerResult = createRouter(provider, rootDir, docAugmenter, skipCustomConfigs);
+    router = routerResult.router;
+  } catch {
+    // Provider not configured — chat will work for local commands
+  }
 
   const state = resolveSessionState(rootDir, resumeFlag, sessionName, deterministic);
   const mode: SessionMode = deterministic ? "DETERMINISTIC" : "INTERACTIVE";
@@ -1198,6 +1303,12 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   if (agentFlag) validateAgentFlag(session, agentFlag);
 
   if (messageFlag) {
+    if (!session.hasProvider()) {
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        "No LLM provider configured. Run `dojops config` to set up a provider first.",
+      );
+    }
     await handleSingleMessage(session, messageFlag, rootDir, ctx);
     return;
   }

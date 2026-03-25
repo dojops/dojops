@@ -5,6 +5,7 @@ import { HistoryStore, logRouteError } from "../store";
 import { GenerateRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 import { runReviewPipeline } from "./review";
+import { initSSE, wantsSSE } from "../sse";
 
 /**
  * POST /api/generate
@@ -70,6 +71,50 @@ export function createGenerateRouter(
         });
 
         res.json({ ...response, historyId: entry.id });
+        return;
+      }
+
+      // SSE streaming mode — use the provider passed to createGenerateRouter
+      if (wantsSSE(req) && provider?.generateStream) {
+        const sse = initSSE(res);
+        sse.send("agent", {
+          name: route.agent.name,
+          domain: route.agent.domain,
+          confidence: route.confidence,
+          reason: route.reason,
+        });
+
+        try {
+          const result = await provider.generateStream(
+            { prompt, temperature, system: route.agent.systemPrompt },
+            (chunk: string) => sse.send("chunk", { content: chunk }),
+          );
+
+          sse.send("done", {
+            content: result.content,
+            usage: result.usage,
+          });
+
+          store.add({
+            type: "generate",
+            request: { prompt, temperature },
+            response: {
+              content: result.content,
+              agent: {
+                name: route.agent.name,
+                domain: route.agent.domain,
+                confidence: route.confidence,
+                reason: route.reason,
+              },
+            },
+            durationMs: Date.now() - start,
+            success: true,
+          });
+
+          sse.done();
+        } catch (err) {
+          sse.error(err instanceof Error ? err.message : String(err));
+        }
         return;
       }
 

@@ -49,6 +49,7 @@ import {
   skillsInstallCommand,
   skillsSearchCommand,
   skillsDevCommand,
+  skillsCacheCommand,
 } from "./commands/skills";
 import {
   toolchainListCommand,
@@ -91,7 +92,7 @@ import {
   skillsExportCommand,
   skillsImportCommand,
 } from "./commands/skills-extra";
-import { recordCommandError } from "./memory";
+import { recordCommandError, initMemory } from "./memory";
 import { prependToolchainBinToPath, projectToolchainCtx } from "./toolchain-sandbox";
 import { withTracking } from "./tracking-provider";
 
@@ -211,6 +212,7 @@ registerSubcommand("skills", "publish", skillsPublishCommand);
 registerSubcommand("skills", "install", skillsInstallCommand);
 registerSubcommand("skills", "search", skillsSearchCommand);
 registerSubcommand("skills", "dev", skillsDevCommand);
+registerSubcommand("skills", "cache", skillsCacheCommand);
 registerSubcommand("skills", "update", skillsUpdateCommand);
 registerSubcommand("skills", "export", skillsExportCommand);
 registerSubcommand("skills", "import", skillsImportCommand);
@@ -479,6 +481,9 @@ async function main() {
     process.stdout.write("\x1B[?25h"); // restore cursor
     process.exit(0);
   });
+
+  // Initialize sql.js WASM engine for the memory system (non-blocking, ~5ms)
+  await initMemory();
 
   // Prepend both project and global toolchain bin dirs to PATH
   const projectRoot = findProjectRoot();

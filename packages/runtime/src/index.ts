@@ -30,7 +30,13 @@ export {
   ContextBlock,
   FileSpecV2Schema,
   FileSpecV2,
+  SkillDependencySchema,
+  SkillDependency,
 } from "./spec";
+
+// Dependency resolver
+export { resolveSkillDependencies } from "./dependency-resolver";
+export type { DependencyResult, SkillLookup } from "./dependency-resolver";
 
 // Parser
 export { parseDopsFile, parseDopsString, validateDopsSkill } from "./parser";
@@ -74,6 +80,10 @@ export { runReviewTool, runReviewTools } from "./review-tool-runner";
 
 // Parsers
 export { getParser, getAvailableParsers, SeverityMapping } from "./parsers/index";
+
+// Multi-file splitter
+export { splitMultiFileOutput, isMultiFileSkill } from "./multi-file-splitter";
+export type { SplitFile } from "./multi-file-splitter";
 
 // Runtime v2
 export {

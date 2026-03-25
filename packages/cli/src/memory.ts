@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
+import initSqlJs from "sql.js";
+import type { Database as SqlJsRawDatabase, SqlJsStatic, SqlValue } from "sql.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -166,6 +167,95 @@ CREATE INDEX IF NOT EXISTS idx_learned_preferences_key
   ON learned_preferences(key);
 `;
 
+// ── sql.js compatibility layer ─────────────────────────────────────
+// Provides a better-sqlite3-compatible synchronous API so the rest of
+// this file stays unchanged after migrating away from the native addon.
+
+let sqlFactory: SqlJsStatic | null = null;
+
+/** Initialize the sql.js WASM engine. Call once before any memory operations. */
+export async function initMemory(): Promise<void> {
+  if (!sqlFactory) {
+    sqlFactory = await initSqlJs();
+  }
+}
+
+/**
+ * Mimics better-sqlite3's PreparedStatement with .run(), .get(), .all().
+ * Uses sql.js's db.run() for mutations and db.exec() for queries.
+ */
+class CompatStatement {
+  constructor(
+    private readonly db: SqlJsRawDatabase,
+    private readonly sql: string,
+    private readonly onMutate: () => void,
+  ) {}
+
+  run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint } {
+    this.db.run(this.sql, params as SqlValue[]);
+    const changes = this.db.getRowsModified();
+    const idResult = this.db.exec("SELECT last_insert_rowid()");
+    const lastInsertRowid = idResult.length > 0 ? (idResult[0].values[0][0] as number) : 0;
+    this.onMutate();
+    return { changes, lastInsertRowid };
+  }
+
+  get(...params: unknown[]): unknown {
+    const results = this.db.exec(this.sql, params as SqlValue[]);
+    if (results.length === 0 || results[0].values.length === 0) return undefined;
+    const { columns, values } = results[0];
+    const obj: Record<string, unknown> = {};
+    for (let i = 0; i < columns.length; i++) obj[columns[i]] = values[0][i];
+    return obj;
+  }
+
+  all(...params: unknown[]): unknown[] {
+    const results = this.db.exec(this.sql, params as SqlValue[]);
+    if (results.length === 0) return [];
+    const { columns, values } = results[0];
+    return values.map((row) => {
+      const obj: Record<string, unknown> = {};
+      for (let i = 0; i < columns.length; i++) obj[columns[i]] = row[i];
+      return obj;
+    });
+  }
+}
+
+/** Wraps a sql.js Database with better-sqlite3-compatible methods. */
+class MemoryDatabase {
+  constructor(
+    private readonly db: SqlJsRawDatabase,
+    private readonly filePath: string,
+  ) {}
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  pragma(_directive: string): void {
+    // WAL mode has no effect in sql.js (in-memory VFS). Safe no-op.
+  }
+
+  exec(sql: string): void {
+    this.db.exec(sql);
+  }
+
+  prepare(sql: string): CompatStatement {
+    return new CompatStatement(this.db, sql, () => this.persist());
+  }
+
+  close(): void {
+    this.persist();
+    this.db.close();
+  }
+
+  private persist(): void {
+    try {
+      const data = this.db.export();
+      fs.writeFileSync(this.filePath, Buffer.from(data));
+    } catch {
+      // silent — persistence failure is non-critical
+    }
+  }
+}
+
 // ── Memory config ──────────────────────────────────────────────────
 
 /** Check if auto-enrichment is enabled for a project. Defaults to true. */
@@ -189,9 +279,9 @@ export function saveMemoryConfig(rootDir: string, autoEnrich: boolean): void {
 
 // ── Database lifecycle ─────────────────────────────────────────────
 
-const dbCache = new Map<string, Database.Database>();
+const dbCache = new Map<string, MemoryDatabase>();
 
-// Close all cached connections on process exit to prevent hanging
+// Save and close all cached connections on process exit
 process.on("exit", () => {
   for (const db of dbCache.values()) {
     try {
@@ -213,18 +303,40 @@ function dbPath(rootDir: string): string {
 
 /**
  * Open (or create) the memory database. Idempotent — caches per rootDir.
- * Returns null if the database cannot be opened.
+ * Returns null if the sql.js engine hasn't been initialized (call initMemory first)
+ * or if the database cannot be opened.
  */
-export function openMemoryDb(rootDir: string): Database.Database | null {
+export function openMemoryDb(rootDir: string): MemoryDatabase | null {
   const cached = dbCache.get(rootDir);
   if (cached) return cached;
 
   try {
+    if (!sqlFactory) return null;
+
     const dir = memoryDir(rootDir);
     fs.mkdirSync(dir, { recursive: true });
 
-    const db = new Database(dbPath(rootDir));
-    db.pragma("journal_mode = WAL");
+    const filePath = dbPath(rootDir);
+
+    // Migration safety: clean up stale WAL/SHM files left by the old
+    // better-sqlite3 driver. sql.js uses an in-memory VFS and cannot
+    // process WAL journals, so un-checkpointed data from a prior crash
+    // would be unrecoverable anyway. Remove the sidecar files so they
+    // don't confuse future tooling.
+    for (const suffix of ["-wal", "-shm"]) {
+      const sidecar = filePath + suffix;
+      if (fs.existsSync(sidecar)) {
+        try {
+          fs.unlinkSync(sidecar);
+        } catch {
+          /* non-critical */
+        }
+      }
+    }
+
+    const fileData = fs.existsSync(filePath) ? fs.readFileSync(filePath) : undefined;
+    const rawDb = new sqlFactory.Database(fileData);
+    const db = new MemoryDatabase(rawDb, filePath);
     db.exec(SCHEMA_SQL);
 
     dbCache.set(rootDir, db);

@@ -315,4 +315,75 @@ describe("ChatSession", () => {
       expect(copy.messages).toStrictEqual(session.messages);
     });
   });
+
+  describe("no-provider mode", () => {
+    it("constructs without provider or router", () => {
+      const session = new ChatSession({});
+      expect(session.id).toMatch(/^chat-/);
+      expect(session.messages).toHaveLength(0);
+      expect(session.hasProvider()).toBe(false);
+    });
+
+    it("hasProvider returns true when provider and router are set", () => {
+      const { session } = createTestSession();
+      expect(session.hasProvider()).toBe(true);
+    });
+
+    it("send() throws helpful error without provider", async () => {
+      const session = new ChatSession({});
+      await expect(session.send("Hello")).rejects.toThrow(/No LLM provider configured/);
+    });
+
+    it("sendStream() throws helpful error without provider", async () => {
+      const session = new ChatSession({});
+      await expect(session.sendStream("Hello", () => {})).rejects.toThrow(
+        /No LLM provider configured/,
+      );
+    });
+
+    it("compress() throws helpful error without provider", async () => {
+      const state: ChatSessionState = {
+        id: "chat-no-provider",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        mode: "INTERACTIVE",
+        messages: [
+          { role: "user", content: "m1", timestamp: "2024-01-01T00:00:01.000Z" },
+          { role: "assistant", content: "r1", timestamp: "2024-01-01T00:00:02.000Z" },
+          { role: "user", content: "m2", timestamp: "2024-01-01T00:00:03.000Z" },
+          { role: "assistant", content: "r2", timestamp: "2024-01-01T00:00:04.000Z" },
+        ],
+        metadata: { totalTokensEstimate: 0, messageCount: 4 },
+      };
+      const session = new ChatSession({ state });
+      await expect(session.compress()).rejects.toThrow(/No LLM provider configured/);
+    });
+
+    it("pinAgent() throws helpful error without router", () => {
+      const session = new ChatSession({});
+      expect(() => session.pinAgent("terraform")).toThrow(/No LLM provider configured/);
+    });
+
+    it("setProvider() activates the session", () => {
+      const session = new ChatSession({});
+      expect(session.hasProvider()).toBe(false);
+
+      const provider = createMockProvider();
+      const router = new AgentRouter(provider);
+      session.setProvider(provider);
+      session.setRouter(router);
+      expect(session.hasProvider()).toBe(true);
+    });
+
+    it("local operations work without provider", () => {
+      const session = new ChatSession({});
+      // These should all work without a provider
+      session.clearMessages();
+      session.setName("test-session");
+      session.unpinAgent();
+      const state = session.getState();
+      expect(state.name).toBe("test-session");
+      expect(state.messages).toHaveLength(0);
+    });
+  });
 });

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import {
+  initMemory,
   loadMemoryConfig,
   saveMemoryConfig,
   closeMemoryDb,
@@ -13,7 +14,8 @@ import {
 
 let tmpDir: string;
 
-beforeEach(() => {
+beforeEach(async () => {
+  await initMemory();
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-memory-auto-test-"));
 });
 

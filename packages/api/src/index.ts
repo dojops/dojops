@@ -40,6 +40,7 @@ export type { ReviewPipelineResult } from "./routes/review";
 export { NoopProvider } from "./noop-provider";
 export type { ProviderOptions, CreateRouterResult } from "./factory";
 export type { SkillRegistry } from "./factory";
+export { initSSE, wantsSSE } from "./sse";
 export { classifyDiffRisk, parseDiff } from "./diff-risk";
 export type { RiskLevel, FileRiskScore, DiffRiskReport } from "./diff-risk";
 export { MetricsAggregator } from "./metrics";

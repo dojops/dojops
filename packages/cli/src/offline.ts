@@ -126,6 +126,29 @@ export function exportSkillBundle(exportPath: string, rootDir: string): { count:
 }
 
 /**
+ * List all cached skills in the project skill cache.
+ */
+export function listCachedSkills(
+  rootDir: string,
+): Array<{ name: string; path: string; sizeBytes: number }> {
+  const cacheDir = skillCacheDir(rootDir);
+  if (!fs.existsSync(cacheDir)) return [];
+
+  return fs
+    .readdirSync(cacheDir)
+    .filter((f) => f.endsWith(".dops"))
+    .map((f) => {
+      const filePath = path.join(cacheDir, f);
+      const stat = fs.statSync(filePath);
+      return {
+        name: f.replace(".dops", ""),
+        path: filePath,
+        sizeBytes: stat.size,
+      };
+    });
+}
+
+/**
  * Import skills from a bundle directory into the global skills directory.
  */
 export function importSkillBundle(importPath: string): { count: number } {

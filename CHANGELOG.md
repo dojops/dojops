@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-03-25
+
+### Added
+
+- **API streaming (SSE)**: `/api/generate` and `/api/chat` endpoints now support Server-Sent Events via `Accept: text/event-stream` header or `stream: true` in the request body. Streams `agent`, `chunk`, and `done` events with JSON payloads, terminated by `[DONE]`. Backwards-compatible — clients that don't request streaming get the existing JSON response
+- **Skill dependency graph**: `.dops v2` skills can declare dependencies on other skills via a `dependencies` array in frontmatter. `resolveSkillDependencies()` produces execution order with missing-required and missing-optional reporting
+- **Skill versioning and manifest**: Hub-installed skills are tracked in `skill-manifest.json` with name, version, source, install date, and SHA-256 hash. `checkForUpdates()` compares local versions against the Hub for selective upgrade
+- **Cost budget alerts**: Configurable daily and monthly cost thresholds in `config.json` under `budget`. `TrackingProvider` checks spend after each LLM call, warns at 80%, and optionally blocks at 100% when `action: "block"` is set
+- **Team/org config sharing**: `.dojops/team.json` provides shared team config (provider defaults, model routing, budgets) committed to the repo. Loaded between global and local config. Tokens are stripped from team config for security
+- **Webhook notifications for background jobs**: `POST /api/auto` accepts optional `webhookUrl` parameter. When a background run completes, the result is POSTed to the webhook with HMAC-SHA256 signature (`X-DojOps-Signature`) for verification
+- **Scan baseline and suppressions**: `.dojops/scan-baseline.json` records accepted findings by fingerprint (SHA-256). `filterBaselined()` removes known findings from scan results. `createBaselineFromFindings()` generates baselines from current scan output
+- **Skill testing framework**: `skill-tester.ts` provides `loadFixtures()` (from `.dojops/skill-tests/<name>.json`), `validateSkillFile()` (schema checks without LLM), and `testOutputAgainstFixture()` (regex-based expected/forbidden pattern matching)
+- **Offline skill cache**: `dojops skills cache` syncs installed skills to a local cache. Supports `--list`, `--bundle <path>` (export for air-gapped environments), and `--import <path>` (import from bundle). Hub search skips network in `--offline` mode
+- **Multi-file skill output**: `splitMultiFileOutput()` splits LLM output containing `--- FILE: path ---` or `# FILE: path` markers into separate files. `isMultiFileSkill()` detects multi-output skills from the files spec
+
 ## [1.1.9] - 2026-03-24
 
 ### Added

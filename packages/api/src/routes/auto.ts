@@ -1,4 +1,5 @@
 import { Router } from "express";
+import * as crypto from "node:crypto";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -44,6 +45,34 @@ if (cleanupInterval.unref) {
   cleanupInterval.unref();
 }
 
+/** Deliver webhook notification with HMAC signature for verification. */
+async function deliverWebhook(
+  url: string,
+  payload: Record<string, unknown>,
+  apiKey?: string,
+): Promise<void> {
+  try {
+    const body = JSON.stringify(payload);
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "User-Agent": "DojOps-Webhook/1.0",
+    };
+    // HMAC-SHA256 signature using API key as secret (if available)
+    if (apiKey) {
+      const signature = crypto.createHmac("sha256", apiKey).update(body).digest("hex");
+      headers["X-DojOps-Signature"] = `sha256=${signature}`;
+    }
+    await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    // Webhook delivery is best-effort — never fail the run
+  }
+}
+
 export function createAutoRouter(
   provider: LLMProvider,
   skills: DevOpsSkill[],
@@ -65,7 +94,7 @@ export function createAutoRouter(
       return;
     }
 
-    const { prompt, maxIterations, background } = parsed.data;
+    const { prompt, maxIterations, background, webhookUrl } = parsed.data;
     // G-02: Always use server's own working directory, never client-provided
     const cwd = rootDir ?? process.cwd();
 
@@ -175,7 +204,7 @@ Rules:
       // Fire-and-forget — process continues in background
       loop
         .run(prompt)
-        .then((result) => {
+        .then(async (result) => {
           store.add({
             type: "auto",
             request: { prompt, maxIterations },
@@ -189,6 +218,21 @@ Rules:
             startedAt: backgroundRuns.get(runId)?.startedAt ?? new Date().toISOString(),
             createdAt,
           });
+          if (webhookUrl) {
+            const apiKey = process.env.DOJOPS_API_KEY;
+            await deliverWebhook(
+              webhookUrl,
+              {
+                runId,
+                status: result.success ? "completed" : "failed",
+                summary: result.summary ?? null,
+                filesWritten: result.filesWritten ?? [],
+                durationMs: Date.now() - start,
+                timestamp: new Date().toISOString(),
+              },
+              apiKey,
+            );
+          }
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
@@ -206,9 +250,23 @@ Rules:
             startedAt: backgroundRuns.get(runId)?.startedAt ?? new Date().toISOString(),
             createdAt,
           });
+          if (webhookUrl) {
+            const apiKey = process.env.DOJOPS_API_KEY;
+            deliverWebhook(
+              webhookUrl,
+              {
+                runId,
+                status: "failed",
+                error: message,
+                durationMs: Date.now() - start,
+                timestamp: new Date().toISOString(),
+              },
+              apiKey,
+            ).catch(() => {});
+          }
         });
 
-      res.status(202).json({ runId, status: "running" });
+      res.status(202).json({ runId, status: "running", webhookUrl: webhookUrl ?? null });
       return;
     }
 

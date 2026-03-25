@@ -17,6 +17,13 @@ export interface ModelRoutingConfig {
   rules: ModelRoutingRule[];
 }
 
+export interface BudgetConfig {
+  dailyLimitUsd?: number;
+  monthlyLimitUsd?: number;
+  /** Action when budget exceeded: "warn" (default) or "block". */
+  action?: "warn" | "block";
+}
+
 export interface DojOpsConfig {
   defaultProvider?: string;
   defaultModel?: string;
@@ -28,6 +35,8 @@ export interface DojOpsConfig {
   ollamaTlsRejectUnauthorized?: boolean;
   /** Auto model routing: route prompts to different models by complexity. */
   modelRouting?: ModelRoutingConfig;
+  /** Daily/monthly cost budget thresholds. */
+  budget?: BudgetConfig;
 }
 
 export const VALID_PROVIDERS = [
@@ -63,6 +72,12 @@ const ModelRoutingConfigSchema = z.object({
   rules: z.array(ModelRoutingRuleSchema),
 });
 
+const BudgetConfigSchema = z.object({
+  dailyLimitUsd: z.number().positive().optional(),
+  monthlyLimitUsd: z.number().positive().optional(),
+  action: z.enum(["warn", "block"]).default("warn"),
+});
+
 export const DojOpsConfigSchema = z.object({
   defaultProvider: z.enum(VALID_PROVIDERS as unknown as [string, ...string[]]).optional(),
   defaultModel: z.string().min(1).optional(),
@@ -72,6 +87,7 @@ export const DojOpsConfigSchema = z.object({
   ollamaHost: z.string().url().optional(),
   ollamaTlsRejectUnauthorized: z.boolean().optional(),
   modelRouting: ModelRoutingConfigSchema.optional(),
+  budget: BudgetConfigSchema.optional(),
 });
 
 /**
@@ -199,24 +215,92 @@ export function readConfigFile(filePath: string): DojOpsConfig {
 }
 
 /**
- * Loads config with local > global merge.
- * Local project config (.dojops/config.json) overrides global (~/.dojops/config.json).
- * Tokens from both sources are merged (local takes precedence per-provider).
+ * Find the project root by walking up from cwd looking for a .dojops/ directory.
+ * Skips the global config directory (~/.dojops).
+ */
+function findProjectRootDir(): string | null {
+  const globalDir = globalConfigDir();
+  let dir = process.cwd();
+  const root = path.parse(dir).root;
+  while (dir !== root) {
+    const dojopsDir = path.join(dir, ".dojops");
+    if (dojopsDir !== globalDir && fs.existsSync(dojopsDir)) {
+      return dir;
+    }
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
+/**
+ * Load team config from .dojops/team.json.
+ * Team config is committed to the repo and shared across the team.
+ * Priority: global < team < local (local overrides team).
+ */
+export function loadTeamConfig(rootDir?: string): Partial<DojOpsConfig> {
+  const projectRoot = rootDir ?? findProjectRootDir();
+  if (!projectRoot) return {};
+
+  const teamPath = path.join(projectRoot, ".dojops", "team.json");
+  if (!fs.existsSync(teamPath)) return {};
+
+  try {
+    const content = fs.readFileSync(teamPath, "utf-8");
+    const data = JSON.parse(content);
+    // Never load tokens from team config — security risk
+    delete data.tokens;
+    const result = DojOpsConfigSchema.safeParse(data);
+    if (result.success) return result.data;
+    // Log warning but don't fail
+    console.warn(`[dojops] Invalid team.json: ${result.error.issues[0]?.message}`);
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+/** Deep merge for nested config objects (budget, modelRouting, tokens). */
+function mergeConfigs(...configs: Partial<DojOpsConfig>[]): DojOpsConfig {
+  const result: Record<string, unknown> = {};
+  for (const config of configs) {
+    for (const [key, value] of Object.entries(config)) {
+      if (value === undefined) continue;
+      const existing = result[key];
+      // Deep merge for known nested objects
+      if (
+        existing &&
+        typeof existing === "object" &&
+        !Array.isArray(existing) &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        (key === "tokens" || key === "budget" || key === "modelRouting" || key === "aliases")
+      ) {
+        result[key] = {
+          ...(existing as Record<string, unknown>),
+          ...(value as Record<string, unknown>),
+        };
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+  return result as DojOpsConfig;
+}
+
+/**
+ * Loads config with team + local > global merge.
+ * Merge order: global < team (.dojops/team.json) < local (.dojops/config.json).
+ * Team config is shared across the org; local overrides for the individual.
+ * Tokens from all sources are merged (local takes precedence per-provider).
+ * Team config never loads tokens (security: tokens should not be committed).
  */
 export function loadConfig(): DojOpsConfig {
   const global = readConfigFile(globalConfigFile());
+  const team = loadTeamConfig();
   const localPath = findLocalConfigFile();
-  if (!localPath) return global;
+  const local = localPath ? readConfigFile(localPath) : {};
 
-  const local = readConfigFile(localPath);
-  // Only merge if the local config has any keys (readConfigFile returns {} on error/missing)
-  if (Object.keys(local).length === 0) return global;
-
-  return {
-    ...global,
-    ...Object.fromEntries(Object.entries(local).filter(([, v]) => v !== undefined)),
-    tokens: { ...global.tokens, ...local.tokens },
-  };
+  return mergeConfigs(global, team, local);
 }
 
 /**

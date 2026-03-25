@@ -3,6 +3,7 @@ import { z } from "zod";
 export const GenerateRequestSchema = z.object({
   prompt: z.string().min(1, "prompt is required").max(65536, "prompt too long"),
   temperature: z.number().min(0).max(2).optional(),
+  stream: z.boolean().optional().default(false),
 });
 
 export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
@@ -72,6 +73,7 @@ export const ChatRequestSchema = z.object({
   sessionId: z.string().max(64, "sessionId too long").optional(),
   message: z.string().min(1, "message is required").max(65536, "message too long"),
   agent: z.string().optional(),
+  stream: z.boolean().optional().default(false),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
@@ -107,6 +109,7 @@ export const AutoRequestSchema = z.object({
   prompt: z.string().min(1, "prompt is required").max(65536, "prompt too long"),
   maxIterations: z.number().min(1).max(50).optional().default(20),
   background: z.boolean().optional().default(false),
+  webhookUrl: z.string().url().max(2048).optional(),
 });
 
 export type AutoRequest = z.infer<typeof AutoRequestSchema>;

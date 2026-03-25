@@ -1,6 +1,6 @@
 {
   "name": "@dojops/executor",
-  "version": "1.1.9",
+  "version": "1.2.0",
   "description": "Sandboxed execution engine with policy controls and approval workflows for DojOps",
   "license": "MIT",
   "repository": {

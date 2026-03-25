@@ -13,7 +13,14 @@ import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { extractFlagValue, hasFlag } from "../parser";
 import { findProjectRoot } from "../state";
 import { truncateNoteTitle } from "../formatter";
-import { isOfflineMode, findCachedSkill, ensureSkillCache } from "../offline";
+import {
+  isOfflineMode,
+  findCachedSkill,
+  ensureSkillCache,
+  listCachedSkills,
+  exportSkillBundle,
+  importSkillBundle,
+} from "../offline";
 
 type SkillScope = "global" | "project";
 
@@ -1136,6 +1143,27 @@ export const skillsSearchCommand: CommandHandler = async (args, ctx) => {
   const limit = limitStr ? Math.min(Math.max(Number.parseInt(limitStr, 10) || 20, 1), 50) : 20;
   const isJson = ctx.globalOpts.output === "json";
 
+  // Offline mode: search the local cache instead of the hub
+  if (isOfflineMode()) {
+    const rootDir = findProjectRoot() ?? process.cwd();
+    const cached = listCachedSkills(rootDir);
+    const lowerQuery = query.toLowerCase();
+    const matched = cached.filter((s) => s.name.toLowerCase().includes(lowerQuery));
+
+    const packages: SearchPackage[] = matched.slice(0, limit).map((s) => ({
+      name: s.name,
+      slug: s.name,
+      description: `Cached skill (${(s.sizeBytes / 1024).toFixed(1)} KB)`,
+    }));
+    displaySearchResults(packages, query, isJson);
+    if (!isJson && matched.length === 0) {
+      p.log.info(
+        pc.dim("Offline mode: searched local cache only. Run `dojops skills cache` to populate."),
+      );
+    }
+    return;
+  }
+
   const spinner = p.spinner();
   if (!isJson) spinner.start(`Searching hub for "${query}"...`);
 
@@ -1242,3 +1270,94 @@ function runDevValidation(filePath: string): void {
     p.log.error(`Parse error: ${toErrorMessage(err)}`);
   }
 }
+
+/**
+ * `dojops skills cache` — manage the local skill cache for offline use.
+ *
+ * Usage:
+ *   dojops skills cache                     # sync skills to local cache
+ *   dojops skills cache --list              # list cached skills
+ *   dojops skills cache --bundle <path>     # export to bundle for air-gapped transfer
+ *   dojops skills cache --import <path>     # import skills from a bundle directory
+ */
+export const skillsCacheCommand: CommandHandler = async (args, ctx) => {
+  const rootDir = findProjectRoot() ?? process.cwd();
+  const isJson = ctx.globalOpts.output === "json";
+
+  // --list: show cached skills
+  if (hasFlag(args, "--list")) {
+    const cached = listCachedSkills(rootDir);
+    if (isJson) {
+      console.log(JSON.stringify(cached, null, 2));
+      return;
+    }
+    if (cached.length === 0) {
+      p.log.info("No cached skills. Run `dojops skills cache` to populate.");
+      return;
+    }
+    p.log.info(`${cached.length} cached skill(s):`);
+    for (const skill of cached) {
+      const size = (skill.sizeBytes / 1024).toFixed(1);
+      console.log(`  ${pc.cyan(skill.name)} ${pc.dim(`(${size} KB)`)}`);
+    }
+    return;
+  }
+
+  // --bundle <path>: export skills to a bundle directory
+  const bundlePath = extractFlagValue(args, "--bundle");
+  if (bundlePath) {
+    const resolvedPath = path.resolve(bundlePath);
+    const spinner = p.spinner();
+    if (!isJson) spinner.start("Exporting skills bundle...");
+
+    try {
+      const result = exportSkillBundle(resolvedPath, rootDir);
+      if (!isJson) spinner.stop("Export complete");
+      if (isJson) {
+        console.log(JSON.stringify({ exported: result.count, path: resolvedPath }));
+      } else {
+        p.log.success(`Exported ${result.count} skill(s) to ${pc.underline(resolvedPath)}`);
+      }
+    } catch (err) {
+      if (!isJson) spinner.stop("Export failed");
+      throw new CLIError(ExitCode.GENERAL_ERROR, toErrorMessage(err));
+    }
+    return;
+  }
+
+  // --import <path>: import skills from a bundle directory
+  const importPath = extractFlagValue(args, "--import");
+  if (importPath) {
+    const resolvedPath = path.resolve(importPath);
+    const spinner = p.spinner();
+    if (!isJson) spinner.start("Importing skills bundle...");
+
+    try {
+      const result = importSkillBundle(resolvedPath);
+      if (!isJson) spinner.stop("Import complete");
+      if (isJson) {
+        console.log(JSON.stringify({ imported: result.count, path: resolvedPath }));
+      } else {
+        p.log.success(`Imported ${result.count} skill(s) from ${pc.underline(resolvedPath)}`);
+      }
+    } catch (err) {
+      if (!isJson) spinner.stop("Import failed");
+      throw new CLIError(ExitCode.GENERAL_ERROR, toErrorMessage(err));
+    }
+    return;
+  }
+
+  // Default: sync skills to cache
+  const spinner = p.spinner();
+  if (!isJson) spinner.start("Syncing skills to local cache...");
+
+  ensureSkillCache(rootDir);
+  const cached = listCachedSkills(rootDir);
+
+  if (!isJson) spinner.stop("Cache updated");
+  if (isJson) {
+    console.log(JSON.stringify({ cached: cached.length, skills: cached }));
+  } else {
+    p.log.success(`Skill cache updated: ${cached.length} skill(s) cached`);
+  }
+};

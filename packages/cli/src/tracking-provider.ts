@@ -4,6 +4,8 @@
 
 import type { LLMProvider, LLMRequest, LLMResponse } from "@dojops/core";
 import { recordTokenUsage } from "./token-store";
+import { checkBudget, printBudgetWarnings } from "./budget";
+import { loadConfig } from "./config";
 
 export class TrackingProvider implements LLMProvider {
   readonly name: string;
@@ -28,6 +30,18 @@ export class TrackingProvider implements LLMProvider {
         completionTokens: response.usage.completionTokens,
         totalTokens: response.usage.totalTokens,
       });
+
+      // Budget check after recording usage
+      const config = loadConfig();
+      if (config.budget) {
+        const status = checkBudget(this.rootDir, config.budget);
+        if (status.warnings.length > 0) {
+          printBudgetWarnings(status);
+        }
+        if (status.exceeded && config.budget.action === "block") {
+          throw new Error("Budget exceeded. Use --force or increase budget in config.");
+        }
+      }
     }
 
     return response;

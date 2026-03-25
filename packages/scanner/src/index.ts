@@ -35,3 +35,11 @@ export type {
   ComplianceControl,
   ComplianceFrameworkDef,
 } from "./compliance";
+export {
+  loadBaseline,
+  saveBaseline,
+  filterBaselined,
+  createBaselineFromFindings,
+  findingFingerprint,
+} from "./baseline";
+export type { ScanBaseline, BaselineEntry } from "./baseline";

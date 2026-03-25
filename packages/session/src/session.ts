@@ -14,8 +14,10 @@ import { rewindMessages, getTurnCount } from "./rewind";
 import type { RewindResult } from "./rewind";
 
 export interface ChatSessionOptions {
-  provider: LLMProvider;
-  router: AgentRouter;
+  /** LLM provider — optional so chat can start without one (for /config, /init). */
+  provider?: LLMProvider;
+  /** Agent router — optional, required only when sending LLM messages. */
+  router?: AgentRouter;
   state?: ChatSessionState;
   maxContextMessages?: number;
   mode?: SessionMode;
@@ -47,10 +49,10 @@ interface PreparedRequest {
 
 export class ChatSession {
   private readonly state: ChatSessionState;
-  private provider: LLMProvider;
-  private router: AgentRouter;
+  private provider: LLMProvider | undefined;
+  private router: AgentRouter | undefined;
   private readonly memoryManager: MemoryManager;
-  private summarizer: SessionSummarizer;
+  private summarizer: SessionSummarizer | undefined;
   private readonly projectDomains: string[];
   private readonly projectContext?: string;
 
@@ -58,7 +60,7 @@ export class ChatSession {
     this.provider = opts.provider;
     this.router = opts.router;
     this.memoryManager = new MemoryManager(opts.maxContextMessages ?? 20);
-    this.summarizer = new SessionSummarizer(opts.provider);
+    this.summarizer = opts.provider ? new SessionSummarizer(opts.provider) : undefined;
     this.projectDomains = opts.projectDomains ?? [];
     this.projectContext = opts.projectContext;
 
@@ -87,6 +89,11 @@ export class ChatSession {
     return this.state.mode;
   }
 
+  /** True when an LLM provider and router are available for sending messages. */
+  hasProvider(): boolean {
+    return !!this.provider && !!this.router;
+  }
+
   /**
    * SA-12: Shared logic for send() and sendStream().
    * Pushes user message, runs summarization if needed, routes to agent,
@@ -96,6 +103,12 @@ export class ChatSession {
     userMessage: string,
     progress?: ChatProgressCallbacks,
   ): Promise<PreparedRequest> {
+    if (!this.provider || !this.router) {
+      throw new Error(
+        "No LLM provider configured. Use /config to set up a provider, then /provider to activate it.",
+      );
+    }
+
     // Add user message to history
     const userMsg: ChatMessage = {
       role: "user",
@@ -107,6 +120,7 @@ export class ChatSession {
     // Check if summarization is needed — wrapped in try/catch so a
     // summarization failure never loses the user message already pushed above.
     if (
+      this.summarizer &&
       this.state.mode === "INTERACTIVE" &&
       this.memoryManager.needsSummarization(this.state.messages.length)
     ) {
@@ -271,6 +285,9 @@ export class ChatSession {
   }
 
   pinAgent(agentName: string): void {
+    if (!this.router) {
+      throw new Error("No LLM provider configured. Set up a provider with /config first.");
+    }
     // UX #4: Validate agent name against available agents
     const agents = this.router.getAgents();
     const match = agents.find((a) => a.name === agentName || a.name.startsWith(agentName));
@@ -307,6 +324,9 @@ export class ChatSession {
    * Keeps the most recent messages and replaces the rest with a summary.
    */
   async compress(): Promise<{ messagesSummarized: number; messagesRetained: number } | null> {
+    if (!this.summarizer) {
+      throw new Error("No LLM provider configured. Use /config to set up a provider first.");
+    }
     if (this.state.messages.length < 4) return null;
 
     const keepCount = Math.min(4, this.state.messages.length);

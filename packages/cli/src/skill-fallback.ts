@@ -12,6 +12,7 @@ import {
   resolveInstallDir,
 } from "./commands/skills";
 import type { SearchPackage } from "./commands/skills";
+import { isOfflineMode } from "./offline";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 type Context7Provider = {
@@ -126,6 +127,12 @@ export async function searchHub(
   hubUrl: string,
   verbose = false,
 ): Promise<SearchPackage[]> {
+  // Skip network requests in offline mode
+  if (isOfflineMode()) {
+    if (verbose) p.log.info(pc.dim("Offline mode: skipping hub search"));
+    return [];
+  }
+
   // Try full query first
   const results = await fetchHubSearch(query, hubUrl, verbose);
   if (results.length > 0) return results;

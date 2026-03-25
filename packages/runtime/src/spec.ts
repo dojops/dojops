@@ -61,6 +61,17 @@ export const PermissionsSchema = z.object({
 
 export type DopsPermissions = z.infer<typeof PermissionsSchema>;
 
+// ── Skill Dependencies ──────────────────────────────
+export const SkillDependencySchema = z.object({
+  skill: z
+    .string()
+    .min(1)
+    .regex(/^[a-z][a-z0-9-]*$/),
+  optional: z.boolean().default(false),
+});
+
+export type SkillDependency = z.infer<typeof SkillDependencySchema>;
+
 // ── Meta ─────────────────────────────────────────────
 
 export const MetaSchema = z.object({
@@ -195,6 +206,7 @@ export const DopsFrontmatterSchema = z.object({
   execution: ExecutionSchema.optional(),
   update: UpdateSchema.optional(),
   capabilities: CapabilitiesSchema.optional(),
+  dependencies: z.array(SkillDependencySchema).optional(),
 });
 
 export type DopsFrontmatter = z.infer<typeof DopsFrontmatterSchema>;

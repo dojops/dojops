@@ -4,6 +4,7 @@ import os from "node:os";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { initProject } from "../state";
 import {
+  initMemory,
   openMemoryDb,
   closeMemoryDb,
   recordTask,
@@ -27,7 +28,8 @@ import type { TaskRecord, SkillOutcome } from "../memory";
 
 let tmpDir: string;
 
-beforeEach(() => {
+beforeEach(async () => {
+  await initMemory();
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-memory-"));
   initProject(tmpDir);
 });
@@ -38,9 +40,11 @@ afterEach(() => {
 });
 
 describe("openMemoryDb", () => {
-  it("creates the database file", () => {
+  it("creates the database file on first write", () => {
     const db = openMemoryDb(tmpDir);
     expect(db).not.toBeNull();
+    // sql.js persists to disk on first mutation, not on open
+    addNote(tmpDir, "trigger persist");
     expect(fs.existsSync(path.join(tmpDir, ".dojops", "memory", "dojops.db"))).toBe(true);
   });
 
@@ -48,6 +52,80 @@ describe("openMemoryDb", () => {
     const db1 = openMemoryDb(tmpDir);
     const db2 = openMemoryDb(tmpDir);
     expect(db1).toBe(db2);
+  });
+
+  it("reads a pre-existing SQLite database from disk (upgrade scenario)", () => {
+    // Simulate a database written by the old better-sqlite3 driver:
+    // 1. Create DB, write data, persist to file
+    // 2. Close and clear cache
+    // 3. Reopen from file and verify data survived
+    const db1 = openMemoryDb(tmpDir);
+    expect(db1).not.toBeNull();
+    addNote(tmpDir, "pre-upgrade note");
+    recordTask(tmpDir, {
+      timestamp: "2025-01-01T00:00:00Z",
+      task_type: "generate",
+      prompt: "Legacy task from old version",
+      result_summary: "Created config",
+      status: "success",
+      duration_ms: 2000,
+      related_files: "[]",
+      agent_or_skill: "terraform",
+      metadata: "{}",
+    });
+
+    // Close and evict from cache to simulate a fresh process
+    closeMemoryDb(tmpDir);
+
+    // Reopen — sql.js reads the file from disk
+    const db2 = openMemoryDb(tmpDir);
+    expect(db2).not.toBeNull();
+
+    const notes = listNotes(tmpDir);
+    expect(notes.length).toBe(1);
+    expect(notes[0].content).toBe("pre-upgrade note");
+
+    const ctx = queryMemory(tmpDir, "generate", "anything");
+    expect(ctx.recentTasks.length).toBe(1);
+    expect(ctx.recentTasks[0].prompt).toBe("Legacy task from old version");
+  });
+
+  it("cleans up stale WAL and SHM sidecar files from better-sqlite3", () => {
+    const dbFilePath = path.join(tmpDir, ".dojops", "memory", "dojops.db");
+    const walPath = dbFilePath + "-wal";
+    const shmPath = dbFilePath + "-shm";
+
+    // Create a valid DB first so the directory exists
+    openMemoryDb(tmpDir);
+    addNote(tmpDir, "data");
+    closeMemoryDb(tmpDir);
+
+    // Simulate stale WAL/SHM files left by old better-sqlite3 after a crash
+    fs.writeFileSync(walPath, "stale wal data");
+    fs.writeFileSync(shmPath, "stale shm data");
+    expect(fs.existsSync(walPath)).toBe(true);
+    expect(fs.existsSync(shmPath)).toBe(true);
+
+    // Reopen — should clean up sidecar files
+    const db = openMemoryDb(tmpDir);
+    expect(db).not.toBeNull();
+    expect(fs.existsSync(walPath)).toBe(false);
+    expect(fs.existsSync(shmPath)).toBe(false);
+
+    // Original data should still be accessible
+    const notes = listNotes(tmpDir);
+    expect(notes.length).toBe(1);
+    expect(notes[0].content).toBe("data");
+  });
+
+  it("handles corrupted database gracefully (returns null)", () => {
+    const dir = path.join(tmpDir, ".dojops", "memory");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "dojops.db"), "this is not a valid sqlite file");
+
+    const db = openMemoryDb(tmpDir);
+    // sql.js should fail to parse garbage — openMemoryDb returns null
+    expect(db).toBeNull();
   });
 });
 

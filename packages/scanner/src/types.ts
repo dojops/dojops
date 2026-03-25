@@ -47,6 +47,8 @@ export interface ScanReport {
   sbomPath?: string;
   errors?: string[];
   policyResult?: { passed: boolean; violations: string[] };
+  baselineApplied?: boolean;
+  baselineFilteredCount?: number;
 }
 
 // ── Scanner result ─────────────────────────────────────────────────
