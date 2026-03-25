@@ -1,6 +1,6 @@
 {
   "name": "@dojops/skill-registry",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Skill registry for DojOps — discovers, loads, and manages built-in and custom skills",
   "license": "MIT",
   "repository": {

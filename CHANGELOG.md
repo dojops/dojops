@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-03-26
+
+### Fixed
+
+- **Path traversal prevention**: `check.ts` and `binary-verifier.ts` now reject `..` segments in user-supplied paths
+- **Hub download hash hard-fail**: Hub skill downloads fail if SHA-256 hash doesn't match; `--allow-unverified` flag for explicit opt-out
+- **Non-bypassable credential denylist**: Policy engine credential patterns can no longer be overridden by user config
+- **Timer leak in planner executor**: `Promise.race` in wave execution now clears timeout timers on completion
+- **ReDoS guard for user-supplied regex**: Planner rejects regexes that exceed a complexity threshold
+- **JSON.parse try/catch for LLM tool arguments**: Malformed JSON in tool call arguments no longer crashes the agentic loop
+- **Context7 opt-in semantics**: Corrected `DOJOPS_CONTEXT_ENABLED` check across 4 CLI files
+- **Deduplicate `isAnalysisIntent`**: Single source of truth in `generate.ts`, removed duplicates from `chat.ts`
+- **`stripCodeFences` multi-block extraction**: Now extracts all fenced blocks instead of only the first
+- **Gemini tool result name mapping**: Tool results now use `callId` lookup instead of assuming positional correspondence
+- **Ollama `maxTokens` support**: `num_predict` option now passed through to Ollama API
+- **FallbackProvider streaming corruption**: Guard prevents partial chunks from corrupting fallback responses
+- **Agent router keyword overlap**: Removed 23 overlapping/generic keywords from 12 specialist agents to reduce routing ambiguity
+- **Agent router `matchRatio` bias**: Denominator capped at `Math.max(keywords.length, 10)` to prevent small-keyword-list agents from dominating
+- **Agent router LLM confidence**: `routeWithLLM()` returns real keyword-based confidence instead of hardcoded 1.0
+- **Agentic stall detection**: Changed from per-call to per-iteration signatures to detect multi-call repeating patterns
+- **`executeWithSemaphore` error handling**: Wave executor collects all errors instead of fail-fast, so parallel tasks aren't abandoned
+- **`routeWithSpinner` structured output check**: Uses shared `isStructuredOutput()` helper instead of inline duplicate
+- **ArgoCD skill keyword collision**: Removed generic "gitops" keyword that captured unrelated prompts
+
+### Added
+
+- **Shell scripting skill** (`shell.dops`): Bash/sh script generation with ShellCheck verification
+- **Python scripting skill** (`python.dops`): Python automation script generation
+- **PowerShell scripting skill** (`powershell.dops`): PowerShell script generation for Windows automation
+- **Packer skill** (`packer.dops`): HashiCorp Packer machine image definitions with `packer validate` verification
+- **Primary keywords for agent routing**: High-signal keywords get a +0.1 confidence boost per match
+- **Project context bonus for agent routing**: +0.15 confidence boost when agent domain matches `dojops init` project domains
+
 ## [1.2.0] - 2026-03-25
 
 ### Added
