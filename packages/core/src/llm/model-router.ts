@@ -197,6 +197,45 @@ export function routeModel(
 }
 
 /**
+ * Known model name prefixes per provider. Used to detect cross-provider
+ * model mismatches in routing rules (e.g., "gpt-4o" on anthropic provider).
+ * Ollama and github-copilot accept any model name, so they're excluded.
+ */
+const PROVIDER_MODEL_PREFIXES: Record<string, RegExp> = {
+  openai: /^(gpt-|o[13]-|o[13]$|chatgpt-|dall-e|whisper|tts-|text-)/i,
+  anthropic: /^(claude-|claude$)/i,
+  deepseek: /^deepseek-/i,
+  mistral: /^(mistral-|codestral-|pixtral-|ministral-|open-mi[sx]tral)/i,
+  gemini: /^gemini-/i,
+};
+
+/**
+ * Check whether a model name is compatible with a given provider.
+ * Returns true if compatible, false if the model clearly belongs to
+ * a different provider (e.g., "gpt-4o" on anthropic).
+ *
+ * Ollama and github-copilot accept any model, so always return true.
+ * Unknown providers also return true (benefit of the doubt).
+ */
+export function isModelCompatibleWithProvider(model: string, providerName: string): boolean {
+  // Ollama runs any model; Copilot proxies OpenAI models
+  if (providerName === "ollama" || providerName === "github-copilot") return true;
+
+  // Check if the model matches the active provider's known prefixes
+  const activePattern = PROVIDER_MODEL_PREFIXES[providerName];
+  if (activePattern && activePattern.test(model)) return true;
+
+  // Check if the model matches ANY other provider's prefixes
+  for (const [otherProvider, pattern] of Object.entries(PROVIDER_MODEL_PREFIXES)) {
+    if (otherProvider === providerName) continue;
+    if (pattern.test(model)) return false; // Model belongs to a different provider
+  }
+
+  // Unknown model name (custom/fine-tuned) — allow it
+  return true;
+}
+
+/**
  * Estimate the cost for a given number of tokens on a provider tier.
  * Returns cost in USD. Returns 0 for unknown providers.
  */

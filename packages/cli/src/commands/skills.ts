@@ -193,7 +193,7 @@ export const skillsListCommand: CommandHandler = async (_args, ctx) => {
 
 /** Returns the home directory for global .dojops lookups. */
 function getHomeDir(): string {
-  return process.env.HOME ?? process.env.USERPROFILE ?? "~";
+  return os.homedir();
 }
 
 /** Search standard locations for a .dops file by name. Returns its path if found. */
@@ -704,12 +704,7 @@ function resolveDopsPath(target: string): string {
   const projectRoot = findProjectRoot();
   const candidates = [
     projectRoot ? path.join(projectRoot, ".dojops", "skills", `${target}.dops`) : null,
-    path.join(
-      process.env.HOME ?? process.env.USERPROFILE ?? "~",
-      ".dojops",
-      "skills",
-      `${target}.dops`,
-    ),
+    path.join(os.homedir(), ".dojops", "skills", `${target}.dops`),
   ].filter(Boolean) as string[];
 
   const found = candidates.find((c) => fs.existsSync(c));
@@ -952,7 +947,7 @@ export async function downloadAndVerify(
 
 export function resolveInstallDir(isGlobal: boolean): string {
   if (isGlobal) {
-    return path.join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".dojops", "skills");
+    return path.join(os.homedir(), ".dojops", "skills");
   }
   const projectRoot = findProjectRoot();
   return projectRoot
@@ -1061,8 +1056,16 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
     spinner.message("Validating...");
     const skill = await parseDownloadedSkill(fileBuffer);
 
+    // Validate skill name is a safe filename (no path separators or special chars)
+    const parsedName = skill.frontmatter.meta.name;
+    if (!/^[a-z0-9][a-z0-9_-]*$/.test(parsedName)) {
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Invalid skill name "${parsedName}" — must match [a-z0-9][a-z0-9_-]*`,
+      );
+    }
     fs.mkdirSync(destDir, { recursive: true });
-    const destPath = path.join(destDir, `${skill.frontmatter.meta.name}.dops`);
+    const destPath = path.join(destDir, `${skillName}.dops`);
 
     logUpgradeIfExists(destPath, version);
     fs.writeFileSync(destPath, fileBuffer);

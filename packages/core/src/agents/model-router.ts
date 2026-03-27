@@ -1,8 +1,6 @@
 export interface ModelRoutingRule {
   match: "simple" | "complex" | "code" | "review" | "analysis";
   model: string;
-  /** Optional: override provider too. */
-  provider?: string;
 }
 
 export interface ModelRoutingConfig {
@@ -101,7 +99,7 @@ export function classifyPromptComplexity(prompt: string): PromptComplexity {
 export function resolveModelForPrompt(
   prompt: string,
   config: ModelRoutingConfig,
-): { model: string; provider?: string; reason: string } | undefined {
+): { model: string; reason: string } | undefined {
   if (!config.enabled || config.rules.length === 0) return undefined;
 
   const complexity = classifyPromptComplexity(prompt);
@@ -130,7 +128,6 @@ export function resolveModelForPrompt(
     if (matched) {
       return {
         model: rule.model,
-        provider: rule.provider,
         reason: `${rule.match} routing (${complexity.reason})`,
       };
     }

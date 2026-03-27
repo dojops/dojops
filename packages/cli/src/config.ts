@@ -9,7 +9,6 @@ import { encryptTokens, decryptTokens } from "./vault";
 export interface ModelRoutingRule {
   match: "simple" | "complex" | "code" | "review" | "analysis";
   model: string;
-  provider?: string;
 }
 
 export interface ModelRoutingConfig {
@@ -64,7 +63,6 @@ const TOKEN_ENV_MAP: Record<string, string> = {
 const ModelRoutingRuleSchema = z.object({
   match: z.enum(["simple", "complex", "code", "review", "analysis"]),
   model: z.string().min(1),
-  provider: z.string().optional(),
 });
 
 const ModelRoutingConfigSchema = z.object({

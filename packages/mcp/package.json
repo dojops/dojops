@@ -1,7 +1,7 @@
 {
   "name": "@dojops/mcp",
-  "version": "1.2.1",
-  "description": "MCP (Model Context Protocol) support for DojOps — connect external tool servers to the agent loop",
+  "version": "1.2.2",
+  "description": "MCP (Model Context Protocol) client and server for DojOps — connect external tool servers and expose DojOps as an MCP server",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -13,13 +13,19 @@
     "mcp",
     "model-context-protocol",
     "tool-server",
-    "agent"
+    "agent",
+    "claude-code",
+    "copilot",
+    "gemini"
   ],
   "engines": {
     "node": ">=20"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "bin": {
+    "dojops-mcp": "dist/bin.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

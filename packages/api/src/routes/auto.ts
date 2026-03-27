@@ -45,6 +45,36 @@ if (cleanupInterval.unref) {
   cleanupInterval.unref();
 }
 
+/** Block webhook URLs targeting internal/cloud metadata endpoints (SSRF prevention). */
+function validateWebhookUrl(url: string): void {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("Webhook URL must use HTTP(S)");
+  }
+  const blockedHosts = [
+    "169.254.169.254",
+    "metadata.google.internal",
+    "100.100.100.200",
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "::1",
+    "[::1]",
+  ];
+  if (blockedHosts.includes(parsed.hostname)) {
+    throw new Error("Webhook URL targets a blocked host");
+  }
+  // Block private RFC-1918 ranges
+  const parts = parsed.hostname.split(".").map(Number);
+  if (parts.length === 4 && parts.every((n) => !Number.isNaN(n))) {
+    if (parts[0] === 10) throw new Error("Webhook URL targets private network");
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+      throw new Error("Webhook URL targets private network");
+    if (parts[0] === 192 && parts[1] === 168)
+      throw new Error("Webhook URL targets private network");
+  }
+}
+
 /** Deliver webhook notification with HMAC signature for verification. */
 async function deliverWebhook(
   url: string,
@@ -52,6 +82,7 @@ async function deliverWebhook(
   apiKey?: string,
 ): Promise<void> {
   try {
+    validateWebhookUrl(url);
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -82,9 +113,11 @@ export function createAutoRouter(
   const router = Router();
 
   router.post("/", async (req, res) => {
-    // G-02: Auto endpoint ALWAYS requires authentication
-    if (!res.locals.authenticated) {
-      res.status(401).json({ error: "Authentication required for /api/auto" });
+    // G-02: Auto endpoint ALWAYS requires real authentication (not --unsafe-no-auth)
+    if (!res.locals.authenticated || res.locals.noAuthMode) {
+      res
+        .status(401)
+        .json({ error: "Authentication required for /api/auto. Configure DOJOPS_API_KEY." });
       return;
     }
 

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-03-27
+
+### Added
+
+- **MCP server mode**: DojOps can now act as an MCP server for external CLI agents (Claude Code, Gemini CLI, GitHub Copilot, OpenClaw). Run `dojops serve --mcp` or `npx @dojops/mcp` to expose 9 tools over stdio transport: `generate`, `plan`, `scan`, `debug-ci`, `diff-analyze`, `chat`, `list-agents`, `list-skills`, `repo-scan`
+- **Provider isolation enforcement**: Model routing rules can no longer cross provider boundaries. `isModelCompatibleWithProvider()` validates that model names match their configured provider using known prefix patterns. Routing rules that reference a model from a different provider are skipped with a warning
+
+### Fixed
+
+- **Graceful shutdown**: API server now calls `server.closeAllConnections()` after the 30-second drain period to force-close lingering keep-alive connections
+- **Arise verification error details**: Failed verification tasks now display the actual error messages (up to 5 per task) in the summary instead of just pass/fail counts
+
 ## [1.2.1] - 2026-03-26
 
 ### Fixed

@@ -566,7 +566,7 @@ function resolveForcedAgent(
   agentName: string,
 ) {
   const agents = router.getAgents();
-  const match = agents.find((a) => a.name === agentName || a.name.startsWith(agentName));
+  const match = agents.find((a) => a.name === agentName);
   if (!match) {
     const available = agents.map((a) => a.name).join(", ");
     throw new CLIError(
@@ -1129,12 +1129,25 @@ async function runGeneration(
 
 async function applyModelRouting(ctx: CLIContext, prompt: string): Promise<void> {
   if (ctx.globalOpts.model) return;
-  const { loadConfig } = await import("../config");
+  const { loadConfig, resolveProvider } = await import("../config");
   const config = loadConfig();
   if (!config.modelRouting?.enabled) return;
-  const { resolveModelForPrompt } = await import("@dojops/core");
+  const { resolveModelForPrompt, isModelCompatibleWithProvider } = await import("@dojops/core");
   const override = resolveModelForPrompt(prompt, config.modelRouting);
   if (!override) return;
+
+  // Enforce provider isolation: reject models that belong to a different provider
+  const activeProvider = resolveProvider(ctx.globalOpts.provider, config);
+  if (!isModelCompatibleWithProvider(override.model, activeProvider)) {
+    p.log.warn(
+      pc.yellow(
+        `Model routing skipped: "${override.model}" is not compatible with provider "${activeProvider}". ` +
+          `Routing rules must use models from the configured provider.`,
+      ),
+    );
+    return;
+  }
+
   ctx.globalOpts.model = override.model;
   if (ctx.globalOpts.verbose) {
     p.log.info(pc.dim(`Model routing: ${override.reason} → ${override.model}`));

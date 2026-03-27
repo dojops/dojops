@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
@@ -418,7 +419,7 @@ async function agentCreateManual(ctx: CLIContext, isGlobal: boolean): Promise<vo
 
 function writeAgentToDisk(name: string, readme: string, isGlobal: boolean): void {
   const base = isGlobal
-    ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? "", ".dojops", "agents", name)
+    ? path.join(os.homedir(), ".dojops", "agents", name)
     : path.join(findProjectRoot() ?? process.cwd(), ".dojops", "agents", name);
 
   fs.mkdirSync(base, { recursive: true });
@@ -439,12 +440,7 @@ async function agentRemove(args: string[], ctx: CLIContext): Promise<void> {
   // Check project dir first, then global
   const projectRoot = findProjectRoot();
   const projectDir = projectRoot ? path.join(projectRoot, ".dojops", "agents", name) : null;
-  const globalDir = path.join(
-    process.env.HOME ?? process.env.USERPROFILE ?? "",
-    ".dojops",
-    "agents",
-    name,
-  );
+  const globalDir = path.join(os.homedir(), ".dojops", "agents", name);
 
   let targetDir: string | null = null;
   if (projectDir && fs.existsSync(projectDir)) {

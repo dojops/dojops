@@ -137,13 +137,13 @@ export function matchesAllowlistPattern(filePath: string, pattern: string): bool
 /**
  * Checks if a file path matches any pattern in the DevOps allowlist.
  */
-export function isDevOpsFile(filePath: string): boolean {
+export function isDevOpsFile(filePath: string, baseCwd?: string): boolean {
   // Extract a relative path: strip leading ./ and any absolute prefix
   let relative = filePath.replaceAll("\\", "/");
   if (path.isAbsolute(relative)) {
     // For absolute paths, resolve and check if under cwd (H-20)
     const resolved = path.resolve(filePath);
-    const cwd = process.cwd();
+    const cwd = baseCwd ?? process.cwd();
     const cwdPrefix = cwd.endsWith(path.sep) ? cwd : cwd + path.sep;
     if (!resolved.startsWith(cwdPrefix) && resolved !== cwd) {
       // Absolute path outside cwd — reject to prevent basename bypass (e.g. ~/.ssh/Dockerfile)
@@ -209,7 +209,7 @@ function isCriticalPath(resolved: string): boolean {
   return CRITICAL_DENYLIST_SUFFIXES.some((suffix) => normalized.includes(suffix));
 }
 
-export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy): void {
+export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy, cwd?: string): void {
   if (!policy.allowWrite) {
     throw new PolicyViolationError(`Write operations are not allowed by policy`, "allowWrite");
   }
@@ -246,7 +246,7 @@ export function checkWriteAllowed(filePath: string, policy: ExecutionPolicy): vo
 
   // Enforce DevOps allowlist when no explicit allowedWritePaths are set
   if (policy.enforceDevOpsAllowlist) {
-    if (!isDevOpsFile(filePath)) {
+    if (!isDevOpsFile(filePath, cwd)) {
       throw new PolicyViolationError(
         `Write to ${resolved} is not a recognized DevOps file. Use --allow-all-paths to bypass.`,
         "enforceDevOpsAllowlist",

@@ -44,7 +44,7 @@ packages/
   core/             LLM providers (7) + specialist agents (32) + tiered model routing + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
-  runtime/          31 built-in DevOps skills as .dops v2 files
+  runtime/          38 built-in DevOps skills as .dops v2 files
   scanner/          10 security scanners + remediation engine
   session/          Chat session management + memory + context injection
   sdk/              BaseSkill<T> abstract class + Zod re-export + verification types + file-reader utilities

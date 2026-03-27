@@ -18,7 +18,9 @@ export function expandFileReferences(input: string, cwd: string): string {
     const traversalCount = (filePath.match(/\.\.\//g) || []).length;
     if (traversalCount > 3) return match;
     const absPath = path.resolve(cwd, filePath);
-    // Block absolute paths and paths reaching sensitive directories
+    // Block absolute paths in the reference itself (not from resolution)
+    if (filePath.startsWith("/") || filePath.startsWith("\\")) return match;
+    // Block paths reaching sensitive directories
     const sensitive = [".ssh", ".gnupg", ".aws", ".config/gcloud"];
     if (
       sensitive.some(

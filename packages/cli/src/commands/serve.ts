@@ -88,6 +88,7 @@ function populateProviderEnvVars(
       anthropic: "ANTHROPIC_API_KEY",
       deepseek: "DEEPSEEK_API_KEY",
       gemini: "GEMINI_API_KEY",
+      mistral: "MISTRAL_API_KEY",
     };
     const envVar = envVarMap[providerName] ?? "OPENAI_API_KEY";
     if (!process.env[envVar]) process.env[envVar] = apiKey;
@@ -142,6 +143,13 @@ async function loadContext7Providers(): Promise<{
 export async function serveCommand(args: string[], ctx: CLIContext): Promise<void> {
   if (args[0] === "credentials") {
     return serveCredentialsCommand();
+  }
+
+  // MCP server mode: expose DojOps capabilities as MCP tools over stdio
+  if (hasFlag(args, "--mcp")) {
+    const { startMcpServer } = await import("@dojops/mcp");
+    await startMcpServer();
+    return;
   }
 
   // SA-11: Support both --no-auth (legacy) and --unsafe-no-auth (matching server.ts)

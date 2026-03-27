@@ -20,18 +20,25 @@ export function checkpointsDir(rootDir: string): string {
  * the working tree or the stash list. Returns null when there are no changes.
  */
 export function createCheckpoint(rootDir: string, name?: string): CheckpointEntry | null {
-  const ref = execFileSync("git", ["stash", "create"], {
-    cwd: rootDir,
-    encoding: "utf-8",
-  }).trim();
-  if (!ref) return null; // no changes to checkpoint
+  let ref: string;
+  let files: string[];
+  try {
+    ref = execFileSync("git", ["stash", "create"], {
+      cwd: rootDir,
+      encoding: "utf-8",
+    }).trim();
+    if (!ref) return null; // no changes to checkpoint
 
-  // Track what files are dirty
-  const status = execFileSync("git", ["diff", "--name-only"], {
-    cwd: rootDir,
-    encoding: "utf-8",
-  }).trim();
-  const files = status ? status.split("\n") : [];
+    // Track what files are dirty
+    const status = execFileSync("git", ["diff", "--name-only"], {
+      cwd: rootDir,
+      encoding: "utf-8",
+    }).trim();
+    files = status ? status.split("\n") : [];
+  } catch {
+    // Not a git repository or git not available
+    return null;
+  }
 
   const entry: CheckpointEntry = {
     id: randomUUID().slice(0, 8),
@@ -53,7 +60,11 @@ export function createCheckpoint(rootDir: string, name?: string): CheckpointEntr
 export function restoreCheckpoint(rootDir: string, idOrName: string): CheckpointEntry | null {
   const entry = findCheckpoint(rootDir, idOrName);
   if (!entry) return null;
-  execFileSync("git", ["stash", "apply", entry.stashRef], { cwd: rootDir });
+  try {
+    execFileSync("git", ["stash", "apply", entry.stashRef], { cwd: rootDir });
+  } catch {
+    return null;
+  }
   return entry;
 }
 

@@ -3,6 +3,7 @@ import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { DevOpsChecker } from "@dojops/core";
+import { scanForSecrets } from "@dojops/executor";
 import { CommandHandler } from "../types";
 import { wrapForNote } from "../formatter";
 import { hasFlag } from "../parser";
@@ -82,6 +83,14 @@ function applyFixContent(fixContent: string, root: string): number {
       continue;
     }
     try {
+      // Scan for secrets before writing LLM-generated content
+      const secrets = scanForSecrets(content);
+      const errors = secrets.filter((s) => s.severity === "error");
+      if (errors.length > 0) {
+        const details = errors.map((s) => `  line ${s.line}: ${s.pattern}`).join("\n");
+        p.log.warn(`Skipping ${pc.cyan(filePath)} — potential secrets detected:\n${details}`);
+        continue;
+      }
       fs.writeFileSync(absPath, content, "utf-8");
       p.log.success(`Fixed: ${pc.cyan(filePath)}`);
       filesFixed++;

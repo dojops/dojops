@@ -106,12 +106,18 @@ server.on("error", (err: NodeJS.ErrnoException) => {
   throw err;
 });
 
-// Graceful shutdown
+// Graceful shutdown: stop accepting, drain existing connections, force-close after 30s
 const shutdown = () => {
-  console.log("\nShutting down...");
-  server.close(() => process.exit(0));
-  // Force exit after 30s
-  setTimeout(() => process.exit(1), 30_000).unref();
+  console.log("\nShutting down (30s drain)...");
+  server.close(() => {
+    console.log("Server stopped.");
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.warn("Force-closing remaining connections...");
+    server.closeAllConnections();
+    setTimeout(() => process.exit(1), 1_000).unref();
+  }, 30_000).unref();
 };
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);

@@ -115,16 +115,7 @@ function parseApplyFlags(args: string[], ctx: CLIContext): ApplyFlags {
   const skipVerify = hasFlag(args, "--skip-verify");
   const force = hasFlag(args, "--force");
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
-  const timeoutArg = extractFlagValue(args, "--timeout");
-  const timeoutMs = timeoutArg
-    ? Number.parseInt(timeoutArg, 10) * 1000
-    : (ctx.globalOpts.timeout ?? 120_000); // --timeout in seconds, or globalOpts.timeout in ms
-  if (timeoutArg && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Invalid --timeout value: "${timeoutArg}". Must be a positive number (seconds).`,
-    );
-  }
+  const timeoutMs = ctx.globalOpts.timeout ?? 120_000;
   const jsonOutput = ctx.globalOpts.output === "json";
   const singleTaskId = extractFlagValue(args, "--task");
   const repairAttemptsArg = extractFlagValue(args, "--repair-attempts");
@@ -260,7 +251,7 @@ function applyToolFilter(
     const usedTools = [...new Set(plan.tasks.map((t) => t.tool))].join(", ");
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `No tasks use module "${toolFilter}". Modules in this plan: ${usedTools}`,
+      `No tasks use skill "${toolFilter}". Skills in this plan: ${usedTools}`,
     );
   }
   const skippedIds = plan.tasks.filter((t) => t.tool !== toolFilter).map((t) => t.id);
@@ -269,7 +260,7 @@ function applyToolFilter(
   }
   if (!jsonOutput && skippedIds.length > 0) {
     p.log.info(
-      `Filtering by module: ${pc.bold(toolFilter)} — skipping ${skippedIds.length} task(s)`,
+      `Filtering by skill: ${pc.bold(toolFilter)} — skipping ${skippedIds.length} task(s)`,
     );
   }
 }
@@ -411,19 +402,20 @@ async function confirmHighRiskPlan(
   flags: ApplyFlags,
   ctx: CLIContext,
 ): Promise<void> {
-  if (plan.risk !== "HIGH" || flags.force) return;
+  if ((plan.risk !== "HIGH" && plan.risk !== "CRITICAL") || flags.force) return;
 
-  p.log.warn(pc.bold(pc.red("This plan is classified as HIGH risk.")));
+  const riskLabel = plan.risk === "CRITICAL" ? "CRITICAL" : "HIGH";
+  p.log.warn(pc.bold(pc.red(`This plan is classified as ${riskLabel} risk.`)));
   if (ctx.globalOpts.nonInteractive) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      "HIGH risk plans require --force in non-interactive mode.",
+      `${riskLabel} risk plans require --force in non-interactive mode.`,
     );
   }
   if (flags.autoApprove) {
-    p.log.warn("HIGH risk plans require explicit confirmation. Use --force to bypass.");
+    p.log.warn(`${riskLabel} risk plans require explicit confirmation. Use --force to bypass.`);
     const highRiskConfirm = await p.confirm({
-      message: "This is a HIGH risk plan. Are you sure you want to proceed?",
+      message: `This is a ${riskLabel} risk plan. Are you sure you want to proceed?`,
     });
     if (p.isCancel(highRiskConfirm) || !highRiskConfirm) {
       p.cancel("Cancelled.");

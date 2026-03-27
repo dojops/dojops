@@ -56,6 +56,7 @@ function isValidRunId(id: string): boolean {
 // ── Write ──────────────────────────────────────────────────────────
 
 export function writeRunMeta(rootDir: string, meta: RunMeta): void {
+  if (!isValidRunId(meta.id)) return;
   const dir = runDir(rootDir, meta.id);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(metaPath(rootDir, meta.id), JSON.stringify(meta, null, 2));

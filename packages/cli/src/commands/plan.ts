@@ -174,7 +174,7 @@ function applyToolFilter(
       `Skill "${skillName}" not found. Available: ${available}`,
     );
   }
-  if (!isJson) p.log.info(`Using module: ${pc.bold(skillName)}`);
+  if (!isJson) p.log.info(`Using skill: ${pc.bold(skillName)}`);
   return [match];
 }
 
@@ -402,7 +402,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   runPrePlanHook(projectRoot, prompt, ctx.globalOpts.verbose);
 
   const provider = ctx.getProvider();
-  const registry = createSkillRegistry(provider, projectRoot ?? undefined);
+  let registry = createSkillRegistry(provider, projectRoot ?? undefined);
   const repoContext = loadRepoContext(projectRoot);
   const isJson = ctx.globalOpts.output === "json";
 
@@ -427,8 +427,8 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     const resolved = await handleGenericTasks(ctx, prompt, genericTasks, isJson);
     if (resolved === "retry") {
       // Hub skill was installed — re-decompose with the expanded tool set
-      const updatedRegistry = createSkillRegistry(provider, projectRoot ?? undefined);
-      const updatedTools = applyToolFilter(updatedRegistry.getAll(), ctx.globalOpts.skill, isJson);
+      registry = createSkillRegistry(provider, projectRoot ?? undefined);
+      const updatedTools = applyToolFilter(registry.getAll(), ctx.globalOpts.skill, isJson);
       graph = await runDecomposition({
         prompt,
         provider,

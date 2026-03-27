@@ -311,21 +311,33 @@ async function resolveVoicePrompt(prompt: string): Promise<string> {
 
 function filterSensitiveEnv(): Record<string, string> {
   const SENSITIVE_ENV_PATTERNS = [/_API_KEY$/, /_TOKEN$/, /_SECRET$/, /_PASSWORD$/];
-  const SAFE_ENV_PREFIXES = [
+  // Exact key names that are always safe to pass through
+  const SAFE_EXACT_KEYS = new Set([
     "PATH",
     "HOME",
     "USER",
     "SHELL",
-    "NODE_",
+    "TERM",
+    "LANG",
+    "LC_ALL",
     "DOJOPS_PROVIDER",
     "DOJOPS_MODEL",
-  ];
+    "DOJOPS_TEMPERATURE",
+    "NODE_ENV",
+    "NODE_PATH",
+    "NODE_OPTIONS",
+  ]);
   const filteredEnv: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value === undefined) continue;
+    // Always include explicitly safe keys
+    if (SAFE_EXACT_KEYS.has(key)) {
+      filteredEnv[key] = value;
+      continue;
+    }
+    // Exclude keys matching sensitive patterns
     const isSensitive = SENSITIVE_ENV_PATTERNS.some((pat) => pat.test(key));
-    const isSafe = SAFE_ENV_PREFIXES.some((prefix) => key === prefix || key.startsWith(prefix));
-    if (!isSensitive || isSafe) {
+    if (!isSensitive) {
       filteredEnv[key] = value;
     }
   }
@@ -648,12 +660,25 @@ function buildSystemPromptWithMemory(
 
 async function applyAutoModelRouting(ctx: CLIContext, prompt: string): Promise<void> {
   if (ctx.globalOpts.model) return;
-  const { loadConfig } = await import("../config");
+  const { loadConfig, resolveProvider } = await import("../config");
   const config = loadConfig();
   if (!config.modelRouting?.enabled) return;
-  const { resolveModelForPrompt } = await import("@dojops/core");
+  const { resolveModelForPrompt, isModelCompatibleWithProvider } = await import("@dojops/core");
   const override = resolveModelForPrompt(prompt, config.modelRouting);
   if (!override) return;
+
+  // Enforce provider isolation: reject models that belong to a different provider
+  const activeProvider = resolveProvider(ctx.globalOpts.provider, config);
+  if (!isModelCompatibleWithProvider(override.model, activeProvider)) {
+    p.log.warn(
+      pc.yellow(
+        `Model routing skipped: "${override.model}" is not compatible with provider "${activeProvider}". ` +
+          `Routing rules must use models from the configured provider.`,
+      ),
+    );
+    return;
+  }
+
   ctx.globalOpts.model = override.model;
   if (ctx.globalOpts.verbose) {
     p.log.info(pc.dim(`Model routing: ${override.reason} → ${override.model}`));

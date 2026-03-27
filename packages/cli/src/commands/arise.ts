@@ -193,11 +193,12 @@ export const ariseCommand = async (args: string[], ctx: CLIContext): Promise<voi
 
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const allFilesCreated: string[] = [];
-  const verifyResults: { id: string; passed: boolean; issues: number }[] = [];
+  const verifyResults: { id: string; passed: boolean; issues: number; errors: string[] }[] = [];
 
   for (const result of planResult.results) {
     if (result.status !== "completed" || !result.output) {
-      verifyResults.push({ id: result.taskId, passed: false, issues: 1 });
+      const reason = result.error ?? "generation failed (no output)";
+      verifyResults.push({ id: result.taskId, passed: false, issues: 1, errors: [reason] });
       continue;
     }
 
@@ -220,10 +221,21 @@ export const ariseCommand = async (args: string[], ctx: CLIContext): Promise<voi
       allFilesCreated.push(...files);
 
       const passed = execResult.status === "completed";
-      const issues = execResult.verification?.issues?.length ?? 0;
-      verifyResults.push({ id: result.taskId, passed, issues });
+      const issueList = execResult.verification?.issues ?? [];
+      const errorMsgs = issueList.map((i) => i.message);
+      verifyResults.push({
+        id: result.taskId,
+        passed,
+        issues: issueList.length,
+        errors: errorMsgs,
+      });
     } catch (err) {
-      verifyResults.push({ id: result.taskId, passed: false, issues: 1 });
+      verifyResults.push({
+        id: result.taskId,
+        passed: false,
+        issues: 1,
+        errors: [toErrorMessage(err)],
+      });
       p.log.warn(`${pc.bold(result.taskId)}: ${toErrorMessage(err)}`);
     }
   }
@@ -232,11 +244,22 @@ export const ariseCommand = async (args: string[], ctx: CLIContext): Promise<voi
 
   const elapsed = Date.now() - startTime;
 
-  // Verification summary
-  const verifyLines = verifyResults.map((r) => {
+  // Verification summary with error details
+  const verifyLines: string[] = [];
+  for (const r of verifyResults) {
     const icon = r.passed ? pc.green("\u2713") : pc.red("\u2717");
-    return `  ${icon} ${r.id}${r.issues > 0 ? pc.dim(` (${r.issues} issue${r.issues === 1 ? "" : "s"})`) : ""}`;
-  });
+    const issueHint =
+      r.issues > 0 ? pc.dim(` (${r.issues} issue${r.issues === 1 ? "" : "s"})`) : "";
+    verifyLines.push(`  ${icon} ${r.id}${issueHint}`);
+    if (!r.passed && r.errors.length > 0) {
+      for (const msg of r.errors.slice(0, 5)) {
+        verifyLines.push(`    ${pc.dim("- " + msg)}`);
+      }
+      if (r.errors.length > 5) {
+        verifyLines.push(`    ${pc.dim(`... and ${r.errors.length - 5} more`)}`);
+      }
+    }
+  }
   p.note(wrapForNote(verifyLines.join("\n")), "Verification");
 
   // Files created summary
@@ -659,14 +682,15 @@ function resolveDeploySkill(target: DeployTarget): string {
     case "helm":
       return "helm";
     case "kubernetes":
-    case "argocd":
+    case "argocd": // ArgoCD deploys raw K8s manifests
       return "kubernetes";
     case "docker-compose":
       return "docker-compose";
     case "ecs":
-      return "kubernetes";
+      return "ecs";
     default:
-      return "kubernetes";
+      // Targets without dedicated skills (bare-metal, serverless) use generic agent
+      return "generic";
   }
 }
 

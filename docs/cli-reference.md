@@ -108,6 +108,15 @@ Background runs store output in `.dojops/runs/<id>/` (meta.json, output.log, res
 
 MCP servers extend the autonomous agent with external tools (databases, cloud APIs, GitHub, etc.). Configure in `.dojops/mcp.json` (project) or `~/.dojops/mcp.json` (global). Tools appear as `mcp__<server>__<tool>` in `dojops auto`.
 
+#### MCP server mode
+
+| Command              | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| `dojops serve --mcp` | Start DojOps as an MCP server over stdio (for external CLI agents) |
+| `npx @dojops/mcp`    | Standalone MCP server entry point (same behavior)                  |
+
+Exposes 9 tools (`generate`, `plan`, `scan`, `debug-ci`, `diff-analyze`, `chat`, `list-agents`, `list-skills`, `repo-scan`) that proxy to a running `dojops serve` instance. External agents like Claude Code, Gemini CLI, and GitHub Copilot configure it as `{ "command": "dojops", "args": ["serve", "--mcp"] }`.
+
 ### Interactive
 
 | Command                            | Description                                            |
@@ -207,6 +216,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/model`, `/provider [na
 | `dojops auth login`                           | Authenticate with LLM provider                                                                                                                    |
 | `dojops auth status`                          | Show saved tokens and default provider                                                                                                            |
 | `dojops serve [--port=N]`                     | Start API server + web dashboard                                                                                                                  |
+| `dojops serve --mcp`                          | Start DojOps as an MCP server (stdio transport) for external agents                                                                               |
 | `dojops serve --no-auth`                      | Start server without API key authentication (local dev only)                                                                                      |
 | `dojops serve --tls-cert=PATH --tls-key=PATH` | Enable HTTPS/TLS on the API server                                                                                                                |
 | `dojops serve credentials`                    | Generate API key for dashboard/API authentication                                                                                                 |

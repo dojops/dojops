@@ -5,6 +5,7 @@ import {
   getModelForTier,
   routeModel,
   estimateCost,
+  isModelCompatibleWithProvider,
   PROVIDER_MODEL_TIERS,
   PROVIDER_COST_PER_M_TOKENS,
 } from "../../llm/model-router";
@@ -356,5 +357,84 @@ describe("estimateCost", () => {
       expect(PROVIDER_COST_PER_M_TOKENS[provider].standard).toBeDefined();
       expect(PROVIDER_COST_PER_M_TOKENS[provider].premium).toBeDefined();
     }
+  });
+});
+
+describe("isModelCompatibleWithProvider", () => {
+  it("accepts OpenAI models on openai provider", () => {
+    expect(isModelCompatibleWithProvider("gpt-4o", "openai")).toBe(true);
+    expect(isModelCompatibleWithProvider("gpt-4o-mini", "openai")).toBe(true);
+    expect(isModelCompatibleWithProvider("o1", "openai")).toBe(true);
+    expect(isModelCompatibleWithProvider("o3-mini", "openai")).toBe(true);
+  });
+
+  it("rejects OpenAI models on anthropic provider", () => {
+    expect(isModelCompatibleWithProvider("gpt-4o", "anthropic")).toBe(false);
+    expect(isModelCompatibleWithProvider("gpt-4o-mini", "anthropic")).toBe(false);
+    expect(isModelCompatibleWithProvider("o1", "anthropic")).toBe(false);
+  });
+
+  it("accepts Anthropic models on anthropic provider", () => {
+    expect(isModelCompatibleWithProvider("claude-sonnet-4-6", "anthropic")).toBe(true);
+    expect(isModelCompatibleWithProvider("claude-opus-4-6", "anthropic")).toBe(true);
+    expect(isModelCompatibleWithProvider("claude-haiku-4-5-20251001", "anthropic")).toBe(true);
+  });
+
+  it("rejects Anthropic models on openai provider", () => {
+    expect(isModelCompatibleWithProvider("claude-sonnet-4-6", "openai")).toBe(false);
+    expect(isModelCompatibleWithProvider("claude-opus-4-6", "openai")).toBe(false);
+  });
+
+  it("rejects DeepSeek models on anthropic provider", () => {
+    expect(isModelCompatibleWithProvider("deepseek-chat", "anthropic")).toBe(false);
+    expect(isModelCompatibleWithProvider("deepseek-reasoner", "anthropic")).toBe(false);
+  });
+
+  it("accepts DeepSeek models on deepseek provider", () => {
+    expect(isModelCompatibleWithProvider("deepseek-chat", "deepseek")).toBe(true);
+    expect(isModelCompatibleWithProvider("deepseek-reasoner", "deepseek")).toBe(true);
+  });
+
+  it("rejects Gemini models on openai provider", () => {
+    expect(isModelCompatibleWithProvider("gemini-2.0-flash", "openai")).toBe(false);
+    expect(isModelCompatibleWithProvider("gemini-2.5-pro", "openai")).toBe(false);
+  });
+
+  it("accepts Gemini models on gemini provider", () => {
+    expect(isModelCompatibleWithProvider("gemini-2.0-flash", "gemini")).toBe(true);
+    expect(isModelCompatibleWithProvider("gemini-2.5-pro", "gemini")).toBe(true);
+  });
+
+  it("rejects Mistral models on openai provider", () => {
+    expect(isModelCompatibleWithProvider("mistral-large-latest", "openai")).toBe(false);
+    expect(isModelCompatibleWithProvider("codestral-latest", "openai")).toBe(false);
+  });
+
+  it("accepts Mistral models on mistral provider", () => {
+    expect(isModelCompatibleWithProvider("mistral-large-latest", "mistral")).toBe(true);
+    expect(isModelCompatibleWithProvider("mistral-small-latest", "mistral")).toBe(true);
+    expect(isModelCompatibleWithProvider("codestral-latest", "mistral")).toBe(true);
+  });
+
+  it("allows any model on ollama (local runner)", () => {
+    expect(isModelCompatibleWithProvider("gpt-4o", "ollama")).toBe(true);
+    expect(isModelCompatibleWithProvider("claude-sonnet-4-6", "ollama")).toBe(true);
+    expect(isModelCompatibleWithProvider("llama3.1:8b", "ollama")).toBe(true);
+    expect(isModelCompatibleWithProvider("custom-model", "ollama")).toBe(true);
+  });
+
+  it("allows any model on github-copilot", () => {
+    expect(isModelCompatibleWithProvider("gpt-4o", "github-copilot")).toBe(true);
+    expect(isModelCompatibleWithProvider("custom-model", "github-copilot")).toBe(true);
+  });
+
+  it("allows unknown model names (custom/fine-tuned) on any provider", () => {
+    expect(isModelCompatibleWithProvider("my-finetuned-model", "openai")).toBe(true);
+    expect(isModelCompatibleWithProvider("my-finetuned-model", "anthropic")).toBe(true);
+    expect(isModelCompatibleWithProvider("llama3.1:8b", "deepseek")).toBe(true);
+  });
+
+  it("allows unknown providers (benefit of the doubt)", () => {
+    expect(isModelCompatibleWithProvider("any-model", "unknown-provider")).toBe(true);
   });
 });

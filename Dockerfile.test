@@ -1,0 +1,57 @@
+# ── Build stage ──────────────────────────────────────────────────────
+FROM node:20-slim AS builder
+
+RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
+
+WORKDIR /app
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.json ./
+COPY packages/core/package.json packages/core/
+COPY packages/sdk/package.json packages/sdk/
+COPY packages/planner/package.json packages/planner/
+COPY packages/runtime/package.json packages/runtime/
+COPY packages/executor/package.json packages/executor/
+COPY packages/scanner/package.json packages/scanner/
+COPY packages/session/package.json packages/session/
+COPY packages/context/package.json packages/context/
+COPY packages/skill-registry/package.json packages/skill-registry/
+COPY packages/api/package.json packages/api/
+COPY packages/mcp/package.json packages/mcp/
+COPY packages/cli/package.json packages/cli/
+
+RUN pnpm install --frozen-lockfile
+
+COPY packages/ packages/
+RUN pnpm build && pnpm prune --prod
+
+# ── Test stage (Debian) ────────────────────────────────────────────
+FROM debian:bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates git make shellcheck gnupg procps \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /dojops
+
+COPY --from=builder /app/node_modules/ node_modules/
+COPY --from=builder /app/packages/ packages/
+COPY --from=builder /app/package.json .
+COPY --from=builder /app/pnpm-workspace.yaml .
+
+# Create a working global CLI symlink
+RUN chmod +x /dojops/packages/cli/dist/index.js \
+    && ln -sf /dojops/packages/cli/dist/index.js /usr/local/bin/dojops
+
+RUN mkdir -p /workspace \
+    && git config --global user.email "test@dojops.ai" \
+    && git config --global user.name "DojOps Test" \
+    && git config --global init.defaultBranch main
+
+WORKDIR /workspace
+
+ENV NODE_PATH=/dojops/node_modules
+ENV DOJOPS_PROVIDER=deepseek
+
+CMD ["/bin/bash"]

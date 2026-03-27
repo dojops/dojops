@@ -162,6 +162,15 @@ export class AgentLoop {
         this.opts.onThinking(response.content);
       }
 
+      // H-23: Execute non-done tool calls before checking stop conditions.
+      // When the LLM returns [write_file, done] in the same response, execute
+      // the write_file first so work isn't silently dropped.
+      const doneCall = response.toolCalls.find((tc) => tc.name === "done");
+      const nonDoneCalls = response.toolCalls.filter((tc) => tc.name !== "done");
+      if (doneCall && nonDoneCalls.length > 0) {
+        await this.executeToolCalls(nonDoneCalls, messages, allToolCalls);
+      }
+
       // Check stop conditions
       const stopResult = this.checkStopConditions(response, allToolCalls, iteration);
       if (stopResult) {

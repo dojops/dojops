@@ -173,17 +173,17 @@ describe("resolveModelForPrompt", () => {
     expect(result!.model).toBe("gpt-4o-mini");
   });
 
-  it("includes provider override when rule specifies it", () => {
+  it("returns model without provider override", () => {
     const config: ModelRoutingConfig = {
       enabled: true,
-      rules: [{ match: "simple", model: "llama3", provider: "ollama" }],
+      rules: [{ match: "simple", model: "llama3" }],
     };
 
     const result = resolveModelForPrompt("What is Terraform?", config);
 
     expect(result).not.toBeUndefined();
     expect(result!.model).toBe("llama3");
-    expect(result!.provider).toBe("ollama");
+    expect(result).not.toHaveProperty("provider");
   });
 
   it("matches 'code' rule for code indicators", () => {

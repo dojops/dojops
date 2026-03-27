@@ -59,11 +59,11 @@ You → DojOps CLI → Agent Router → Specialist Agent → LLM Provider
 |                          |                                                                                                                    |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | **32 specialist agents** | Terraform, Kubernetes, CI/CD, security, Docker, cloud, SRE, incident response, and more                            |
-| **31 built-in skills**   | `.dops v2` manifests for GitHub Actions, Terraform, K8s, Helm, Docker, Nginx, Falco, Vault, Istio, EKS, and others |
+| **38 built-in skills**   | `.dops v2` manifests for GitHub Actions, Terraform, K8s, Helm, Docker, Nginx, Falco, Vault, Istio, EKS, and others |
 | **7 LLM providers**      | OpenAI, Anthropic, Ollama (local), DeepSeek, Mistral, Google Gemini, GitHub Copilot                                |
 | **10 security scanners** | Trivy, Gitleaks, Checkov, Semgrep, Hadolint, ShellCheck, npm/pip audit, SBOM, license scan                         |
 | **12 packages**          | Modular monorepo - CLI, API, runtime, planner, executor, scanner, core, SDK, and more                              |
-| **21 REST endpoints**    | Full HTTP API with web dashboard, metrics, and token tracking                                                      |
+| **22 REST endpoints**    | Full HTTP API with web dashboard, metrics, and token tracking                                                      |
 | **0 telemetry**          | Nothing leaves your machine except requests to your chosen LLM provider                                            |
 
 ---
@@ -163,7 +163,7 @@ Create custom agents with `dojops agents create` or drop a YAML file in `.dojops
 </details>
 
 <details>
-<summary><strong>31 built-in skills</strong> - validated config generation for real DevOps tools</summary>
+<summary><strong>38 built-in skills</strong> - validated config generation for real DevOps tools</summary>
 
 Each skill is a `.dops v2` manifest with output guidance, best practices, and optional Context7 documentation. The runtime compiles a prompt from the skill definition and your input, sends it to the LLM, and validates the output.
 
@@ -189,7 +189,11 @@ Each skill is a `.dops v2` manifest with output guidance, best practices, and op
 | opa-gatekeeper | YAML       | ConstraintTemplates, Constraints, Rego policies          |
 | flux           | YAML       | GitRepository, Kustomization, HelmRelease                |
 | trivy-operator | YAML       | VulnerabilityReports, ConfigAuditReports                 |
-| _+ 11 more_    |            | Pulumi, Kustomize, Crossplane, Terragrunt, Makefile, ... |
+| shell          | sh/bash    | Shell scripts, validated by ShellCheck                   |
+| python         | py         | Python automation scripts                                |
+| powershell     | ps1        | PowerShell scripts for Windows automation                |
+| packer         | JSON       | Machine image definitions, validated by packer validate  |
+| _+ 10 more_    |            | Pulumi, Kustomize, Crossplane, Terragrunt, Makefile, ... |
 
 Write your own skills as `.dops v2` manifests and share them on the [DojOps Hub](https://hub.dojops.ai). Skills are auto-installed from the Hub when a prompt matches.
 
@@ -281,7 +285,7 @@ The agent loop runs until the plan succeeds or reaches the retry limit. Each ite
 </details>
 
 <details>
-<summary><strong>REST API and web dashboard</strong> - 21 endpoints over HTTP</summary>
+<summary><strong>REST API and web dashboard</strong> - 22 endpoints over HTTP</summary>
 
 `dojops serve` starts an Express server with API key authentication, CORS, and optional TLS.
 
@@ -325,9 +329,9 @@ Diff risk classification scores changes heuristically (critical paths like Docke
 </details>
 
 <details>
-<summary><strong>MCP integration</strong> - extend with external tool servers</summary>
+<summary><strong>MCP integration</strong> - client and server</summary>
 
-Connect any [Model Context Protocol](https://modelcontextprotocol.io) server to add tools to the agent loop.
+**As MCP client:** connect any [Model Context Protocol](https://modelcontextprotocol.io) server to add tools to the agent loop.
 
 ```bash
 # Add an MCP server
@@ -337,7 +341,23 @@ dojops mcp add my-server -- npx my-mcp-server
 dojops "Use my-tool to check the deployment status"
 ```
 
-Supports both stdio and HTTP transports. Tools appear alongside built-in capabilities.
+**As MCP server:** expose DojOps capabilities to external CLI agents (Claude Code, Gemini CLI, GitHub Copilot, OpenClaw).
+
+```bash
+# Start DojOps as an MCP server (stdio transport)
+dojops serve --mcp
+
+# Or run standalone
+npx @dojops/mcp
+```
+
+External agents configure DojOps as a tool server:
+
+```json
+{ "command": "dojops", "args": ["serve", "--mcp"] }
+```
+
+9 tools are exposed: `generate`, `plan`, `scan`, `debug-ci`, `diff-analyze`, `chat`, `list-agents`, `list-skills`, `repo-scan`. Each proxies to a running `dojops serve` instance.
 
 </details>
 
@@ -358,13 +378,13 @@ DojOps generates and validates infrastructure configs. It does not:
 
 ```
 @dojops/cli              CLI entry point, terminal UI (@clack/prompts)
-@dojops/api              REST API (Express), web dashboard, 21 endpoints
+@dojops/api              REST API (Express), web dashboard, 22 endpoints
 @dojops/skill-registry   Skill registry, custom skill + agent discovery
 @dojops/planner          Task graph decomposition, topological executor
 @dojops/executor         Sandbox, policy engine, approval, audit log
-@dojops/runtime          31 built-in DevOps skills (.dops v2)
+@dojops/runtime          38 built-in DevOps skills (.dops v2)
 @dojops/scanner          10 security scanners, auto-remediation
-@dojops/mcp              MCP client manager, tool discovery
+@dojops/mcp              MCP client + server, tool discovery, stdio transport
 @dojops/context          Context7 documentation augmentation
 @dojops/session          Chat session management, project memory
 @dojops/core             LLM abstraction (7 providers), 32 specialist agents, tiered routing

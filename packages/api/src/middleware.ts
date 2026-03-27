@@ -131,6 +131,7 @@ export function authMiddleware(apiKey?: string | string[]) {
     if (keys.length === 0) {
       // No server-side auth configured — treat as authenticated (no auth barrier to enforce)
       res.locals.authenticated = true;
+      res.locals.noAuthMode = true;
       next();
       return;
     }

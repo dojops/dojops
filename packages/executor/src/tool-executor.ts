@@ -477,7 +477,7 @@ export class ToolExecutor {
     const filePath = this.resolvePath(call.arguments.path as string);
     const content = call.arguments.content as string;
 
-    checkWriteAllowed(filePath, this.opts.policy);
+    checkWriteAllowed(filePath, this.opts.policy, this.opts.cwd);
     checkFileSize(Buffer.byteLength(content, "utf-8"), this.opts.policy);
 
     // G-09: Scan for secrets before writing
@@ -534,7 +534,7 @@ export class ToolExecutor {
       return { callId: call.id, output: `File not found: ${filePath}`, isError: true };
     }
 
-    checkWriteAllowed(filePath, this.opts.policy);
+    checkWriteAllowed(filePath, this.opts.policy, this.opts.cwd);
     this.opts.onBeforeWrite?.(filePath);
 
     const content = fs.readFileSync(filePath, "utf-8");
@@ -583,6 +583,15 @@ export class ToolExecutor {
     const command = call.arguments.command as string;
     const cwd = call.arguments.cwd ? this.resolvePath(call.arguments.cwd as string) : this.opts.cwd;
     const timeout = (call.arguments.timeout as number) ?? this.opts.policy.timeoutMs;
+
+    // H-21: cwd containment — prevent executing commands from outside the project
+    if (!isPathWithin(path.resolve(cwd), path.resolve(this.opts.cwd))) {
+      return {
+        callId: call.id,
+        output: `Command blocked: cwd "${cwd}" is outside the project directory`,
+        isError: true,
+      };
+    }
 
     // G-01: Block dangerous command patterns
     const dangerCheck = isDangerousCommand(command);

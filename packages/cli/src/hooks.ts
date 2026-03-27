@@ -12,6 +12,7 @@ import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { runShellCmd } from "./safe-exec";
+import { isFolderTrusted } from "./trust";
 
 export type HookEvent =
   | "pre-generate"
@@ -83,11 +84,26 @@ function buildHookEnv(ctx: HookContext): Record<string, string> {
   return env;
 }
 
+/** Block hook commands that pipe from network or use eval-like constructs. */
+const DANGEROUS_HOOK_PATTERNS = [
+  /\bcurl\b.*\|\s*(bash|sh|zsh)/i,
+  /\bwget\b.*\|\s*(bash|sh|zsh)/i,
+  /\beval\s/,
+  /\$\(curl\b/i,
+  /\$\(wget\b/i,
+];
+
 /**
  * Execute a single hook command.
  * Returns true if successful, false if failed.
  */
 function executeHook(hook: HookDefinition, ctx: HookContext, verbose: boolean): boolean {
+  // Block known-dangerous command patterns
+  if (DANGEROUS_HOOK_PATTERNS.some((pat) => pat.test(hook.command))) {
+    p.log.warn(`Hook ${pc.yellow(ctx.event)} blocked: command contains a dangerous pattern.`);
+    return false;
+  }
+
   const env = buildHookEnv(ctx);
   try {
     if (verbose) {
@@ -126,6 +142,15 @@ export function runHooks(
 
   const hookDefs = config.hooks[event];
   if (!hookDefs) return true;
+
+  // Hooks execute arbitrary shell commands — require workspace trust
+  const trustCheck = isFolderTrusted(rootDir);
+  if (!trustCheck.trusted) {
+    p.log.warn(
+      `Hooks skipped (${event}): workspace not trusted. Run ${pc.cyan("dojops trust")} first.`,
+    );
+    return true;
+  }
 
   const hooks = Array.isArray(hookDefs) ? hookDefs : [hookDefs];
   const isPreHook = event.startsWith("pre-");

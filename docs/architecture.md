@@ -1,6 +1,6 @@
 # Architecture
 
-DojOps is designed as a modular, layered DevOps agent system - not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 31 built-in DevOps skills, a custom skill system for extending with additional skills, 32 specialist agents, 7 LLM providers with tiered model routing, sandboxed execution, approval workflows, and hash-chained audit trails.
+DojOps is designed as a modular, layered DevOps agent system - not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 38 built-in DevOps skills, a custom skill system for extending with additional skills, 32 specialist agents, 7 LLM providers with tiered model routing, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 
@@ -19,7 +19,7 @@ Agent Router (32 specialist agents, keyword confidence scoring)
 Planner Engine (LLM -> TaskGraph -> topological execution)
  |
  v
-Skill Registry (31 built-in skills + custom skills, unified discovery)
+Skill Registry (38 built-in skills + custom skills, unified discovery)
  |
  v
 Skill SDK Layer (BaseSkill<T>, Zod validation)
@@ -42,8 +42,8 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/skill-registry Skill registry + custom skill system (discovers built-in + custom skills)
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/mcp            MCP (Model Context Protocol) client — server lifecycle, tool discovery, dispatcher
-@dojops/runtime        31 built-in DevOps skills as .dops v2 files (DopsRuntime)
+@dojops/mcp            MCP client + server — tool discovery, dispatcher, stdio transport for external agents
+@dojops/runtime        38 built-in DevOps skills as .dops v2 files (DopsRuntime)
 @dojops/scanner        10 security scanners + remediation engine
 @dojops/session        Chat session management + autonomous agent loop (AgentLoop) + memory + context injection
 @dojops/context        Context7 documentation augmentation for v2 skills
@@ -117,6 +117,8 @@ Abstraction over seven LLM providers with structured JSON output and tiered mode
 | GitHub Copilot | gpt-4o-mini      | gpt-4o            | o1                |
 
 Simple prompts (makefiles, basic configs) use the fast tier. Complex prompts (multi-service architectures, security hardening) use the premium tier. Agent routing always uses the fast tier to keep costs low.
+
+**Provider isolation:** model routing rules cannot cross provider boundaries. `isModelCompatibleWithProvider()` validates that a model name belongs to the configured provider using known prefix patterns (e.g., `gpt-*` → OpenAI, `claude-*` → Anthropic). Ollama and GitHub Copilot accept any model name. If a routing rule references a model from a different provider, the rule is skipped with a warning and the default model is used instead.
 
 Key interface:
 
@@ -196,13 +198,13 @@ The DOPS runtime processes `.dops v2` skill files — a declarative format combi
 
 ### 5. DevOps Skills (`@dojops/runtime`)
 
-31 built-in skills covering CI/CD, IaC, containers, monitoring, security, service mesh, cloud, and system services. All 31 are `.dops v2` skills in `packages/runtime/skills/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All skills support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
+38 built-in skills covering CI/CD, IaC, containers, monitoring, security, service mesh, cloud, and system services. All 31 are `.dops v2` skills in `packages/runtime/skills/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All skills support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
 
 See [DevOps Skills](skills.md) for the full skill list.
 
 ### 5b. Skill Registry (`@dojops/skill-registry`)
 
-Unified registry layer between consumers (Planner, Executor, CLI, API) and skill implementations. Combines all 31 built-in skills with custom skills discovered from disk:
+Unified registry layer between consumers (Planner, Executor, CLI, API) and skill implementations. Combines all 38 built-in skills with custom skills discovered from disk:
 
 - **`.dops` skill discovery** — Discovers `.dops v2` skills from `~/.dojops/skills/` (global) and `.dojops/skills/` (project)
 - **Skill validation** — Zod schema validates `.dops` frontmatter
@@ -240,13 +242,21 @@ Available via `dojops auto <prompt>` (CLI), `POST /api/auto` (API), and `/auto <
 
 ### 8c. MCP Support (`@dojops/mcp`)
 
-The MCP (Model Context Protocol) package enables the autonomous agent to call tools from external servers — databases, cloud APIs, GitHub, etc. MCP is a Linux Foundation standard supported by Claude Code, Codex, Gemini CLI, and Copilot CLI.
+The MCP (Model Context Protocol) package provides both client and server capabilities. MCP is a Linux Foundation standard supported by Claude Code, Codex, Gemini CLI, and Copilot CLI.
 
-**Architecture:**
+**Client (DojOps as MCP client):** enables the autonomous agent to call tools from external servers — databases, cloud APIs, GitHub, etc.
 
 - `McpClientManager` — Manages server lifecycle (connect all at agent start, disconnect on completion). Supports `stdio` (local subprocess) and `streamable-http` (remote endpoint) transports via `@modelcontextprotocol/sdk`.
 - `McpToolDispatcher` — Bridges MCP tools into the `ToolExecutor` dispatch chain. Parses `mcp__<server>__<tool>` names and routes to the correct server.
 - Tool naming: `mcp__<servername>__<toolname>` convention (matches Claude Code). Double-underscore delimiter prevents collisions.
+
+**Server (DojOps as MCP server):** exposes DojOps capabilities to external CLI agents over stdio transport.
+
+- `createDojOpsMcpServer()` — Creates an MCP server with 9 tool registrations, each proxying to a running `dojops serve` HTTP API
+- `startMcpServer()` — Connects via `StdioServerTransport` for integration with external agents
+- `TOOL_DEFINITIONS` — 9 tools: `generate`, `plan`, `scan`, `debug-ci`, `diff-analyze`, `chat`, `list-agents`, `list-skills`, `repo-scan`
+- Entry points: `dojops serve --mcp` (CLI flag) or `npx @dojops/mcp` (standalone binary)
+- Environment: `DOJOPS_API_URL` (default `http://localhost:3000`), `DOJOPS_API_KEY` for auth
 
 **Config:** `.dojops/mcp.json` (project) + `~/.dojops/mcp.json` (global). Project config overrides global by server name.
 
@@ -287,7 +297,7 @@ Streaming is used in `dojops "prompt"` for agent-routed generation commands. Str
 
 ### 9. REST API & Dashboard (`@dojops/api`)
 
-Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/skill-registry` to load all built-in + custom skills. 21 endpoints exposing all capabilities over HTTP with API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias, `X-API-Version: 1` header on v1 routes). Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customSkillCount`. Per-route rate limiting and token budget tracking via `TokenTracker`.
+Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/skill-registry` to load all built-in + custom skills. 22 endpoints exposing all capabilities over HTTP with API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias, `X-API-Version: 1` header on v1 routes). Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customSkillCount`. Per-route rate limiting and token budget tracking via `TokenTracker`.
 
 See [API Reference](api-reference.md) and [Web Dashboard](dashboard.md).
 
