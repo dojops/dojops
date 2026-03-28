@@ -16,15 +16,22 @@ export function initSSE(res: Response): {
     "X-Accel-Buffering": "no",
   });
 
+  // M-7: Heartbeat keeps the connection alive through proxies (every 15s)
+  const heartbeat = setInterval(() => {
+    res.write(": heartbeat\n\n");
+  }, 15_000);
+
   return {
     send(event: string, data: unknown) {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     },
     done() {
+      clearInterval(heartbeat);
       res.write("data: [DONE]\n\n");
       res.end();
     },
     error(message: string) {
+      clearInterval(heartbeat);
       res.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`);
       res.end();
     },

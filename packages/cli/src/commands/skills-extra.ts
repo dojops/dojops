@@ -10,6 +10,7 @@ import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { hasFlag } from "../parser";
 import { findProjectRoot } from "../state";
 import { exportSkillBundle, importSkillBundle } from "../offline";
+import { recordInstall } from "../skill-manifest";
 
 const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "https://hub.dojops.ai";
 
@@ -109,15 +110,40 @@ async function downloadAndApplyUpdate(update: UpdateInfo): Promise<void> {
 
   const fileBuffer = Buffer.from(await res.arrayBuffer());
   const checksum = res.headers.get("x-checksum-sha256");
-  if (checksum) {
-    const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-    if (hash !== checksum) {
-      p.log.error(`Integrity check failed for ${update.name}. Expected ${checksum}, got ${hash}`);
-      return;
-    }
+  const actualHash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+  if (checksum && actualHash !== checksum) {
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `SHA-256 integrity check failed for ${update.name}.\n` +
+        `  Publisher: ${checksum}\n` +
+        `  Download:  ${actualHash}\n` +
+        `Aborting update — the downloaded file may have been tampered with.`,
+    );
   }
+
+  if (!checksum) {
+    p.log.warn(
+      `Hub did not provide a SHA-256 checksum for ${update.name}. ` +
+        "Installing anyway, but the download could not be verified against a publisher hash.",
+    );
+  }
+
   fs.writeFileSync(update.filePath, fileBuffer);
+  fs.writeFileSync(`${update.filePath}.sha256`, actualHash, "utf-8");
+
+  // Determine scope from file path and record in manifest
+  const scope: "global" | "project" = update.location === "project" ? "project" : "global";
+  recordInstall(scope, {
+    name: update.name,
+    version: update.latestVersion,
+    source: "hub",
+    installedAt: new Date().toISOString(),
+    sha256: actualHash,
+  });
+
   p.log.success(`Updated ${pc.cyan(update.name)} to v${update.latestVersion}`);
+  p.log.info(pc.dim(`SHA-256: ${actualHash}`));
 }
 
 async function autoInstallUpdates(available: UpdateInfo[]): Promise<void> {

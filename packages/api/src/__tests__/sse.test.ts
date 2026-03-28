@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { initSSE, wantsSSE } from "../sse";
 
 function createMockResponse() {
@@ -36,9 +36,17 @@ function createMockResponse() {
 }
 
 describe("initSSE", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("sets correct SSE headers", () => {
     const mock = createMockResponse();
-    initSSE(mock.res);
+    const sse = initSSE(mock.res);
 
     expect(mock.headStatus).toBe(200);
     expect(mock.headHeaders).toEqual({
@@ -47,6 +55,8 @@ describe("initSSE", () => {
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     });
+
+    sse.done(); // clean up heartbeat interval
   });
 
   it("send() writes event and data lines", () => {
@@ -57,6 +67,8 @@ describe("initSSE", () => {
 
     expect(mock.chunks).toHaveLength(1);
     expect(mock.chunks[0]).toBe('event: chunk\ndata: {"content":"hello"}\n\n');
+
+    sse.done(); // clean up heartbeat interval
   });
 
   it("done() writes [DONE] sentinel and ends response", () => {
@@ -89,6 +101,8 @@ describe("initSSE", () => {
     expect(mock.chunks[0]).toBe(
       'event: agent\ndata: {"name":"k8s","domain":"kubernetes","confidence":0.95}\n\n',
     );
+
+    sse.done(); // clean up heartbeat interval
   });
 
   it("supports multiple send() calls in sequence", () => {
@@ -102,6 +116,31 @@ describe("initSSE", () => {
 
     expect(mock.chunks).toHaveLength(4);
     expect(mock.ended).toBe(true);
+  });
+
+  it("sends heartbeat comments every 15 seconds", () => {
+    const mock = createMockResponse();
+    const sse = initSSE(mock.res);
+
+    // No heartbeat yet
+    expect(mock.chunks).toHaveLength(0);
+
+    // Advance 15 seconds
+    vi.advanceTimersByTime(15_000);
+    expect(mock.chunks).toHaveLength(1);
+    expect(mock.chunks[0]).toBe(": heartbeat\n\n");
+
+    // Advance another 15 seconds
+    vi.advanceTimersByTime(15_000);
+    expect(mock.chunks).toHaveLength(2);
+    expect(mock.chunks[1]).toBe(": heartbeat\n\n");
+
+    sse.done(); // clean up heartbeat interval
+
+    // No more heartbeats after done()
+    vi.advanceTimersByTime(15_000);
+    // done() added [DONE] chunk, so total is 3 (2 heartbeats + 1 done)
+    expect(mock.chunks).toHaveLength(3);
   });
 });
 

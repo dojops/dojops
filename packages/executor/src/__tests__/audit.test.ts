@@ -47,7 +47,9 @@ describe("AuditPersistence", () => {
     persistence.append(entry);
 
     expect(entry.hash).toBeDefined();
-    expect(entry.previousHash).toBe("GENESIS");
+    // L-3: Genesis hash is now random (64 hex chars), no longer hardcoded "GENESIS"
+    expect(entry.previousHash).toBeDefined();
+    expect(entry.previousHash!.length).toBe(64);
     expect(entry.hash!.length).toBe(64); // SHA-256 hex
   });
 
@@ -171,6 +173,57 @@ describe("AuditPersistence", () => {
     // Full chain should still verify
     const result = resumed.verify();
     expect(result.valid).toBe(true);
+  });
+
+  it("writes audit-head.json on first append with genesis hash", () => {
+    persistence.append(makeEntry({ taskId: "a" }));
+
+    const head = persistence.readHead();
+    expect(head).not.toBeNull();
+    expect(head!.firstEntryHash).toBeDefined();
+    expect(head!.genesisHash).toBeDefined();
+    expect(head!.genesisHash.length).toBe(64); // Random 32-byte hex
+  });
+
+  it("preserves genesis hash across restarts", () => {
+    persistence.append(makeEntry({ taskId: "a" }));
+    const head1 = persistence.readHead();
+
+    // Create a new persistence instance (simulating process restart)
+    const resumed = new AuditPersistence(tmpDir);
+    resumed.append(makeEntry({ taskId: "b" }));
+    const head2 = resumed.readHead();
+
+    // Genesis hash should be the same — loaded from audit-head.json
+    expect(head2!.genesisHash).toBe(head1!.genesisHash);
+  });
+
+  it("verify detects truncation when chain is replaced with a valid substitute", () => {
+    persistence.append(makeEntry({ taskId: "a" }));
+    persistence.append(makeEntry({ taskId: "b" }));
+    persistence.append(makeEntry({ taskId: "c" }));
+
+    const head = persistence.readHead();
+    expect(head).not.toBeNull();
+
+    // Sophisticated truncation attack: replace entire chain with a new valid chain
+    // that starts from the same genesis hash but has different entries
+    const auditFile = path.join(tmpDir, ".dojops", "audit.jsonl");
+    const fakeEntry = makeEntry({ taskId: "fake" });
+    fakeEntry.previousHash = head!.genesisHash;
+    fakeEntry.hash = computeAuditHash(fakeEntry, fakeEntry.previousHash);
+    fs.writeFileSync(auditFile, JSON.stringify(fakeEntry) + "\n");
+
+    // Re-create persistence to read from file
+    const verifier = new AuditPersistence(tmpDir);
+    const result = verifier.verify();
+    expect(result.valid).toBe(false);
+    expect(result.brokenAt).toBe(0);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("readHead returns null when no head file exists", () => {
+    expect(persistence.readHead()).toBeNull();
   });
 });
 

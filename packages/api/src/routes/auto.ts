@@ -186,6 +186,7 @@ export function createAutoRouter(
         // G-02: Never allow all paths — always enforce DevOps allowlist
         allowedWritePaths: [cwd],
         deniedWritePaths,
+        allowedReadPaths: [cwd],
         enforceDevOpsAllowlist: true,
         allowNetwork: false,
         allowEnvVars: [],

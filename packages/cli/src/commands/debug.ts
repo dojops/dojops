@@ -34,8 +34,8 @@ function formatDiagnosis(diagnosis: {
   suggestedFixes: Array<{
     confidence: number;
     description: string;
-    command?: string;
-    file?: string;
+    command?: string | null;
+    file?: string | null;
   }>;
 }): string[] {
   const lines = [

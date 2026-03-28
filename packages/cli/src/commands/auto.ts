@@ -512,6 +512,7 @@ function buildToolExecutor(
       allowWrite: true,
       allowedWritePaths: [cwd],
       deniedWritePaths: deniedPaths,
+      allowedReadPaths: [cwd],
       enforceDevOpsAllowlist: !allowAllPaths,
       allowNetwork: false,
       allowEnvVars: [],

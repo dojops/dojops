@@ -196,13 +196,28 @@ describe("API integration", () => {
           metricsEnabled: false,
         }),
       );
-      expect(typeof res.body.memory).toBe("number");
-      expect(res.body.memory).toBeGreaterThan(0);
-      expect(typeof res.body.uptime).toBe("number");
-      expect(res.body.uptime).toBeGreaterThanOrEqual(0);
+      // L-1: memory and uptime are gated behind DOJOPS_DEBUG
+      expect(res.body.memory).toBeUndefined();
+      expect(res.body.uptime).toBeUndefined();
       expect(typeof res.body.timestamp).toBe("string");
       // Timestamp should be a valid ISO date
       expect(new Date(res.body.timestamp).toISOString()).toBe(res.body.timestamp);
+    });
+
+    it("includes memory and uptime when DOJOPS_DEBUG is enabled", async () => {
+      const origDebug = process.env.DOJOPS_DEBUG;
+      process.env.DOJOPS_DEBUG = "true";
+      try {
+        const app = createApp(deps);
+        const res = await request(app).get("/api/health").expect(200);
+        expect(typeof res.body.memory).toBe("number");
+        expect(res.body.memory).toBeGreaterThan(0);
+        expect(typeof res.body.uptime).toBe("number");
+        expect(res.body.uptime).toBeGreaterThanOrEqual(0);
+      } finally {
+        if (origDebug === undefined) delete process.env.DOJOPS_DEBUG;
+        else process.env.DOJOPS_DEBUG = origDebug;
+      }
     });
 
     it("shows degraded when listModels fails", async () => {

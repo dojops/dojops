@@ -126,8 +126,9 @@ describe("API Integration", () => {
       expect(res.body.authRequired).toBe(true);
       expect(res.body.provider).toBe("mock");
       expect(res.body.tools).toContain("mock-tool");
-      expect(typeof res.body.memory).toBe("number");
-      expect(typeof res.body.uptime).toBe("number");
+      // L-1: memory and uptime only appear when DOJOPS_DEBUG is enabled
+      expect(res.body.memory).toBeUndefined();
+      expect(res.body.uptime).toBeUndefined();
     });
   });
 

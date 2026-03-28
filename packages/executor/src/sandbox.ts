@@ -63,6 +63,17 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
         }
       }
 
+      // M-1: Restrict reads to allowed paths when specified
+      if (policy.allowedReadPaths && policy.allowedReadPaths.length > 0) {
+        const allowed = policy.allowedReadPaths.some((p) => isPathWithin(resolved, p));
+        if (!allowed) {
+          throw new PolicyViolationError(
+            `Read from ${resolved} is not in allowed read paths`,
+            "allowedReadPaths",
+          );
+        }
+      }
+
       // Enforce file size limit before reading
       const stat = fs.statSync(resolved);
       checkFileSize(stat.size, policy);

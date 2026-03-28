@@ -56,6 +56,7 @@ export const ExecutionPolicySchema = z.object({
   allowWrite: z.boolean().default(false),
   allowedWritePaths: z.array(z.string()).default([]),
   deniedWritePaths: z.array(z.string()).default([]),
+  allowedReadPaths: z.array(z.string()).default([]),
   enforceDevOpsAllowlist: z.boolean().default(true),
   /** @advisory Partially enforced: emits warnings via `onPolicyWarning` when network commands are detected in `runCommand`. Not OS-level blocked. */
   allowNetwork: z.boolean().default(false),
@@ -128,6 +129,6 @@ export interface ExecutionAuditEntry {
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
   /** SHA-256 hash of this entry (computed over all other fields). */
   hash?: string;
-  /** SHA-256 hash of the previous entry in the chain, or "GENESIS" for the first. */
+  /** SHA-256 hash of the previous entry in the chain, or the genesis hash for the first. */
   previousHash?: string;
 }

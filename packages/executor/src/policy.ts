@@ -280,6 +280,7 @@ export const DEFAULT_POLICY: ExecutionPolicy = {
   allowWrite: false,
   allowedWritePaths: [],
   deniedWritePaths: [],
+  allowedReadPaths: [],
   enforceDevOpsAllowlist: true,
   /** @advisory Partially enforced: warnings emitted for network commands in runCommand. Not OS-level blocked. */
   allowNetwork: false,

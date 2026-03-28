@@ -14,6 +14,48 @@ function sessionsDir(rootDir: string): string {
   return path.join(rootDir, ".dojops", "sessions");
 }
 
+// ── H-2: Session file encryption at rest ─────────────────────────────
+
+const ENCRYPTION_ALGO = "aes-256-gcm";
+const IV_LENGTH = 12; // GCM recommended
+const TAG_LENGTH = 16;
+
+/** Derive a 32-byte key from the user-provided secret using SHA-256. */
+function deriveKey(secret: string): Buffer {
+  return crypto.createHash("sha256").update(secret).digest();
+}
+
+/** Get the encryption key from env, or null if encryption is disabled. */
+function getEncryptionKey(): Buffer | null {
+  const secret = process.env.DOJOPS_SESSION_KEY;
+  if (!secret) return null;
+  return deriveKey(secret);
+}
+
+/** Encrypt a JSON string with AES-256-GCM. Returns base64-encoded ciphertext with IV+tag prepended. */
+function encrypt(plaintext: string, key: Buffer): string {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ENCRYPTION_ALGO, key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf-8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  // Format: iv (12) + tag (16) + ciphertext
+  return Buffer.concat([iv, tag, encrypted]).toString("base64");
+}
+
+/** Decrypt a base64-encoded ciphertext. Returns the original JSON string. */
+function decrypt(ciphertext: string, key: Buffer): string {
+  const data = Buffer.from(ciphertext, "base64");
+  if (data.length < IV_LENGTH + TAG_LENGTH) {
+    throw new Error("Invalid encrypted session data: too short");
+  }
+  const iv = data.subarray(0, IV_LENGTH);
+  const tag = data.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
+  const encrypted = data.subarray(IV_LENGTH + TAG_LENGTH);
+  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGO, key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(encrypted) + decipher.final("utf-8");
+}
+
 export function generateSessionId(): string {
   return `chat-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
 }
@@ -23,14 +65,33 @@ export function saveSession(rootDir: string, session: ChatSessionState): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${session.id}.json`);
   const toSave = { ...session, updatedAt: new Date().toISOString() };
-  atomicWriteFileSync(file, JSON.stringify(toSave, null, 2) + "\n");
+  const json = JSON.stringify(toSave, null, 2) + "\n";
+
+  const key = getEncryptionKey();
+  if (key) {
+    // H-2: Write encrypted session with DOJOPS_ENC prefix marker
+    const encrypted = encrypt(json, key);
+    atomicWriteFileSync(file, `DOJOPS_ENC:${encrypted}`);
+  } else {
+    atomicWriteFileSync(file, json);
+  }
 }
 
 export function loadSession(rootDir: string, sessionId: string): ChatSessionState | null {
   if (!isValidSessionId(sessionId)) return null;
   const file = path.join(sessionsDir(rootDir), `${sessionId}.json`);
   try {
-    return JSON.parse(fs.readFileSync(file, "utf-8")) as ChatSessionState;
+    const raw = fs.readFileSync(file, "utf-8");
+    if (raw.startsWith("DOJOPS_ENC:")) {
+      const key = getEncryptionKey();
+      if (!key) {
+        console.warn(`[session] Encrypted session ${sessionId} but DOJOPS_SESSION_KEY not set`);
+        return null;
+      }
+      const json = decrypt(raw.slice("DOJOPS_ENC:".length), key);
+      return JSON.parse(json) as ChatSessionState;
+    }
+    return JSON.parse(raw) as ChatSessionState;
   } catch {
     return null;
   }
@@ -48,7 +109,14 @@ export function listSessions(rootDir: string): ChatSessionState[] {
     })
     .map((f) => {
       try {
-        return JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as ChatSessionState;
+        const raw = fs.readFileSync(path.join(dir, f), "utf-8");
+        if (raw.startsWith("DOJOPS_ENC:")) {
+          const key = getEncryptionKey();
+          if (!key) return null;
+          const json = decrypt(raw.slice("DOJOPS_ENC:".length), key);
+          return JSON.parse(json) as ChatSessionState;
+        }
+        return JSON.parse(raw) as ChatSessionState;
       } catch {
         return null;
       }
@@ -101,7 +169,15 @@ export function cleanExpiredSessions(rootDir: string, ttlMs?: number): number {
 
     try {
       const filePath = path.join(dir, file);
-      const data = JSON.parse(fs.readFileSync(filePath, "utf-8")) as ChatSessionState;
+      const raw = fs.readFileSync(filePath, "utf-8");
+      let data: ChatSessionState;
+      if (raw.startsWith("DOJOPS_ENC:")) {
+        const key = getEncryptionKey();
+        if (!key) continue;
+        data = JSON.parse(decrypt(raw.slice("DOJOPS_ENC:".length), key));
+      } else {
+        data = JSON.parse(raw);
+      }
       const updatedAt = new Date(data.updatedAt).getTime();
       if (Number.isFinite(updatedAt) && now - updatedAt > ttl) {
         fs.unlinkSync(filePath);

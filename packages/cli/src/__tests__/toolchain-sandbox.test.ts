@@ -38,9 +38,30 @@ describe("toolchain-sandbox", () => {
       );
     });
 
+    it("checks for xz availability before extraction", () => {
+      extractTarXz("/tmp/archive.tar.xz", "/tmp/dest");
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        "which",
+        ["xz"],
+        expect.objectContaining({ timeout: 5_000 }),
+      );
+    });
+
+    it("throws helpful error when xz is not available", () => {
+      mockExecFileSync.mockImplementation((bin: string) => {
+        if (bin === "which") throw new Error("not found");
+        return Buffer.from("");
+      });
+      expect(() => extractTarXz("/tmp/archive.tar.xz", "/tmp/dest")).toThrow(
+        /xz is required.*not found on PATH/,
+      );
+    });
+
     it("uses different flag than extractTarGz", () => {
       extractTarXz("/tmp/archive.tar.xz", "/tmp/dest");
-      const xzArgs = mockExecFileSync.mock.calls[0][1];
+      // Find the tar call (skip the `which xz` check)
+      const tarCall = mockExecFileSync.mock.calls.find((c: unknown[]) => c[0] === "tar");
+      const xzArgs = tarCall![1] as string[];
 
       mockExecFileSync.mockReset();
       extractTarGz("/tmp/archive.tar.gz", "/tmp/dest");

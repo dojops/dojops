@@ -13,6 +13,8 @@ import {
   auditFile,
   loadAuditKey,
   computeAuditHash,
+  loadScanReport,
+  isValidScanId,
 } from "../state";
 import type { AuditEntry } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -153,6 +155,55 @@ function formatResultLine(r: {
   return line;
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- scan reports are untyped JSON */
+function showScanReport(scan: Record<string, unknown>, scanId: string, ctx: CLIContext): void {
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify(scan, null, 2));
+    return;
+  }
+
+  const findings = (scan.findings ?? scan.results ?? []) as any[];
+  const scanners = (scan.scanners ?? []) as any[];
+  const ts = scan.timestamp ?? scan.createdAt ?? "unknown";
+
+  const lines = [
+    `${pc.bold("ID:")}        ${scanId}`,
+    `${pc.bold("Type:")}      scan report`,
+    `${pc.bold("Timestamp:")} ${ts}`,
+    `${pc.bold("Findings:")}  ${findings.length}`,
+  ];
+
+  if (scanners.length > 0) {
+    lines.push("", pc.bold("Scanners:"));
+    for (const s of scanners) {
+      const name = typeof s === "string" ? s : (s.name ?? s.scanner ?? "unknown");
+      const count = typeof s === "object" && s.findings != null ? ` (${s.findings} findings)` : "";
+      lines.push(`  ${pc.dim("-")} ${name}${count}`);
+    }
+  }
+
+  if (findings.length > 0) {
+    lines.push("", pc.bold("Findings:"));
+    for (const f of findings.slice(0, 20)) {
+      const sev = f.severity ?? f.level ?? "info";
+      const sevColor =
+        sev === "critical" || sev === "high"
+          ? pc.red(sev)
+          : sev === "medium"
+            ? pc.yellow(sev)
+            : pc.dim(sev);
+      const desc = f.description ?? f.message ?? f.title ?? "";
+      lines.push(`  ${sevColor.padEnd(20)} ${desc}`);
+    }
+    if (findings.length > 20) {
+      lines.push(pc.dim(`  ... and ${findings.length - 20} more`));
+    }
+  }
+
+  p.note(lines.join("\n"), `Scan: ${scanId}`);
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 function historyShow(args: string[], ctx: CLIContext): void {
   const root = findProjectRoot();
   if (!root) {
@@ -167,8 +218,16 @@ function historyShow(args: string[], ctx: CLIContext): void {
   }
 
   const plan = loadPlan(root, planId);
+
+  // If not a plan, check if it's a scan report
   if (!plan) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
+    if (isValidScanId(planId)) {
+      const scan = loadScanReport(root, planId);
+      if (scan) {
+        return showScanReport(scan, planId, ctx);
+      }
+    }
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan or scan report "${planId}" not found.`);
   }
 
   if (ctx.globalOpts.output === "json") {

@@ -307,9 +307,21 @@ export function extractTarGz(archivePath: string, destDir: string): void {
 }
 
 /**
- * Extract a tar.xz archive using system `tar`.
+ * Extract a tar.xz archive using system `tar` + `xz`.
+ * Checks for xz availability first since `tar xJf` requires it.
  */
 export function extractTarXz(archivePath: string, destDir: string): void {
+  if (!commandExists("xz")) {
+    const hint =
+      process.platform === "linux"
+        ? "Install with: apt-get install xz-utils  (or: yum install xz)"
+        : process.platform === "darwin"
+          ? "Install with: brew install xz"
+          : "Install xz-utils for your platform";
+    throw new Error(
+      `xz is required to extract .tar.xz archives but was not found on PATH. ${hint}`,
+    );
+  }
   fs.mkdirSync(destDir, { recursive: true });
   runBin("tar", ["xJf", archivePath, "-C", destDir], {
     timeout: 60_000,

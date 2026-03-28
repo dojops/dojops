@@ -121,6 +121,11 @@ export function createApp(deps: AppDependencies): Express {
           imgSrc: ["'self'", "data:"],
         },
       },
+      strictTransportSecurity: {
+        maxAge: 63072000, // 2 years
+        includeSubDomains: true,
+        preload: true,
+      },
     }),
   );
 
@@ -130,6 +135,13 @@ export function createApp(deps: AppDependencies): Express {
     (process.env.DOJOPS_CORS_ORIGIN
       ? process.env.DOJOPS_CORS_ORIGIN.split(",").map((s) => s.trim())
       : "http://localhost:3000");
+  // M-6: Warn if CORS allows all origins in production
+  if (corsOrigin === "*" || (Array.isArray(corsOrigin) && corsOrigin.includes("*"))) {
+    console.warn(
+      "[WARN] CORS is configured to allow all origins (*). " +
+        "Set DOJOPS_CORS_ORIGIN to restrict allowed origins in production.",
+    );
+  }
   app.use(cors({ origin: corsOrigin })); // NOSONAR — S5247: explicit allow-list origin, not wildcard
   app.use(express.json({ limit: "1mb" }));
 
@@ -203,6 +215,9 @@ export function createApp(deps: AppDependencies): Express {
       return;
     }
 
+    // L-1: Only expose process memory and uptime in debug mode
+    const debugMode = process.env.DOJOPS_DEBUG === "true" || process.env.DOJOPS_DEBUG === "1";
+
     res.json({
       status,
       authRequired,
@@ -211,8 +226,10 @@ export function createApp(deps: AppDependencies): Express {
       tools: deps.tools.map((t) => t.name),
       customToolCount: deps.customToolCount ?? 0,
       metricsEnabled,
-      memory: process.memoryUsage().heapUsed,
-      uptime: process.uptime(),
+      ...(debugMode && {
+        memory: process.memoryUsage().heapUsed,
+        uptime: process.uptime(),
+      }),
       timestamp,
     });
   };
@@ -306,19 +323,73 @@ export function createApp(deps: AppDependencies): Express {
   );
   const autoRouter = createAutoRouter(deps.provider, deps.tools, deps.store, deps.rootDir);
 
+  // H-3: Per-route body size limits — tighter limits for expensive LLM routes
+  const smallBodyLimit = express.json({ limit: "100kb" }); // generate, debug-ci, diff, chat
+  const mediumBodyLimit = express.json({ limit: "256kb" }); // plan, review, auto (multi-step prompts)
+  const scanBodyLimit = express.json({ limit: "512kb" }); // scan (may include large file lists)
+
   // Mount routes at both /api/ (backward compat) and /api/v1/ (versioned)
   // SA-05: promptValidation on LLM routes; SA-06: budgetMiddleware on LLM routes
   const mountRoutes = (prefix: string) => {
-    app.use(`${prefix}/generate`, llmLimiter, promptValidation, budgetMiddleware, generateRouter);
-    app.use(`${prefix}/plan`, planLimiter, promptValidation, budgetMiddleware, planRouter);
-    app.use(`${prefix}/debug-ci`, llmLimiter, promptValidation, budgetMiddleware, debugCIRouter);
-    app.use(`${prefix}/diff`, llmLimiter, promptValidation, budgetMiddleware, diffRouter);
+    app.use(
+      `${prefix}/generate`,
+      smallBodyLimit,
+      llmLimiter,
+      promptValidation,
+      budgetMiddleware,
+      generateRouter,
+    );
+    app.use(
+      `${prefix}/plan`,
+      mediumBodyLimit,
+      planLimiter,
+      promptValidation,
+      budgetMiddleware,
+      planRouter,
+    );
+    app.use(
+      `${prefix}/debug-ci`,
+      smallBodyLimit,
+      llmLimiter,
+      promptValidation,
+      budgetMiddleware,
+      debugCIRouter,
+    );
+    app.use(
+      `${prefix}/diff`,
+      smallBodyLimit,
+      llmLimiter,
+      promptValidation,
+      budgetMiddleware,
+      diffRouter,
+    );
     app.use(`${prefix}/agents`, agentsRouter);
     app.use(`${prefix}/history`, historyRouter);
-    app.use(`${prefix}/scan`, scanLimiter, scanRouter);
-    app.use(`${prefix}/chat`, llmLimiter, promptValidation, budgetMiddleware, chatRouter);
-    app.use(`${prefix}/review`, llmLimiter, promptValidation, budgetMiddleware, reviewRouter);
-    app.use(`${prefix}/auto`, planLimiter, promptValidation, budgetMiddleware, autoRouter);
+    app.use(`${prefix}/scan`, scanBodyLimit, scanLimiter, scanRouter);
+    app.use(
+      `${prefix}/chat`,
+      smallBodyLimit,
+      llmLimiter,
+      promptValidation,
+      budgetMiddleware,
+      chatRouter,
+    );
+    app.use(
+      `${prefix}/review`,
+      mediumBodyLimit,
+      llmLimiter,
+      promptValidation,
+      budgetMiddleware,
+      reviewRouter,
+    );
+    app.use(
+      `${prefix}/auto`,
+      mediumBodyLimit,
+      planLimiter,
+      promptValidation,
+      budgetMiddleware,
+      autoRouter,
+    );
   };
 
   // #27: API versioning — /api/v1/ is the canonical prefix (middleware registered above health routes)

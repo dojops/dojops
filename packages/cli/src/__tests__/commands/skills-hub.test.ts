@@ -357,12 +357,15 @@ describe("skillsInstallCommand", () => {
     expect(mockFetch.mock.calls[0][0]).toContain("/api/packages/test-tool");
     expect(mockFetch.mock.calls[1][0]).toContain("/api/download/test-tool/1.0.0");
 
-    // Verify file was written (skill file + sha256 sidecar)
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+    // Verify file was written (skill file + sha256 sidecar + manifest)
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
     const writtenPath = String(vi.mocked(fs.writeFileSync).mock.calls[0][0]);
     expect(writtenPath).toContain("test-tool.dops");
     const sidecarPath = String(vi.mocked(fs.writeFileSync).mock.calls[1][0]);
     expect(sidecarPath).toContain("test-tool.dops.sha256");
+    // Third call writes the skill manifest
+    const manifestPath = String(vi.mocked(fs.writeFileSync).mock.calls[2][0]);
+    expect(manifestPath).toContain("skill-manifest.json");
   });
 
   it("rejects when tool not found on hub (404)", async () => {
@@ -417,8 +420,8 @@ describe("skillsInstallCommand", () => {
 
     await skillsInstallCommand(["test-tool"], makeCtx());
 
-    // Should succeed — file written (skill file + sha256 sidecar)
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+    // Should succeed — file written (skill file + sha256 sidecar + manifest)
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
   });
 
   it("rejects when no publisher hash is available", async () => {
@@ -442,8 +445,8 @@ describe("skillsInstallCommand", () => {
 
     await skillsInstallCommand(["test-tool", "--allow-unverified"], makeCtx());
 
-    // Skill file + sha256 sidecar written — install succeeded
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+    // Skill file + sha256 sidecar + manifest written — install succeeded
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
   });
 
   it("uses --version flag to install specific version", async () => {
@@ -471,6 +474,28 @@ describe("skillsInstallCommand", () => {
     expect(writtenPath).toContain(".dojops");
     expect(writtenPath).toContain("skills");
     expect(writtenPath).toContain("test-tool.dops");
+  });
+
+  it("records SHA-256 in skill manifest on install", async () => {
+    setupInstallFsMocks();
+    mockPackageInfoResponse("test-tool", "1.0.0");
+    mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
+    vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
+
+    await skillsInstallCommand(["test-tool", "--global"], makeCtx());
+
+    // The third writeFileSync call should be the manifest
+    const manifestCall = vi.mocked(fs.writeFileSync).mock.calls[2];
+    const manifestPath = String(manifestCall[0]);
+    expect(manifestPath).toContain("skill-manifest.json");
+
+    // Parse the manifest content and verify SHA-256 is recorded
+    const manifestContent = JSON.parse(String(manifestCall[1]));
+    expect(manifestContent.version).toBe(1);
+    expect(manifestContent.skills["test-tool"]).toBeDefined();
+    expect(manifestContent.skills["test-tool"].sha256).toBe(SAMPLE_SHA256);
+    expect(manifestContent.skills["test-tool"].version).toBe("1.0.0");
+    expect(manifestContent.skills["test-tool"].source).toBe("hub");
   });
 
   it("rejects when download fails (404 version)", async () => {

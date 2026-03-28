@@ -23,8 +23,8 @@ export const CIDiagnosisSchema = z.object({
   suggestedFixes: z.array(
     z.object({
       description: z.string(),
-      command: z.string().optional(),
-      file: z.string().optional(),
+      command: z.string().nullish(),
+      file: z.string().nullish(),
       confidence: z.number().min(0).max(1),
     }),
   ),

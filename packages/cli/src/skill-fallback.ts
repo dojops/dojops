@@ -13,6 +13,7 @@ import {
 } from "./commands/skills";
 import type { SearchPackage } from "./commands/skills";
 import { isOfflineMode } from "./offline";
+import { recordInstall } from "./skill-manifest";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 type Context7Provider = {
@@ -201,15 +202,26 @@ export async function promptHubInstall(
 export async function installHubSkill(slug: string, skillName: string): Promise<boolean> {
   try {
     const version = await resolveLatestVersion(slug, skillName);
-    const { fileBuffer } = await downloadAndVerify(slug, version, skillName);
+    const { fileBuffer, actualHash } = await downloadAndVerify(slug, version, skillName);
     await parseDownloadedSkill(fileBuffer);
 
     const destDir = resolveInstallDir(true);
     fs.mkdirSync(destDir, { recursive: true });
     const destPath = path.join(destDir, `${skillName}.dops`);
     fs.writeFileSync(destPath, fileBuffer);
+    fs.writeFileSync(`${destPath}.sha256`, actualHash, "utf-8");
+
+    // Record in the skill manifest for integrity tracking
+    recordInstall("global", {
+      name: skillName,
+      version,
+      source: "hub",
+      installedAt: new Date().toISOString(),
+      sha256: actualHash,
+    });
 
     p.log.success(`Installed ${pc.cyan(skillName)} v${version} from hub`);
+    p.log.info(pc.dim(`SHA-256: ${actualHash}`));
     return true;
   } catch (err) {
     p.log.warn(

@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -8,6 +9,7 @@ import {
   listSessions,
   deleteSession,
   generateSessionId,
+  cleanExpiredSessions,
 } from "../serializer";
 import { ChatSessionState } from "../types";
 
@@ -241,5 +243,131 @@ describe("serializer", () => {
     // Only the valid hex session ID should be returned
     expect(sessions).toHaveLength(1);
     expect(sessions[0].id).toBe(validId);
+  });
+
+  // ── H-2: Session file encryption at rest ─────────────────────────
+
+  describe("encryption (DOJOPS_SESSION_KEY)", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("saves encrypted data and loads it back correctly", () => {
+      vi.stubEnv("DOJOPS_SESSION_KEY", "my-secret-key-for-testing");
+
+      const state = makeState("chat-e0c0000011");
+      saveSession(tmpDir, state);
+
+      // The file on disk should start with the DOJOPS_ENC: prefix, not plain JSON
+      const file = path.join(tmpDir, ".dojops", "sessions", "chat-e0c0000011.json");
+      const raw = fs.readFileSync(file, "utf-8");
+      expect(raw.startsWith("DOJOPS_ENC:")).toBe(true);
+      expect(raw).not.toContain('"messages"');
+
+      // Loading with the same key should return the original session
+      const loaded = loadSession(tmpDir, "chat-e0c0000011");
+      expect(loaded).not.toBeNull();
+      expect(loaded!.id).toBe("chat-e0c0000011");
+      expect(loaded!.messages).toHaveLength(2);
+      expect(loaded!.messages[0].content).toBe("Hello");
+      expect(loaded!.mode).toBe("INTERACTIVE");
+    });
+
+    it("loading encrypted session without key returns null", () => {
+      vi.stubEnv("DOJOPS_SESSION_KEY", "my-secret-key-for-testing");
+
+      const state = makeState("chat-e0c0000022");
+      saveSession(tmpDir, state);
+
+      // Remove the key before loading
+      vi.stubEnv("DOJOPS_SESSION_KEY", "");
+
+      const loaded = loadSession(tmpDir, "chat-e0c0000022");
+      expect(loaded).toBeNull();
+    });
+
+    it("unencrypted sessions still load when key is set (backwards compatibility)", () => {
+      // Save without encryption
+      const state = makeState("chat-b0c0a0a000");
+      saveSession(tmpDir, state);
+
+      // Now enable encryption and load the plaintext session
+      vi.stubEnv("DOJOPS_SESSION_KEY", "my-secret-key-for-testing");
+
+      const loaded = loadSession(tmpDir, "chat-b0c0a0a000");
+      expect(loaded).not.toBeNull();
+      expect(loaded!.id).toBe("chat-b0c0a0a000");
+      expect(loaded!.messages).toHaveLength(2);
+    });
+
+    it("listSessions returns encrypted sessions when key is set", () => {
+      vi.stubEnv("DOJOPS_SESSION_KEY", "list-test-key");
+
+      const s1 = makeState("chat-e0c1a0b001");
+      const s2 = makeState("chat-e0c1a0b002");
+      saveSession(tmpDir, s1);
+      saveSession(tmpDir, s2);
+
+      const sessions = listSessions(tmpDir);
+      expect(sessions).toHaveLength(2);
+      const ids = sessions.map((s) => s.id).sort();
+      expect(ids).toEqual(["chat-e0c1a0b001", "chat-e0c1a0b002"]);
+    });
+
+    it("listSessions skips encrypted sessions when key is not set", () => {
+      vi.stubEnv("DOJOPS_SESSION_KEY", "list-test-key");
+
+      const encrypted = makeState("chat-e0c00a0001");
+      saveSession(tmpDir, encrypted);
+
+      // Remove key, add a plaintext session manually
+      vi.stubEnv("DOJOPS_SESSION_KEY", "");
+
+      const plain = makeState("chat-a0b0c00001");
+      saveSession(tmpDir, plain);
+
+      const sessions = listSessions(tmpDir);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].id).toBe("chat-a0b0c00001");
+    });
+
+    it("cleanExpiredSessions handles encrypted files", () => {
+      vi.stubEnv("DOJOPS_SESSION_KEY", "cleanup-test-key");
+
+      // Save a session first so the directory exists
+      const state = makeState("chat-e0ce0a0001");
+      saveSession(tmpDir, state);
+
+      // Write an encrypted file directly with an old updatedAt
+      // (saveSession always overwrites updatedAt with current time)
+      const file = path.join(tmpDir, ".dojops", "sessions", "chat-e0ce0a0001.json");
+      const oldState = { ...state, updatedAt: "2020-01-01T00:00:00.000Z" };
+      const json = JSON.stringify(oldState, null, 2) + "\n";
+      // Encrypt manually using same crypto approach
+      const key = crypto.createHash("sha256").update("cleanup-test-key").digest();
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+      const encrypted = Buffer.concat([cipher.update(json, "utf-8"), cipher.final()]);
+      const tag = cipher.getAuthTag();
+      const encoded = Buffer.concat([iv, tag, encrypted]).toString("base64");
+      fs.writeFileSync(file, `DOJOPS_ENC:${encoded}`);
+
+      const deleted = cleanExpiredSessions(tmpDir, 1000); // 1 second TTL
+      expect(deleted).toBe(1);
+      expect(fs.existsSync(file)).toBe(false);
+    });
+
+    it("loading with wrong key returns null (decryption fails gracefully)", () => {
+      vi.stubEnv("DOJOPS_SESSION_KEY", "correct-key");
+
+      const state = makeState("chat-bad0e00001");
+      saveSession(tmpDir, state);
+
+      // Switch to a different key
+      vi.stubEnv("DOJOPS_SESSION_KEY", "wrong-key");
+
+      const loaded = loadSession(tmpDir, "chat-bad0e00001");
+      expect(loaded).toBeNull();
+    });
   });
 });

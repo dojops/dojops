@@ -21,6 +21,7 @@ import {
   exportSkillBundle,
   importSkillBundle,
 } from "../offline";
+import { recordInstall, loadManifest } from "../skill-manifest";
 
 type SkillScope = "global" | "project";
 
@@ -1068,9 +1069,35 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
     const destPath = path.join(destDir, `${skillName}.dops`);
 
     logUpgradeIfExists(destPath, version);
+
+    // Check for local tampering: if manifest has a hash for this skill,
+    // verify the file on disk still matches before overwriting
+    const manifestScope = loc as "global" | "project";
+    const manifest = loadManifest(manifestScope);
+    const existingEntry = manifest.skills[skillName];
+    if (existingEntry?.sha256 && fs.existsSync(destPath)) {
+      const diskHash = crypto.createHash("sha256").update(fs.readFileSync(destPath)).digest("hex");
+      if (diskHash !== existingEntry.sha256) {
+        p.log.warn(
+          `Local file has been modified since last install (expected ${existingEntry.sha256.slice(0, 12)}..., got ${diskHash.slice(0, 12)}...).`,
+        );
+        p.log.warn("Overwriting with verified hub download.");
+      }
+    }
+
     fs.writeFileSync(destPath, fileBuffer);
     // Persist SHA-256 sidecar for load-time re-verification
     fs.writeFileSync(`${destPath}.sha256`, actualHash, "utf-8");
+
+    // Record in the skill manifest for integrity tracking
+    recordInstall(manifestScope, {
+      name: skillName,
+      version,
+      source: "hub",
+      installedAt: new Date().toISOString(),
+      sha256: actualHash,
+    });
+
     spinner.stop("Installed successfully");
 
     p.note(

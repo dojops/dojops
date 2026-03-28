@@ -83,6 +83,19 @@ const DANGEROUS_PATTERNS: { pattern: RegExp; reason: string }[] = [
   },
   { pattern: /base64.*\|\s*(sh|bash)/, reason: "Base64 decode piped to shell" },
   { pattern: /<\(/, reason: "Process substitution" },
+  // C-3: Destructive system commands
+  { pattern: /\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?\/($|\s)/, reason: "rm targeting filesystem root" },
+  { pattern: /\bmkfs\b/, reason: "Filesystem format command" },
+  { pattern: /\bdd\s+.*\bof=\/dev\//, reason: "dd writing to block device" },
+  { pattern: /\bchmod\s+(-R\s+)?777\s/, reason: "chmod 777 (world-writable)" },
+  { pattern: /:\(\)\s*\{\s*:\|:&\s*\}\s*;?\s*:/, reason: "Fork bomb" },
+  { pattern: /\bcrontab\s+-r\b/, reason: "Crontab removal" },
+  { pattern: /\bsystemctl\s+(disable|mask|stop)\s/, reason: "Systemd service disruption" },
+  { pattern: /\biptables\s+-F\b/, reason: "Firewall flush" },
+  { pattern: /\b(useradd|usermod|userdel)\b/, reason: "User account modification" },
+  { pattern: /\bpasswd\b/, reason: "Password change command" },
+  { pattern: />\s*\/dev\/sd[a-z]/, reason: "Direct write to block device" },
+  { pattern: /\bkill\s+-9\s+-1\b/, reason: "Kill all processes" },
 ];
 
 /**
