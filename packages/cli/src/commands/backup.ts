@@ -34,7 +34,7 @@ function handleBackup(args: string[], ctx: CLIContext): void {
   }
 
   const outDir = extractFlagValue(args, "--output") ?? root;
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-").slice(0, 19);
   const archiveName = `dojops-backup-${timestamp}.tar.gz`;
   const archivePath = path.join(outDir, archiveName);
 
@@ -70,7 +70,8 @@ function handleBackup(args: string[], ctx: CLIContext): void {
   }
 
   p.log.success(`Backup created: ${pc.cyan(archivePath)}`);
-  p.log.info(`${pc.dim(`Size: ${sizeKB} KB  SHA-256: ${hash.slice(0, 16)}…`)}`);
+  const hashPrefix = hash.slice(0, 16);
+  p.log.info(`${pc.dim(`Size: ${sizeKB} KB  SHA-256: ${hashPrefix}…`)}`);
   p.log.info(pc.dim(`Checksum: ${checksumPath}`));
 }
 
@@ -152,7 +153,8 @@ function handleList(ctx: CLIContext): void {
     const fp = path.join(root, f);
     const stats = fs.statSync(fp);
     const sizeKB = Math.ceil(stats.size / 1024);
-    return `  ${pc.cyan(f)}  ${pc.dim(`${sizeKB} KB`)}`;
+    const sizeLabel = `${sizeKB} KB`;
+    return `  ${pc.cyan(f)}  ${pc.dim(sizeLabel)}`;
   });
   p.note(lines.join("\n"), `Backups (${files.length})`);
 }
@@ -171,6 +173,6 @@ export async function backupCommand(args: string[], ctx: CLIContext): Promise<vo
   }
 
   // Default: create backup. If sub looks like a flag, pass it through.
-  const backupArgs = sub && sub.startsWith("-") ? args : args.slice(sub ? 0 : 0);
+  const backupArgs = sub?.startsWith("-") ? args : args.slice(0);
   handleBackup(backupArgs, ctx);
 }

@@ -34,8 +34,8 @@ export interface CoordinatorSnapshot {
 }
 
 export class AgentCoordinator {
-  private context = new Map<string, SharedContextEntry>();
-  private inbox = new Map<string, CoordinatorMessage[]>();
+  private readonly context = new Map<string, SharedContextEntry>();
+  private readonly inbox = new Map<string, CoordinatorMessage[]>();
   private handoffs: HandoffRequest[] = [];
 
   /** Set a shared context value visible to all tasks. */
@@ -44,7 +44,7 @@ export class AgentCoordinator {
   }
 
   /** Get a shared context value. */
-  get(key: string): unknown | undefined {
+  get(key: string): unknown {
     return this.context.get(key)?.value;
   }
 

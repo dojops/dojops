@@ -51,7 +51,7 @@ function discoverInstalledSkills(): InstalledSkill[] {
 }
 
 async function checkHubVersion(skillName: string): Promise<string | null> {
-  const slug = skillName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const slug = skillName.toLowerCase().replaceAll(/[^a-z0-9-]/g, "-");
   try {
     const res = await fetch(`${DEFAULT_HUB_URL}/api/packages/${slug}`, {
       signal: AbortSignal.timeout(5000),
@@ -103,7 +103,7 @@ async function fetchUpdateInfo(skills: InstalledSkill[]): Promise<UpdateInfo[]> 
 }
 
 async function downloadAndApplyUpdate(update: UpdateInfo): Promise<void> {
-  const slug = update.name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const slug = update.name.toLowerCase().replaceAll(/[^a-z0-9-]/g, "-");
   const res = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${update.latestVersion}`);
   if (!res.ok) return;
 

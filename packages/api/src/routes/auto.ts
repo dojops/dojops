@@ -45,27 +45,38 @@ if (cleanupInterval.unref) {
   cleanupInterval.unref();
 }
 
+/** Check if valid IPv4 octets belong to a private/reserved range. */
+function isPrivateIpv4(parts: number[]): boolean {
+  if (parts[0] === 127) return true; // loopback
+  if (parts[0] === 10) return true; // 10.0.0.0/8
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
+  if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
+  if (parts[0] === 169 && parts[1] === 254) return true; // link-local
+  if (parts[0] === 0) return true; // 0.0.0.0/8
+  if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // CGNAT
+  return false;
+}
+
+/** Check if an IPv6 address belongs to a private/loopback/link-local range. */
+function isPrivateIpv6(ip: string): boolean {
+  if (ip === "::1" || ip === "::") return true;
+  const lower = ip.toLowerCase();
+  if (lower.startsWith("fe80:")) return true; // link-local
+  if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // unique local (fc00::/7)
+  return false;
+}
+
 /** Check if an IP address belongs to a private/loopback/link-local range. */
 export function isPrivateIp(ip: string): boolean {
-  // IPv6 loopback
-  if (ip === "::1" || ip === "::") return true;
+  if (isPrivateIpv6(ip)) return true;
+
   // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1)
-  const v4Mapped = ip.startsWith("::ffff:") ? ip.slice(7) : null;
-  const v4 = v4Mapped ?? ip;
+  const v4 = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
   const parts = v4.split(".").map(Number);
-  if (parts.length === 4 && parts.every((n) => !Number.isNaN(n) && n >= 0 && n <= 255)) {
-    if (parts[0] === 127) return true; // loopback
-    if (parts[0] === 10) return true; // 10.0.0.0/8
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
-    if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
-    if (parts[0] === 169 && parts[1] === 254) return true; // link-local
-    if (parts[0] === 0) return true; // 0.0.0.0/8
-    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // CGNAT
-  }
-  // IPv6 link-local (fe80::)
-  if (ip.toLowerCase().startsWith("fe80:")) return true;
-  // IPv6 unique local (fc00::/7)
-  if (ip.toLowerCase().startsWith("fc") || ip.toLowerCase().startsWith("fd")) return true;
+  const isValidIpv4 =
+    parts.length === 4 && parts.every((n) => !Number.isNaN(n) && n >= 0 && n <= 255);
+  if (isValidIpv4) return isPrivateIpv4(parts);
+
   return false;
 }
 

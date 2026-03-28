@@ -40,6 +40,29 @@ function loadTokenRecords(rootDir: string): TokenRecord[] {
   }
 }
 
+/** Check a single budget limit and return a warning if thresholds are crossed. */
+function checkLimitWarning(
+  label: string,
+  spend: number,
+  limit: number | undefined,
+  percent: number,
+): { message: string; exceeded: boolean } | null {
+  if (!limit) return null;
+  if (percent >= 100) {
+    return {
+      message: `${label} budget exceeded: $${spend.toFixed(4)} / $${limit}`,
+      exceeded: true,
+    };
+  }
+  if (percent >= 80) {
+    return {
+      message: `${label} budget at ${percent.toFixed(0)}%: $${spend.toFixed(4)} / $${limit}`,
+      exceeded: false,
+    };
+  }
+  return null;
+}
+
 /** Check current spend against budget limits. */
 export function checkBudget(
   rootDir: string,
@@ -80,28 +103,21 @@ export function checkBudget(
   const warnings: string[] = [];
   let exceeded = false;
 
-  if (budget.dailyLimitUsd) {
-    if (dailyPercent >= 100) {
-      warnings.push(`Daily budget exceeded: $${dailySpend.toFixed(4)} / $${budget.dailyLimitUsd}`);
-      exceeded = true;
-    } else if (dailyPercent >= 80) {
-      warnings.push(
-        `Daily budget at ${dailyPercent.toFixed(0)}%: $${dailySpend.toFixed(4)} / $${budget.dailyLimitUsd}`,
-      );
-    }
+  const dailyWarning = checkLimitWarning("Daily", dailySpend, budget.dailyLimitUsd, dailyPercent);
+  if (dailyWarning) {
+    warnings.push(dailyWarning.message);
+    if (dailyWarning.exceeded) exceeded = true;
   }
 
-  if (budget.monthlyLimitUsd) {
-    if (monthlyPercent >= 100) {
-      warnings.push(
-        `Monthly budget exceeded: $${monthlySpend.toFixed(4)} / $${budget.monthlyLimitUsd}`,
-      );
-      exceeded = true;
-    } else if (monthlyPercent >= 80) {
-      warnings.push(
-        `Monthly budget at ${monthlyPercent.toFixed(0)}%: $${monthlySpend.toFixed(4)} / $${budget.monthlyLimitUsd}`,
-      );
-    }
+  const monthlyWarning = checkLimitWarning(
+    "Monthly",
+    monthlySpend,
+    budget.monthlyLimitUsd,
+    monthlyPercent,
+  );
+  if (monthlyWarning) {
+    warnings.push(monthlyWarning.message);
+    if (monthlyWarning.exceeded) exceeded = true;
   }
 
   return {

@@ -36,7 +36,7 @@ describe("skill-tester", () => {
     const result = testOutputAgainstFixture("FROM node:20-slim\nRUN npm install", {
       name: "basic",
       prompt: "test",
-      expectedPatterns: ["FROM", "node:\\d+"],
+      expectedPatterns: ["FROM", String.raw`node:\d+`],
     });
     expect(result.passed).toBe(true);
     expect(result.errors).toEqual([]);

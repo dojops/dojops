@@ -7,6 +7,21 @@ const TestSchema = z.object({ answer: z.string() });
 // Mock native fetch
 const mockFetch = vi.fn();
 
+function mockGenerateResponse(text: string | null, extra?: Record<string, unknown>) {
+  return {
+    ok: true,
+    json: vi.fn().mockResolvedValue({
+      candidates: [
+        {
+          content: { parts: text !== null ? [{ text }] : [] },
+          finishReason: "STOP",
+        },
+      ],
+      ...extra,
+    }),
+  };
+}
+
 describe("GeminiProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -16,21 +31,6 @@ describe("GeminiProvider", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  function mockGenerateResponse(text: string | null, extra?: Record<string, unknown>) {
-    return {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        candidates: [
-          {
-            content: { parts: text !== null ? [{ text }] : [] },
-            finishReason: "STOP",
-          },
-        ],
-        ...extra,
-      }),
-    };
-  }
 
   it("has name 'gemini'", () => {
     expect(new GeminiProvider("key").name).toBe("gemini");

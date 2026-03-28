@@ -551,76 +551,132 @@ export class SafeExecutor {
       generateOutput = genResult.output;
     }
 
-    // Proactive critique: run a separate critic before verification to catch semantic issues early.
-    // If the critic finds errors, attempt one re-generation with repair instructions
-    // before entering the formal verify → repair loop.
-    if (this.proactiveCritic && !this.policy.skipVerification) {
-      try {
-        const content =
-          typeof generateOutput.data === "string"
-            ? generateOutput.data
-            : JSON.stringify(generateOutput.data ?? "");
-        const preVerify: VerificationResult = {
-          passed: true,
-          tool: tool.name,
-          issues: [],
-        };
-        const critique = await this.proactiveCritic.critique(content, preVerify, tool.name);
-        if (critique.repairInstructions && critique.repairInstructions.length > 20) {
-          const regenInput =
-            input && typeof input === "object"
-              ? {
-                  ...(input as Record<string, unknown>),
-                  _repairContext: critique.repairInstructions,
-                }
-              : input;
-          const regenResult = await this.runGeneratePhase(
-            taskId,
-            tool,
-            regenInput,
-            startTime,
-            meta,
-          );
-          if (!("result" in regenResult)) {
-            generateOutput = regenResult.output;
-          }
-        }
-      } catch {
-        // Proactive critique is advisory — don't block on failure
-      }
-    }
+    generateOutput = await this.runProactiveCritique(
+      taskId,
+      tool,
+      input,
+      generateOutput,
+      startTime,
+      meta,
+    );
 
-    let verifyResult = await this.runVerification(tool, generateOutput, meta);
+    const verified = await this.runVerifyAndRepair(
+      taskId,
+      tool,
+      input,
+      generateOutput,
+      startTime,
+      meta,
+    );
+    if ("result" in verified) return verified.result;
+    generateOutput = verified.generateOutput;
+
+    return this.runApprovalAndExecution(
+      taskId,
+      tool,
+      input,
+      generateOutput,
+      verified.verification,
+      taskRisk,
+      startTime,
+      meta,
+    );
+  }
+
+  /**
+   * Run proactive critique if configured. May re-generate output based on critic feedback.
+   * Returns the (possibly updated) generateOutput.
+   */
+  private async runProactiveCritique(
+    taskId: string,
+    tool: DevOpsSkill,
+    input: unknown,
+    generateOutput: SkillOutput,
+    startTime: number,
+    meta?: Record<string, unknown>,
+  ): Promise<SkillOutput> {
+    if (!this.proactiveCritic || this.policy.skipVerification) return generateOutput;
+
+    try {
+      const content =
+        typeof generateOutput.data === "string"
+          ? generateOutput.data
+          : JSON.stringify(generateOutput.data ?? "");
+      const preVerify: VerificationResult = { passed: true, tool: tool.name, issues: [] };
+      const critique = await this.proactiveCritic.critique(content, preVerify, tool.name);
+      if (!critique.repairInstructions || critique.repairInstructions.length <= 20) {
+        return generateOutput;
+      }
+      const regenInput =
+        input && typeof input === "object"
+          ? { ...(input as Record<string, unknown>), _repairContext: critique.repairInstructions }
+          : input;
+      const regenResult = await this.runGeneratePhase(taskId, tool, regenInput, startTime, meta);
+      if (!("result" in regenResult)) return regenResult.output;
+    } catch {
+      // Proactive critique is advisory
+    }
+    return generateOutput;
+  }
+
+  /** Verify output and run repair loop if needed. Returns verified output or early failure. */
+  private async runVerifyAndRepair(
+    taskId: string,
+    tool: DevOpsSkill,
+    input: unknown,
+    generateOutput: SkillOutput,
+    startTime: number,
+    meta?: Record<string, unknown>,
+  ): Promise<
+    | { generateOutput: SkillOutput; verification: VerificationResult | undefined }
+    | { result: ExecutionResult }
+  > {
+    let currentOutput = generateOutput;
+    let verifyResult = await this.runVerification(tool, currentOutput, meta);
 
     if (!verifyResult.ok) {
       this.notifyVerificationFailed(taskId, verifyResult);
-
       const repairOutcome = await this.runRepairLoop(
         taskId,
         tool,
         input,
-        generateOutput,
+        currentOutput,
         verifyResult,
         startTime,
         meta,
       );
-      if (!repairOutcome.repaired) return repairOutcome.earlyResult;
-      generateOutput = repairOutcome.generateOutput;
+      if (!repairOutcome.repaired) return { result: repairOutcome.earlyResult };
+      currentOutput = repairOutcome.generateOutput;
       verifyResult = repairOutcome.verifyResult;
     }
 
     if (!verifyResult.ok) {
-      return this.buildResult(taskId, tool.name, "failed", startTime, {
-        error: verifyResult.error,
-        output: generateOutput.data,
-        verification: verifyResult.verification,
-        filesWritten: [],
-        usage: generateOutput.usage,
-        metadata: meta,
-      });
+      return {
+        result: this.buildResult(taskId, tool.name, "failed", startTime, {
+          error: verifyResult.error,
+          output: currentOutput.data,
+          verification: verifyResult.verification,
+          filesWritten: [],
+          usage: currentOutput.usage,
+          metadata: meta,
+        }),
+      };
     }
-    const { verification } = verifyResult;
 
+    return { generateOutput: currentOutput, verification: verifyResult.verification };
+  }
+
+  /** Run approval checks and execution phase. */
+  private async runApprovalAndExecution(
+    taskId: string,
+    tool: DevOpsSkill,
+    input: unknown,
+    generateOutput: SkillOutput,
+    verification: VerificationResult | undefined,
+    taskRisk: RiskLevel | undefined,
+    startTime: number,
+    meta?: Record<string, unknown>,
+  ): Promise<ExecutionResult> {
     if (!tool.execute) {
       return this.buildResult(taskId, tool.name, "completed", startTime, {
         output: generateOutput.data,

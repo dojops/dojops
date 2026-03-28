@@ -167,6 +167,14 @@ async function executeVerificationCommand(
   }
 }
 
+/** Check if a file entry should be skipped during tmp dir write. */
+function shouldSkipFileEntry(fname: string, resolvedTmpDir: string): boolean {
+  if (fname.endsWith("/")) return true; // directory-only paths cause EISDIR errors
+  if (/\.(gitkeep|keep)$/.test(fname)) return true; // placeholder files
+  const filePath = path.resolve(resolvedTmpDir, fname);
+  return !filePath.startsWith(resolvedTmpDir + path.sep); // path traversal prevention
+}
+
 /** Write input files (multi or single) into a temp directory. */
 function writeFilesToTmpDir(
   tmpDir: string,
@@ -174,22 +182,18 @@ function writeFilesToTmpDir(
   filename: string,
   content: string,
 ): void {
-  if (files && Object.keys(files).length > 0) {
-    const resolvedTmpDir = path.resolve(tmpDir);
-    for (const [fname, fcontent] of Object.entries(files)) {
-      // Skip directory-only paths (trailing /) — these cause EISDIR errors
-      if (fname.endsWith("/")) continue;
-      // Skip .gitkeep/.keep placeholders
-      if (/\.(gitkeep|keep)$/.test(fname)) continue;
-      const filePath = path.resolve(resolvedTmpDir, fname);
-      // Prevent LLM-controlled path traversal outside the temp directory
-      if (!filePath.startsWith(resolvedTmpDir + path.sep)) continue;
-      const dir = path.dirname(filePath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(filePath, fcontent, "utf-8");
-    }
-  } else {
+  if (!files || Object.keys(files).length === 0) {
     fs.writeFileSync(path.join(tmpDir, filename), content, "utf-8");
+    return;
+  }
+
+  const resolvedTmpDir = path.resolve(tmpDir);
+  for (const [fname, fcontent] of Object.entries(files)) {
+    if (shouldSkipFileEntry(fname, resolvedTmpDir)) continue;
+    const filePath = path.resolve(resolvedTmpDir, fname);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, fcontent, "utf-8");
   }
 }
 

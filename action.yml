@@ -83,8 +83,10 @@ runs:
     - name: Check severity threshold
       if: inputs.fail-on != 'none' && steps.review.outputs.has_review == 'true'
       shell: bash
+      env:
+        FAIL_ON: ${{ inputs.fail-on }}
       run: |
-        THRESHOLD="${{ inputs.fail-on }}"
+        THRESHOLD="$FAIL_ON"
         REVIEW=$(cat /tmp/review.json)
 
         # Map severity to numeric level for comparison

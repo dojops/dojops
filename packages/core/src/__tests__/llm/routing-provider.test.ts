@@ -21,6 +21,34 @@ function createMockProvider(
   };
 }
 
+function setup(opts?: {
+  skillHint?: string;
+  forceTier?: "fast" | "standard" | "premium";
+  onRoute?: (result: unknown, request: LLMRequest) => void;
+  learningFn?: (
+    skillName: string,
+  ) => { model: string; tier: "fast" | "standard" | "premium" } | null;
+}) {
+  // Track which models get created
+  const createdModels: string[] = [];
+  const providers = new Map<string, LLMProvider>();
+
+  const inner = createMockProvider("openai", "gpt-4o");
+  const providerFactory = vi.fn((model: string) => {
+    createdModels.push(model);
+    const p = createMockProvider("openai", model);
+    providers.set(model, p);
+    return p;
+  });
+
+  const routing = new RoutingProvider(inner, {
+    providerFactory,
+    ...opts,
+  });
+
+  return { routing, inner, providerFactory, createdModels, providers };
+}
+
 describe("RoutingProvider", () => {
   const originalEnv = process.env.DOJOPS_MODEL;
 
@@ -31,34 +59,6 @@ describe("RoutingProvider", () => {
       process.env.DOJOPS_MODEL = originalEnv;
     }
   });
-
-  function setup(opts?: {
-    skillHint?: string;
-    forceTier?: "fast" | "standard" | "premium";
-    onRoute?: (result: unknown, request: LLMRequest) => void;
-    learningFn?: (
-      skillName: string,
-    ) => { model: string; tier: "fast" | "standard" | "premium" } | null;
-  }) {
-    // Track which models get created
-    const createdModels: string[] = [];
-    const providers = new Map<string, LLMProvider>();
-
-    const inner = createMockProvider("openai", "gpt-4o");
-    const providerFactory = vi.fn((model: string) => {
-      createdModels.push(model);
-      const p = createMockProvider("openai", model);
-      providers.set(model, p);
-      return p;
-    });
-
-    const routing = new RoutingProvider(inner, {
-      providerFactory,
-      ...opts,
-    });
-
-    return { routing, inner, providerFactory, createdModels, providers };
-  }
 
   it("routes simple prompt to fast tier model", async () => {
     // Short prompt with no complex keywords → simple → fast → gpt-4o-mini

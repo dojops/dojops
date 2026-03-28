@@ -52,7 +52,7 @@ const SECRET_PATTERNS: SecretPattern[] = [
   { regex: /ghp_[a-zA-Z0-9]{36}/, name: "GitHub Personal Access Token", severity: "error" },
   { regex: /gho_[a-zA-Z0-9]{36}/, name: "GitHub OAuth Token", severity: "error" },
   { regex: /ghs_[a-zA-Z0-9]{36}/, name: "GitHub App Token", severity: "error" },
-  { regex: /github_pat_[a-zA-Z0-9_]{22,}/, name: "GitHub Fine-Grained PAT", severity: "error" },
+  { regex: /github_pat_\w{22,}/, name: "GitHub Fine-Grained PAT", severity: "error" },
   // Generic API keys
   { regex: /sk-[a-zA-Z0-9]{20,}/, name: "Generic API Key (sk-)", severity: "error" },
   // Private keys

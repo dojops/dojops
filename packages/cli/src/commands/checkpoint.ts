@@ -86,7 +86,7 @@ function handleRestore(args: string[], ctx: CLIContext): void {
 function handleClean(): void {
   const root = getRoot();
   const count = cleanCheckpoints(root);
-  p.log.success(`Removed ${count} checkpoint${count !== 1 ? "s" : ""}.`);
+  p.log.success(`Removed ${count} checkpoint${count === 1 ? "" : "s"}.`);
 }
 
 export async function checkpointCommand(args: string[], ctx: CLIContext): Promise<void> {

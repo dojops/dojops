@@ -11,7 +11,7 @@ type ExportFormat = "json" | "csv" | "syslog";
 
 function parseDate(dateStr: string): Date | null {
   const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function filterByDateRange(entries: AuditEntry[], since?: string, until?: string): AuditEntry[] {
@@ -42,7 +42,7 @@ function exportAsJson(entries: AuditEntry[]): string {
 
 function escapeCSV(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
+    return `"${value.replaceAll('"', '""')}"`;
   }
   return value;
 }

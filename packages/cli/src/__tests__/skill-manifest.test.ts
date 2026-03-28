@@ -64,7 +64,10 @@ describe("skill-manifest", () => {
     );
     const list = listInstalledSkills("project", tmpDir);
     expect(list).toHaveLength(2);
-    expect(list.map((s) => s.name).sort()).toEqual(["kubernetes", "terraform"]);
+    expect(list.map((s) => s.name).sort((a, b) => a.localeCompare(b))).toEqual([
+      "kubernetes",
+      "terraform",
+    ]);
   });
 
   it("updates existing skill entry", () => {

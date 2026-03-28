@@ -65,6 +65,36 @@ export function validateSkillFile(filePath: string): SkillTestResult {
   };
 }
 
+/** Check that all expected patterns appear in the output. */
+function checkExpectedPatterns(output: string, patterns: string[]): string[] {
+  const errors: string[] = [];
+  for (const pattern of patterns) {
+    try {
+      if (!new RegExp(pattern).test(output)) {
+        errors.push(`Expected pattern not found: ${pattern}`);
+      }
+    } catch {
+      errors.push(`Invalid regex pattern: ${pattern}`);
+    }
+  }
+  return errors;
+}
+
+/** Check that no forbidden patterns appear in the output. */
+function checkForbiddenPatterns(output: string, patterns: string[]): string[] {
+  const errors: string[] = [];
+  for (const pattern of patterns) {
+    try {
+      if (new RegExp(pattern).test(output)) {
+        errors.push(`Forbidden pattern found: ${pattern}`);
+      }
+    } catch {
+      errors.push(`Invalid regex pattern: ${pattern}`);
+    }
+  }
+  return errors;
+}
+
 /**
  * Test skill output against fixture expectations.
  * Does NOT call LLM — validates structure of pre-generated output.
@@ -76,27 +106,11 @@ export function testOutputAgainstFixture(
   const errors: string[] = [];
 
   if (fixture.expectedPatterns) {
-    for (const pattern of fixture.expectedPatterns) {
-      try {
-        if (!new RegExp(pattern).test(output)) {
-          errors.push(`Expected pattern not found: ${pattern}`);
-        }
-      } catch {
-        errors.push(`Invalid regex pattern: ${pattern}`);
-      }
-    }
+    errors.push(...checkExpectedPatterns(output, fixture.expectedPatterns));
   }
 
   if (fixture.forbiddenPatterns) {
-    for (const pattern of fixture.forbiddenPatterns) {
-      try {
-        if (new RegExp(pattern).test(output)) {
-          errors.push(`Forbidden pattern found: ${pattern}`);
-        }
-      } catch {
-        errors.push(`Invalid regex pattern: ${pattern}`);
-      }
-    }
+    errors.push(...checkForbiddenPatterns(output, fixture.forbiddenPatterns));
   }
 
   return {

@@ -132,12 +132,12 @@ function formatFindingsSection(
 /** Format the full review report for terminal display. */
 function formatReviewReport(result: ReviewPipelineResult): string {
   const { report, toolResults, filesReviewed } = result;
-  const lines: string[] = [];
-
-  // Header: score + summary
-  lines.push(`${pc.bold("Score:")}   ${scoreColor(report.score)} / 100`);
-  lines.push(`${pc.bold("Summary:")} ${report.summary}`);
-  lines.push("");
+  const lines: string[] = [
+    // Header: score + summary
+    `${pc.bold("Score:")}   ${scoreColor(report.score)} / 100`,
+    `${pc.bold("Summary:")} ${report.summary}`,
+    "",
+  ];
 
   // Files reviewed
   lines.push(pc.bold(`Files Reviewed (${filesReviewed.length}):`));

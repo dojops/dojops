@@ -313,6 +313,26 @@ async function loadExecutionMemory(
   }
 }
 
+async function tryInstallHubSkill(
+  ctx: CLIContext,
+  packages: Awaited<ReturnType<typeof searchHub>>,
+  structured: boolean,
+): Promise<boolean> {
+  if (packages.length === 0) return false;
+
+  const selected = await promptHubInstall(ctx, packages);
+  if (!selected) return false;
+
+  const installSpinner = p.spinner();
+  if (!structured) installSpinner.start(`Installing ${pc.cyan(selected.name)}...`);
+
+  const installed = await installHubSkill(selected.slug, selected.name);
+
+  if (!structured) installSpinner.stop(installed ? "Installed" : "Install failed");
+
+  return installed;
+}
+
 /**
  * Handle tasks assigned to "generic" by the decomposer — no built-in skill matched.
  * Searches the hub for matching skills and offers installation.
@@ -328,7 +348,6 @@ async function handleGenericTasks(
   const structured = isJson || ctx.globalOpts.raw;
   const searchTerms = extractSearchTerms(prompt);
 
-  // Search hub for matching skills
   const s = p.spinner();
   if (!structured) s.start("Searching hub for matching skills...");
 
@@ -343,22 +362,9 @@ async function handleGenericTasks(
     );
   }
 
-  if (packages.length > 0) {
-    const selected = await promptHubInstall(ctx, packages);
+  const installed = await tryInstallHubSkill(ctx, packages, structured);
+  if (installed) return "retry";
 
-    if (selected) {
-      const installSpinner = p.spinner();
-      if (!structured) installSpinner.start(`Installing ${pc.cyan(selected.name)}...`);
-
-      const installed = await installHubSkill(selected.slug, selected.name);
-
-      if (!structured) installSpinner.stop(installed ? "Installed" : "Install failed");
-
-      if (installed) return "retry";
-    }
-  }
-
-  // No skill installed — warn the user
   if (!structured) {
     warnNoSkill(searchTerms);
     for (const task of genericTasks) {
@@ -445,10 +451,10 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   enrichTasksWithMetadata(graph, registry);
   if (!isJson) displayTaskGraph(graph);
 
+  if (ctx.globalOpts.dryRun && !executeMode && !isJson) {
+    p.log.info(`${pc.yellow("[dry-run]")} Plan not saved — preview only.`);
+  }
   if (ctx.globalOpts.dryRun && !executeMode) {
-    if (!isJson) {
-      p.log.info(`${pc.yellow("[dry-run]")} Plan not saved — preview only.`);
-    }
     outputPlanResult("dry-run", graph, ctx.globalOpts.output);
     return;
   }

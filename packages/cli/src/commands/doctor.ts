@@ -297,21 +297,22 @@ function checkVoiceDeps(): Check[] {
 
   const checks: Check[] = [];
 
-  checks.push({
-    name: "Voice: SoX (rec)",
-    status: status.recBin ? "pass" : "warn",
-    detail: status.recBin
-      ? `Found (${status.recBin})`
-      : "Not found — brew install sox (macOS) / apt install sox (Linux)",
-  });
-
-  checks.push({
-    name: "Voice: whisper model",
-    status: status.modelPath ? "pass" : "warn",
-    detail: status.modelPath
-      ? `Found (${status.modelPath})`
-      : "Not found — reinstall whisper-cpp or set DOJOPS_WHISPER_MODEL",
-  });
+  checks.push(
+    {
+      name: "Voice: SoX (rec)",
+      status: status.recBin ? "pass" : "warn",
+      detail: status.recBin
+        ? `Found (${status.recBin})`
+        : "Not found — brew install sox (macOS) / apt install sox (Linux)",
+    },
+    {
+      name: "Voice: whisper model",
+      status: status.modelPath ? "pass" : "warn",
+      detail: status.modelPath
+        ? `Found (${status.modelPath})`
+        : "Not found — reinstall whisper-cpp or set DOJOPS_WHISPER_MODEL",
+    },
+  );
 
   return checks;
 }

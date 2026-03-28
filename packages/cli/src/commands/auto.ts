@@ -10,6 +10,7 @@ import type { ToolCall, ToolDefinition } from "@dojops/core";
 import { ToolExecutor, createCheckpoint } from "@dojops/executor";
 import type { McpToolDispatcher as McpToolDispatcherType } from "@dojops/executor";
 import { AgentLoop } from "@dojops/session";
+import type { AgentLoopResult } from "@dojops/session";
 import { createTools } from "@dojops/api";
 import { CLIContext } from "../types";
 import { stripFlags, extractFlagValue, hasFlag } from "../parser";
@@ -543,6 +544,7 @@ function buildToolExecutor(
       };
     })(),
     onToolStart: (call) => {
+      // NOSONAR — isStreamJson selects output format, not a behavioral flag
       if (isStreamJson) {
         emitStreamEvent({
           type: "tool_use",
@@ -554,6 +556,7 @@ function buildToolExecutor(
       }
     },
     onToolEnd: (call, result) => {
+      // NOSONAR — isStreamJson selects output format, not a behavioral flag
       if (isStreamJson) {
         emitStreamEvent({
           type: "tool_result",
@@ -587,6 +590,41 @@ const COMPLETION_SKILL_PATTERNS: Array<{ pattern: RegExp; skill: string }> = [
  * Validate all files written by the agent before declaring done.
  * Runs skill.verify() on files matching known patterns and returns issue descriptions.
  */
+async function verifyFileWithSkill(
+  filePath: string,
+  relPath: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  skill: any,
+): Promise<string[]> {
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const result = await skill.verify({ content, filePath });
+    if (result.passed) return [];
+    return result.issues
+      .filter((i: { severity: string }) => i.severity === "error")
+      .slice(0, 3)
+      .map((i: { message: string }) => `${relPath}: ${i.message}`);
+  } catch {
+    // Verification is best-effort
+    return [];
+  }
+}
+
+function findMatchingSkill(
+  basename: string,
+  relPath: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  skillsMap: Map<string, any>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any | null {
+  for (const { pattern, skill: skillName } of COMPLETION_SKILL_PATTERNS) {
+    if (!pattern.test(basename) && !pattern.test(relPath)) continue;
+    const skill = skillsMap.get(skillName);
+    return skill?.verify ? skill : null;
+  }
+  return null;
+}
+
 async function validateWrittenFiles(
   toolExecutor: ToolExecutor,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -605,28 +643,10 @@ async function validateWrittenFiles(
   for (const filePath of allFiles) {
     const relPath = path.relative(cwd, filePath);
     const basename = path.basename(filePath);
-
-    for (const { pattern, skill: skillName } of COMPLETION_SKILL_PATTERNS) {
-      if (!pattern.test(basename) && !pattern.test(relPath)) continue;
-      const skill = skillsMap.get(skillName);
-      if (!skill?.verify) break;
-
-      try {
-        const content = fs.readFileSync(filePath, "utf-8");
-        const result = await skill.verify({ content, filePath });
-        if (!result.passed) {
-          const errorIssues = result.issues
-            .filter((i: { severity: string }) => i.severity === "error")
-            .slice(0, 3);
-          for (const i of errorIssues) {
-            issues.push(`${relPath}: ${i.message}`);
-          }
-        }
-      } catch {
-        // Verification is best-effort
-      }
-      break;
-    }
+    const skill = findMatchingSkill(basename, relPath, skillsMap);
+    if (!skill) continue;
+    const fileIssues = await verifyFileWithSkill(filePath, relPath, skill);
+    issues.push(...fileIssues);
   }
   return issues;
 }
@@ -776,17 +796,84 @@ function writeBackgroundResult(
   updateRunStatus(effectiveRootDir, backgroundRunId, result.success ? "completed" : "failed");
 }
 
-/**
- * Autonomous agent mode: iterative tool-use loop (ReAct pattern).
- * The LLM reads files, makes changes, runs commands, and verifies — all autonomously.
- *
- * Usage: dojops auto "Create CI for Node app"
- */
-export async function autoCommand(args: string[], ctx: CLIContext): Promise<void> {
-  const isBackground = hasFlag(args, "--background");
-  const isBackgroundChild = hasFlag(args, "--_background-child");
-  const backgroundRunId = extractFlagValue(args, "--run-id");
+function emitStreamInit(ctx: CLIContext): void {
+  const providerName = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+  const modelName = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+  emitStreamEvent({
+    type: "init",
+    provider: providerName,
+    model: modelName,
+    timestamp: new Date().toISOString(),
+  });
+}
 
+function handleAutoSuccess(
+  result: AgentLoopResult,
+  opts: {
+    isStreamJson: boolean;
+    isInteractive: boolean;
+    memoryEnabled: boolean;
+    isBackgroundChild: boolean;
+    backgroundRunId: string | undefined;
+    effectiveRootDir: string;
+    cwd: string;
+    prompt: string;
+    startTime: number;
+  },
+): void {
+  const summary = cleanDisplayText(result.summary);
+
+  if (opts.isStreamJson) {
+    emitStreamEvent({
+      type: "result",
+      content: summary,
+      stats: {
+        success: result.success,
+        iterations: result.iterations,
+        toolCalls: result.toolCalls.length,
+        totalTokens: result.totalTokens,
+        filesWritten: result.filesWritten,
+        filesModified: result.filesModified,
+      },
+    });
+  }
+
+  if (opts.isInteractive) {
+    displayInteractiveResult({ ...result, summary }, opts.cwd);
+  }
+
+  if (opts.memoryEnabled) {
+    recordAutoMemory(opts.effectiveRootDir, opts.prompt, summary, result, opts.startTime);
+  }
+
+  if (opts.isBackgroundChild && opts.backgroundRunId) {
+    writeBackgroundResult(opts.effectiveRootDir, opts.backgroundRunId, summary, result);
+  }
+}
+
+function handleAutoError(
+  err: unknown,
+  isStreamJson: boolean,
+  isBackgroundChild: boolean,
+  backgroundRunId: string | undefined,
+  effectiveRootDir: string,
+): never {
+  if (isStreamJson) {
+    emitStreamEvent({
+      type: "error",
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  if (isBackgroundChild && backgroundRunId) {
+    updateRunStatus(effectiveRootDir, backgroundRunId, "failed");
+  }
+
+  const message = err instanceof Error ? err.message : String(err);
+  throw new CLIError(ExitCode.GENERAL_ERROR, message);
+}
+
+async function resolvePromptFromArgs(args: string[], ctx: CLIContext): Promise<string> {
   const { prompt: initialPrompt, useVoice } = resolveAutoPrompt(args, ctx);
   let prompt = initialPrompt;
 
@@ -802,7 +889,21 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
 
-  prompt = expandFileReferences(prompt, ctx.cwd);
+  return expandFileReferences(prompt, ctx.cwd);
+}
+
+/**
+ * Autonomous agent mode: iterative tool-use loop (ReAct pattern).
+ * The LLM reads files, makes changes, runs commands, and verifies — all autonomously.
+ *
+ * Usage: dojops auto "Create CI for Node app"
+ */
+export async function autoCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const isBackground = hasFlag(args, "--background");
+  const isBackgroundChild = hasFlag(args, "--_background-child");
+  const backgroundRunId = extractFlagValue(args, "--run-id");
+
+  const prompt = await resolvePromptFromArgs(args, ctx);
 
   if (isBackground) {
     spawnBackgroundRun(prompt, ctx.cwd);
@@ -882,14 +983,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
   const startTime = Date.now();
 
   if (isStreamJson) {
-    const providerName = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
-    const modelName = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
-    emitStreamEvent({
-      type: "init",
-      provider: providerName,
-      model: modelName,
-      timestamp: new Date().toISOString(),
-    });
+    emitStreamInit(ctx);
   }
 
   const isInteractive = !isBackgroundChild && !isStreamJson;
@@ -900,50 +994,20 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     const result = await loop.run(prompt);
     s?.stop(result.success ? pc.green("Done") : pc.yellow("Stopped"));
 
-    const summary = cleanDisplayText(result.summary);
-
-    if (isStreamJson) {
-      emitStreamEvent({
-        type: "result",
-        content: summary,
-        stats: {
-          success: result.success,
-          iterations: result.iterations,
-          toolCalls: result.toolCalls.length,
-          totalTokens: result.totalTokens,
-          filesWritten: result.filesWritten,
-          filesModified: result.filesModified,
-        },
-      });
-    }
-
-    if (isInteractive) {
-      displayInteractiveResult({ ...result, summary }, cwd);
-    }
-
-    if (memoryEnabled) {
-      recordAutoMemory(effectiveRootDir, prompt, summary, result, startTime);
-    }
-
-    if (isBackgroundChild && backgroundRunId) {
-      writeBackgroundResult(effectiveRootDir, backgroundRunId, summary, result);
-    }
+    handleAutoSuccess(result, {
+      isStreamJson,
+      isInteractive,
+      memoryEnabled,
+      isBackgroundChild,
+      backgroundRunId,
+      effectiveRootDir,
+      cwd,
+      prompt,
+      startTime,
+    });
   } catch (err) {
     s?.stop("Error");
-
-    if (isStreamJson) {
-      emitStreamEvent({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
-
-    if (isBackgroundChild && backgroundRunId) {
-      updateRunStatus(effectiveRootDir, backgroundRunId, "failed");
-    }
-
-    const message = err instanceof Error ? err.message : String(err);
-    throw new CLIError(ExitCode.GENERAL_ERROR, message);
+    handleAutoError(err, isStreamJson, isBackgroundChild, backgroundRunId, effectiveRootDir);
   } finally {
     if (mcpResources.mcpDisconnect) {
       await mcpResources.mcpDisconnect().catch(() => {});

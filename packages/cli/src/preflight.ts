@@ -303,6 +303,25 @@ async function selectToolsForInstall(missing: ToolDependency[]): Promise<string[
   return selected;
 }
 
+/** Print manual installation instructions for tools that failed automatic install. */
+function printManualInstallInstructions(
+  manualInstall: Array<{ dep: ToolDependency; hint?: string }>,
+): void {
+  if (manualInstall.length === 0) return;
+  p.log.info(pc.yellow(`\n${manualInstall.length} tool(s) require manual installation:`));
+  for (const { dep, hint } of manualInstall) {
+    const installCmd =
+      dep.installMethod === "pipx"
+        ? `pipx install ${dep.npmPackage}`
+        : `npm install -g ${dep.npmPackage}`;
+    const lines = [`  ${pc.bold(dep.name)} (${dep.npmPackage})`, `    ${pc.dim(installCmd)}`];
+    if (hint) {
+      lines.push(`    ${pc.dim("Context7 hint:")} ${pc.dim(hint.split("\n")[0])}`);
+    }
+    p.log.message(lines.join("\n"));
+  }
+}
+
 /** Install a list of npm packages into the toolchain sandbox. Returns successfully installed package names. */
 async function installNpmPackages(
   packages: string[],
@@ -324,7 +343,6 @@ async function installNpmPackages(
       s.stop(`${pc.yellow("!")} ${dep.name} failed — checking install method...`);
     }
 
-    // Look up correct install instructions via Context7 and retry
     const hint = await lookupInstallHint(dep.npmPackage);
     if (hint) {
       p.log.info(pc.dim(`Context7: found install info for ${dep.name}`));
@@ -343,20 +361,7 @@ async function installNpmPackages(
     }
   }
 
-  if (manualInstall.length > 0) {
-    p.log.info(pc.yellow(`\n${manualInstall.length} tool(s) require manual installation:`));
-    for (const { dep, hint } of manualInstall) {
-      const installCmd =
-        dep.installMethod === "pipx"
-          ? `pipx install ${dep.npmPackage}`
-          : `npm install -g ${dep.npmPackage}`;
-      const lines = [`  ${pc.bold(dep.name)} (${dep.npmPackage})`, `    ${pc.dim(installCmd)}`];
-      if (hint) {
-        lines.push(`    ${pc.dim("Context7 hint:")} ${pc.dim(hint.split("\n")[0])}`);
-      }
-      p.log.message(lines.join("\n"));
-    }
-  }
+  printManualInstallInstructions(manualInstall);
 
   return installed;
 }

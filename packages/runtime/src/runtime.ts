@@ -772,7 +772,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       fileWriter: fw,
     });
 
-    this.writeDynamicFiles(
+    this.writeDynamicFiles({
       input,
       isUpdate,
       basePath,
@@ -780,8 +780,8 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       normalizedContents,
       consumedLlmKeys,
       tracker,
-      fw,
-    );
+      fileWriter: fw,
+    });
 
     this.guardMultiFileMustProduceOutput(normalizedContents, tracker);
 
@@ -910,16 +910,26 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
    * Write LLM output files that didn't match any declared file spec.
    * Handles dynamically-named files whose paths are determined by the prompt.
    */
-  private writeDynamicFiles(
-    input: Record<string, unknown>,
-    isUpdate: boolean,
-    basePath: string,
-    outputPath: string,
-    normalizedContents: Record<string, string> | null,
-    consumedLlmKeys: Set<string>,
-    tracker: FileWriteTracker,
-    fileWriter?: RuntimeFileWriter,
-  ): void {
+  private writeDynamicFiles(opts: {
+    input: Record<string, unknown>;
+    isUpdate: boolean;
+    basePath: string;
+    outputPath: string;
+    normalizedContents: Record<string, string> | null;
+    consumedLlmKeys: Set<string>;
+    tracker: FileWriteTracker;
+    fileWriter?: RuntimeFileWriter;
+  }): void {
+    const {
+      input,
+      isUpdate,
+      basePath,
+      outputPath,
+      normalizedContents,
+      consumedLlmKeys,
+      tracker,
+      fileWriter,
+    } = opts;
     if (!normalizedContents) return;
 
     for (const [llmKey, content] of Object.entries(normalizedContents)) {

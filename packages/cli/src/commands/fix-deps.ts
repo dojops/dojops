@@ -162,10 +162,11 @@ function runPipFix(dryRun: boolean): string[] {
 // ── Display ───────────────────────────────────────────────────────
 
 function displayFixResult(result: FixResult): void {
-  const lines: string[] = [];
-  lines.push(`${pc.bold("Tool:")}     ${result.tool}`);
-  lines.push(`${pc.bold("Before:")}   ${result.beforeCount} vulnerabilities`);
-  lines.push(`${pc.bold("After:")}    ${result.afterCount} vulnerabilities`);
+  const lines: string[] = [
+    `${pc.bold("Tool:")}     ${result.tool}`,
+    `${pc.bold("Before:")}   ${result.beforeCount} vulnerabilities`,
+    `${pc.bold("After:")}    ${result.afterCount} vulnerabilities`,
+  ];
   lines.push(
     `${pc.bold("Fixed:")}    ${result.fixed > 0 ? pc.green(String(result.fixed)) : pc.dim("0")}`,
   );
@@ -294,12 +295,12 @@ export async function fixDepsCommand(args: string[], ctx: CLIContext): Promise<v
     if (result) results.push(result);
   }
 
+  if (results.length === 0 && isJson) {
+    console.log(JSON.stringify([], null, 2));
+    return;
+  }
   if (results.length === 0) {
-    if (isJson) {
-      console.log(JSON.stringify([], null, 2));
-    } else {
-      p.log.info("No dependency vulnerabilities to fix.");
-    }
+    p.log.info("No dependency vulnerabilities to fix.");
     return;
   }
 

@@ -34,11 +34,11 @@ function matchIgnorePattern(filePath: string, pattern: string): boolean {
   const re = new RegExp(
     "^" +
       p
-        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-        .replace(/\*\*/g, "{{GLOBSTAR}}")
-        .replace(/\*/g, "[^/]*")
-        .replace(/\?/g, "[^/]")
-        .replace(/\{\{GLOBSTAR\}\}/g, ".*") +
+        .replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`)
+        .replaceAll("**", "{{GLOBSTAR}}")
+        .replaceAll("*", "[^/]*")
+        .replaceAll("?", "[^/]")
+        .replaceAll("{{GLOBSTAR}}", ".*") +
       "$",
   );
   // Match full path or just the basename (matchBase behavior for bare names)

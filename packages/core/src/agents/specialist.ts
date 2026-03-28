@@ -289,28 +289,15 @@ export class SpecialistAgent {
     const allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
     const recentSignatures: string[] = [];
 
-    let systemPrompt = this.config.systemPrompt;
-    if (this.docAugmenter) {
-      try {
-        const keywords = [this.config.domain, ...this.config.keywords.slice(0, 3)];
-        systemPrompt = await this.docAugmenter.augmentPrompt(systemPrompt, keywords, prompt);
-      } catch {
-        // Graceful degradation
-      }
-    }
-
+    const systemPrompt = await this.resolveAgenticSystemPrompt(prompt);
     const messages: AgentMessage[] = [{ role: "user", content: sanitizeUserInput(prompt) }];
     let summary = "";
     let success = false;
 
     for (let iteration = 0; iteration < maxIterations; iteration++) {
       const response = await this.generateAgenticResponse(systemPrompt, messages, opts.tools);
+      if (response.usage) totalTokens += response.usage.totalTokens;
 
-      if (response.usage) {
-        totalTokens += response.usage.totalTokens;
-      }
-
-      // Append assistant message
       messages.push({
         role: "assistant",
         content: response.content,
@@ -318,23 +305,13 @@ export class SpecialistAgent {
       });
       opts.onIteration?.(iteration, response.content);
 
-      // Check for "done" tool call
-      const doneCall = response.toolCalls.find((tc) => tc.name === "done");
-      if (doneCall) {
-        allToolCalls.push({ name: doneCall.name, arguments: doneCall.arguments });
-        summary = (doneCall.arguments.summary as string) || "Task completed.";
-        success = true;
+      const stepResult = this.evaluateAgenticStep(response, allToolCalls, iteration);
+      if (stepResult.done) {
+        summary = stepResult.summary;
+        success = stepResult.success;
         break;
       }
-
-      // End turn with no tool calls = finished
-      if (response.stopReason === "end_turn" && response.toolCalls.length === 0) {
-        if (allToolCalls.length > 0 || iteration > 0) {
-          summary = response.content || "Task completed.";
-          success = true;
-          break;
-        }
-        // First iteration with no tools used — nudge the agent
+      if (stepResult.nudge) {
         messages.push({
           role: "user",
           content: "Use the provided tools to complete this task. Do not output results as text.",
@@ -342,43 +319,20 @@ export class SpecialistAgent {
         continue;
       }
 
-      if (response.stopReason === "max_tokens") {
-        summary = "Stopped: LLM response hit max tokens limit.";
-        break;
-      }
-
-      // Execute tool calls (skip "done" which was already handled above)
       const actionCalls = response.toolCalls.filter((tc) => tc.name !== "done");
-      for (const call of actionCalls) {
-        opts.onToolCall?.(call);
-        allToolCalls.push({ name: call.name, arguments: call.arguments });
-        const result = await opts.toolExecutor.execute(call);
-        opts.onToolResult?.(result);
-        messages.push({
-          role: "tool",
-          callId: call.id,
-          content: result.output,
-          isError: result.isError,
-        });
-      }
+      await this.executeAgenticToolCalls(actionCalls, opts, allToolCalls, messages);
 
-      // Stall detection: combine all calls into one per-iteration signature
-      // so repeated multi-call patterns (e.g., read+write 3x) are detected
-      const iterSig = actionCalls.map((c) => `${c.name}:${JSON.stringify(c.arguments)}`).join("|");
-      recentSignatures.push(iterSig);
-      while (recentSignatures.length > 10) recentSignatures.shift();
-      if (this.isStale(recentSignatures)) {
-        summary = `Terminated: stuck in loop on ${actionCalls[0]?.name ?? "unknown"}.`;
+      const stallResult = this.checkStallAndBudget(
+        actionCalls,
+        recentSignatures,
+        totalTokens,
+        maxTokens,
+      );
+      if (stallResult) {
+        summary = stallResult;
         break;
       }
 
-      // Token budget check
-      if (totalTokens >= maxTokens) {
-        summary = `Stopped: token budget exhausted (${totalTokens}/${maxTokens}).`;
-        break;
-      }
-
-      // Compact old tool results to prevent context overflow
       this.compactAgenticMessages(messages);
     }
 
@@ -395,6 +349,87 @@ export class SpecialistAgent {
       filesWritten: opts.toolExecutor.getFilesWritten(),
       filesModified: opts.toolExecutor.getFilesModified(),
     };
+  }
+
+  /** Resolve the system prompt, optionally augmenting with doc context. */
+  private async resolveAgenticSystemPrompt(prompt: string): Promise<string> {
+    if (!this.docAugmenter) return this.config.systemPrompt;
+    try {
+      const keywords = [this.config.domain, ...this.config.keywords.slice(0, 3)];
+      return await this.docAugmenter.augmentPrompt(this.config.systemPrompt, keywords, prompt);
+    } catch {
+      return this.config.systemPrompt;
+    }
+  }
+
+  /** Evaluate a single agentic step and decide whether to stop, nudge, or continue. */
+  private evaluateAgenticStep(
+    response: LLMToolResponse,
+    allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+    iteration: number,
+  ): { done: true; summary: string; success: boolean } | { done: false; nudge: boolean } {
+    const doneCall = response.toolCalls.find((tc) => tc.name === "done");
+    if (doneCall) {
+      allToolCalls.push({ name: doneCall.name, arguments: doneCall.arguments });
+      return {
+        done: true,
+        summary: (doneCall.arguments.summary as string) || "Task completed.",
+        success: true,
+      };
+    }
+
+    if (response.stopReason === "end_turn" && response.toolCalls.length === 0) {
+      if (allToolCalls.length > 0 || iteration > 0) {
+        return { done: true, summary: response.content || "Task completed.", success: true };
+      }
+      return { done: false, nudge: true };
+    }
+
+    if (response.stopReason === "max_tokens") {
+      return { done: true, summary: "Stopped: LLM response hit max tokens limit.", success: false };
+    }
+
+    return { done: false, nudge: false };
+  }
+
+  /** Execute tool calls and append results to the message history. */
+  private async executeAgenticToolCalls(
+    actionCalls: ToolCall[],
+    opts: AgenticOptions,
+    allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+    messages: AgentMessage[],
+  ): Promise<void> {
+    for (const call of actionCalls) {
+      opts.onToolCall?.(call);
+      allToolCalls.push({ name: call.name, arguments: call.arguments });
+      const result = await opts.toolExecutor.execute(call);
+      opts.onToolResult?.(result);
+      messages.push({
+        role: "tool",
+        callId: call.id,
+        content: result.output,
+        isError: result.isError,
+      });
+    }
+  }
+
+  /** Check for stall detection and token budget exhaustion. Returns a stop reason or null. */
+  private checkStallAndBudget(
+    actionCalls: ToolCall[],
+    recentSignatures: string[],
+    totalTokens: number,
+    maxTokens: number,
+  ): string | null {
+    const iterSig = actionCalls.map((c) => `${c.name}:${JSON.stringify(c.arguments)}`).join("|");
+    recentSignatures.push(iterSig);
+    while (recentSignatures.length > 10) recentSignatures.shift();
+    if (this.isStale(recentSignatures)) {
+      return `Terminated: stuck in loop on ${actionCalls[0]?.name ?? "unknown"}.`;
+    }
+    if (totalTokens >= maxTokens) {
+      return `Stopped: token budget exhausted (${totalTokens}/${maxTokens}).`;
+    }
+    return null;
   }
 
   /** Call LLM with tools — native if available, prompt-based fallback otherwise. */

@@ -537,39 +537,39 @@ describe("SpecialistAgent retry and timeout", () => {
   });
 });
 
+function mockToolExecutor(results?: Map<string, string>): AgenticToolExecutor {
+  const filesWritten: string[] = [];
+  const filesModified: string[] = [];
+  return {
+    execute: vi.fn().mockImplementation(async (call: ToolCall): Promise<ToolResult> => {
+      if (call.name === "write_file") filesWritten.push(call.arguments.path as string);
+      if (call.name === "edit_file") filesModified.push(call.arguments.path as string);
+      const output = results?.get(call.name) ?? `Executed ${call.name}`;
+      return { callId: call.id, output, isError: false };
+    }),
+    getFilesWritten: () => filesWritten,
+    getFilesModified: () => filesModified,
+  };
+}
+
+function mockToolCallingProvider(responses: LLMToolResponse[]): LLMProvider {
+  let callIndex = 0;
+  return {
+    name: "mock-tool-provider",
+    generate: vi.fn().mockResolvedValue({
+      content: "",
+      model: "mock",
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    }),
+    generateWithTools: vi.fn().mockImplementation(async () => {
+      const resp = responses[callIndex] ?? responses[responses.length - 1];
+      callIndex++;
+      return resp;
+    }),
+  };
+}
+
 describe("SpecialistAgent.runAgentic", () => {
-  function mockToolExecutor(results?: Map<string, string>): AgenticToolExecutor {
-    const filesWritten: string[] = [];
-    const filesModified: string[] = [];
-    return {
-      execute: vi.fn().mockImplementation(async (call: ToolCall): Promise<ToolResult> => {
-        if (call.name === "write_file") filesWritten.push(call.arguments.path as string);
-        if (call.name === "edit_file") filesModified.push(call.arguments.path as string);
-        const output = results?.get(call.name) ?? `Executed ${call.name}`;
-        return { callId: call.id, output, isError: false };
-      }),
-      getFilesWritten: () => filesWritten,
-      getFilesModified: () => filesModified,
-    };
-  }
-
-  function mockToolCallingProvider(responses: LLMToolResponse[]): LLMProvider {
-    let callIndex = 0;
-    return {
-      name: "mock-tool-provider",
-      generate: vi.fn().mockResolvedValue({
-        content: "",
-        model: "mock",
-        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-      }),
-      generateWithTools: vi.fn().mockImplementation(async () => {
-        const resp = responses[callIndex] ?? responses[responses.length - 1];
-        callIndex++;
-        return resp;
-      }),
-    };
-  }
-
   it("completes when LLM calls the done tool", async () => {
     const provider = mockToolCallingProvider([
       {

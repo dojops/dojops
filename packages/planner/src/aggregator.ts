@@ -52,7 +52,7 @@ export class ResultAggregator {
             const aScore = (a.output as Record<string, number>)?.[scoreField] ?? 0;
             const bScore = (b.output as Record<string, number>)?.[scoreField] ?? 0;
             return aScore >= bScore ? a : b;
-          });
+          }, items[0]);
           aggregated.set(groupKey, best.output);
           break;
         }

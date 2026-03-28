@@ -31,7 +31,7 @@ export interface RoutingProviderOptions {
 
 export class RoutingProvider implements LLMProvider {
   readonly name: string;
-  private tierProviders = new Map<string, LLMProvider>();
+  private readonly tierProviders = new Map<string, LLMProvider>();
 
   constructor(
     private readonly inner: LLMProvider,

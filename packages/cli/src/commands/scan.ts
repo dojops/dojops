@@ -355,13 +355,12 @@ function displayFindings(findings: ScanFinding[]): void {
 function displayComplianceReport(findings: ScanFinding[], framework: string): void {
   const report: ComplianceReport = mapFindingsToCompliance(findings, framework);
 
-  const lines: string[] = [];
   const versionLabel = pc.dim(`v${report.version}`);
-  lines.push(`${pc.bold("Framework:")}  ${report.framework} ${versionLabel}`);
-  lines.push(
+  const lines: string[] = [
+    `${pc.bold("Framework:")}  ${report.framework} ${versionLabel}`,
     `${pc.bold("Score:")}      ${complianceScoreLabel(report.summary.compliancePercentage)}`,
-  );
-  lines.push("");
+    "",
+  ];
 
   for (const control of report.controls) {
     let icon: string;

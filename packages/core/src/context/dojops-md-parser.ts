@@ -70,7 +70,7 @@ export function parseDojopsMdString(content: string, rootPath?: string): DojopsM
 
 /** Extract the content of the ## Notes section from a DOJOPS.md body. */
 export function extractNotesSection(body: string): string {
-  const match = body.match(/## Notes\s*\n([\s\S]*?)(?=\n## |\s*$)/);
+  const match = /## Notes\s*\n([\s\S]*?)(?=\n## |\s*$)/.exec(body);
   return match ? match[1].trimEnd() : "";
 }
 
@@ -105,7 +105,7 @@ export function extractCustomSections(body: string): string {
 
 /** Extract activity entries from between activity markers. */
 export function extractActivityEntries(body: string): string[] {
-  const match = body.match(/<!-- activity-start -->\n([\s\S]*?)\n?<!-- activity-end -->/);
+  const match = /<!-- activity-start -->\n([\s\S]*?)\n?<!-- activity-end -->/.exec(body);
   if (!match) return [];
   return match[1].split("\n").filter((l) => l.startsWith("- "));
 }

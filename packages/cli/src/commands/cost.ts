@@ -61,16 +61,17 @@ function runInfracost(targetPath: string): InfracostOutput {
 
 function formatCurrency(amount: string | undefined, currency: string): string {
   if (!amount || amount === "0") return pc.dim("$0.00");
-  const num = parseFloat(amount);
-  if (isNaN(num)) return pc.dim("$0.00");
+  const num = Number.parseFloat(amount);
+  if (Number.isNaN(num)) return pc.dim("$0.00");
   const symbol = currency === "USD" ? "$" : currency;
   return `${symbol}${num.toFixed(2)}`;
 }
 
 function buildResourceTable(resources: InfracostResource[], currency: string): string[] {
-  const lines: string[] = [];
-  lines.push(`  ${pc.bold("Resource".padEnd(40))} ${pc.bold("Monthly Cost".padStart(14))}`);
-  lines.push(`  ${"─".repeat(40)} ${"─".repeat(14)}`);
+  const lines: string[] = [
+    `  ${pc.bold("Resource".padEnd(40))} ${pc.bold("Monthly Cost".padStart(14))}`,
+    `  ${"─".repeat(40)} ${"─".repeat(14)}`,
+  ];
 
   for (const resource of resources) {
     const cost = formatCurrency(resource.monthlyCost, currency);
@@ -90,7 +91,7 @@ function buildResourceTable(resources: InfracostResource[], currency: string): s
 
 function buildCostDiffLine(diffAmount: string, currency: string): string | null {
   if (!diffAmount || diffAmount === "0") return null;
-  const diff = parseFloat(diffAmount);
+  const diff = Number.parseFloat(diffAmount);
   const diffLabel =
     diff > 0
       ? pc.red(`+${formatCurrency(diffAmount, currency)}`)

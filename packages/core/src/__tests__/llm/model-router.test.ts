@@ -266,7 +266,7 @@ describe("routeModel", () => {
   });
 
   it("uses fast tier when isRouting is true", () => {
-    const filler = Array(150).fill("context").join(" ");
+    const filler = new Array(150).fill("context").join(" ");
     const result = routeModel("openai", `Design architecture ${filler}`, { isRouting: true });
     expect(result.tier).toBe("fast");
     expect(result.model).toBe("gpt-4o-mini");

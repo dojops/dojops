@@ -262,10 +262,11 @@ export function createDojOpsMcpServer(): McpServer {
       if (path) body.path = path;
 
       // Repo scan uses the generate endpoint with a scan-oriented prompt
+      const pathSuffix = path ? ` at ${path}` : "";
       const resp = await apiRequest("/api/generate", {
         method: "POST",
         body: {
-          prompt: `Scan and analyze the repository${path ? ` at ${path}` : ""}: list detected languages, frameworks, CI/CD setup, container configuration, infrastructure files, and security posture.`,
+          prompt: `Scan and analyze the repository${pathSuffix}: list detected languages, frameworks, CI/CD setup, container configuration, infrastructure files, and security posture.`,
           agent: "devsecops-reviewer",
         },
       });

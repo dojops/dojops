@@ -357,74 +357,10 @@ export class PlannerExecutor {
 
     for (let attempt = 0; attempt <= this.maxRepairAttempts; attempt++) {
       try {
-        let resolvedInput = resolveInputRefs(task.input, results);
-
-        // Inject specialist agent domain context when task has an assigned agent
-        if (task.agent && this.agentConfigs?.has(task.agent)) {
-          const agentConfig = this.agentConfigs.get(task.agent)!;
-          resolvedInput = { ...resolvedInput, _agentContext: agentConfig.systemPrompt };
-        }
-
-        // Inject lightweight dependency context so each task knows what happened upstream
-        if (task.dependsOn.length > 0) {
-          const depContext = task.dependsOn
-            .map((depId) => {
-              const r = results.get(depId);
-              return r ? `- ${depId}: ${r.status}` : null;
-            })
-            .filter(Boolean)
-            .join("\n");
-          if (depContext) {
-            resolvedInput = { ...resolvedInput, _dependencyContext: depContext };
-          }
-        }
-
-        // Inject coordinator context if available
-        if (this.coordinator) {
-          this.coordinator.register(task.id);
-          const messages = this.coordinator.drain(task.id);
-          if (messages.length > 0) {
-            resolvedInput = {
-              ...resolvedInput,
-              _coordinatorMessages: messages
-                .map((m) => `[${m.type}] from ${m.from}: ${JSON.stringify(m.payload)}`)
-                .join("\n"),
-            };
-          }
-          const sharedCtx = this.coordinator.getAll();
-          if (sharedCtx.size > 0) {
-            const ctxLines: string[] = [];
-            for (const [key, entry] of sharedCtx) {
-              ctxLines.push(`${key}: ${JSON.stringify(entry.value)} (from ${entry.source})`);
-            }
-            resolvedInput = { ...resolvedInput, _sharedContext: ctxLines.join("\n") };
-          }
-          const handoffs = this.coordinator.drainHandoffs(task.id);
-          if (handoffs.length > 0) {
-            resolvedInput = {
-              ...resolvedInput,
-              _handoffs: handoffs
-                .map(
-                  (h) =>
-                    `Handoff from ${h.from}: ${h.reason}\nPartial output: ${JSON.stringify(h.partialOutput)}`,
-                )
-                .join("\n---\n"),
-            };
-          }
-        }
-
-        // On repair attempts, inject the previous error so the LLM can self-correct
-        if (attempt > 0 && lastError) {
-          resolvedInput = {
-            ...resolvedInput,
-            _repairContext: `Attempt ${attempt}/${this.maxRepairAttempts} — previous attempt failed: ${lastError}. Analyze the error and produce a corrected output.`,
-          };
-        }
+        const resolvedInput = this.buildTaskInput(task, results, attempt, lastError);
 
         const validation = tool.validate(resolvedInput);
-
         if (!validation.valid) {
-          // Validation failures are structural, not retryable
           this.recordResult(
             task,
             "failed",
@@ -435,74 +371,190 @@ export class PlannerExecutor {
           return;
         }
 
-        const generatePromise = tool.generate(resolvedInput);
-        let output: Awaited<ReturnType<typeof tool.generate>>;
-        if (this.generateTimeoutMs) {
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            timer = setTimeout(
-              () => reject(new Error(`Generate timed out after ${this.generateTimeoutMs}ms`)),
-              this.generateTimeoutMs,
-            );
-          });
-          try {
-            output = await Promise.race([generatePromise, timeoutPromise]);
-          } finally {
-            if (timer !== undefined) clearTimeout(timer);
-          }
-        } else {
-          output = await generatePromise;
-        }
+        const output = await this.generateWithTimeout(tool, resolvedInput);
 
-        if (output.success) {
-          // Embed usage in data so SafeExecutor can accumulate token counts
-          const data =
-            output.usage && output.data && typeof output.data === "object"
-              ? { ...(output.data as Record<string, unknown>), _usage: output.usage }
-              : output.data;
-
-          // Evaluate programmatic success criteria if present
-          if (task.successCriteria) {
-            const violations = evaluateSuccessCriteria(task.successCriteria, data);
-            if (violations.length > 0) {
-              lastError = `Success criteria failed: ${violations.join("; ")}`;
-              if (attempt < this.maxRepairAttempts) continue;
-              this.recordResult(task, "failed", results, failed, lastError);
-              return;
-            }
-          }
-
-          // Run verification when available — drives repair with richer feedback
-          if (this.verifyFn) {
-            const verifyResult = await this.verifyFn(tool, data, task.id);
-            if (!verifyResult.passed) {
-              lastError = `Verification failed: ${verifyResult.errors.join("; ")}`;
-              if (attempt < this.maxRepairAttempts) continue;
-              this.recordResult(task, "failed", results, failed, lastError);
-              return;
-            }
-          }
-
-          // Publish _share: keys to coordinator for downstream tasks
-          if (this.coordinator && data && typeof data === "object") {
-            for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-              if (key.startsWith("_share:")) {
-                this.coordinator.set(key.slice(7), value, task.id);
-              }
-            }
-          }
-
-          this.recordResult(task, "completed", results, failed, undefined, data);
+        if (!output.success) {
+          lastError = output.error;
+          if (attempt < this.maxRepairAttempts) continue;
+          this.recordResult(task, "failed", results, failed, output.error);
           return;
         }
 
-        lastError = output.error;
-        if (attempt < this.maxRepairAttempts) continue;
-        this.recordResult(task, "failed", results, failed, output.error);
+        const data = this.embedUsageInData(output);
+        const validationError = await this.validateTaskOutput(task, tool, data);
+        if (validationError) {
+          lastError = validationError;
+          if (attempt < this.maxRepairAttempts) continue;
+          this.recordResult(task, "failed", results, failed, lastError);
+          return;
+        }
+
+        this.publishSharedContext(task.id, data);
+        this.recordResult(task, "completed", results, failed, undefined, data);
+        return;
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
         if (attempt < this.maxRepairAttempts) continue;
         this.recordResult(task, "failed", results, failed, lastError);
+      }
+    }
+  }
+
+  /** Resolve $refs, inject agent context, dependencies, coordinator data, and repair context. */
+  private buildTaskInput(
+    task: TaskNode,
+    results: Map<string, TaskResult>,
+    attempt: number,
+    lastError: string | undefined,
+  ): Record<string, unknown> {
+    let input = resolveInputRefs(task.input, results);
+
+    input = this.injectAgentContext(input, task);
+    input = this.injectDependencyContext(input, task, results);
+    input = this.injectCoordinatorContext(input, task.id);
+
+    if (attempt > 0 && lastError) {
+      input = {
+        ...input,
+        _repairContext: `Attempt ${attempt}/${this.maxRepairAttempts} — previous attempt failed: ${lastError}. Analyze the error and produce a corrected output.`,
+      };
+    }
+
+    return input;
+  }
+
+  /** Inject specialist agent system prompt into input if the task has an assigned agent. */
+  private injectAgentContext(
+    input: Record<string, unknown>,
+    task: TaskNode,
+  ): Record<string, unknown> {
+    if (!task.agent || !this.agentConfigs?.has(task.agent)) return input;
+    const agentConfig = this.agentConfigs.get(task.agent)!;
+    return { ...input, _agentContext: agentConfig.systemPrompt };
+  }
+
+  /** Inject dependency status context so each task knows what happened upstream. */
+  private injectDependencyContext(
+    input: Record<string, unknown>,
+    task: TaskNode,
+    results: Map<string, TaskResult>,
+  ): Record<string, unknown> {
+    if (task.dependsOn.length === 0) return input;
+    const depContext = task.dependsOn
+      .map((depId) => {
+        const r = results.get(depId);
+        return r ? `- ${depId}: ${r.status}` : null;
+      })
+      .filter(Boolean)
+      .join("\n");
+    if (!depContext) return input;
+    return { ...input, _dependencyContext: depContext };
+  }
+
+  /** Inject coordinator messages, shared context, and handoffs into input. */
+  private injectCoordinatorContext(
+    input: Record<string, unknown>,
+    taskId: string,
+  ): Record<string, unknown> {
+    if (!this.coordinator) return input;
+
+    this.coordinator.register(taskId);
+    let result = input;
+
+    const messages = this.coordinator.drain(taskId);
+    if (messages.length > 0) {
+      result = {
+        ...result,
+        _coordinatorMessages: messages
+          .map((m) => `[${m.type}] from ${m.from}: ${JSON.stringify(m.payload)}`)
+          .join("\n"),
+      };
+    }
+
+    const sharedCtx = this.coordinator.getAll();
+    if (sharedCtx.size > 0) {
+      const ctxLines: string[] = [];
+      for (const [key, entry] of sharedCtx) {
+        ctxLines.push(`${key}: ${JSON.stringify(entry.value)} (from ${entry.source})`);
+      }
+      result = { ...result, _sharedContext: ctxLines.join("\n") };
+    }
+
+    const handoffs = this.coordinator.drainHandoffs(taskId);
+    if (handoffs.length > 0) {
+      result = {
+        ...result,
+        _handoffs: handoffs
+          .map(
+            (h) =>
+              `Handoff from ${h.from}: ${h.reason}\nPartial output: ${JSON.stringify(h.partialOutput)}`,
+          )
+          .join("\n---\n"),
+      };
+    }
+
+    return result;
+  }
+
+  /** Run tool.generate with an optional timeout. */
+  private async generateWithTimeout(
+    tool: DevOpsSkill,
+    input: Record<string, unknown>,
+  ): Promise<Awaited<ReturnType<typeof tool.generate>>> {
+    const generatePromise = tool.generate(input);
+    if (!this.generateTimeoutMs) return generatePromise;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`Generate timed out after ${this.generateTimeoutMs}ms`)),
+        this.generateTimeoutMs,
+      );
+    });
+    try {
+      return await Promise.race([generatePromise, timeoutPromise]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
+  /** Embed token usage in the output data object if available. */
+  private embedUsageInData(output: { data?: unknown; usage?: unknown }): unknown {
+    if (output.usage && output.data && typeof output.data === "object") {
+      return { ...(output.data as Record<string, unknown>), _usage: output.usage };
+    }
+    return output.data;
+  }
+
+  /** Validate output against success criteria and verification. Returns error string or null. */
+  private async validateTaskOutput(
+    task: TaskNode,
+    tool: DevOpsSkill,
+    data: unknown,
+  ): Promise<string | null> {
+    if (task.successCriteria) {
+      const violations = evaluateSuccessCriteria(task.successCriteria, data);
+      if (violations.length > 0) {
+        return `Success criteria failed: ${violations.join("; ")}`;
+      }
+    }
+
+    if (this.verifyFn) {
+      const verifyResult = await this.verifyFn(tool, data, task.id);
+      if (!verifyResult.passed) {
+        return `Verification failed: ${verifyResult.errors.join("; ")}`;
+      }
+    }
+
+    return null;
+  }
+
+  /** Publish _share: prefixed keys from output data to the coordinator. */
+  private publishSharedContext(taskId: string, data: unknown): void {
+    if (!this.coordinator || !data || typeof data !== "object") return;
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      if (key.startsWith("_share:")) {
+        this.coordinator.set(key.slice(7), value, taskId);
       }
     }
   }
@@ -580,68 +632,87 @@ export class PlannerExecutor {
         await this.executeTask(task, completedTaskIds, failed, results);
       });
 
-      if (wave.some((id) => failed.has(id)) && wave.some((id) => !failed.has(id))) {
-        console.warn(
-          `[planner] Wave completed with mixed results — some tasks failed while others succeeded. Manual review recommended.`,
-        );
-      }
-
-      // Run aggregation on wave results if configured
-      if (this.aggregator && this.coordinator) {
-        const waveResults = wave
-          .filter((id) => results.has(id) && results.get(id)!.status === "completed")
-          .map((id) => ({ taskId: id, output: results.get(id)!.output }));
-        if (waveResults.length > 0) {
-          const aggregated = this.aggregator.aggregate(waveResults);
-          for (const [groupKey, value] of aggregated) {
-            this.coordinator.set(`_aggregated:${groupKey}`, value, "wave");
-          }
-        }
-      }
-
+      this.warnOnMixedWave(wave, failed);
+      this.aggregateWaveResults(wave, results);
       this.advanceReadyTasks(wave, dependants, inDegree, processed, ready);
-      // Only prune when there are still tasks left to execute
       if (ready.size > 0) {
         this.pruneCompletedOutputs(results, graph.tasks, processed);
       }
     }
 
     const allResults = Array.from(results.values());
+    return this.buildPlannerResult(graph.goal, allResults);
+  }
+
+  /** Warn when a wave has mixed success/failure results. */
+  private warnOnMixedWave(wave: string[], failed: Set<string>): void {
+    const hasFailed = wave.some((id) => failed.has(id));
+    const hasSucceeded = wave.some((id) => !failed.has(id));
+    if (hasFailed && hasSucceeded) {
+      console.warn(
+        `[planner] Wave completed with mixed results — some tasks failed while others succeeded. Manual review recommended.`,
+      );
+    }
+  }
+
+  /** Run aggregation on completed wave results if configured. */
+  private aggregateWaveResults(wave: string[], results: Map<string, TaskResult>): void {
+    if (!this.aggregator || !this.coordinator) return;
+    const waveResults = wave
+      .filter((id) => results.has(id) && results.get(id)!.status === "completed")
+      .map((id) => ({ taskId: id, output: results.get(id)!.output }));
+    if (waveResults.length === 0) return;
+    const aggregated = this.aggregator.aggregate(waveResults);
+    for (const [groupKey, value] of aggregated) {
+      this.coordinator.set(`_aggregated:${groupKey}`, value, "wave");
+    }
+  }
+
+  /** Build the final PlannerResult from all task results. */
+  private buildPlannerResult(goal: string, allResults: TaskResult[]): PlannerResult {
     const hasRealFailure = allResults.some((r) => r.status === "failed");
     const success =
       !hasRealFailure &&
       allResults.every((r) => r.status === "completed" || r.status === "skipped");
 
-    // Build replan context from failures so the caller can reinvoke the decomposer
-    let replanContext: string | undefined;
-    if (hasRealFailure) {
-      const failedTasks = allResults.filter((r) => r.status === "failed");
-      const completedIds = allResults.filter((r) => r.status === "completed").map((r) => r.taskId);
-      const lines = failedTasks.map(
-        (r) => `- Task "${r.taskId}" failed: ${r.error ?? "unknown error"}`,
-      );
-      if (completedIds.length > 0) {
-        lines.push(`Already completed: ${completedIds.join(", ")}`);
-      }
-      replanContext = lines.join("\n");
-    }
-
-    // Compute aggregate quality metrics
-    const completedCount = allResults.filter((r) => r.status === "completed").length;
-    const total = allResults.length;
-    const quality: PlanQuality = {
-      score: total > 0 ? completedCount / total : 1.0,
-      skippedTasks: allResults.filter((r) => r.status === "skipped").map((r) => r.taskId),
-      summary: `${completedCount}/${total} tasks completed (${total > 0 ? ((completedCount / total) * 100).toFixed(0) : 100}%)`,
-    };
+    const replanContext = this.buildReplanContext(allResults, hasRealFailure);
+    const quality = this.computeQuality(allResults);
 
     return {
-      goal: graph.goal,
+      goal,
       results: allResults,
       success,
       replanContext,
       quality,
       coordinatorSnapshot: this.coordinator?.snapshot(),
+    };
+  }
+
+  /** Build replan context from failures so the caller can reinvoke the decomposer. */
+  private buildReplanContext(
+    allResults: TaskResult[],
+    hasRealFailure: boolean,
+  ): string | undefined {
+    if (!hasRealFailure) return undefined;
+    const failedTasks = allResults.filter((r) => r.status === "failed");
+    const completedIds = allResults.filter((r) => r.status === "completed").map((r) => r.taskId);
+    const lines = failedTasks.map(
+      (r) => `- Task "${r.taskId}" failed: ${r.error ?? "unknown error"}`,
+    );
+    if (completedIds.length > 0) {
+      lines.push(`Already completed: ${completedIds.join(", ")}`);
+    }
+    return lines.join("\n");
+  }
+
+  /** Compute aggregate quality metrics for plan execution. */
+  private computeQuality(allResults: TaskResult[]): PlanQuality {
+    const completedCount = allResults.filter((r) => r.status === "completed").length;
+    const total = allResults.length;
+    return {
+      score: total > 0 ? completedCount / total : 1,
+      skippedTasks: allResults.filter((r) => r.status === "skipped").map((r) => r.taskId),
+      summary: `${completedCount}/${total} tasks completed (${total > 0 ? ((completedCount / total) * 100).toFixed(0) : 100}%)`,
     };
   }
 }

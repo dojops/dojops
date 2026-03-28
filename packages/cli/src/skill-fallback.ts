@@ -178,7 +178,7 @@ export async function promptHubInstall(
   // Interactive: show select prompt
   const options = packages.map((pkg) => {
     const ver = pkg.latestVersion?.semver ? `v${pkg.latestVersion.semver}` : "";
-    const stars = pkg.starCount != null ? `★${pkg.starCount}` : "";
+    const stars = pkg.starCount == null ? "" : `★${pkg.starCount}`;
     const hint = [ver, stars, pkg.description?.slice(0, 50)].filter(Boolean).join(" · ");
     return { value: pkg.slug, label: pkg.name, hint };
   });
@@ -293,6 +293,117 @@ export function warnNoSkill(searchTerms: string): void {
   );
 }
 
+/** Options for the skill fallback flow. */
+export interface SkillFallbackOptions {
+  writePath: string | undefined;
+  allowAllPaths: boolean;
+  projectRoot: string | undefined;
+  provider: LLMProvider;
+  docAugmenter: DocAugmenter | undefined;
+  context7Provider: Context7Provider | undefined;
+  projectContextStr: string | undefined;
+}
+
+/** Whether the output mode is structured (JSON/YAML/stream). */
+function isStructuredOutput(ctx: CLIContext): boolean {
+  return (
+    ctx.globalOpts.output === "json" ||
+    ctx.globalOpts.output === "yaml" ||
+    ctx.globalOpts.output === "stream-json" ||
+    ctx.globalOpts.raw
+  );
+}
+
+/**
+ * Tier 1: Search the hub for matching skills and offer interactive install.
+ * Returns "retry" if a skill was installed, null to continue to tier 2.
+ */
+async function tryHubSearch(
+  ctx: CLIContext,
+  searchTerms: string,
+  structured: boolean,
+): Promise<"retry" | null> {
+  const hubUrl = DEFAULT_HUB_URL;
+  const s = p.spinner();
+  if (!structured) s.start("Searching hub for matching skills...");
+
+  const packages = await searchHub(searchTerms, hubUrl, ctx.globalOpts.verbose);
+
+  if (!structured) {
+    const msg =
+      packages.length > 0
+        ? `Found ${packages.length} matching skill(s) on hub`
+        : "No matching skills on hub";
+    s.stop(msg);
+  }
+
+  if (packages.length === 0) return null;
+
+  const selected = await promptHubInstall(ctx, packages);
+  if (!selected) return null;
+
+  const installSpinner = p.spinner();
+  if (!structured) installSpinner.start(`Installing ${pc.cyan(selected.name)}...`);
+
+  const installed = await installHubSkill(selected.slug, selected.name);
+
+  if (!structured) installSpinner.stop(installed ? "Installed" : "Install failed");
+
+  return installed ? "retry" : null;
+}
+
+/**
+ * Tier 2: Generate content via Context7 + LLM and emit output.
+ * Returns "handled" if content was generated, "skip" otherwise.
+ */
+async function tryLlmFallback(
+  ctx: CLIContext,
+  prompt: string,
+  opts: SkillFallbackOptions,
+  structured: boolean,
+): Promise<"handled" | "skip"> {
+  if (!structured) {
+    p.log.info(pc.dim("No matching skill found. Generating with documentation-augmented LLM..."));
+  }
+
+  const s2 = p.spinner();
+  if (!structured) s2.start("Generating...");
+
+  const content = await context7LlmFallback(
+    prompt,
+    opts.provider,
+    opts.docAugmenter,
+    opts.context7Provider,
+    opts.projectContextStr,
+  );
+
+  if (!structured) s2.stop("Done.");
+
+  if (!content) return "skip";
+
+  await emitFallbackContent(ctx, content, opts.writePath, opts.allowAllPaths);
+  return "handled";
+}
+
+/** Write or print the generated fallback content. */
+async function emitFallbackContent(
+  ctx: CLIContext,
+  content: string,
+  writePath: string | undefined,
+  allowAllPaths: boolean,
+): Promise<void> {
+  if (writePath) {
+    const { handleWriteOutput } = await import("./commands/generate");
+    await handleWriteOutput(ctx, writePath, allowAllPaths, content, "context7-llm");
+  } else if (ctx.globalOpts.raw) {
+    process.stdout.write(content);
+    if (!content.endsWith("\n")) process.stdout.write("\n");
+  } else {
+    const { outputFormatted } = await import("./commands/generate");
+    outputFormatted(ctx.globalOpts.output, "fallback", "context7-llm", content);
+  }
+}
+
 /**
  * Two-tier fallback between skill matching and agent routing.
  *
@@ -305,99 +416,26 @@ export function warnNoSkill(searchTerms: string): void {
 export async function trySkillFallback(
   ctx: CLIContext,
   prompt: string,
-  writePath: string | undefined,
-  allowAllPaths: boolean,
-  _projectRoot: string | undefined,
-  provider: LLMProvider,
-  docAugmenter: DocAugmenter | undefined,
-  context7Provider: Context7Provider | undefined,
-  projectContextStr: string | undefined,
+  opts: SkillFallbackOptions,
 ): Promise<"handled" | "retry" | "skip"> {
-  // Analysis/review prompts should route to specialist agents
   const { isAnalysisIntent } = await import("./commands/generate");
   if (isAnalysisIntent(prompt)) return "skip";
 
   const searchTerms = extractSearchTerms(prompt);
-  const hubUrl = DEFAULT_HUB_URL;
-  const structured =
-    ctx.globalOpts.output === "json" ||
-    ctx.globalOpts.output === "yaml" ||
-    ctx.globalOpts.output === "stream-json" ||
-    ctx.globalOpts.raw;
+  const structured = isStructuredOutput(ctx);
 
-  // ── Tier 1: Hub search ────────────────────────────────────────
-  const s = p.spinner();
-  if (!structured) s.start("Searching hub for matching skills...");
+  // Tier 1: hub search + install
+  const hubResult = await tryHubSearch(ctx, searchTerms, structured);
+  if (hubResult) return hubResult;
 
-  const packages = await searchHub(searchTerms, hubUrl, ctx.globalOpts.verbose);
-
-  if (!structured) {
-    if (packages.length > 0) {
-      s.stop(`Found ${packages.length} matching skill(s) on hub`);
-    } else {
-      s.stop("No matching skills on hub");
-    }
-  }
-
-  if (packages.length > 0) {
-    const selected = await promptHubInstall(ctx, packages);
-
-    if (selected) {
-      const installSpinner = p.spinner();
-      if (!structured) installSpinner.start(`Installing ${pc.cyan(selected.name)}...`);
-
-      const installed = await installHubSkill(selected.slug, selected.name);
-
-      if (!structured) installSpinner.stop(installed ? "Installed" : "Install failed");
-
-      if (installed) {
-        return "retry";
-      }
-    }
-    // User skipped or install failed — fall through to tier 2
-  }
-
-  // ── Tier 2: Context7 + LLM fallback ──────────────────────────
-  if (!docAugmenter && !context7Provider) {
+  // Tier 2: Context7 + LLM fallback
+  if (!opts.docAugmenter && !opts.context7Provider) {
     if (!structured) warnNoSkill(searchTerms);
     return "skip";
   }
 
-  if (!structured) {
-    p.log.info(pc.dim("No matching skill found. Generating with documentation-augmented LLM..."));
-  }
-
-  const s2 = p.spinner();
-  if (!structured) s2.start("Generating...");
-
-  const content = await context7LlmFallback(
-    prompt,
-    provider,
-    docAugmenter,
-    context7Provider,
-    projectContextStr,
-  );
-
-  if (!structured) s2.stop("Done.");
-
-  if (content) {
-    if (writePath) {
-      const { handleWriteOutput } = await import("./commands/generate");
-      await handleWriteOutput(ctx, writePath, allowAllPaths, content, "context7-llm");
-    } else if (ctx.globalOpts.raw) {
-      process.stdout.write(content);
-      if (!content.endsWith("\n")) process.stdout.write("\n");
-    } else {
-      const { outputFormatted } = await import("./commands/generate");
-      outputFormatted(ctx.globalOpts.output, "fallback", "context7-llm", content);
-    }
-
-    if (!structured) {
-      warnNoSkill(searchTerms);
-    }
-    return "handled";
-  }
+  const llmResult = await tryLlmFallback(ctx, prompt, opts, structured);
 
   if (!structured) warnNoSkill(searchTerms);
-  return "skip";
+  return llmResult;
 }

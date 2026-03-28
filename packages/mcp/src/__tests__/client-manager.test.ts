@@ -44,19 +44,11 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => {
 });
 
 vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
-  StdioClientTransport: class MockStdioTransport {
-    constructor() {
-      /* noop */
-    }
-  },
+  StdioClientTransport: vi.fn(),
 }));
 
 vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
-  StreamableHTTPClientTransport: class MockHTTPTransport {
-    constructor() {
-      /* noop */
-    }
-  },
+  StreamableHTTPClientTransport: vi.fn(),
 }));
 
 describe("McpClientManager", () => {

@@ -78,11 +78,19 @@ function handlePatterns(args: string[], rootDir: string, ctx: CLIContext): void 
 
   const lines = patterns.map((pat) => {
     const rate = pat.count > 0 ? Math.round((pat.success_count / pat.count) * 100) : 0;
-    const rateColor = rate >= 80 ? pc.green : rate >= 50 ? pc.yellow : pc.red;
+    let rateColor: (s: string) => string;
+    if (rate >= 80) {
+      rateColor = pc.green;
+    } else if (rate >= 50) {
+      rateColor = pc.yellow;
+    } else {
+      rateColor = pc.red;
+    }
     const agents = pat.top_agents ? pc.dim(` → ${pat.top_agents}`) : "";
-    const duration =
-      pat.avg_duration_ms > 0 ? pc.dim(` ~${Math.round(pat.avg_duration_ms / 1000)}s`) : "";
-    return `  ${pc.cyan(pat.task_type.padEnd(12))} ${String(pat.count).padStart(4)} runs  ${rateColor(`${rate}% ok`)}${duration}${agents}`;
+    const durationSec = Math.round(pat.avg_duration_ms / 1000);
+    const duration = pat.avg_duration_ms > 0 ? pc.dim(` ~${durationSec}s`) : "";
+    const rateLabel = rateColor(`${rate}% ok`);
+    return `  ${pc.cyan(pat.task_type.padEnd(12))} ${String(pat.count).padStart(4)} runs  ${rateLabel}${duration}${agents}`;
   });
 
   p.note(lines.join("\n"), "Execution patterns");
@@ -108,7 +116,8 @@ function handleRules(args: string[], rootDir: string, ctx: CLIContext): void {
     const resolved = ep.resolution ? pc.green(` ✓ ${ep.resolution}`) : pc.dim(" unresolved");
     const msg =
       ep.error_message.length > 80 ? ep.error_message.slice(0, 77) + "..." : ep.error_message;
-    return `  ${pc.cyan(`#${ep.id}`)} ${pc.dim(ep.task_type)}${count}  ${msg}${resolved}`;
+    const idLabel = pc.cyan(`#${ep.id}`);
+    return `  ${idLabel} ${pc.dim(ep.task_type)}${count}  ${msg}${resolved}`;
   });
 
   p.note(lines.join("\n"), `Learned rules (${patterns.length})`);
@@ -190,8 +199,14 @@ function handleSummary(rootDir: string, ctx: CLIContext): void {
   if (recentTasks.length > 0) {
     lines.push("", pc.bold("Recent:"));
     for (const t of recentTasks) {
-      const status =
-        t.status === "success" ? pc.green("✓") : t.status === "failure" ? pc.red("✗") : pc.dim("○");
+      let status: string;
+      if (t.status === "success") {
+        status = pc.green("✓");
+      } else if (t.status === "failure") {
+        status = pc.red("✗");
+      } else {
+        status = pc.dim("○");
+      }
       const prompt = t.prompt.length > 60 ? t.prompt.slice(0, 57) + "..." : t.prompt || t.task_type;
       lines.push(
         `  ${status} ${pc.dim(t.timestamp.slice(0, 10))} ${pc.cyan(t.task_type)} ${prompt}`,

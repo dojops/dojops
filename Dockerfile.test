@@ -40,11 +40,10 @@ COPY --from=builder /app/packages/ packages/
 COPY --from=builder /app/package.json .
 COPY --from=builder /app/pnpm-workspace.yaml .
 
-# Create a working global CLI symlink
+# Create a working global CLI symlink and configure git
 RUN chmod +x /dojops/packages/cli/dist/index.js \
-    && ln -sf /dojops/packages/cli/dist/index.js /usr/local/bin/dojops
-
-RUN mkdir -p /workspace \
+    && ln -sf /dojops/packages/cli/dist/index.js /usr/local/bin/dojops \
+    && mkdir -p /workspace \
     && git config --global user.email "test@dojops.ai" \
     && git config --global user.name "DojOps Test" \
     && git config --global init.defaultBranch main

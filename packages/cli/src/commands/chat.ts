@@ -273,9 +273,9 @@ function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown
       `${pc.dim("Provider:")} ${pc.white(provider)}  ${pc.dim("Model:")} ${pc.white(model)}`,
       `${pc.dim("Session:")} ${pc.white(sessionState.id.slice(0, 8))}`,
       contextInfo ? `${pc.green("●")} ${pc.dim("Project context loaded")}` : "",
-      !hasProvider
-        ? pc.yellow("Run /config to set up a provider, /init to initialize your project.")
-        : "",
+      hasProvider
+        ? ""
+        : pc.yellow("Run /config to set up a provider, /init to initialize your project."),
       "",
       pc.dim("Type a message to chat, or ") + pc.cyan("/help") + pc.dim(" for commands."),
     ].filter(Boolean);
@@ -850,7 +850,7 @@ async function handleRewindCommand(
   const parts = trimmed.slice(7).trim().split(/\s+/);
   const withCode = parts.includes("--code");
   const nStr = parts.find((pt) => /^\d+$/.test(pt));
-  const n = nStr ? parseInt(nStr, 10) : 1;
+  const n = nStr ? Number.parseInt(nStr, 10) : 1;
   const result = session.rewind(n);
   if (result.removedTurns === 0) {
     p.log.info("Nothing to rewind.");

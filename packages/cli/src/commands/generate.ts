@@ -1060,7 +1060,7 @@ function emitStreamInitAndResult(
     stats: {
       agent: agentName,
       durationMs: genDuration,
-      ...(result.usage ?? {}),
+      ...result.usage,
     },
   });
 }
@@ -1224,9 +1224,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   // No skill match either — try hub search fallback
-  const fallbackResult = await trySkillFallback(
-    ctx,
-    prompt,
+  const fallbackResult = await trySkillFallback(ctx, prompt, {
     writePath,
     allowAllPaths,
     projectRoot,
@@ -1234,7 +1232,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     docAugmenter,
     context7Provider,
     projectContextStr,
-  );
+  });
   if (fallbackResult === "handled") return;
 
   if (fallbackResult === "retry") {

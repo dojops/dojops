@@ -41,13 +41,13 @@ export const PROVIDER_COST_PER_M_TOKENS: Record<
 > = {
   openai: {
     fast: { input: 0.15, output: 0.6 },
-    standard: { input: 2.5, output: 10.0 },
-    premium: { input: 15.0, output: 60.0 },
+    standard: { input: 2.5, output: 10 },
+    premium: { input: 15, output: 60 },
   },
   anthropic: {
-    fast: { input: 0.8, output: 4.0 },
-    standard: { input: 3.0, output: 15.0 },
-    premium: { input: 15.0, output: 75.0 },
+    fast: { input: 0.8, output: 4 },
+    standard: { input: 3, output: 15 },
+    premium: { input: 15, output: 75 },
   },
   ollama: {
     fast: { input: 0, output: 0 },
@@ -62,12 +62,12 @@ export const PROVIDER_COST_PER_M_TOKENS: Record<
   mistral: {
     fast: { input: 0.1, output: 0.3 },
     standard: { input: 2.7, output: 8.1 },
-    premium: { input: 3.0, output: 9.0 },
+    premium: { input: 3, output: 9 },
   },
   gemini: {
     fast: { input: 0.1, output: 0.4 },
-    standard: { input: 1.25, output: 10.0 },
-    premium: { input: 1.25, output: 10.0 },
+    standard: { input: 1.25, output: 10 },
+    premium: { input: 1.25, output: 10 },
   },
   "github-copilot": {
     fast: { input: 0, output: 0 },
@@ -86,9 +86,17 @@ const SIMPLE_SKILLS = new Set([
   "prometheus",
 ]);
 
-// Keywords that signal architectural or multi-system complexity
-const COMPLEX_KEYWORDS =
-  /\b(architect|design|migrate|multi[- ]?cloud|disaster[- ]?recovery|zero[- ]?downtime|blue[- ]?green|canary|microservice|distributed|fault[- ]?toleran|high[- ]?availability|cross[- ]?region|federation|mesh|orchestrat)\b/i;
+// Keywords that signal architectural or multi-system complexity.
+// Split into two simpler patterns to keep regex complexity under threshold.
+const COMPLEX_KEYWORDS_ARCH =
+  /\b(architect|design|migrate|multi[- ]?cloud|disaster[- ]?recovery|zero[- ]?downtime|blue[- ]?green|canary)\b/i;
+const COMPLEX_KEYWORDS_INFRA =
+  /\b(microservice|distributed|fault[- ]?toleran|high[- ]?availability|cross[- ]?region|federation|mesh|orchestrat)\b/i;
+
+/** Test whether a prompt contains any complex-task keyword. */
+function hasComplexKeywords(text: string): boolean {
+  return COMPLEX_KEYWORDS_ARCH.test(text) || COMPLEX_KEYWORDS_INFRA.test(text);
+}
 
 // Multi-skill references like "terraform and kubernetes and helm"
 const MULTI_SKILL_REF =
@@ -105,12 +113,12 @@ export function classifyTaskComplexity(prompt: string, skillName?: string): Task
   // Skill-based fast path
   if (skillName && SIMPLE_SKILLS.has(skillName.toLowerCase())) {
     // Even a simple skill becomes complex with architecture keywords
-    if (COMPLEX_KEYWORDS.test(prompt)) return "complex";
+    if (hasComplexKeywords(prompt)) return "complex";
     return "simple";
   }
 
   // Very short prompts are simple
-  if (wordCount < 100 && !COMPLEX_KEYWORDS.test(prompt)) {
+  if (wordCount < 100 && !hasComplexKeywords(prompt)) {
     // Check for multi-skill references that push short prompts to moderate
     const skillMatches = prompt.match(MULTI_SKILL_REF);
     const uniqueSkills = skillMatches ? new Set(skillMatches.map((s) => s.toLowerCase())).size : 0;
@@ -119,7 +127,7 @@ export function classifyTaskComplexity(prompt: string, skillName?: string): Task
   }
 
   // Architecture/design keywords push to complex
-  if (COMPLEX_KEYWORDS.test(prompt)) return "complex";
+  if (hasComplexKeywords(prompt)) return "complex";
 
   // Long prompts (>500 words) are complex
   if (wordCount > 500) return "complex";
@@ -223,7 +231,7 @@ export function isModelCompatibleWithProvider(model: string, providerName: strin
 
   // Check if the model matches the active provider's known prefixes
   const activePattern = PROVIDER_MODEL_PREFIXES[providerName];
-  if (activePattern && activePattern.test(model)) return true;
+  if (activePattern?.test(model)) return true;
 
   // Check if the model matches ANY other provider's prefixes
   for (const [otherProvider, pattern] of Object.entries(PROVIDER_MODEL_PREFIXES)) {

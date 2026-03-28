@@ -365,17 +365,15 @@ describe("trySkillFallback", () => {
   it("returns 'skip' for analysis-intent prompts", async () => {
     const ctx = makeCtx();
     const provider = makeMockProvider();
-    const result = await trySkillFallback(
-      ctx,
-      "What is wrong with my Dockerfile?",
-      undefined,
-      false,
-      undefined,
+    const result = await trySkillFallback(ctx, "What is wrong with my Dockerfile?", {
+      writePath: undefined,
+      allowAllPaths: false,
+      projectRoot: undefined,
       provider,
-      undefined,
-      undefined,
-      undefined,
-    );
+      docAugmenter: undefined,
+      context7Provider: undefined,
+      projectContextStr: undefined,
+    });
     expect(result).toBe("skip");
   });
 
@@ -384,17 +382,15 @@ describe("trySkillFallback", () => {
 
     const ctx = makeCtx();
     const provider = makeMockProvider();
-    const result = await trySkillFallback(
-      ctx,
-      "Create a Redis cluster config",
-      undefined,
-      false,
-      undefined,
+    const result = await trySkillFallback(ctx, "Create a Redis cluster config", {
+      writePath: undefined,
+      allowAllPaths: false,
+      projectRoot: undefined,
       provider,
-      undefined,
-      undefined,
-      undefined,
-    );
+      docAugmenter: undefined,
+      context7Provider: undefined,
+      projectContextStr: undefined,
+    });
     expect(result).toBe("skip");
 
     const { log } = await import("@clack/prompts");
@@ -412,17 +408,15 @@ describe("trySkillFallback", () => {
     };
 
     const ctx = makeCtx({ output: "json" });
-    const result = await trySkillFallback(
-      ctx,
-      "Create a Redis cluster config",
-      undefined,
-      false,
-      undefined,
+    const result = await trySkillFallback(ctx, "Create a Redis cluster config", {
+      writePath: undefined,
+      allowAllPaths: false,
+      projectRoot: undefined,
       provider,
       docAugmenter,
-      undefined,
-      undefined,
-    );
+      context7Provider: undefined,
+      projectContextStr: undefined,
+    });
     expect(result).toBe("handled");
   });
 
@@ -452,17 +446,15 @@ describe("trySkillFallback", () => {
 
     const ctx = makeCtx({ nonInteractive: true });
     const provider = makeMockProvider();
-    const result = await trySkillFallback(
-      ctx,
-      "Create a Redis cluster config",
-      undefined,
-      false,
-      undefined,
+    const result = await trySkillFallback(ctx, "Create a Redis cluster config", {
+      writePath: undefined,
+      allowAllPaths: false,
+      projectRoot: undefined,
       provider,
-      undefined,
-      undefined,
-      undefined,
-    );
+      docAugmenter: undefined,
+      context7Provider: undefined,
+      projectContextStr: undefined,
+    });
     expect(result).toBe("retry");
   });
 
@@ -487,17 +479,15 @@ describe("trySkillFallback", () => {
     };
 
     const ctx = makeCtx({ output: "json" });
-    const result = await trySkillFallback(
-      ctx,
-      "Create a Redis cluster config",
-      undefined,
-      false,
-      undefined,
+    const result = await trySkillFallback(ctx, "Create a Redis cluster config", {
+      writePath: undefined,
+      allowAllPaths: false,
+      projectRoot: undefined,
       provider,
       docAugmenter,
-      undefined,
-      undefined,
-    );
+      context7Provider: undefined,
+      projectContextStr: undefined,
+    });
     expect(result).toBe("handled");
 
     Object.defineProperty(process.stdout, "isTTY", { value: origIsTTY, configurable: true });

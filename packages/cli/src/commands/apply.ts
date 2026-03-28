@@ -4,6 +4,7 @@ import { runBin } from "@dojops/sdk";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { DeterministicProvider } from "@dojops/core";
+import type { LLMProvider } from "@dojops/core";
 import { appendActivity } from "../dojops-md";
 import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
@@ -924,6 +925,35 @@ function shouldSkipDocTask(
   return true;
 }
 
+function displayGenericTaskContent(
+  taskResult: { taskId: string; output?: unknown },
+  toolName: string,
+  jsonOutput: boolean,
+): void {
+  if (toolName !== "generic" || !taskResult.output || jsonOutput) return;
+  const outputData = taskResult.output as Record<string, unknown>;
+  const content = (outputData?.content as string) ?? "";
+  if (!content) return;
+  const preview = content.length > 3000 ? content.slice(0, 3000) + "\n..." : content;
+  p.note(wrapForNote(preview), truncateNoteTitle(`${taskResult.taskId} — generated (unvalidated)`));
+}
+
+function isAnalysisOnlyTask(
+  taskResult: { taskId: string; output?: unknown },
+  ctx: ApplyContext,
+): boolean {
+  const taskDef = ctx.plan.tasks.find((t) => t.id === taskResult.taskId);
+  if (!taskDef) return false;
+  const taskPrompt = taskDef.input?.prompt as string | undefined;
+  if (!isAnalysisTask(taskDef.description, taskPrompt)) return false;
+  if (!ctx.jsonOutput) {
+    p.log.info(
+      `${pc.dim("○")} ${pc.bold(taskResult.taskId)} ${pc.dim("skipped (analysis-only task)")}`,
+    );
+  }
+  return true;
+}
+
 async function classifyAndProcessTask(
   taskResult: { taskId: string; status: string; output?: unknown; error?: string },
   graph: ReturnType<typeof buildTaskGraph>,
@@ -938,18 +968,7 @@ async function classifyAndProcessTask(
 
   const tool = toolMap.get(taskNode.tool);
   if (!tool?.execute) {
-    // Generic tasks: display generated content since no files will be written
-    if (taskNode.tool === "generic" && taskResult.output && !ctx.jsonOutput) {
-      const outputData = taskResult.output as Record<string, unknown>;
-      const content = (outputData?.content as string) ?? "";
-      if (content) {
-        const preview = content.length > 3000 ? content.slice(0, 3000) + "\n..." : content;
-        p.note(
-          wrapForNote(preview),
-          truncateNoteTitle(`${taskResult.taskId} — generated (unvalidated)`),
-        );
-      }
-    }
+    displayGenericTaskContent(taskResult, taskNode.tool, ctx.jsonOutput);
     return processNonExecutableTask(taskResult);
   }
 
@@ -957,18 +976,8 @@ async function classifyAndProcessTask(
     return { taskId: taskResult.taskId, status: "completed", output: taskResult.output };
   }
 
-  // Analysis tasks produce prose, not config files — skip execution (file writing)
-  const taskDef = ctx.plan.tasks.find((t) => t.id === taskResult.taskId);
-  if (taskDef) {
-    const taskPrompt = taskDef.input?.prompt as string | undefined;
-    if (isAnalysisTask(taskDef.description, taskPrompt)) {
-      if (!ctx.jsonOutput) {
-        p.log.info(
-          `${pc.dim("○")} ${pc.bold(taskResult.taskId)} ${pc.dim("skipped (analysis-only task)")}`,
-        );
-      }
-      return { taskId: taskResult.taskId, status: "completed", output: taskResult.output };
-    }
+  if (isAnalysisOnlyTask(taskResult, ctx)) {
+    return { taskId: taskResult.taskId, status: "completed", output: taskResult.output };
   }
 
   return processExecutableTask(taskResult, taskNode, tool, ctx);
@@ -1177,6 +1186,70 @@ function runPostApplyInstall(root: string): void {
   }
 }
 
+function buildSafeExecutor(
+  flags: ApplyFlags,
+  critic: import("@dojops/executor").CriticCallback | undefined,
+): InstanceType<typeof SafeExecutor> {
+  return new SafeExecutor({
+    policy: {
+      allowWrite: true,
+      requireApproval: !flags.autoApprove,
+      approvalMode: flags.autoApprove ? "never" : "risk-based",
+      autoApproveRiskLevel: "MEDIUM",
+      timeoutMs: flags.timeoutMs,
+      executeTimeoutMs: 10 * 60_000, // 10 minutes — tool.execute() includes LLM generation
+      skipVerification: flags.skipVerify,
+      enforceDevOpsAllowlist: !flags.allowAllPaths,
+      maxRepairAttempts: flags.maxRepairAttempts,
+    },
+    approvalHandler: flags.autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
+    critic,
+    progress: flags.jsonOutput
+      ? undefined
+      : {
+          onVerificationFailed(taskId, errors) {
+            const errorSuffix = errors.length === 1 ? "" : "s";
+            p.log.warn(
+              `Verification failed for ${pc.bold(taskId)} (${errors.length} error${errorSuffix}). Starting self-repair...`,
+            );
+          },
+          onRepairAttempt(taskId, attempt, maxAttempts, errors) {
+            p.log.info(
+              `${pc.yellow("↻")} Repairing ${pc.bold(taskId)} (attempt ${attempt}/${maxAttempts}): ${errors[0] ?? "verification errors"}`,
+            );
+          },
+          onVerificationPassed(taskId) {
+            p.log.success(`Self-repair succeeded for ${pc.bold(taskId)}`);
+          },
+        },
+  });
+}
+
+async function runPlanCritique(
+  graph: ReturnType<typeof buildTaskGraph>,
+  tools: ToolEntry[],
+  provider: LLMProvider,
+): Promise<boolean> {
+  const validToolNames = [...tools.map((t) => t.name), "generic"];
+  const critique = await critiquePlan(graph, provider, validToolNames);
+  for (const issue of critique.issues) {
+    p.log.warn(`${pc.yellow("⚠")} Plan issue: ${issue}`);
+  }
+  if (!critique.approved) {
+    p.log.error("Plan critique rejected the task graph. Review the issues above.");
+  }
+  return critique.approved;
+}
+
+function handleExecutionStatus(status: string): void {
+  if (status === "FAILURE") {
+    throw new CLIError(ExitCode.GENERAL_ERROR, "All tasks failed.");
+  }
+  if (status === "PARTIAL") {
+    throw new CLIError(ExitCode.GENERAL_ERROR, "Some tasks failed. Use --resume to retry.");
+  }
+}
+
 async function executeApplyPlan(
   ctx: CLIContext,
   root: string,
@@ -1197,9 +1270,7 @@ async function executeApplyPlan(
   });
   const tools = registry.getAll();
 
-  // Inject generic skill if plan has tasks with tool="generic"
-  const hasGenericTasks = plan.tasks.some((t) => t.tool === "generic");
-  if (hasGenericTasks) {
+  if (plan.tasks.some((t) => t.tool === "generic")) {
     tools.push(createGenericSkill(provider));
   }
 
@@ -1211,7 +1282,6 @@ async function executeApplyPlan(
     await handleToolIntegrityCheck(plan, tools, flags.autoApprove, root);
   }
 
-  // Build critic for self-repair loop (uses same LLM provider)
   let critic: import("@dojops/executor").CriticCallback | undefined;
   try {
     const { CriticAgent } = await import("@dojops/core");
@@ -1220,56 +1290,13 @@ async function executeApplyPlan(
     // CriticAgent not available — self-repair will use raw verification feedback
   }
 
-  const safeExecutor = new SafeExecutor({
-    policy: {
-      allowWrite: true,
-      requireApproval: !flags.autoApprove,
-      approvalMode: flags.autoApprove ? "never" : "risk-based",
-      autoApproveRiskLevel: "MEDIUM",
-      timeoutMs: flags.timeoutMs,
-      // tool.execute() includes LLM generation internally, needs a longer timeout
-      executeTimeoutMs: 10 * 60_000, // 10 minutes
-      skipVerification: flags.skipVerify,
-      enforceDevOpsAllowlist: !flags.allowAllPaths,
-      maxRepairAttempts: flags.maxRepairAttempts,
-    },
-    approvalHandler: flags.autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
-    critic,
-    progress: flags.jsonOutput
-      ? undefined
-      : {
-          onVerificationFailed(taskId, errors) {
-            p.log.warn(
-              `Verification failed for ${pc.bold(taskId)} (${errors.length} error${errors.length === 1 ? "" : "s"}). Starting self-repair...`,
-            );
-          },
-          onRepairAttempt(taskId, attempt, maxAttempts, errors) {
-            p.log.info(
-              `${pc.yellow("↻")} Repairing ${pc.bold(taskId)} (attempt ${attempt}/${maxAttempts}): ${errors[0] ?? "verification errors"}`,
-            );
-          },
-          onVerificationPassed(taskId) {
-            p.log.success(`Self-repair succeeded for ${pc.bold(taskId)}`);
-          },
-        },
-  });
-
+  const safeExecutor = buildSafeExecutor(flags, critic);
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const graph = buildTaskGraph(plan);
 
-  // Plan-level critique: LLM reviews the task graph before execution
   if (!flags.skipVerify) {
-    const validToolNames = [...tools.map((t) => t.name), "generic"];
-    const critique = await critiquePlan(graph, provider, validToolNames);
-    if (critique.issues.length > 0) {
-      for (const issue of critique.issues) {
-        p.log.warn(`${pc.yellow("⚠")} Plan issue: ${issue}`);
-      }
-    }
-    if (!critique.approved) {
-      p.log.error("Plan critique rejected the task graph. Review the issues above.");
-      return;
-    }
+    const approved = await runPlanCritique(graph, tools, provider);
+    if (!approved) return;
   }
 
   const { executor, progress } = createExecutorWithCallbacks(
@@ -1285,7 +1312,6 @@ async function executeApplyPlan(
   });
   progress?.done();
 
-  // Cross-task replanning: surface failure context so the user can rerun with adjusted plan
   if (planResult.replanContext) {
     p.log.warn(`${pc.yellow("⚠")} Some tasks failed. Replan context:\n${planResult.replanContext}`);
     p.log.info(
@@ -1326,11 +1352,7 @@ async function executeApplyPlan(
     outputHumanResult(status, allFilesCreated, allFilesModified, durationMs);
   }
 
-  if (status === "FAILURE") {
-    throw new CLIError(ExitCode.GENERAL_ERROR, "All tasks failed.");
-  } else if (status === "PARTIAL") {
-    throw new CLIError(ExitCode.GENERAL_ERROR, "Some tasks failed. Use --resume to retry.");
-  }
+  handleExecutionStatus(status);
 
   if (!flags.jsonOutput) {
     displayTokenUsage(safeExecutor);

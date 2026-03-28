@@ -100,7 +100,7 @@ export function isDangerousCommand(cmd: string): { dangerous: boolean; reason: s
 
 function findBlockedNetworkCommand(command: string): string | null {
   for (const netCmd of NETWORK_COMMANDS) {
-    if (new RegExp(`\\b${netCmd}\\b`).test(command)) return netCmd;
+    if (new RegExp(String.raw`\b${netCmd}\b`).test(command)) return netCmd;
   }
   return null;
 }
@@ -117,34 +117,41 @@ function parseCommandArgs(command: string): string[] {
 
   for (let i = 0; i < command.length; i++) {
     const ch = command[i];
-
-    if (inSingleQuote) {
-      if (ch === "'") {
-        inSingleQuote = false;
-      } else {
-        current += ch;
-      }
-    } else if (inDoubleQuote) {
-      if (ch === '"') {
-        inDoubleQuote = false;
-      } else {
-        current += ch;
-      }
-    } else if (ch === "'") {
-      inSingleQuote = true;
-    } else if (ch === '"') {
-      inDoubleQuote = true;
-    } else if (/\s/.test(ch)) {
-      if (current.length > 0) {
-        args.push(current);
-        current = "";
-      }
-    } else {
-      current += ch;
-    }
+    const result = processCommandChar(ch, inSingleQuote, inDoubleQuote, current, args);
+    inSingleQuote = result.inSingleQuote;
+    inDoubleQuote = result.inDoubleQuote;
+    current = result.current;
   }
   if (current.length > 0) args.push(current);
   return args;
+}
+
+/** Process a single character during command argument parsing. */
+function processCommandChar(
+  ch: string,
+  inSingleQuote: boolean,
+  inDoubleQuote: boolean,
+  current: string,
+  args: string[],
+): { inSingleQuote: boolean; inDoubleQuote: boolean; current: string } {
+  if (inSingleQuote) {
+    if (ch === "'") return { inSingleQuote: false, inDoubleQuote, current };
+    return { inSingleQuote, inDoubleQuote, current: current + ch };
+  }
+  if (inDoubleQuote) {
+    if (ch === '"') return { inSingleQuote, inDoubleQuote: false, current };
+    return { inSingleQuote, inDoubleQuote, current: current + ch };
+  }
+  if (ch === "'") return { inSingleQuote: true, inDoubleQuote, current };
+  if (ch === '"') return { inSingleQuote, inDoubleQuote: true, current };
+  if (/\s/.test(ch)) {
+    if (current.length > 0) {
+      args.push(current);
+      return { inSingleQuote, inDoubleQuote, current: "" };
+    }
+    return { inSingleQuote, inDoubleQuote, current };
+  }
+  return { inSingleQuote, inDoubleQuote, current: current + ch };
 }
 
 function validateSearchPatterns(
@@ -579,12 +586,8 @@ export class ToolExecutor {
     return { callId: call.id, output: `Edited ${filePath}` };
   }
 
-  private async runCommand(call: ToolCall): Promise<ToolResult> {
-    const command = call.arguments.command as string;
-    const cwd = call.arguments.cwd ? this.resolvePath(call.arguments.cwd as string) : this.opts.cwd;
-    const timeout = (call.arguments.timeout as number) ?? this.opts.policy.timeoutMs;
-
-    // H-21: cwd containment — prevent executing commands from outside the project
+  /** Check command policy constraints (cwd, dangerous patterns, network). Returns error result or null. */
+  private checkCommandPolicy(call: ToolCall, command: string, cwd: string): ToolResult | null {
     if (!isPathWithin(path.resolve(cwd), path.resolve(this.opts.cwd))) {
       return {
         callId: call.id,
@@ -593,17 +596,11 @@ export class ToolExecutor {
       };
     }
 
-    // G-01: Block dangerous command patterns
     const dangerCheck = isDangerousCommand(command);
     if (dangerCheck.dangerous) {
-      return {
-        callId: call.id,
-        output: `Command blocked: ${dangerCheck.reason}`,
-        isError: true,
-      };
+      return { callId: call.id, output: `Command blocked: ${dangerCheck.reason}`, isError: true };
     }
 
-    // G-06: Block network commands when allowNetwork is false
     if (!this.opts.policy.allowNetwork) {
       const blockedNet = findBlockedNetworkCommand(command);
       if (blockedNet) {
@@ -618,22 +615,33 @@ export class ToolExecutor {
       }
     }
 
-    // G-06: Filter env vars when allowEnvVars is set
-    let env: Record<string, string> | undefined;
-    if (this.opts.policy.allowEnvVars.length > 0) {
-      env = {};
-      const allowed = new Set([...this.opts.policy.allowEnvVars, ...STANDARD_ENV_VARS]);
-      for (const key of allowed) {
-        if (process.env[key] !== undefined) {
-          env[key] = process.env[key]!;
-        }
+    return null;
+  }
+
+  /** Build filtered env vars based on policy allowEnvVars. */
+  private buildFilteredEnv(): Record<string, string> | undefined {
+    if (this.opts.policy.allowEnvVars.length === 0) return undefined;
+    const env: Record<string, string> = {};
+    const allowed = new Set([...this.opts.policy.allowEnvVars, ...STANDARD_ENV_VARS]);
+    for (const key of allowed) {
+      if (process.env[key] !== undefined) {
+        env[key] = process.env[key]!;
       }
     }
+    return env;
+  }
+
+  private async runCommand(call: ToolCall): Promise<ToolResult> {
+    const command = call.arguments.command as string;
+    const cwd = call.arguments.cwd ? this.resolvePath(call.arguments.cwd as string) : this.opts.cwd;
+    const timeout = (call.arguments.timeout as number) ?? this.opts.policy.timeoutMs;
+
+    const policyError = this.checkCommandPolicy(call, command, cwd);
+    if (policyError) return policyError;
+
+    const env = this.buildFilteredEnv();
 
     try {
-      // Parse command into binary + args to avoid shell injection.
-      // Simple commands: split on whitespace. Compound commands (pipes, redirects, &&, ||)
-      // are blocked since they require shell interpretation and are injection vectors.
       const shellMetachars = /[|;&`$(){}!<>]/;
       if (shellMetachars.test(command)) {
         return {
@@ -660,36 +668,41 @@ export class ToolExecutor {
       });
       return { callId: call.id, output: truncateOutput(output) };
     } catch (err) {
-      const execErr = err as {
-        stdout?: string;
-        stderr?: string;
-        status?: number;
-        message?: string;
-      };
-      const rawOutput =
-        [execErr.stdout, execErr.stderr].filter(Boolean).join("\n") ||
-        execErr.message ||
-        "Command failed";
-
-      // Detect "command not found" (exit code 127 or ENOENT) — give the agent a clear, non-retriable error
-      if (
-        execErr.status === 127 ||
-        /command not found|not found in PATH|No such file or directory|ENOENT/i.test(rawOutput)
-      ) {
-        const bin = command.trim().split(/\s+/)[0];
-        return {
-          callId: call.id,
-          output: [
-            `[TOOL NOT INSTALLED] "${bin}" is not available on this system.`,
-            `Do NOT retry this command or attempt to install "${bin}".`,
-            `Use run_skill for DevOps config generation, or skip this validation step.`,
-          ].join("\n"),
-          isError: true,
-        };
-      }
-
-      return { callId: call.id, output: truncateOutput(rawOutput), isError: true };
+      return this.handleCommandError(call, command, err);
     }
+  }
+
+  /** Handle command execution errors, detecting "not found" for clear messaging. */
+  private handleCommandError(call: ToolCall, command: string, err: unknown): ToolResult {
+    const execErr = err as {
+      stdout?: string;
+      stderr?: string;
+      status?: number;
+      message?: string;
+    };
+    const rawOutput =
+      [execErr.stdout, execErr.stderr].filter(Boolean).join("\n") ||
+      execErr.message ||
+      "Command failed";
+
+    const isNotFound =
+      execErr.status === 127 ||
+      /command not found|not found in PATH|No such file or directory|ENOENT/i.test(rawOutput);
+
+    if (isNotFound) {
+      const bin = command.trim().split(/\s+/)[0];
+      return {
+        callId: call.id,
+        output: [
+          `[TOOL NOT INSTALLED] "${bin}" is not available on this system.`,
+          `Do NOT retry this command or attempt to install "${bin}".`,
+          `Use run_skill for DevOps config generation, or skip this validation step.`,
+        ].join("\n"),
+        isError: true,
+      };
+    }
+
+    return { callId: call.id, output: truncateOutput(rawOutput), isError: true };
   }
 
   /**
@@ -720,68 +733,105 @@ export class ToolExecutor {
       };
     }
 
+    const validation = skill.validate(input);
+    if (!validation.valid) {
+      return {
+        callId: call.id,
+        output: [
+          `ERROR: Validation failed for skill "${skillName}".`,
+          ``,
+          `The "input" object must contain a "prompt" field (string, required).`,
+          `Correct usage: run_skill({ skill: "${skillName}", input: { prompt: "describe what to generate" } })`,
+          ``,
+          `You provided: ${JSON.stringify(input)}`,
+          `Zod error: ${validation.error ?? "unknown"}`,
+        ].join("\n"),
+        isError: true,
+      };
+    }
+
     try {
-      const validation = skill.validate(input);
-      if (!validation.valid) {
-        return {
-          callId: call.id,
-          output: [
-            `ERROR: Validation failed for skill "${skillName}".`,
-            ``,
-            `The "input" object must contain a "prompt" field (string, required).`,
-            `Correct usage: run_skill({ skill: "${skillName}", input: { prompt: "describe what to generate" } })`,
-            ``,
-            `You provided: ${JSON.stringify(input)}`,
-            `Zod error: ${validation.error ?? "unknown"}`,
-          ].join("\n"),
-          isError: true,
-        };
-      }
-
-      const maxRetries = this.opts.skillRepairAttempts ?? 1;
-      let currentInput = input;
-      let result = await skill.generate(currentInput);
-      let output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-
-      // Run skill verification with optional retry loop
-      if (skill.verify && !this.opts.policy.skipVerification) {
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-          try {
-            const vResult = await skill.verify(result);
-            if (vResult.passed || vResult.issues.length === 0) break;
-
-            const errorIssues = vResult.issues.filter(
-              (i) => i.severity === "error" || i.severity === "warning",
-            );
-            const issueLines = errorIssues
-              .slice(0, 5)
-              .map((i) => `  - ${i.message ?? i}`)
-              .join("\n");
-
-            if (attempt < maxRetries && errorIssues.length > 0) {
-              // Retry: inject verification errors as repair context
-              currentInput = {
-                ...currentInput,
-                _repairContext: `Verification failed (attempt ${attempt + 1}/${maxRetries}). Fix these issues:\n${issueLines}`,
-              };
-              result = await skill.generate(currentInput);
-              output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
-              continue;
-            }
-
-            // Final attempt or only warnings — append issues as advisory
-            output += `\n\nVerification (${skill.name}): ${vResult.issues.length} issue(s)\n${issueLines}`;
-          } catch {
-            // Verification is advisory
-            break;
-          }
-        }
-      }
-
+      const output = await this.generateAndVerifySkill(skill, input);
       return { callId: call.id, output: truncateOutput(output) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { callId: call.id, output: `Skill error: ${message}`, isError: true };
+    }
+  }
+
+  /** Generate skill output and run verification with optional retry loop. */
+  private async generateAndVerifySkill(
+    skill: DevOpsSkill,
+    input: Record<string, unknown>,
+  ): Promise<string> {
+    const maxRetries = this.opts.skillRepairAttempts ?? 1;
+    let currentInput = input;
+    let result = await skill.generate(currentInput);
+    let output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+
+    if (!skill.verify || this.opts.policy.skipVerification) return output;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const verifyOutput = await this.runSkillVerifyAttempt(
+        skill,
+        result,
+        output,
+        currentInput,
+        attempt,
+        maxRetries,
+      );
+      if (verifyOutput.done) return verifyOutput.output;
+      // Continue with repaired input
+      currentInput = verifyOutput.nextInput;
+      result = await skill.generate(currentInput);
+      output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+    }
+
+    return output;
+  }
+
+  /** Run a single verification attempt. Returns done=true to stop, or nextInput to retry. */
+  private async runSkillVerifyAttempt(
+    skill: DevOpsSkill,
+    result: unknown,
+    output: string,
+    currentInput: Record<string, unknown>,
+    attempt: number,
+    maxRetries: number,
+  ): Promise<{ done: true; output: string } | { done: false; nextInput: Record<string, unknown> }> {
+    try {
+      const vResult = await skill.verify!(result);
+      if (vResult.passed || vResult.issues.length === 0) {
+        return { done: true, output };
+      }
+
+      const errorIssues = vResult.issues.filter(
+        (i) => i.severity === "error" || i.severity === "warning",
+      );
+      const issueLines = errorIssues
+        .slice(0, 5)
+        .map((i) => `  - ${i.message ?? i}`)
+        .join("\n");
+
+      if (attempt < maxRetries && errorIssues.length > 0) {
+        return {
+          done: false,
+          nextInput: {
+            ...currentInput,
+            _repairContext: `Verification failed (attempt ${attempt + 1}/${maxRetries}). Fix these issues:\n${issueLines}`,
+          },
+        };
+      }
+
+      return {
+        done: true,
+        output:
+          output +
+          `\n\nVerification (${skill.name}): ${vResult.issues.length} issue(s)\n${issueLines}`,
+      };
+    } catch {
+      // Verification is advisory
+      return { done: true, output };
     }
   }
 
