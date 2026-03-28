@@ -646,6 +646,9 @@ export class ToolExecutor {
       }
 
       const args = parseCommandArgs(command);
+      if (args.length === 0) {
+        return { callId: call.id, output: "Command blocked: empty command", isError: true };
+      }
       const binary = args.shift()!;
       const output = execFileSync(binary, args, {
         cwd,

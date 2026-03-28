@@ -94,7 +94,16 @@ export class AnthropicProvider implements LLMProvider {
           "LLM response was truncated (hit max_tokens limit). The generated JSON is incomplete.",
         );
       }
-      if (usedPrefill) content = "{" + content;
+      if (usedPrefill) {
+        content = "{" + content;
+        // Guard against empty/whitespace-only model response producing invalid JSON
+        const trimmed = content.trim();
+        if (trimmed === "{" || trimmed === "") {
+          throw new Error(
+            "Anthropic returned empty content with prefill; cannot construct valid JSON",
+          );
+        }
+      }
     }
 
     return buildLLMResponse(content, this.extractUsage(message), req);

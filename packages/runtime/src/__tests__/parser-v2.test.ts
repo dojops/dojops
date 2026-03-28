@@ -8,7 +8,7 @@ vi.mock("node:fs", () => ({
 
 const MINIMAL_V2_DOPS = `---
 dops: v2
-kind: tool
+kind: skill
 meta:
   name: v2-tool
   version: 1.0.0
@@ -40,7 +40,7 @@ terraform, hcl, iac
 
 const FULL_V2_DOPS = `---
 dops: v2
-kind: tool
+kind: skill
 meta:
   name: full-v2-tool
   version: 2.0.0
@@ -100,7 +100,7 @@ terraform, hcl, infrastructure, aws
 // Backward-compat fixture: a v2 file with the old sections still present
 const FULL_V2_DOPS_WITH_OLD_SECTIONS = `---
 dops: v2
-kind: tool
+kind: skill
 meta:
   name: old-v2-tool
   version: 1.0.0
@@ -148,7 +148,7 @@ describe("parseDopsString", () => {
   });
 
   it("rejects .dops files without a version field", () => {
-    const noVersion = `---\nkind: tool\nmeta:\n  name: test\n---\n## Prompt\nTest\n\n## Keywords\n\ntest`;
+    const noVersion = `---\nkind: skill\nmeta:\n  name: test\n---\n## Prompt\nTest\n\n## Keywords\n\ntest`;
     expect(() => parseDopsString(noVersion)).toThrow(/only v2 is supported/i);
   });
 
@@ -247,7 +247,7 @@ describe("parseDopsFile", () => {
   it("rejects a v1 file from disk", async () => {
     const v1Content = `---
 dops: v1
-kind: tool
+kind: skill
 meta:
   name: v1-tool
   version: 1.0.0

@@ -90,6 +90,7 @@ export {
   DopsRuntimeV2,
   DopsRuntimeV2Options,
   DocProvider,
+  RuntimeFileWriter,
   ToolMetadata,
   SkillTrustLevel,
   stripCodeFences,

@@ -1,6 +1,6 @@
 ---
 dops: v2
-kind: tool
+kind: skill
 
 meta:
   name: github-actions
@@ -38,7 +38,7 @@ context:
     EXAMPLE — reusable build workflow:
     {
       "files": {
-        ".github/workflows/reusable-build.yml": "name: Reusable Build\non:\n  workflow_call:\n    inputs:\n      node-version:\n        type: string\n        default: '20'\nperms:\n  contents: read\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/setup-node\n        with:\n          node-version: ${{ inputs.node-version }}\n      - run: npm test\n      - run: npm run build"
+        ".github/workflows/reusable-build.yml": "name: Reusable Build\non:\n  workflow_call:\n    inputs:\n      node-version:\n        type: string\n        default: '20'\npermissions:\n  contents: read\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/setup-node\n        with:\n          node-version: ${{ inputs.node-version }}\n      - run: npm test\n      - run: npm run build"
       }
     }
 

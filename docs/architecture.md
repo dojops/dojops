@@ -297,7 +297,7 @@ Streaming is used in `dojops "prompt"` for agent-routed generation commands. Str
 
 ### 9. REST API & Dashboard (`@dojops/api`)
 
-Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/skill-registry` to load all built-in + custom skills. 22 endpoints exposing all capabilities over HTTP with API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias, `X-API-Version: 1` header on v1 routes). Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customSkillCount`. Per-route rate limiting and token budget tracking via `TokenTracker`.
+Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/skill-registry` to load all built-in + custom skills. 23 endpoints exposing all capabilities over HTTP with API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias, `X-API-Version: 1` header on v1 routes). Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customSkillCount`. Per-route rate limiting and token budget tracking via `TokenTracker`.
 
 See [API Reference](api-reference.md) and [Web Dashboard](dashboard.md).
 

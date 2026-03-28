@@ -63,7 +63,7 @@ You → DojOps CLI → Agent Router → Specialist Agent → LLM Provider
 | **7 LLM providers**      | OpenAI, Anthropic, Ollama (local), DeepSeek, Mistral, Google Gemini, GitHub Copilot                                |
 | **10 security scanners** | Trivy, Gitleaks, Checkov, Semgrep, Hadolint, ShellCheck, npm/pip audit, SBOM, license scan                         |
 | **12 packages**          | Modular monorepo - CLI, API, runtime, planner, executor, scanner, core, SDK, and more                              |
-| **22 REST endpoints**    | Full HTTP API with web dashboard, metrics, and token tracking                                                      |
+| **23 REST endpoints**    | Full HTTP API with web dashboard, metrics, and token tracking                                                      |
 | **0 telemetry**          | Nothing leaves your machine except requests to your chosen LLM provider                                            |
 
 ---
@@ -285,7 +285,7 @@ The agent loop runs until the plan succeeds or reaches the retry limit. Each ite
 </details>
 
 <details>
-<summary><strong>REST API and web dashboard</strong> - 22 endpoints over HTTP</summary>
+<summary><strong>REST API and web dashboard</strong> - 23 endpoints over HTTP</summary>
 
 `dojops serve` starts an Express server with API key authentication, CORS, and optional TLS.
 
@@ -298,11 +298,12 @@ The agent loop runs until the plan succeeds or reaches the retry limit. Each ite
 | POST   | `/api/diff`     | Infrastructure diff analysis with risk scoring           |
 | POST   | `/api/scan`     | Run security scanners                                    |
 | POST   | `/api/chat`     | Chat message with agent routing                          |
+| POST   | `/api/review`   | DevSecOps code review pipeline                           |
 | POST   | `/api/auto`     | Autonomous agent (background: HTTP 202)                  |
 | GET    | `/api/agents`   | List all specialist agents                               |
 | GET    | `/api/metrics`  | Dashboard metrics (overview, security, audit, tokens)    |
 | GET    | `/api/history`  | Execution history with audit verification                |
-|        | _+ 10 more_     | Sessions, chat CRUD, metrics breakdowns, auto run status |
+|        | _+ 11 more_     | Sessions, chat CRUD, metrics breakdowns, auto run status |
 
 The web dashboard at `http://localhost:3000` shows agent usage, scan findings, execution history, and token consumption. Protect it with `DOJOPS_API_KEY` or `dojops serve credentials`.
 
@@ -378,7 +379,7 @@ DojOps generates and validates infrastructure configs. It does not:
 
 ```
 @dojops/cli              CLI entry point, terminal UI (@clack/prompts)
-@dojops/api              REST API (Express), web dashboard, 22 endpoints
+@dojops/api              REST API (Express), web dashboard, 23 endpoints
 @dojops/skill-registry   Skill registry, custom skill + agent discovery
 @dojops/planner          Task graph decomposition, topological executor
 @dojops/executor         Sandbox, policy engine, approval, audit log

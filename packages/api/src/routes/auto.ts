@@ -1,6 +1,6 @@
 import { Router } from "express";
-import * as crypto from "node:crypto";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
+import dns from "node:dns/promises";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -45,8 +45,32 @@ if (cleanupInterval.unref) {
   cleanupInterval.unref();
 }
 
+/** Check if an IP address belongs to a private/loopback/link-local range. */
+function isPrivateIp(ip: string): boolean {
+  // IPv6 loopback
+  if (ip === "::1" || ip === "::") return true;
+  // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1)
+  const v4Mapped = ip.startsWith("::ffff:") ? ip.slice(7) : null;
+  const v4 = v4Mapped ?? ip;
+  const parts = v4.split(".").map(Number);
+  if (parts.length === 4 && parts.every((n) => !Number.isNaN(n) && n >= 0 && n <= 255)) {
+    if (parts[0] === 127) return true; // loopback
+    if (parts[0] === 10) return true; // 10.0.0.0/8
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12
+    if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16
+    if (parts[0] === 169 && parts[1] === 254) return true; // link-local
+    if (parts[0] === 0) return true; // 0.0.0.0/8
+    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // CGNAT
+  }
+  // IPv6 link-local (fe80::)
+  if (ip.toLowerCase().startsWith("fe80:")) return true;
+  // IPv6 unique local (fc00::/7)
+  if (ip.toLowerCase().startsWith("fc") || ip.toLowerCase().startsWith("fd")) return true;
+  return false;
+}
+
 /** Block webhook URLs targeting internal/cloud metadata endpoints (SSRF prevention). */
-function validateWebhookUrl(url: string): void {
+async function validateWebhookUrl(url: string): Promise<void> {
   const parsed = new URL(url);
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     throw new Error("Webhook URL must use HTTP(S)");
@@ -64,14 +88,16 @@ function validateWebhookUrl(url: string): void {
   if (blockedHosts.includes(parsed.hostname)) {
     throw new Error("Webhook URL targets a blocked host");
   }
-  // Block private RFC-1918 ranges
-  const parts = parsed.hostname.split(".").map(Number);
-  if (parts.length === 4 && parts.every((n) => !Number.isNaN(n))) {
-    if (parts[0] === 10) throw new Error("Webhook URL targets private network");
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
-      throw new Error("Webhook URL targets private network");
-    if (parts[0] === 192 && parts[1] === 168)
-      throw new Error("Webhook URL targets private network");
+
+  // Resolve hostname to IP and check against private ranges to prevent DNS rebinding
+  try {
+    const { address } = await dns.lookup(parsed.hostname);
+    if (isPrivateIp(address)) {
+      throw new Error("Webhook URL resolves to a private/internal IP address");
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("private/internal")) throw err;
+    throw new Error("Webhook URL hostname could not be resolved", { cause: err });
   }
 }
 
@@ -82,7 +108,7 @@ async function deliverWebhook(
   apiKey?: string,
 ): Promise<void> {
   try {
-    validateWebhookUrl(url);
+    await validateWebhookUrl(url);
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -90,7 +116,7 @@ async function deliverWebhook(
     };
     // HMAC-SHA256 signature using API key as secret (if available)
     if (apiKey) {
-      const signature = crypto.createHmac("sha256", apiKey).update(body).digest("hex");
+      const signature = createHmac("sha256", apiKey).update(body).digest("hex");
       headers["X-DojOps-Signature"] = `sha256=${signature}`;
     }
     await fetch(url, {
@@ -318,6 +344,7 @@ Rules:
       res.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      console.error("[auto] execution error:", message);
       store.add({
         type: "auto",
         request: { prompt },
@@ -326,7 +353,7 @@ Rules:
         success: false,
         error: message,
       });
-      res.status(500).json({ error: message });
+      res.status(500).json({ error: "Internal execution error" });
     }
   });
 

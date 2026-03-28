@@ -63,8 +63,13 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
       let lastError: unknown;
       let schemaAttempt = 0;
       let currentRequest = request;
+      // Hard cap prevents infinite loops if schemaRetries is misconfigured
+      const maxTotalAttempts = maxRetries + schemaRetries + 1;
+      let totalAttempts = 0;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (++totalAttempts > maxTotalAttempts) break;
+
         try {
           return await provider.generate(currentRequest);
         } catch (err) {

@@ -194,7 +194,7 @@ export type FileSpecV2 = z.infer<typeof FileSpecV2Schema>;
 
 export const DopsFrontmatterSchema = z.object({
   dops: z.literal("v2"),
-  kind: z.enum(["tool"]).default("tool"),
+  kind: z.enum(["skill", "tool"]).default("skill"),
   meta: MetaSchema,
   context: ContextBlockSchema,
   files: z.array(FileSpecV2Schema).min(1),

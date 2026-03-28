@@ -189,7 +189,7 @@ describe("FileSpecV2Schema", () => {
 describe("DopsFrontmatterSchema", () => {
   const validFrontmatter = {
     dops: "v2",
-    kind: "tool",
+    kind: "skill",
     meta: {
       name: "test-tool",
       version: "1.0.0",
@@ -270,7 +270,7 @@ describe("DopsSkill type", () => {
     const mod: DopsSkill = {
       frontmatter: {
         dops: "v2",
-        kind: "tool",
+        kind: "skill",
         meta: { name: "test", version: "1.0.0", description: "Test" },
         context: {
           technology: "Test",

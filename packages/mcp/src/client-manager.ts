@@ -139,15 +139,20 @@ export class McpClientManager {
     const transport = this.createTransport(config);
     const client = new Client({ name: `dojops-${name}`, version: PKG_VERSION });
 
-    await Promise.race([
-      client.connect(transport),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`MCP server "${name}" connection timed out after 30s`)),
-          CONNECTION_TIMEOUT_MS,
-        ),
-      ),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        client.connect(transport),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`MCP server "${name}" connection timed out after 30s`)),
+            CONNECTION_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
 
     // Discover tools
     const toolsResult = await client.listTools();

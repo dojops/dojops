@@ -1,7 +1,7 @@
 {
   "name": "@dojops/sdk",
   "version": "1.2.2",
-  "description": "Base tool abstraction and Zod validation for DojOps DevOps agents",
+  "description": "Base skill abstraction and Zod validation for DojOps DevOps skills",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -11,7 +11,7 @@
   "keywords": [
     "devops",
     "sdk",
-    "tools",
+    "skills",
     "zod",
     "validation"
   ],

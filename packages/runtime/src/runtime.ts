@@ -34,6 +34,12 @@ function detectContent(
   return detectExistingContent(detection.paths, basePath) ?? undefined;
 }
 
+/** Optional sandboxed write interface. When provided, all file writes go through it. */
+export interface RuntimeFileWriter {
+  writeFileSync(filePath: string, content: string): void;
+  mkdirSync(dirPath: string): void;
+}
+
 interface DopsRuntimeOptionsBase {
   /** Base path for file detection (defaults to cwd) */
   basePath?: string;
@@ -41,6 +47,8 @@ interface DopsRuntimeOptionsBase {
   docAugmenter?: {
     augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
   };
+  /** Optional sandboxed file writer. When provided, all writes go through this instead of raw fs. */
+  fileWriter?: RuntimeFileWriter;
 }
 
 export interface ToolMetadata {
@@ -486,6 +494,7 @@ function resolveDynamicFilePath(outputPath: string, llmKey: string): string {
 /**
  * Classify a file as written/modified/unchanged and write it to disk.
  * Handles directory creation and identical-content detection.
+ * When a fileWriter is provided, all writes are routed through it (policy-enforced).
  */
 function classifyAndWriteFile(
   resolvedPath: string,
@@ -493,6 +502,7 @@ function classifyAndWriteFile(
   isUpdate: boolean,
   basePath: string,
   tracker: FileWriteTracker,
+  fileWriter?: RuntimeFileWriter,
 ): void {
   const fullPath = path.isAbsolute(resolvedPath) ? resolvedPath : path.join(basePath, resolvedPath);
 
@@ -509,8 +519,13 @@ function classifyAndWriteFile(
   }
 
   const dir = path.dirname(fullPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(fullPath, content, "utf-8");
+  if (fileWriter) {
+    if (!fs.existsSync(dir)) fileWriter.mkdirSync(dir);
+    fileWriter.writeFileSync(fullPath, content);
+  } else {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(fullPath, content, "utf-8");
+  }
 }
 
 // ── Helpers for verify decomposition ──
@@ -743,6 +758,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
 
     const consumedLlmKeys = new Set<string>();
     const outputPath = typeof input.outputPath === "string" ? input.outputPath : "";
+    const fw = this.options.fileWriter;
 
     this.writeDeclaredFileSpecs({
       input,
@@ -753,6 +769,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       normalizedContents,
       consumedLlmKeys,
       tracker,
+      fileWriter: fw,
     });
 
     this.writeDynamicFiles(
@@ -763,6 +780,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       normalizedContents,
       consumedLlmKeys,
       tracker,
+      fw,
     );
 
     this.guardMultiFileMustProduceOutput(normalizedContents, tracker);
@@ -824,6 +842,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     normalizedContents: Record<string, string> | null;
     consumedLlmKeys: Set<string>;
     tracker: FileWriteTracker;
+    fileWriter?: RuntimeFileWriter;
   }): void {
     const {
       input,
@@ -834,6 +853,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       normalizedContents,
       consumedLlmKeys,
       tracker,
+      fileWriter,
     } = opts;
     for (const fileSpec of this.skill.frontmatter.files) {
       const resolvedPath = resolveFilePath(fileSpec.path, input);
@@ -847,7 +867,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       if (content === null) continue; // conditional file not generated
 
       this.enforceScopePolicy(resolvedPath, input);
-      classifyAndWriteFile(resolvedPath, content, isUpdate, basePath, tracker);
+      classifyAndWriteFile(resolvedPath, content, isUpdate, basePath, tracker, fileWriter);
     }
   }
 
@@ -898,6 +918,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     normalizedContents: Record<string, string> | null,
     consumedLlmKeys: Set<string>,
     tracker: FileWriteTracker,
+    fileWriter?: RuntimeFileWriter,
   ): void {
     if (!normalizedContents) return;
 
@@ -908,7 +929,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       const isOutsideScope = this.isOutsideScope(resolvedPath, input);
       if (isOutsideScope) continue;
 
-      classifyAndWriteFile(resolvedPath, content, isUpdate, basePath, tracker);
+      classifyAndWriteFile(resolvedPath, content, isUpdate, basePath, tracker, fileWriter);
     }
   }
 

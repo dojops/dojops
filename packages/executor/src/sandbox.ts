@@ -14,9 +14,22 @@ export interface SandboxedFs {
 export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
   return {
     writeFileSync(filePath: string, content: string): void {
-      checkWriteAllowed(filePath, policy);
+      // Resolve symlinks before policy check to prevent symlink-based path escapes.
+      // If the target doesn't exist yet, resolve the parent directory instead.
+      let resolved: string;
+      try {
+        resolved = fs.realpathSync(path.resolve(filePath));
+      } catch {
+        const parentDir = path.dirname(path.resolve(filePath));
+        try {
+          resolved = path.join(fs.realpathSync(parentDir), path.basename(filePath));
+        } catch {
+          resolved = path.resolve(filePath);
+        }
+      }
+      checkWriteAllowed(resolved, policy);
       checkFileSize(Buffer.byteLength(content, "utf-8"), policy);
-      atomicWriteFileSync(filePath, content);
+      atomicWriteFileSync(resolved, content);
     },
 
     mkdirSync(dirPath: string): void {

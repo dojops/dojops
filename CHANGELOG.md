@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Graceful shutdown**: API server now calls `server.closeAllConnections()` after the 30-second drain period to force-close lingering keep-alive connections
-- **Arise verification error details**: Failed verification tasks now display the actual error messages (up to 5 per task) in the summary instead of just pass/fail counts
+- **Verification error details**: Failed verification tasks now display the actual error messages (up to 5 per task) in the summary instead of just pass/fail counts
 
 ## [1.2.1] - 2026-03-26
 

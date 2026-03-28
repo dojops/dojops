@@ -1,33 +1,33 @@
 # @dojops/sdk
 
-Base tool abstraction and Zod validation for [DojOps](https://github.com/dojops/dojops) DevOps tools.
+Base skill abstraction and Zod validation for [DojOps](https://github.com/dojops/dojops) DevOps skills.
 
 ## Features
 
-- `BaseTool<T>` abstract class with Zod `inputSchema` validation
+- `BaseSkill<T>` abstract class with Zod `inputSchema` validation
+- `DevOpsSkill<T>` interface with `generate()`, optional `execute()`, `verify()`
 - Automatic input validation via `safeParse`
-- Optional `verify()` interface for external tool validation
 - File reader utilities (`readExistingConfig`, `backupFile`) for update workflows
 - Re-exports `z` from Zod for convenience
 
 ## Usage
 
 ```typescript
-import { BaseTool, z } from "@dojops/sdk";
+import { BaseSkill, z } from "@dojops/sdk";
 
-const MyToolInputSchema = z.object({
+const MySkillInputSchema = z.object({
   name: z.string(),
   replicas: z.number().default(3),
 });
 
-type MyToolInput = z.infer<typeof MyToolInputSchema>;
+type MySkillInput = z.infer<typeof MySkillInputSchema>;
 
-class MyTool extends BaseTool<MyToolInput> {
-  name = "my-tool";
+class MySkill extends BaseSkill<MySkillInput> {
+  name = "my-skill";
   description = "Generates my config";
-  inputSchema = MyToolInputSchema;
+  inputSchema = MySkillInputSchema;
 
-  async generate(input: MyToolInput) {
+  async generate(input: MySkillInput) {
     // LLM call + serialization
   }
 }

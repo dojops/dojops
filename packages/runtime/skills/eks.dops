@@ -1,6 +1,6 @@
 ---
 dops: v2
-kind: tool
+kind: skill
 
 meta:
   name: eks
@@ -84,7 +84,7 @@ context:
             name: external-dns
             namespace: kube-system
           attachPolicyARNs:
-            - arn:aws:iam::policy/ExternalDNSRoute53Access
+            - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/ExternalDNSRoute53Access
   bestPractices:
     - Use managed node groups over self-managed for automatic AMI updates and draining
     - Enable IRSA (IAM Roles for Service Accounts) instead of node-level IAM roles

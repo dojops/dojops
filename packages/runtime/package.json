@@ -1,13 +1,20 @@
 {
   "name": "@dojops/runtime",
   "version": "1.2.2",
-  "description": "Unified DOPS tool runtime engine for DojOps",
+  "description": "38 built-in .dops v2 skill runtime for DojOps",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dojops/dojops.git",
     "directory": "packages/runtime"
   },
+  "keywords": [
+    "devops",
+    "dops",
+    "skills",
+    "runtime",
+    "llm"
+  ],
   "engines": {
     "node": ">=20"
   },

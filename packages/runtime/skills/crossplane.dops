@@ -1,6 +1,6 @@
 ---
 dops: v2
-kind: tool
+kind: skill
 
 meta:
   name: crossplane

@@ -38,11 +38,19 @@ export class AuditPersistence {
     fs.appendFileSync(this.filePath, JSON.stringify(entry) + "\n");
   }
 
-  /** Read all persisted audit entries. */
+  /** Read all persisted audit entries, skipping corrupt lines. */
   readAll(): ExecutionAuditEntry[] {
     if (!fs.existsSync(this.filePath)) return [];
     const lines = fs.readFileSync(this.filePath, "utf-8").split("\n").filter(Boolean);
-    return lines.map((line) => JSON.parse(line) as ExecutionAuditEntry);
+    const entries: ExecutionAuditEntry[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        entries.push(JSON.parse(lines[i]) as ExecutionAuditEntry);
+      } catch {
+        console.warn(`[audit] corrupt entry at line ${i + 1}, skipping`);
+      }
+    }
+    return entries;
   }
 
   /**

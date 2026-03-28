@@ -1,7 +1,7 @@
 {
   "name": "@dojops/api",
   "version": "1.2.2",
-  "description": "REST API server and web dashboard for DojOps DevOps agent",
+  "description": "REST API server and web dashboard for DojOps AI Automation Engine",
   "license": "MIT",
   "repository": {
     "type": "git",

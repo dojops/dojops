@@ -19,9 +19,14 @@ import { TOOL_DEFINITIONS } from "./server-tools";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PKG_VERSION: string = (require("../package.json") as { version: string }).version;
 
-/** Environment-configurable API URL for the DojOps backend. */
-const DOJOPS_API_URL = process.env.DOJOPS_API_URL || "http://localhost:3000";
-const DOJOPS_API_KEY = process.env.DOJOPS_API_KEY || "";
+/** Read API URL from environment per-call so tests and late-configured servers work. */
+function getApiUrl(): string {
+  return process.env.DOJOPS_API_URL || "http://localhost:3000";
+}
+
+function getApiKey(): string {
+  return process.env.DOJOPS_API_KEY || "";
+}
 
 /**
  * Make an authenticated request to the DojOps API server.
@@ -36,15 +41,16 @@ async function apiRequest(
     "Content-Type": "application/json",
     Accept: "application/json",
   };
-  if (DOJOPS_API_KEY) {
-    headers["X-API-Key"] = DOJOPS_API_KEY;
+  const apiKey = getApiKey();
+  if (apiKey) {
+    headers["X-API-Key"] = apiKey;
   }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const resp = await fetch(`${DOJOPS_API_URL}${path}`, {
+    const resp = await fetch(`${getApiUrl()}${path}`, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -231,9 +237,16 @@ export function createDojOpsMcpServer(): McpServer {
       if (!resp.ok)
         return errorResult(`List skills failed (${resp.status}): ${formatJson(resp.data)}`);
 
-      const data = resp.data as { agents?: unknown[]; skills?: unknown[] };
-      if (data.skills) return textResult(formatJson(data.skills));
-      return textResult(formatJson(resp.data));
+      const data = resp.data;
+      if (
+        data &&
+        typeof data === "object" &&
+        "skills" in data &&
+        Array.isArray((data as Record<string, unknown>).skills)
+      ) {
+        return textResult(formatJson((data as Record<string, unknown>).skills));
+      }
+      return textResult(formatJson(data));
     },
   );
 

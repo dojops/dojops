@@ -341,7 +341,10 @@ If the plan looks correct, return {"approved": true, "issues": []}.`,
       issues: Array.isArray(parsed.issues) ? parsed.issues : [],
     };
   } catch {
-    // If parsing fails, approve by default to not block execution
-    return { approved: true, issues: [] };
+    // Parse failure means we can't verify the plan is sound — reject to be safe
+    return {
+      approved: false,
+      issues: ["Critique response could not be parsed; rejecting plan as a precaution"],
+    };
   }
 }
