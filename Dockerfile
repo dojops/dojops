@@ -1,5 +1,5 @@
 # ── Build stage ──────────────────────────────────────────────────────
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
 
@@ -30,7 +30,7 @@ RUN pnpm build
 RUN pnpm prune --prod
 
 # ── Production stage ────────────────────────────────────────────────
-FROM node:20-slim AS production
+FROM node:24-slim AS production
 
 # Enable pnpm and install common DevOps tools for verification (requires root) # NOSONAR
 RUN corepack enable && corepack prepare pnpm@8.15.0 --activate \
