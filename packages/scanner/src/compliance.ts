@@ -50,7 +50,7 @@ export function getSupportedFrameworks(): string[] {
 // ── Framework loading ─────────────────────────────────────────────
 
 function loadFrameworkDef(framework: string): ComplianceFrameworkDef {
-  const normalized = framework.toLowerCase().replace(/\s+/g, "-");
+  const normalized = framework.toLowerCase().replaceAll(/\s+/g, "-");
 
   if (!SUPPORTED_FRAMEWORKS.includes(normalized)) {
     throw new Error(

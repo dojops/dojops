@@ -108,9 +108,11 @@ export function resolveVoiceConfig(): VoiceConfig {
   if (!status.available) {
     const lines = ["Voice input requires:"];
     for (const m of status.missing) lines.push(`  - ${m}`);
-    lines.push("");
-    lines.push("Install whisper.cpp: dojops toolchain install whisper-cpp");
-    lines.push("Install SoX:         brew install sox (macOS) / apt install sox (Linux)");
+    lines.push(
+      "",
+      "Install whisper.cpp: dojops toolchain install whisper-cpp",
+      "Install SoX:         brew install sox (macOS) / apt install sox (Linux)",
+    );
     throw new Error(lines.join("\n"));
   }
   return {

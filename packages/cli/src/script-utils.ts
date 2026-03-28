@@ -89,7 +89,7 @@ export function makeExecutable(filePath: string): boolean {
   if (process.platform === "win32") return false;
 
   try {
-    fs.chmodSync(filePath, 0o755);
+    fs.chmodSync(filePath, 0o755); // NOSONAR — intentional: shell scripts need execute permission
     return true;
   } catch {
     return false;

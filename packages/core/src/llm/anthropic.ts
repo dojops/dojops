@@ -63,50 +63,75 @@ export class AnthropicProvider implements LLMProvider {
       usedPrefill = true;
     }
 
-    let message: Anthropic.Message;
+    const { message, prefillUsed } = await this.createMessageWithPrefillFallback(
+      system,
+      messages,
+      req,
+      usedPrefill,
+    );
+    usedPrefill = prefillUsed;
+
+    const content = this.extractGenerateContent(message, req, usedPrefill);
+    return buildLLMResponse(content, this.extractUsage(message), req);
+  }
+
+  /** Attempt to create a message, falling back to retry without prefill on prefill errors. */
+  private async createMessageWithPrefillFallback(
+    system: string | undefined,
+    messages: Anthropic.MessageParam[],
+    req: LLMRequest,
+    usedPrefill: boolean,
+  ): Promise<{ message: Anthropic.Message; prefillUsed: boolean }> {
     try {
-      message = await this.client.messages.create(this.buildCreateParams(system, messages, req));
+      const message = await this.client.messages.create(
+        this.buildCreateParams(system, messages, req),
+      );
+      return { message, prefillUsed: usedPrefill };
     } catch (err: unknown) {
       const errMsg = extractApiError(err);
-      if (usedPrefill && /\bprefill\b/i.test(errMsg)) {
-        usedPrefill = false;
-        const messagesWithoutPrefill = messages.filter(
-          (m) => m.role !== "assistant" || m.content !== "{",
-        );
-        try {
-          message = await this.client.messages.create(
-            this.buildCreateParams(system, messagesWithoutPrefill, req),
-          );
-        } catch (retryErr: unknown) {
-          throw new Error(extractApiError(retryErr), { cause: retryErr });
-        }
-      } else {
+      if (!usedPrefill || !/\bprefill\b/i.test(errMsg)) {
         throw new Error(errMsg, { cause: err });
       }
+      const messagesWithoutPrefill = messages.filter(
+        (m) => m.role !== "assistant" || m.content !== "{",
+      );
+      try {
+        const message = await this.client.messages.create(
+          this.buildCreateParams(system, messagesWithoutPrefill, req),
+        );
+        return { message, prefillUsed: false };
+      } catch (retryErr: unknown) {
+        throw new Error(extractApiError(retryErr), { cause: retryErr });
+      }
     }
+  }
 
+  /** Extract text content from a generate response, applying prefill and schema validation. */
+  private extractGenerateContent(
+    message: Anthropic.Message,
+    req: LLMRequest,
+    usedPrefill: boolean,
+  ): string {
     const firstBlock = message.content[0];
     let content = firstBlock?.type === "text" ? firstBlock.text : "";
 
-    if (req.schema) {
-      if (message.stop_reason === "max_tokens") {
+    if (!req.schema) return content;
+
+    if (message.stop_reason === "max_tokens") {
+      throw new Error(
+        "LLM response was truncated (hit max_tokens limit). The generated JSON is incomplete.",
+      );
+    }
+    if (usedPrefill) {
+      content = "{" + content;
+      const trimmed = content.trim();
+      if (trimmed === "{" || trimmed === "") {
         throw new Error(
-          "LLM response was truncated (hit max_tokens limit). The generated JSON is incomplete.",
+          "Anthropic returned empty content with prefill; cannot construct valid JSON",
         );
       }
-      if (usedPrefill) {
-        content = "{" + content;
-        // Guard against empty/whitespace-only model response producing invalid JSON
-        const trimmed = content.trim();
-        if (trimmed === "{" || trimmed === "") {
-          throw new Error(
-            "Anthropic returned empty content with prefill; cannot construct valid JSON",
-          );
-        }
-      }
     }
-
-    return buildLLMResponse(content, this.extractUsage(message), req);
+    return content;
   }
 
   async generateStream(req: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> {

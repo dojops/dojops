@@ -248,15 +248,16 @@ export const ariseCommand = async (args: string[], ctx: CLIContext): Promise<voi
   const verifyLines: string[] = [];
   for (const r of verifyResults) {
     const icon = r.passed ? pc.green("\u2713") : pc.red("\u2717");
-    const issueHint =
-      r.issues > 0 ? pc.dim(` (${r.issues} issue${r.issues === 1 ? "" : "s"})`) : "";
+    const issueSuffix = r.issues === 1 ? "" : "s";
+    const issueHint = r.issues > 0 ? pc.dim(` (${r.issues} issue${issueSuffix})`) : "";
     verifyLines.push(`  ${icon} ${r.id}${issueHint}`);
     if (!r.passed && r.errors.length > 0) {
       for (const msg of r.errors.slice(0, 5)) {
         verifyLines.push(`    ${pc.dim("- " + msg)}`);
       }
       if (r.errors.length > 5) {
-        verifyLines.push(`    ${pc.dim(`... and ${r.errors.length - 5} more`)}`);
+        const moreCount = r.errors.length - 5;
+        verifyLines.push(`    ${pc.dim(`... and ${moreCount} more`)}`);
       }
     }
   }

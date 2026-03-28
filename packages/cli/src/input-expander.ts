@@ -13,7 +13,7 @@ const FILE_REF_RE = /(?<![\\@\w])@((?:\.\.?\/)?[\w./-]+\.\w+)/g;
  * Files > 256KB or non-existent paths are left unchanged.
  */
 export function expandFileReferences(input: string, cwd: string): string {
-  return input.replace(FILE_REF_RE, (match, filePath: string) => {
+  return input.replaceAll(FILE_REF_RE, (match, filePath: string) => {
     // Block paths with excessive traversal (more than 3 levels up)
     const traversalCount = (filePath.match(/\.\.\//g) || []).length;
     if (traversalCount > 3) return match;

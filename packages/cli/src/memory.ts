@@ -175,9 +175,7 @@ let sqlFactory: SqlJsStatic | null = null;
 
 /** Initialize the sql.js WASM engine. Call once before any memory operations. */
 export async function initMemory(): Promise<void> {
-  if (!sqlFactory) {
-    sqlFactory = await initSqlJs();
-  }
+  sqlFactory ??= await initSqlJs();
 }
 
 /**
