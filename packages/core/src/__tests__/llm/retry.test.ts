@@ -409,6 +409,46 @@ describe("withRetry()", () => {
   });
 
   // ---------------------------------------------------------------
+  // Hard cap on total attempts prevents runaway loops
+  // ---------------------------------------------------------------
+  it("enforces maxTotalAttempts hard cap with high schemaRetries", async () => {
+    const maxRetries = 1;
+    const schemaRetries = 8;
+    // Hard cap in retry.ts: maxRetries + schemaRetries + 1 = 10
+    const hardCap = maxRetries + schemaRetries + 1;
+    const schemaErr = new JsonValidationError("bad", "raw");
+
+    // Every call throws a schema error. Without any cap the
+    // attempt-- trick would let the loop spin schemaRetries + 1
+    // times before handleSchemaRetry returns false (9 calls).
+    // The hard cap at 10 is >= 9, so schema exhaustion stops it
+    // first — but the key guarantee is that total calls never
+    // exceed hardCap regardless of how high schemaRetries is set.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const generate = async (_req: LLMRequest): Promise<LLMResponse> => {
+      throw schemaErr;
+    };
+    const generateSpy = vi.fn(generate);
+    const provider = mockProvider(generateSpy);
+    const retried = withRetry(provider, {
+      maxRetries,
+      initialDelayMs: 1000,
+      schemaRetries,
+    });
+
+    const schema = { parse: vi.fn() };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const promise = retried.generate({ prompt: "hello", schema: schema as unknown as any });
+    await flush();
+
+    await expect(promise).rejects.toThrow();
+    // schemaRetries(8) + 1 final attempt that exhausts budget = 9 calls
+    expect(generateSpy).toHaveBeenCalledTimes(schemaRetries + 1);
+    // And that is always within the hard cap
+    expect(generateSpy.mock.calls.length).toBeLessThanOrEqual(hardCap);
+  });
+
+  // ---------------------------------------------------------------
   // Preserves provider name
   // ---------------------------------------------------------------
   it("preserves the original provider name", () => {

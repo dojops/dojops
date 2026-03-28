@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { LLMProvider } from "@dojops/core";
 import { BaseSkill, SkillOutput, z } from "@dojops/sdk";
-import { decompose, buildAgentSection } from "../decomposer";
+import { decompose, buildAgentSection, critiquePlan } from "../decomposer";
 import { TaskGraphSchema } from "../types";
 
 class MockTool extends BaseSkill<{ projectPath: string; enabled: boolean }> {
@@ -210,5 +210,52 @@ describe("buildAgentSection", () => {
     expect(section).toContain("terraform-specialist (infrastructure): Terraform expert");
     expect(section).toContain("kubernetes-specialist (container-orchestration)");
     expect(section).not.toContain("kubernetes-specialist (container-orchestration):");
+  });
+});
+
+describe("critiquePlan", () => {
+  it("returns approved: true when LLM approves the plan", async () => {
+    const provider = makeMockProvider({ approved: true, issues: [] });
+    const graph = singleTaskGraph();
+    const result = await critiquePlan(graph, provider, ["mock-tool"]);
+
+    expect(result.approved).toBe(true);
+    expect(result.issues).toEqual([]);
+  });
+
+  it("returns approved: false with issues when LLM finds problems", async () => {
+    const provider = makeMockProvider({
+      approved: false,
+      issues: ["Task t1 uses wrong tool for the goal", "Missing dependency between tasks"],
+    });
+    const graph = singleTaskGraph();
+    const result = await critiquePlan(graph, provider, ["mock-tool"]);
+
+    expect(result.approved).toBe(false);
+    expect(result.issues).toHaveLength(2);
+    expect(result.issues[0]).toBe("Task t1 uses wrong tool for the goal");
+    expect(result.issues[1]).toBe("Missing dependency between tasks");
+  });
+
+  it("returns approved: false when response cannot be parsed", async () => {
+    const provider: LLMProvider = {
+      name: "mock",
+      generate: vi.fn().mockResolvedValue({ content: "not valid json" }),
+    };
+    const graph = singleTaskGraph();
+    const result = await critiquePlan(graph, provider, ["mock-tool"]);
+
+    expect(result.approved).toBe(false);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toContain("could not be parsed");
+  });
+
+  it("returns approved: false when parsed.approved is not strictly true", async () => {
+    const provider = makeMockProvider({ approved: "yes", issues: [] });
+    const graph = singleTaskGraph();
+    const result = await critiquePlan(graph, provider, ["mock-tool"]);
+
+    expect(result.approved).toBe(false);
+    expect(result.issues).toEqual([]);
   });
 });

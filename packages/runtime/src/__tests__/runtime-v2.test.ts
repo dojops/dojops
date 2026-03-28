@@ -931,4 +931,42 @@ describe("DopsRuntimeV2 trust envelope", () => {
     const { runtime: custom } = createRuntime("", undefined, { trustLevel: "custom" });
     expect(custom.metadata.toolType).toBe("custom");
   });
+
+  it("routes file writes through fileWriter when provided", async () => {
+    const writeFileSync = vi.fn();
+    const mkdirSync = vi.fn();
+    const fileWriter = { writeFileSync, mkdirSync };
+
+    const rawContent = 'resource "aws_s3_bucket" "main" {}';
+    const module = createV2Module();
+    const provider = createMockProvider(rawContent);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test", fileWriter });
+
+    const result = await runtime.execute({ prompt: "Create S3 bucket" });
+
+    expect(result.success).toBe(true);
+    // fileWriter.writeFileSync should have been called instead of raw fs.writeFileSync
+    expect(writeFileSync).toHaveBeenCalledWith(expect.stringContaining("main.tf"), rawContent);
+    // raw fs.writeFileSync should NOT have been called
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("routes directory creation through fileWriter.mkdirSync when provided", async () => {
+    const writeFileSync = vi.fn();
+    const mkdirSync = vi.fn();
+    const fileWriter = { writeFileSync, mkdirSync };
+
+    const rawContent = 'resource "aws_s3_bucket" "main" {}';
+    const module = createV2Module();
+    const provider = createMockProvider(rawContent);
+    const runtime = new DopsRuntimeV2(module, provider, { basePath: "/tmp/test", fileWriter });
+
+    await runtime.execute({ prompt: "Create config" });
+
+    // mkdirSync should be called to create the parent directory (existsSync returns false)
+    expect(mkdirSync).toHaveBeenCalled();
+    // raw fs.mkdirSync should NOT have been called for file writing
+    // (it may be called for other reasons like .dojops dir, so check mkdirSync was called)
+    expect(writeFileSync).toHaveBeenCalled();
+  });
 });

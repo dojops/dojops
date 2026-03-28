@@ -156,6 +156,83 @@ describe("createSandboxedFs", () => {
     expect(() => sfs.readFileSync(deniedFile)).toThrow(PolicyViolationError);
     expect(() => sfs.readFileSync(deniedFile)).toThrow("denied by policy");
   });
+
+  it("writeFileSync resolves symlinks to prevent path escape", () => {
+    const dir = makeTmpDir();
+    const allowed = path.join(dir, "allowed");
+    const forbidden = path.join(dir, "forbidden");
+    fs.mkdirSync(allowed, { recursive: true });
+    fs.mkdirSync(forbidden, { recursive: true });
+
+    // Create a symlink inside "allowed" that points to "forbidden"
+    const linkPath = path.join(allowed, "sneaky-link");
+    fs.symlinkSync(forbidden, linkPath);
+
+    const sfs = createSandboxedFs(
+      policy({
+        allowWrite: true,
+        allowedWritePaths: [allowed],
+      }),
+    );
+
+    // Writing via the symlink should fail because the resolved real path
+    // lands in "forbidden", which is outside allowedWritePaths
+    const targetFile = path.join(linkPath, "escape.txt");
+    expect(() => sfs.writeFileSync(targetFile, "escaped")).toThrow(PolicyViolationError);
+  });
+
+  it("writeFileSync resolves parent directory when file doesn't exist yet", () => {
+    const dir = makeTmpDir();
+
+    const sfs = createSandboxedFs(
+      policy({
+        allowWrite: true,
+        allowedWritePaths: [dir],
+      }),
+    );
+
+    // File doesn't exist yet — parent resolves to the allowed tmpDir
+    const newFile = path.join(dir, "brand-new-file.txt");
+    sfs.writeFileSync(newFile, "hello");
+
+    expect(fs.readFileSync(newFile, "utf-8")).toBe("hello");
+  });
+
+  it("readFileSync throws PolicyViolationError for non-existent file", () => {
+    const dir = makeTmpDir();
+    const sfs = createSandboxedFs(policy({ allowWrite: true }));
+
+    const missing = path.join(dir, "does-not-exist.txt");
+    expect(() => sfs.readFileSync(missing)).toThrow(PolicyViolationError);
+    expect(() => sfs.readFileSync(missing)).toThrow("File not found");
+  });
+
+  it("readFileSync resolves symlinks to prevent reading outside allowed paths", () => {
+    const dir = makeTmpDir();
+    const denied = path.join(dir, "denied");
+    const public_ = path.join(dir, "public");
+    fs.mkdirSync(denied, { recursive: true });
+    fs.mkdirSync(public_, { recursive: true });
+
+    // Create a real file in the denied directory
+    const secretFile = path.join(denied, "secret.txt");
+    fs.writeFileSync(secretFile, "top secret", "utf-8");
+
+    // Create a symlink in the public directory pointing to the secret file
+    const linkPath = path.join(public_, "innocent-link.txt");
+    fs.symlinkSync(secretFile, linkPath);
+
+    const sfs = createSandboxedFs(
+      policy({
+        allowWrite: true,
+        deniedWritePaths: [denied],
+      }),
+    );
+
+    // Reading via the symlink should fail because the resolved real path is in "denied"
+    expect(() => sfs.readFileSync(linkPath)).toThrow(PolicyViolationError);
+    expect(() => sfs.readFileSync(linkPath)).toThrow("denied by policy");
+  });
 });
 
 describe("withTimeout", () => {

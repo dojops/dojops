@@ -46,7 +46,7 @@ if (cleanupInterval.unref) {
 }
 
 /** Check if an IP address belongs to a private/loopback/link-local range. */
-function isPrivateIp(ip: string): boolean {
+export function isPrivateIp(ip: string): boolean {
   // IPv6 loopback
   if (ip === "::1" || ip === "::") return true;
   // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1)
@@ -70,7 +70,7 @@ function isPrivateIp(ip: string): boolean {
 }
 
 /** Block webhook URLs targeting internal/cloud metadata endpoints (SSRF prevention). */
-async function validateWebhookUrl(url: string): Promise<void> {
+export async function validateWebhookUrl(url: string): Promise<void> {
   const parsed = new URL(url);
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     throw new Error("Webhook URL must use HTTP(S)");

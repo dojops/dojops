@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -120,6 +120,38 @@ describe("AuditPersistence", () => {
     const result = persistence.verify();
     expect(result.valid).toBe(true);
     expect(result.brokenAt).toBe(-1);
+  });
+
+  it("readAll skips corrupt JSONL lines and returns valid entries", () => {
+    persistence.append(makeEntry({ taskId: "valid-1" }));
+    persistence.append(makeEntry({ taskId: "valid-2" }));
+
+    // Inject a corrupt line into the audit file
+    const auditFile = path.join(tmpDir, ".dojops", "audit.jsonl");
+    const content = fs.readFileSync(auditFile, "utf-8");
+    fs.writeFileSync(auditFile, content + "NOT_VALID_JSON\n");
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const entries = persistence.readAll();
+    expect(entries).toHaveLength(2);
+    expect(entries[0].taskId).toBe("valid-1");
+    expect(entries[1].taskId).toBe("valid-2");
+
+    expect(warnSpy).toHaveBeenCalledWith("[audit] corrupt entry at line 3, skipping");
+    warnSpy.mockRestore();
+  });
+
+  it("readAll handles file with only corrupt entries", () => {
+    const auditFile = path.join(tmpDir, ".dojops", "audit.jsonl");
+    fs.writeFileSync(auditFile, "CORRUPT_LINE_1\nCORRUPT_LINE_2\n");
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const entries = persistence.readAll();
+    expect(entries).toHaveLength(0);
+
+    warnSpy.mockRestore();
   });
 
   it("resumes hash chain from existing file", () => {
