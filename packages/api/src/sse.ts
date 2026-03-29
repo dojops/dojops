@@ -23,7 +23,11 @@ export function initSSE(res: Response): {
 
   return {
     send(event: string, data: unknown) {
-      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      // Strip newlines/carriage-returns from the event name to prevent SSE injection.
+      // An attacker who controls the event string could otherwise inject arbitrary
+      // SSE fields (e.g. "done\ndata: injected") into the stream.
+      const safeEvent = event.replaceAll(/[\r\n]/g, "");
+      res.write(`event: ${safeEvent}\ndata: ${JSON.stringify(data)}\n\n`);
     },
     done() {
       clearInterval(heartbeat);

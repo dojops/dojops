@@ -69,14 +69,36 @@ export function loadHooksConfig(rootDir: string): HooksConfig {
 }
 
 /**
+ * Env var names that must NEVER be forwarded to hooks.
+ * These contain LLM API tokens and the DojOps API key.
+ */
+const HOOK_BLOCKED_ENV_VARS = new Set([
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "MISTRAL_API_KEY",
+  "GEMINI_API_KEY",
+  "GITHUB_COPILOT_TOKEN",
+  "DOJOPS_API_KEY",
+  "DOJOPS_HUB_TOKEN",
+  "DOJOPS_VAULT_KEY",
+  "DOJOPS_CONTEXT7_API_KEY",
+]);
+
+/**
  * Build environment variables for hook execution.
+ * Sensitive API keys and tokens are stripped so hook commands cannot exfiltrate them.
  */
 function buildHookEnv(ctx: HookContext): Record<string, string> {
-  const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    DOJOPS_HOOK_EVENT: ctx.event,
-    DOJOPS_HOOK_ROOT: ctx.rootDir,
-  };
+  // Copy the current environment minus any blocked (sensitive) keys.
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined && !HOOK_BLOCKED_ENV_VARS.has(k)) {
+      env[k] = v;
+    }
+  }
+  env.DOJOPS_HOOK_EVENT = ctx.event;
+  env.DOJOPS_HOOK_ROOT = ctx.rootDir;
   if (ctx.agent) env.DOJOPS_HOOK_AGENT = ctx.agent;
   if (ctx.outputPath) env.DOJOPS_HOOK_OUTPUT = ctx.outputPath;
   if (ctx.prompt) env.DOJOPS_HOOK_PROMPT = ctx.prompt;
@@ -86,11 +108,30 @@ function buildHookEnv(ctx: HookContext): Record<string, string> {
 
 /** Block hook commands that pipe from network or use eval-like constructs. */
 const DANGEROUS_HOOK_PATTERNS = [
-  /\bcurl\b.*\|\s*(bash|sh|zsh)/i,
-  /\bwget\b.*\|\s*(bash|sh|zsh)/i,
+  // Remote code download piped to a shell
+  /\bcurl\b.*\|\s*(bash|sh|zsh|python[23]?|node|perl|ruby)/i,
+  /\bwget\b.*\|\s*(bash|sh|zsh|python[23]?|node|perl|ruby)/i,
+  // Command substitution / subshell execution
   /\beval\s/,
   /\$\(curl\b/i,
   /\$\(wget\b/i,
+  /\$\([^)]+\)/, // generic $() command substitution
+  /`[^`]+`/, // backtick subshell
+  // Interpreter inline execution flags (-c / -e)
+  /\bpython[23]?\s+-c\b/i,
+  /\bnode\s+-e\b/i,
+  /\bperl\s+-e\b/i,
+  /\bruby\s+-e\b/i,
+  /\bbash\s+-c\b/i,
+  /\bsh\s+-c\b/i,
+  /\bzsh\s+-c\b/i,
+  // Chained-command injection (hook command itself should be a single command)
+  /\|\s*(bash|sh|zsh|python[23]?|node|perl|ruby)\b/,
+  // PowerShell code execution
+  /Invoke-Expression|IEX\b|\bpowershell\b.*-Command|\bpwsh\b.*-Command/i,
+  // Encoded command execution
+  /base64.*\|\s*(bash|sh)/i,
+  /\benv\s+(bash|sh|zsh|python[23]?|node|perl|ruby)\b/i,
 ];
 
 /**

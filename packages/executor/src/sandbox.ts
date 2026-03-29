@@ -33,8 +33,22 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
     },
 
     mkdirSync(dirPath: string): void {
-      checkWriteAllowed(dirPath, policy);
-      fs.mkdirSync(dirPath, { recursive: true });
+      // Resolve symlinks before the policy check to prevent a symlink-based escape
+      // during directory creation. Mirrors the same logic used in writeFileSync above.
+      let resolved: string;
+      try {
+        resolved = fs.realpathSync(path.resolve(dirPath));
+      } catch {
+        // Directory doesn't exist yet — resolve the parent and append the basename.
+        const parentDir = path.dirname(path.resolve(dirPath));
+        try {
+          resolved = path.join(fs.realpathSync(parentDir), path.basename(dirPath));
+        } catch {
+          resolved = path.resolve(dirPath);
+        }
+      }
+      checkWriteAllowed(resolved, policy);
+      fs.mkdirSync(resolved, { recursive: true });
     },
 
     existsSync(filePath: string): boolean {

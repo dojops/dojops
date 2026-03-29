@@ -1,7 +1,12 @@
 const MAX_SYSTEM_PROMPT_LENGTH = 32 * 1024; // 32KB
 
-/** Confidence threshold above which unsafe prompts are blocked. */
-const BLOCK_CONFIDENCE_THRESHOLD = 0.5;
+/**
+ * Confidence threshold above which unsafe prompts are blocked.
+ * Each pattern match contributes 0.35. A single match = 0.35 (warn only).
+ * Two matches = 0.70 (blocked). Lowering to 0.35 means one match is enough
+ * to block, which prevents single-pattern injection attempts.
+ */
+const BLOCK_CONFIDENCE_THRESHOLD = 0.35;
 
 const INJECTION_PATTERNS = [
   /ignore\s+(?:all\s+)?previous/i,

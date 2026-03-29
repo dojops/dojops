@@ -469,16 +469,22 @@ export function clearNotes(rootDir: string): number {
   }
 }
 
+/** Maximum number of search terms processed per query. Caps query complexity. */
+const MAX_SEARCH_WORDS = 20;
+
 /** Search notes by keyword match against content and keywords fields. */
 export function searchNotes(rootDir: string, query: string, limit = 20): NoteRecord[] {
   try {
     const db = openMemoryDb(rootDir);
     if (!db) return [];
 
-    const words = tokenize(query);
+    // Cap at MAX_SEARCH_WORDS to bound SQL query size and parameter count.
+    const words = tokenize(query).slice(0, MAX_SEARCH_WORDS);
     if (words.length === 0) return listNotes(rootDir, undefined, limit);
 
-    // Build LIKE clauses for each word against content + keywords
+    // Build LIKE clauses for each word against content + keywords.
+    // The conditions string only contains fixed placeholder fragments — no user
+    // data is interpolated into the SQL text itself.
     const conditions = words
       .map(() => `(LOWER(content) LIKE ? OR LOWER(keywords) LIKE ?)`)
       .join(" AND ");

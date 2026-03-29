@@ -26,9 +26,23 @@ const KEY_LENGTH = 32;
 const SALT = "dojops-vault-v1";
 const ENCRYPTED_PREFIX = "enc:v1:";
 
+/**
+ * scrypt cost parameters.
+ *
+ * Two tiers are used:
+ * - SCRYPT_PARAMS_FILE: used when the key material is a random 64-char hex string
+ *   (the persistent key file path). The randomness means brute-force is infeasible
+ *   at any cost factor, so N=16384 is sufficient and avoids blocking the main thread.
+ * - SCRYPT_PARAMS_USER: used when the key material is a user-chosen passphrase
+ *   (DOJOPS_VAULT_KEY env var). User passphrases have lower entropy, so N=65536
+ *   is used to increase the cost of offline dictionary attacks.
+ */
+const SCRYPT_PARAMS_FILE = { N: 16384, r: 8, p: 1 };
+const SCRYPT_PARAMS_USER = { N: 65536, r: 8, p: 1, maxmem: 128 * 65536 * 8 * 2 };
+
 /** Derive a 256-bit key from a passphrase using scrypt. */
-function deriveKey(passphrase: string): Buffer {
-  return scryptSync(passphrase, SALT, KEY_LENGTH);
+function deriveKey(passphrase: string, params = SCRYPT_PARAMS_FILE): Buffer {
+  return scryptSync(passphrase, SALT, KEY_LENGTH, params);
 }
 
 /** Path to the persistent random vault key file. */
@@ -62,10 +76,12 @@ function loadOrCreateVaultKeyFile(): string {
 /** Get the vault key — from env or persistent random key file. */
 function getVaultKey(): Buffer {
   const envKey = process.env.DOJOPS_VAULT_KEY;
-  if (envKey) return deriveKey(envKey);
+  // User-supplied passphrase: use higher scrypt cost (N=65536) to resist dictionary attacks.
+  if (envKey) return deriveKey(envKey, SCRYPT_PARAMS_USER);
 
+  // Random 64-char hex file key: standard cost is sufficient (key space is already 256-bit).
   const fileKey = loadOrCreateVaultKeyFile();
-  return deriveKey(fileKey);
+  return deriveKey(fileKey, SCRYPT_PARAMS_FILE);
 }
 
 /**
