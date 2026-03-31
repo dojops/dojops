@@ -34,7 +34,7 @@
     "public"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../../scripts/minify-dist.mjs",
     "start": "node dist/server.js",
     "dev": "node --require dotenv/config dist/server.js",
     "lint": "eslint src/",
