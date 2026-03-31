@@ -63,8 +63,8 @@ test-report.junit.xml
 # DojOps project runtime data (created by `dojops init`, user-local)
 .dojops/
 
-# scripts/ directory (if you have scripts that should not be committed)
-scripts/
+# Local-only scripts (keep build scripts tracked)
+scripts/stress-install.sh
 
 # Tape test recordings
 demo.tape
