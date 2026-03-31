@@ -25,6 +25,7 @@ RUN pnpm install --frozen-lockfile
 
 # Copy source and build
 COPY packages/ packages/
+COPY scripts/ scripts/
 RUN pnpm build
 
 # Prune dev dependencies
