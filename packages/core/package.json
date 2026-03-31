@@ -36,7 +36,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && node ../../scripts/minify-dist.mjs",
+    "build": "node ../../scripts/bundle-dist.mjs",
     "lint": "eslint src/",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",

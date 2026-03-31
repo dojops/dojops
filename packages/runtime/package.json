@@ -34,7 +34,7 @@
     "skills"
   ],
   "scripts": {
-    "build": "tsc && node ../../scripts/minify-dist.mjs",
+    "build": "node ../../scripts/bundle-dist.mjs",
     "lint": "eslint src/",
     "test": "vitest run",
     "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"

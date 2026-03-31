@@ -35,7 +35,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && rm -rf dist/compliance-frameworks && cp -r src/compliance-frameworks dist/compliance-frameworks && node ../../scripts/minify-dist.mjs",
+    "build": "node ../../scripts/bundle-dist.mjs && cp -r src/compliance-frameworks dist/compliance-frameworks",
     "lint": "eslint src/",
     "test": "vitest run",
     "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
