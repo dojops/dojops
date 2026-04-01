@@ -8,6 +8,7 @@ import * as path from "node:path";
 import { SkillRegistry } from "./registry";
 import { discoverUserDopsFiles } from "./dops-loader";
 import { loadSkillPolicy, isSkillAllowed } from "./policy";
+import { discoverPacks, getPackSkillEntries } from "./pack-loader";
 
 export * from "./registry";
 export * from "./dops-loader";
@@ -18,6 +19,9 @@ export * from "./agent-parser";
 export * from "./agent-loader";
 export * from "./agent-schema";
 export * from "./prompt-validator";
+export * from "./deferred-loader";
+export * from "./pack-types";
+export * from "./pack-loader";
 
 export interface CreateSkillRegistryOptions {
   /** Optional documentation augmenter for injecting up-to-date docs into module prompts */
@@ -106,7 +110,12 @@ export function loadUserModules(
   projectPath?: string,
   options?: CreateSkillRegistryOptions,
 ): { modules: DevOpsSkill[]; warnings: string[] } {
+  // Discover skills from user directories + installed packs
   const dopsFiles = discoverUserDopsFiles(projectPath);
+  const packs = discoverPacks(projectPath);
+  const packSkills = getPackSkillEntries(packs);
+  dopsFiles.push(...packSkills);
+
   const modules: DevOpsSkill[] = [];
   const warnings: string[] = [];
 

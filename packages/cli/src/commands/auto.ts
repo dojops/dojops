@@ -205,7 +205,7 @@ When the task requires creating or modifying files, you MUST call write_file or 
 When the task requires running commands, you MUST call run_command.
 Text-only responses are NOT acceptable when the user asks you to create, modify, or generate anything.
 
-You have exactly 7 tools: read_file, write_file, edit_file, run_command, run_skill, search_files, done.
+You have exactly 8 tools: read_file, write_file, edit_file, run_command, run_skill, search_files, search_skills, done.
 Do NOT call tools by any other name. To use a DojOps skill, call run_skill with the skill name as a parameter — do NOT call the skill name directly as a tool.
 
 Workflow:

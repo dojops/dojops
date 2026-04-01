@@ -204,11 +204,18 @@ function validateSearchPatterns(
   return null;
 }
 
+/** Callback for searching skills by keyword query. */
+export interface SkillSearchFn {
+  (query: string): Array<{ name: string; description: string; score: number }>;
+}
+
 export interface ToolExecutorOptions {
   policy: ExecutionPolicy;
   cwd: string;
   skills?: Map<string, DevOpsSkill>;
   mcpDispatcher?: McpToolDispatcher;
+  /** Callback for the search_skills tool. */
+  skillSearchFn?: SkillSearchFn;
   onToolStart?: (call: ToolCall) => void;
   onToolEnd?: (call: ToolCall, result: ToolResult) => void;
   /** Called before any file write/edit — use for checkpointing. */
@@ -222,8 +229,24 @@ export interface ToolExecutorOptions {
 }
 
 /** Truncate output to fit within the context budget. */
-function truncateOutput(output: string): string {
+function truncateOutput(output: string, spillDir?: string): string {
   if (Buffer.byteLength(output, "utf-8") <= MAX_OUTPUT_BYTES) return output;
+
+  // If a spill directory is provided, persist the full output to disk
+  if (spillDir) {
+    try {
+      const spillPath = path.join(spillDir, `.dojops-tool-output-${Date.now()}.txt`);
+      if (!fs.existsSync(spillDir)) {
+        fs.mkdirSync(spillDir, { recursive: true });
+      }
+      fs.writeFileSync(spillPath, output, "utf-8");
+      const preview = output.slice(0, Math.floor(MAX_OUTPUT_BYTES * 0.8));
+      return `${preview}\n\n[output truncated — full result saved to ${spillPath} (${Buffer.byteLength(output, "utf-8")} bytes)]`;
+    } catch {
+      // Fall through to simple truncation
+    }
+  }
+
   const truncated = output.slice(0, MAX_OUTPUT_BYTES);
   return `${truncated}\n\n[truncated — output exceeded ${MAX_OUTPUT_BYTES} bytes]`;
 }
@@ -374,6 +397,9 @@ export class ToolExecutor {
           break;
         case "search_files":
           result = await this.searchFiles(call);
+          break;
+        case "search_skills":
+          result = this.searchSkills(call);
           break;
         case "done":
           result = {
@@ -887,5 +913,31 @@ export class ToolExecutor {
     }
 
     return { callId: call.id, output: truncateOutput(results.join("\n\n")) };
+  }
+
+  private searchSkills(call: ToolCall): ToolResult {
+    const query = (call.arguments.query as string) ?? "";
+
+    if (!this.opts.skillSearchFn) {
+      // Fallback: list all skill names from the skills map
+      if (this.opts.skills) {
+        const names = [...this.opts.skills.keys()].sort();
+        return {
+          callId: call.id,
+          output: `Available skills (${names.length}): ${names.join(", ")}`,
+        };
+      }
+      return { callId: call.id, output: "No skills available." };
+    }
+
+    const results = this.opts.skillSearchFn(query);
+    if (results.length === 0) {
+      return { callId: call.id, output: `No skills matched query "${query}".` };
+    }
+
+    const lines = results.map(
+      (r) => `- ${r.name} (score: ${r.score.toFixed(2)}): ${r.description}`,
+    );
+    return { callId: call.id, output: lines.join("\n") };
   }
 }

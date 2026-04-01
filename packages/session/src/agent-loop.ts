@@ -5,9 +5,16 @@ import type {
   ToolDefinition,
   ToolCall,
   ToolResult,
+  HookEngine,
 } from "@dojops/core";
-import { buildToolCallingSystemPrompt, parseToolCallsFromContent } from "@dojops/core";
+import {
+  buildToolCallingSystemPrompt,
+  parseToolCallsFromContent,
+  isContextOverflowError,
+} from "@dojops/core";
 import type { ToolExecutor } from "@dojops/executor";
+import { ContextBudgetTracker } from "./context-budget";
+import type { BudgetSnapshot } from "./context-budget";
 
 export interface AgentLoopOptions {
   provider: LLMProvider;
@@ -18,6 +25,10 @@ export interface AgentLoopOptions {
   maxIterations?: number;
   /** Maximum total tokens before stopping (default: 200_000). */
   maxTotalTokens?: number;
+  /** Provider name for context window detection (e.g. "openai", "anthropic"). */
+  providerName?: string;
+  /** Override the provider's default context window limit. */
+  contextLimit?: number;
   /** Reasoning effort level for extended thinking (Anthropic). */
   thinking?: "none" | "low" | "medium" | "high";
   /**
@@ -26,8 +37,20 @@ export interface AgentLoopOptions {
    * instead of terminating. This gates output on validation passing.
    */
   validateBeforeDone?: () => Promise<string[]>;
-  /** When set, enables progressive summarization to keep context focused. */
+  /** When set, enables progressive and full summarization to keep context focused. */
   summarizationProvider?: LLMProvider;
+  /** Pre-configured budget tracker. If omitted, one is created from the other options. */
+  budgetTracker?: ContextBudgetTracker;
+  /**
+   * When running as a sub-agent, fraction of parent's remaining budget to use.
+   * Typically set to 0.25 (25%) to prevent sub-agents from exhausting the parent budget.
+   * Only applies when budgetTracker is a child created via createSubAgentBudget().
+   */
+  subAgentBudgetFraction?: number;
+  /** Max times to continue after a max_tokens truncation (default: 3). */
+  maxTokensContinuations?: number;
+  /** Hook engine for lifecycle events (optional). */
+  hookEngine?: HookEngine;
   onIteration?: (iteration: number, message: AgentMessage) => void;
   onToolCall?: (call: ToolCall) => void;
   onToolResult?: (result: ToolResult) => void;
@@ -44,6 +67,8 @@ export interface AgentLoopResult {
   filesModified: string[];
   /** Accumulated reasoning trace from extended thinking (when enabled). */
   reasoningTrace?: string;
+  /** Context budget state at the end of the run. */
+  budgetSnapshot?: BudgetSnapshot;
 }
 
 /**
@@ -123,16 +148,25 @@ function extractSummaryFromContent(content: string): string {
  */
 export class AgentLoop {
   private readonly maxIterations: number;
-  private readonly maxTotalTokens: number;
-  private totalTokens = 0;
+  private readonly maxTokensContinuations: number;
+  private readonly tracker: ContextBudgetTracker;
   /** Sliding window of recent tool call signatures for stale-loop detection. */
   private readonly recentCallSignatures: string[] = [];
   /** Number of consecutive repeated signatures before injecting reassessment. */
   private static readonly STALE_THRESHOLD = 3;
+  /** How many max_tokens continuations have been used this run. */
+  private continuationCount = 0;
 
   constructor(private readonly opts: AgentLoopOptions) {
     this.maxIterations = opts.maxIterations ?? 50;
-    this.maxTotalTokens = opts.maxTotalTokens ?? 200_000;
+    this.maxTokensContinuations = opts.maxTokensContinuations ?? 3;
+    this.tracker =
+      opts.budgetTracker ??
+      new ContextBudgetTracker({
+        providerName: opts.providerName,
+        contextLimit: opts.contextLimit,
+        maxTotalTokens: opts.maxTotalTokens,
+      });
   }
 
   async run(userPrompt: string): Promise<AgentLoopResult> {
@@ -145,7 +179,35 @@ export class AgentLoop {
 
     for (let iteration = 0; iteration < this.maxIterations; iteration++) {
       iterationCount++;
-      const response = await this.generateWithTools(messages);
+
+      // Emit AgentIteration hook (fire-and-forget, non-blocking)
+      this.opts.hookEngine
+        ?.emit("AgentIteration", {
+          iteration,
+          totalTokens: this.tracker.getSnapshot().totalConsumed,
+        })
+        .catch(() => {});
+
+      // Generate with context overflow recovery
+      let response: LLMToolResponse;
+      try {
+        response = await this.generateWithTools(messages);
+      } catch (err) {
+        if (isContextOverflowError(err)) {
+          // Reactive compaction: force full compaction and retry once
+          this.tracker.forceFullCompaction();
+          await this.fullCompact(messages);
+          this.tracker.recordCompaction(messages);
+          try {
+            response = await this.generateWithTools(messages);
+          } catch {
+            summary = "Stopped: context overflow persists after compaction.";
+            break;
+          }
+        } else {
+          throw err;
+        }
+      }
 
       // Capture reasoning trace from extended thinking
       if (response.thinking) {
@@ -153,7 +215,7 @@ export class AgentLoop {
       }
 
       if (response.usage) {
-        this.totalTokens += response.usage.totalTokens;
+        this.tracker.recordUsage(response.usage);
       }
 
       this.appendAssistantMessage(messages, response, iteration);
@@ -192,6 +254,17 @@ export class AgentLoop {
         summary = stopResult.summary;
         success = stopResult.success;
         break;
+      }
+
+      // Max tokens recovery: inject continuation prompt to resume where the LLM left off
+      if (response.stopReason === "max_tokens") {
+        messages.push({
+          role: "user",
+          content:
+            "Your response was cut off by the token limit. Resume directly from where you stopped. " +
+            "Do not repeat what you already said. Continue working on the task.",
+        });
+        continue;
       }
 
       // If LLM returned text-only without using tools, nudge it to use tools
@@ -261,29 +334,44 @@ export class AgentLoop {
         });
       }
 
-      // Check token budget
-      if (this.totalTokens >= this.maxTotalTokens) {
-        summary = `Stopped: token budget exhausted (${this.totalTokens}/${this.maxTotalTokens}).`;
+      // Check hard token budget
+      if (this.tracker.isBudgetExhausted()) {
+        const snap = this.tracker.getSnapshot();
+        summary = `Stopped: token budget exhausted (${snap.totalConsumed}/${snap.contextLimit}).`;
         break;
       }
 
-      await this.maybeSummarize(messages);
-      this.compactMessages(messages);
+      // Per-iteration budget check: if last iteration used 3x the average,
+      // warn the agent to be more concise
+      if (this.tracker.isIterationOverBudget()) {
+        messages.push({
+          role: "user",
+          content:
+            "Warning: the last iteration consumed significantly more tokens than average. " +
+            "Be more concise in tool arguments and avoid reading large files unnecessarily. " +
+            `Estimated iterations remaining: ${this.tracker.estimatedIterationsRemaining()}.`,
+        });
+      }
+
+      // Three-tier context compaction
+      await this.compactByTier(messages);
     }
 
     if (iterationCount >= this.maxIterations && !success) {
       summary = `Stopped: reached maximum iterations (${this.maxIterations}).`;
     }
 
+    const budgetSnapshot = this.tracker.getSnapshot();
     return {
       success,
       summary,
       iterations: iterationCount,
-      totalTokens: this.totalTokens,
+      totalTokens: budgetSnapshot.totalConsumed,
       toolCalls: allToolCalls,
       filesWritten: this.opts.toolExecutor.getFilesWritten(),
       filesModified: this.opts.toolExecutor.getFilesModified(),
       reasoningTrace: thinkingParts.length > 0 ? thinkingParts.join("\n\n---\n\n") : undefined,
+      budgetSnapshot,
     };
   }
 
@@ -321,7 +409,15 @@ export class AgentLoop {
     }
 
     if (response.stopReason === "max_tokens") {
-      return { summary: "Stopped: LLM response hit max tokens limit.", success: false };
+      // Try to continue instead of stopping (up to maxTokensContinuations times)
+      if (this.continuationCount < this.maxTokensContinuations) {
+        this.continuationCount++;
+        return null; // null = continue the loop; the run() method injects a continuation prompt
+      }
+      return {
+        summary: "Stopped: LLM response hit max tokens limit after retries.",
+        success: false,
+      };
     }
 
     const doneCall = response.toolCalls.find((tc) => tc.name === "done");
@@ -346,8 +442,22 @@ export class AgentLoop {
       this.opts.onToolCall?.(call);
       allToolCalls.push({ name: call.name, arguments: call.arguments });
 
+      // Emit PreExecute hook (non-blocking)
+      this.opts.hookEngine
+        ?.emit("PreExecute", { tool: call.name, arguments: call.arguments })
+        .catch(() => {});
+
       const result = await this.opts.toolExecutor.execute(call);
       this.opts.onToolResult?.(result);
+
+      // Emit PostExecute hook (non-blocking)
+      this.opts.hookEngine
+        ?.emit("PostExecute", {
+          tool: call.name,
+          success: !result.isError,
+          outputLength: result.output.length,
+        })
+        .catch(() => {});
 
       messages.push({
         role: "tool",
@@ -447,30 +557,67 @@ export class AgentLoop {
   }
 
   /**
-   * Estimate token count using word-based heuristic (same approach as MemoryManager).
+   * Three-tier context compaction driven by ContextBudgetTracker.
+   * - micro: truncate old tool results (no LLM call)
+   * - progressive: summarize oldest third via LLM
+   * - full: compress entire conversation into a single summary
    */
-  private estimateTokens(messages: AgentMessage[]): number {
-    let totalChars = 0;
-    for (const msg of messages) {
-      if (msg.content) totalChars += msg.content.length;
+  private async compactByTier(messages: AgentMessage[]): Promise<void> {
+    const tier = this.tracker.evaluate(messages);
+    if (tier === "none") return;
+
+    if (tier === "micro") {
+      this.microCompact(messages);
+      this.tracker.recordCompaction(messages);
+      return;
     }
-    // ~4 chars per token on average
-    return Math.ceil(totalChars / 4);
+
+    if (tier === "progressive") {
+      this.microCompact(messages);
+      await this.progressiveSummarize(messages);
+      this.tracker.recordCompaction(messages);
+      return;
+    }
+
+    // tier === "full"
+    this.microCompact(messages);
+    await this.fullCompact(messages);
+    this.tracker.recordCompaction(messages);
   }
 
   /**
-   * Progressive summarization: when context exceeds 60% of budget, summarize
-   * the oldest third of messages (preserving the initial user message).
+   * Micro-compaction: truncate old tool results to 200 chars.
+   * Keeps the most recent 10 tool results intact.
    */
-  private async maybeSummarize(messages: AgentMessage[]): Promise<void> {
+  private microCompact(messages: AgentMessage[]): void {
+    const keepCount = 10;
+    let toolsSeen = 0;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "tool") {
+        toolsSeen++;
+        if (toolsSeen > keepCount) {
+          const msg = messages[i] as {
+            role: "tool";
+            callId: string;
+            content: string;
+            isError?: boolean;
+          };
+          if (msg.content.length > 200) {
+            msg.content = msg.content.slice(0, 200) + "\n[truncated — old tool result]";
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Progressive summarization: summarize the oldest third of messages
+   * (preserving the initial user message) using the summarization provider.
+   */
+  private async progressiveSummarize(messages: AgentMessage[]): Promise<void> {
     if (!this.opts.summarizationProvider) return;
-    if (messages.length < 6) return; // too few messages to summarize
+    if (messages.length < 6) return;
 
-    const estimated = this.estimateTokens(messages);
-    const threshold = this.maxTotalTokens * 0.6;
-    if (estimated <= threshold) return;
-
-    // Summarize the oldest third of messages (skip index 0 — initial user message)
     const summarizeCount = Math.max(2, Math.floor((messages.length - 1) / 3));
     const toSummarize = messages.slice(1, 1 + summarizeCount);
 
@@ -489,43 +636,47 @@ export class AgentLoop {
         prompt: summaryText,
       });
 
-      // Replace summarized messages with a single system message
       messages.splice(1, summarizeCount, {
         role: "user",
         content: `[Context summary of earlier interactions]\n${result.content}`,
       });
     } catch {
-      // Summarization failure is non-fatal — fall through to compactMessages
+      // Summarization failure is non-fatal
     }
   }
 
   /**
-   * Compact old messages to prevent context overflow.
-   * After 15 tool result messages, summarize older ones.
+   * Full compaction: compress the entire conversation (except the initial user
+   * message and the most recent 4 messages) into a single context summary.
+   * Used as a last resort when approaching the provider's context limit.
    */
-  private compactMessages(messages: AgentMessage[]): void {
-    const toolMessages = messages.filter((m) => m.role === "tool");
-    if (toolMessages.length <= 15) return;
+  private async fullCompact(messages: AgentMessage[]): Promise<void> {
+    if (!this.opts.summarizationProvider) return;
+    const keepRecent = 4;
+    if (messages.length <= keepRecent + 2) return; // nothing to compact
 
-    // Find the oldest tool results beyond the last 10
-    const keepCount = 10;
-    let toolsSeen = 0;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "tool") {
-        toolsSeen++;
-        if (toolsSeen > keepCount) {
-          // Truncate old tool results to a single line
-          const msg = messages[i] as {
-            role: "tool";
-            callId: string;
-            content: string;
-            isError?: boolean;
-          };
-          if (msg.content.length > 200) {
-            msg.content = msg.content.slice(0, 200) + "\n[truncated — old tool result]";
-          }
-        }
-      }
+    const toSummarize = messages.slice(1, messages.length - keepRecent);
+    const summaryText = toSummarize
+      .map((m) => {
+        const prefix = m.role === "tool" ? `[tool ${m.callId}]` : `[${m.role}]`;
+        const content = (m.content ?? "").slice(0, 300);
+        return `${prefix} ${content}`;
+      })
+      .join("\n");
+
+    try {
+      const result = await this.opts.summarizationProvider.generate({
+        system:
+          "Compress this entire conversation into a concise summary. Include: the original task, all files created/modified, commands run and their outcomes, key decisions made, current state of progress. Output only the summary.",
+        prompt: summaryText,
+      });
+
+      messages.splice(1, toSummarize.length, {
+        role: "user",
+        content: `[Full context summary — earlier messages compacted]\n${result.content}`,
+      });
+    } catch {
+      // Full compaction failure is non-fatal — micro-compact already ran
     }
   }
 }

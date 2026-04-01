@@ -140,6 +140,24 @@ export const SEARCH_FILES_TOOL: ToolDefinition = {
   },
 };
 
+export const SEARCH_SKILLS_TOOL: ToolDefinition = {
+  name: "search_skills",
+  description:
+    "Search available DojOps skills by keyword. Use this to discover skills when none of the pre-loaded skills match your needs. Returns skill names, descriptions, and relevance scores.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description:
+          "Search query — keywords describing the skill you need (e.g. 'kubernetes helm chart', 'ci github actions', 'docker compose')",
+      },
+    },
+    required: ["query"],
+    additionalProperties: false,
+  },
+};
+
 export const DONE_TOOL: ToolDefinition = {
   name: "done",
   description: "Signal that the task is complete. Provide a summary of what was accomplished.",
@@ -156,7 +174,7 @@ export const DONE_TOOL: ToolDefinition = {
   },
 };
 
-/** All 7 agent tools, ready to pass to LLM providers. */
+/** All 8 agent tools, ready to pass to LLM providers. */
 export const AGENT_TOOLS: ToolDefinition[] = [
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
@@ -164,5 +182,6 @@ export const AGENT_TOOLS: ToolDefinition[] = [
   RUN_COMMAND_TOOL,
   RUN_SKILL_TOOL,
   SEARCH_FILES_TOOL,
+  SEARCH_SKILLS_TOOL,
   DONE_TOOL,
 ];

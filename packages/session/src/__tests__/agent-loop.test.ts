@@ -205,12 +205,18 @@ describe("AgentLoop", () => {
     expect(result.summary).toContain("token budget");
   });
 
-  it("handles max_tokens stop reason", async () => {
+  it("handles max_tokens with continuation recovery", async () => {
+    // First response truncated, second response completes normally
     const provider = mockProvider([
       {
         content: "Truncated resp",
         toolCalls: [],
         stopReason: "max_tokens",
+      },
+      {
+        content: "",
+        toolCalls: [{ id: "d1", name: "done", arguments: { summary: "Recovered" } }],
+        stopReason: "tool_use",
       },
     ]);
 
@@ -219,6 +225,29 @@ describe("AgentLoop", () => {
       toolExecutor: mockToolExecutor(),
       tools,
       systemPrompt: "Test",
+    });
+
+    const result = await loop.run("Task");
+    expect(result.success).toBe(true);
+    expect(result.summary).toBe("Recovered");
+  });
+
+  it("stops after max_tokens continuations exhausted", async () => {
+    // All responses are truncated; should stop after maxTokensContinuations
+    const truncated = {
+      content: "Truncated",
+      toolCalls: [] as ToolCall[],
+      stopReason: "max_tokens" as const,
+    };
+    const provider = mockProvider([truncated, truncated, truncated, truncated, truncated]);
+
+    const loop = new AgentLoop({
+      provider,
+      toolExecutor: mockToolExecutor(),
+      tools,
+      systemPrompt: "Test",
+      maxTokensContinuations: 2,
+      maxIterations: 10,
     });
 
     const result = await loop.run("Task");
@@ -534,9 +563,9 @@ describe("AgentLoop", () => {
         })),
       };
 
-      // Build enough messages to exceed 60% of a small budget.
-      // With maxTotalTokens=1000, threshold=600 tokens. Each tool result adds chars.
-      // We need the provider to report enough usage to trigger the check.
+      // Build enough messages to exceed the progressive threshold (70% of contextLimit).
+      // With contextLimit=2000, threshold=1400 tokens. Each iteration adds ~250 tokens
+      // (400 char content + 500 char tool result) to the context window estimate.
       const responses = [];
       for (let i = 0; i < 8; i++) {
         responses.push({
@@ -560,7 +589,8 @@ describe("AgentLoop", () => {
         ),
         tools,
         systemPrompt: "Test",
-        maxTotalTokens: 1000, // small budget so 60% threshold is easily exceeded
+        maxTotalTokens: 100_000,
+        contextLimit: 2000, // small context window so progressive threshold is easily exceeded
         summarizationProvider,
       });
 
@@ -598,7 +628,8 @@ describe("AgentLoop", () => {
         toolExecutor: mockToolExecutor(new Map([["read_file", "x".repeat(500)]])),
         tools,
         systemPrompt: "Test",
-        maxTotalTokens: 1000,
+        maxTotalTokens: 100_000,
+        contextLimit: 2000,
         summarizationProvider,
       });
 

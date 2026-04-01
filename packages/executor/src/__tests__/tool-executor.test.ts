@@ -290,6 +290,63 @@ describe("ToolExecutor", () => {
     });
   });
 
+  describe("search_skills", () => {
+    it("returns search results from skillSearchFn", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const searchFn = (query: string) => [
+        { name: "terraform", description: "Generate Terraform configs", score: 0.9 },
+        { name: "dockerfile", description: "Generate Dockerfiles", score: 0.5 },
+      ];
+      const searchExecutor = new ToolExecutor({
+        policy,
+        cwd: tmpDir,
+        skillSearchFn: searchFn,
+      });
+
+      const result = await searchExecutor.execute(
+        makeCall("search_skills", { query: "infrastructure cloud" }),
+      );
+      expect(result.isError).toBeUndefined();
+      expect(result.output).toContain("terraform");
+      expect(result.output).toContain("0.90");
+      expect(result.output).toContain("dockerfile");
+    });
+
+    it("returns no-match message when search yields nothing", async () => {
+      const searchExecutor = new ToolExecutor({
+        policy,
+        cwd: tmpDir,
+        skillSearchFn: () => [],
+      });
+
+      const result = await searchExecutor.execute(makeCall("search_skills", { query: "quantum" }));
+      expect(result.output).toContain("No skills matched");
+    });
+
+    it("falls back to listing skill names when no searchFn provided", async () => {
+      const skills = new Map<string, DevOpsSkill>([
+        ["terraform", { name: "terraform" } as DevOpsSkill],
+        ["dockerfile", { name: "dockerfile" } as DevOpsSkill],
+      ]);
+      const fallbackExecutor = new ToolExecutor({
+        policy,
+        cwd: tmpDir,
+        skills,
+      });
+
+      const result = await fallbackExecutor.execute(
+        makeCall("search_skills", { query: "anything" }),
+      );
+      expect(result.output).toContain("terraform");
+      expect(result.output).toContain("dockerfile");
+    });
+
+    it("returns no-skills message when nothing is available", async () => {
+      const result = await executor.execute(makeCall("search_skills", { query: "anything" }));
+      expect(result.output).toContain("No skills available");
+    });
+  });
+
   describe("callbacks", () => {
     it("calls onToolStart and onToolEnd", async () => {
       const onStart = vi.fn();

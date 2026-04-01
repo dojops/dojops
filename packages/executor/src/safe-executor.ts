@@ -31,6 +31,11 @@ export interface ExecutorProgressCallback {
   onVerificationPassed?(taskId: string): void;
 }
 
+/** Minimal hook engine interface (matches HookEngine from @dojops/core). */
+export interface HookEmitter {
+  emit(event: string, payload?: Record<string, unknown>): Promise<unknown[]>;
+}
+
 export interface SafeExecutorOptions {
   policy?: Partial<ExecutionPolicy>;
   approvalHandler?: ApprovalHandler;
@@ -44,6 +49,8 @@ export interface SafeExecutorOptions {
   progress?: ExecutorProgressCallback;
   /** Optional audit persistence for hash-chained JSONL logging to disk. */
   auditPersistence?: AuditPersistence;
+  /** Optional hook engine for lifecycle events. */
+  hookEngine?: HookEmitter;
 }
 
 /** Options for the internal runExecution method. */
@@ -86,6 +93,7 @@ export class SafeExecutor {
   private readonly proactiveCritic: CriticCallback | undefined;
   private readonly progress: ExecutorProgressCallback | undefined;
   private readonly auditPersistence: AuditPersistence | undefined;
+  private readonly hookEngine: HookEmitter | undefined;
   private readonly auditLog: ExecutionAuditEntry[] = [];
   private readonly tokenUsage = { prompt: 0, completion: 0, total: 0 };
 
@@ -96,6 +104,7 @@ export class SafeExecutor {
     this.critic = options.critic;
     this.proactiveCritic = options.proactiveCritic;
     this.auditPersistence = options.auditPersistence;
+    this.hookEngine = options.hookEngine;
   }
 
   private handleTimeoutError(
@@ -541,6 +550,9 @@ export class SafeExecutor {
       });
     }
 
+    // Emit PreSkillGenerate hook
+    this.hookEngine?.emit("PreSkillGenerate", { taskId, skill: tool.name }).catch(() => {});
+
     let generateOutput: SkillOutput;
     if (preGeneratedOutput) {
       generateOutput = preGeneratedOutput;
@@ -551,6 +563,11 @@ export class SafeExecutor {
       generateOutput = genResult.output;
     }
 
+    // Emit PostSkillGenerate hook
+    this.hookEngine
+      ?.emit("PostSkillGenerate", { taskId, skill: tool.name, success: generateOutput.success })
+      .catch(() => {});
+
     generateOutput = await this.runProactiveCritique(
       taskId,
       tool,
@@ -559,6 +576,9 @@ export class SafeExecutor {
       startTime,
       meta,
     );
+
+    // Emit PreVerify hook
+    this.hookEngine?.emit("PreVerify", { taskId, skill: tool.name }).catch(() => {});
 
     const verified = await this.runVerifyAndRepair(
       taskId,
@@ -570,6 +590,18 @@ export class SafeExecutor {
     );
     if ("result" in verified) return verified.result;
     generateOutput = verified.generateOutput;
+
+    // Emit PostVerify hook
+    this.hookEngine
+      ?.emit("PostVerify", {
+        taskId,
+        skill: tool.name,
+        passed: verified.verification?.passed ?? true,
+      })
+      .catch(() => {});
+
+    // Emit PreApproval hook
+    this.hookEngine?.emit("PreApproval", { taskId, skill: tool.name }).catch(() => {});
 
     return this.runApprovalAndExecution(
       taskId,

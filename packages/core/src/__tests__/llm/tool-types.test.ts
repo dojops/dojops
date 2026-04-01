@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { ToolDefinition, ToolCall, ToolResult, AgentMessage } from "../../llm/tool-types";
-import { AGENT_TOOLS, READ_FILE_TOOL, DONE_TOOL } from "../../llm/tool-defs";
+import { AGENT_TOOLS, READ_FILE_TOOL, SEARCH_SKILLS_TOOL, DONE_TOOL } from "../../llm/tool-defs";
 import {
   buildToolCallingSystemPrompt,
   parseToolCallsFromContent,
@@ -57,8 +57,8 @@ describe("AgentMessage", () => {
 });
 
 describe("AGENT_TOOLS", () => {
-  it("defines exactly 7 tools", () => {
-    expect(AGENT_TOOLS).toHaveLength(7);
+  it("defines exactly 8 tools", () => {
+    expect(AGENT_TOOLS).toHaveLength(8);
   });
 
   it("contains all expected tool names", () => {
@@ -70,6 +70,7 @@ describe("AGENT_TOOLS", () => {
       "run_command",
       "run_skill",
       "search_files",
+      "search_skills",
       "done",
     ]);
   });
@@ -88,6 +89,10 @@ describe("AGENT_TOOLS", () => {
 
   it("done requires summary", () => {
     expect(DONE_TOOL.parameters.required).toContain("summary");
+  });
+
+  it("search_skills requires query", () => {
+    expect(SEARCH_SKILLS_TOOL.parameters.required).toContain("query");
   });
 });
 
