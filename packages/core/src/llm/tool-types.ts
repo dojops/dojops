@@ -42,7 +42,13 @@ export interface LLMToolResponse {
   content: string; // Text response (may be empty if only tool calls)
   toolCalls: ToolCall[]; // Tool calls to execute (empty = done)
   stopReason: "end_turn" | "tool_use" | "max_tokens";
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cacheCreationTokens?: number;
+    cacheReadTokens?: number;
+  };
   /** Reasoning trace from providers that support extended thinking (e.g. Anthropic). */
   thinking?: string;
 }

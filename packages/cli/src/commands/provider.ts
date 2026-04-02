@@ -4,6 +4,7 @@ import {
   loadConfig,
   saveConfig,
   validateProvider,
+  resolveProvider,
   VALID_PROVIDERS,
   getConfiguredProviders,
 } from "../config";
@@ -70,14 +71,16 @@ function getProviderDetail(name: string, config: ReturnType<typeof loadConfig>):
 async function providerList(args: string[], ctx: CLIContext): Promise<void> {
   const config = loadConfig();
   const configured = new Set(getConfiguredProviders(config));
+  const activeProvider = resolveProvider(ctx.globalOpts.provider, config);
 
   if (ctx.globalOpts.output === "json") {
     const data = VALID_PROVIDERS.map((name) => ({
       name,
       configured: configured.has(name),
+      active: activeProvider === name,
       default: config.defaultProvider === name,
       token: name !== "ollama" && config.tokens?.[name] ? "***" : null,
-      model: config.defaultProvider === name && config.defaultModel ? config.defaultModel : null,
+      model: activeProvider === name && config.defaultModel ? config.defaultModel : null,
     }));
     console.log(JSON.stringify(data, null, 2));
     return;
@@ -85,14 +88,13 @@ async function providerList(args: string[], ctx: CLIContext): Promise<void> {
 
   const lines: string[] = [];
   for (const name of VALID_PROVIDERS) {
-    const isConfigured = configured.has(name);
-    const isDefault = config.defaultProvider === name;
-    const icon = isConfigured ? pc.green("*") : pc.dim("o");
-    const defaultBadge = isDefault ? pc.cyan(" (default)") : "";
+    const isActive = activeProvider === name;
+    const icon = isActive ? pc.green("*") : configured.has(name) ? pc.dim("o") : pc.dim("o");
+    const activeBadge = isActive ? pc.cyan(" (active)") : "";
     const detail = getProviderDetail(name, config);
     const model =
-      isDefault && config.defaultModel ? `  ${pc.dim("model:")} ${config.defaultModel}` : "";
-    lines.push(`  ${icon} ${pc.bold(name)}${defaultBadge}  ${detail}${model}`);
+      isActive && config.defaultModel ? `  ${pc.dim("model:")} ${config.defaultModel}` : "";
+    lines.push(`  ${icon} ${pc.bold(name)}${activeBadge}  ${detail}${model}`);
   }
 
   p.note(lines.join("\n"), "Providers");

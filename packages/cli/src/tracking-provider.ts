@@ -29,6 +29,8 @@ export class TrackingProvider implements LLMProvider {
         promptTokens: response.usage.promptTokens,
         completionTokens: response.usage.completionTokens,
         totalTokens: response.usage.totalTokens,
+        cacheCreationTokens: response.usage.cacheCreationTokens ?? 0,
+        cacheReadTokens: response.usage.cacheReadTokens ?? 0,
       });
 
       // Budget check after recording usage

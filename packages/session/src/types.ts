@@ -35,4 +35,8 @@ export interface CompactionInfo {
 export interface ChatProgressCallbacks {
   onPhase?: (phase: ChatPhase, detail?: string) => void;
   onCompaction?: (info: CompactionInfo) => void;
+  /** Fired when the LLM streams extended thinking content. */
+  onThinking?: (text: string) => void;
+  /** Fired when token usage increments during streaming (approximate). */
+  onTokenDelta?: (count: number) => void;
 }

@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { runBin } from "@dojops/sdk";
+import { runBin, atomicWriteFileSync, backupFile } from "@dojops/sdk";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { DeterministicProvider } from "@dojops/core";
-import type { LLMProvider } from "@dojops/core";
+import { DeterministicProvider, initHookEngine } from "@dojops/core";
+import type { LLMProvider, HookEngine } from "@dojops/core";
 import { appendActivity } from "../dojops-md";
 import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
@@ -54,12 +54,66 @@ import { z } from "zod";
 type ToolEntry = ReturnType<ReturnType<typeof createSkillRegistry>["getAll"]>[number];
 
 /**
- * Lightweight skill for tasks that don't match any built-in or installed skill.
- * Generates raw LLM content with no verification.
+ * Try to extract a `{ "files": { "path": "content", ... } }` map from LLM output.
+ * Returns the file map on success or null when the output isn't parseable JSON with files.
  */
-function createGenericSkill(provider: {
-  generate(req: { system: string; prompt: string }): Promise<{ content: string }>;
-}): ToolEntry {
+export function parseGenericFiles(raw: string): Record<string, string> | null {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed.files === "object" && parsed.files !== null) {
+      const files: Record<string, string> = {};
+      for (const [key, value] of Object.entries(parsed.files)) {
+        if (typeof value === "string" && key.length > 0) {
+          files[key] = value;
+        }
+      }
+      if (Object.keys(files).length > 0) return files;
+    }
+  } catch {
+    // Not valid JSON — fall through
+  }
+  return null;
+}
+
+/**
+ * Write a files map to disk under `basePath`. Creates parent directories,
+ * backs up existing files, and returns the lists of written/modified paths.
+ */
+export function writeGenericFiles(
+  files: Record<string, string>,
+  basePath: string,
+): { filesWritten: string[]; filesModified: string[] } {
+  const filesWritten: string[] = [];
+  const filesModified: string[] = [];
+  for (const [relPath, content] of Object.entries(files)) {
+    const absPath = path.resolve(basePath, relPath);
+    const existed = fs.existsSync(absPath);
+    if (existed) {
+      backupFile(absPath);
+    }
+    atomicWriteFileSync(absPath, content);
+    if (existed) {
+      filesModified.push(relPath);
+    } else {
+      filesWritten.push(relPath);
+    }
+  }
+  return { filesWritten, filesModified };
+}
+
+/**
+ * Lightweight skill for tasks that don't match any built-in or installed skill.
+ * Generates structured JSON with a `files` map so output can be written to disk.
+ * Falls back gracefully when the LLM returns plain text instead of JSON.
+ */
+function createGenericSkill(
+  provider: {
+    generate(req: { system: string; prompt: string }): Promise<{ content: string }>;
+  },
+  basePath?: string,
+): ToolEntry {
   return {
     name: "generic",
     description: "Raw LLM generation — no matching skill available",
@@ -69,10 +123,65 @@ function createGenericSkill(provider: {
       const prompt = (input.prompt as string) ?? "";
       const result = await provider.generate({
         system:
-          "You are a DevOps configuration generator. Generate production-ready configuration based on the request. Output the file content directly — no markdown fences, no explanations.",
+          "You are a DevOps configuration generator. Generate production-ready configuration based on the request.\n" +
+          'You MUST respond with a JSON object containing a "files" field that maps relative file paths to their full contents.\n' +
+          "Example response format:\n" +
+          '{"files":{".editorconfig":"root = true\\n[*]\\nindent_style = space\\n"}}\n' +
+          "Do NOT include markdown fences, explanations, or any text outside the JSON object.",
         prompt,
       });
-      return { success: true, data: { content: result.content, files: {} } };
+      const files = parseGenericFiles(result.content);
+      return { success: true, data: { content: result.content, files: files ?? {} } };
+    },
+    async execute(input: Record<string, unknown>) {
+      // Use pre-generated output from SafeExecutor when available
+      const preGen = (input as Record<string, unknown>)._generatedOutput as
+        | { success: boolean; data: unknown }
+        | undefined;
+      let content: string;
+      let files: Record<string, string> | null;
+
+      if (preGen?.success && preGen.data) {
+        const data = preGen.data as Record<string, unknown>;
+        content = (data.content as string) ?? "";
+        // Prefer pre-parsed files map, fall back to re-parsing content
+        const preFiles = data.files as Record<string, string> | undefined;
+        files =
+          preFiles && Object.keys(preFiles).length > 0 ? preFiles : parseGenericFiles(content);
+      } else {
+        // No pre-generated output — run generate ourselves
+        const prompt = (input.prompt as string) ?? "";
+        const result = await provider.generate({
+          system:
+            "You are a DevOps configuration generator. Generate production-ready configuration based on the request.\n" +
+            'You MUST respond with a JSON object containing a "files" field that maps relative file paths to their full contents.\n' +
+            "Example response format:\n" +
+            '{"files":{".editorconfig":"root = true\\n[*]\\nindent_style = space\\n"}}\n' +
+            "Do NOT include markdown fences, explanations, or any text outside the JSON object.",
+          prompt,
+        });
+        content = result.content;
+        files = parseGenericFiles(content);
+      }
+
+      if (!files) {
+        // LLM returned plain text — no files to write
+        return {
+          success: true,
+          data: { content, files: {} },
+          filesWritten: [],
+          filesModified: [],
+        };
+      }
+
+      const root = basePath ?? process.cwd();
+      const { filesWritten, filesModified } = writeGenericFiles(files, root);
+      return {
+        success: true,
+        data: { content, files },
+        filesWritten,
+        filesModified,
+      };
     },
     // No verify() — verification is intentionally skipped for generic tasks
   } as unknown as ToolEntry;
@@ -363,6 +472,10 @@ async function executeDryRun(
     });
     const tools = registry.getAll();
 
+    if (remainingTasks.some((t) => t.tool === "generic")) {
+      tools.push(createGenericSkill(provider, root));
+    }
+
     for (const task of remainingTasks) {
       const tool = tools.find((t) => t.name === task.tool);
       if (!tool) {
@@ -574,6 +687,7 @@ function createExecutorWithCallbacks(
   ctx: CLIContext,
   jsonOutput: boolean,
   generateTimeoutMs?: number,
+  hookEngine?: HookEngine,
 ) {
   const taskTimers = new Map<string, number>();
   const progress = jsonOutput ? null : createProgressReporter(graph.tasks.length);
@@ -581,6 +695,7 @@ function createExecutorWithCallbacks(
     tools,
     {
       taskStart(id, desc) {
+        hookEngine?.emit("TaskStart", { taskId: id, description: desc }).catch(() => {});
         if (progress) {
           progress.start(id, desc);
         } else {
@@ -595,6 +710,7 @@ function createExecutorWithCallbacks(
         }
       },
       taskEnd(id, status, error) {
+        hookEngine?.emit("TaskComplete", { taskId: id, status, error }).catch(() => {});
         const elapsed = taskTimers.has(id) ? Date.now() - taskTimers.get(id)! : 0;
         if (progress && error) {
           progress.fail(id, error);
@@ -1189,6 +1305,7 @@ function runPostApplyInstall(root: string): void {
 function buildSafeExecutor(
   flags: ApplyFlags,
   critic: import("@dojops/executor").CriticCallback | undefined,
+  hookEngine?: HookEngine,
 ): InstanceType<typeof SafeExecutor> {
   return new SafeExecutor({
     policy: {
@@ -1204,6 +1321,7 @@ function buildSafeExecutor(
     },
     approvalHandler: flags.autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
     critic,
+    hookEngine,
     progress: flags.jsonOutput
       ? undefined
       : {
@@ -1271,7 +1389,7 @@ async function executeApplyPlan(
   const tools = registry.getAll();
 
   if (plan.tasks.some((t) => t.tool === "generic")) {
-    tools.push(createGenericSkill(provider));
+    tools.push(createGenericSkill(provider, root));
   }
 
   if (flags.replay) {
@@ -1290,13 +1408,25 @@ async function executeApplyPlan(
     // CriticAgent not available — self-repair will use raw verification feedback
   }
 
-  const safeExecutor = buildSafeExecutor(flags, critic);
+  const hookEngine = initHookEngine(root);
+  const safeExecutor = buildSafeExecutor(flags, critic, hookEngine);
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const graph = buildTaskGraph(plan);
 
+  // Emit PlanCreated hook
+  hookEngine
+    .emit("PlanCreated", { goal: plan.goal, taskCount: graph.tasks.length })
+    .catch(() => {});
+
   if (!flags.skipVerify) {
     const approved = await runPlanCritique(graph, tools, provider);
-    if (!approved) return;
+    if (!approved) {
+      if (flags.autoApprove) {
+        p.log.warn("Proceeding despite critique issues (--yes).");
+      } else {
+        return;
+      }
+    }
   }
 
   const { executor, progress } = createExecutorWithCallbacks(
@@ -1305,6 +1435,7 @@ async function executeApplyPlan(
     ctx,
     flags.jsonOutput,
     flags.timeoutMs,
+    hookEngine,
   );
   const planResult = await executor.execute(graph, {
     completedTaskIds,

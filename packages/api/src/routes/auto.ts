@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { LLMProvider } from "@dojops/core";
-import { AGENT_TOOLS } from "@dojops/core";
+import { AGENT_TOOLS, initHookEngine } from "@dojops/core";
 import type { DevOpsSkill } from "@dojops/sdk";
 import { ToolExecutor } from "@dojops/executor";
 import { AgentLoop } from "@dojops/session";
@@ -203,10 +203,12 @@ export function createAutoRouter(
       skills: skillsMap,
     });
 
+    const hookEngine = rootDir ? initHookEngine(rootDir) : undefined;
     const loop = new AgentLoop({
       provider,
       toolExecutor,
       tools: AGENT_TOOLS,
+      hookEngine,
       systemPrompt: `You are DojOps, an autonomous DevOps AI agent operating in: ${cwd}
 Complete the user's task by reading files, making changes, and running commands.
 

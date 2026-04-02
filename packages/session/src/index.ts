@@ -32,6 +32,8 @@ export type {
   BudgetSnapshot,
   BudgetAlert,
 } from "./context-budget";
+export { TurnBudgetTracker } from "./turn-budget";
+export type { TurnBudgetOptions, TurnBudgetStatus } from "./turn-budget";
 export { AgentContext } from "./agent-context";
 export type { AgentContextOptions } from "./agent-context";
 export { CoordinatorAgent } from "./coordinator-agent";

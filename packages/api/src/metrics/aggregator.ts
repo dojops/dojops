@@ -49,18 +49,17 @@ interface ScanReport {
   };
 }
 
+/**
+ * Recompute audit entry hash using the same algorithm as @dojops/executor audit.ts:
+ * SHA-256 of JSON.stringify({...entry, hash: undefined, previousHash}).
+ * Falls back to HMAC-SHA-256 if an hmacKey is provided.
+ */
 function computeAuditHash(entry: MetricsAuditEntry, hmacKey?: string | null): string {
-  const payload = [
-    entry.seq,
-    entry.timestamp,
-    entry.user,
-    entry.command,
-    entry.action,
-    entry.planId ?? "",
-    entry.status,
-    entry.durationMs,
-    entry.previousHash ?? "genesis",
-  ].join("\0");
+  const payload = JSON.stringify({
+    ...entry,
+    hash: undefined,
+    previousHash: entry.previousHash ?? "genesis",
+  });
   if (hmacKey) {
     return crypto.createHmac("sha256", hmacKey).update(payload).digest("hex");
   }

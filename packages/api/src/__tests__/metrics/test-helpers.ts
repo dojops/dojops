@@ -8,17 +8,11 @@ export function createTempDir(prefix = "dojops-metrics-test-"): string {
 }
 
 export function computeAuditHash(entry: Record<string, unknown>): string {
-  const payload = [
-    entry.seq,
-    entry.timestamp,
-    entry.user,
-    entry.command,
-    entry.action,
-    (entry.planId as string) ?? "",
-    entry.status,
-    entry.durationMs,
-    (entry.previousHash as string) ?? "genesis",
-  ].join("\0");
+  const payload = JSON.stringify({
+    ...entry,
+    hash: undefined,
+    previousHash: (entry.previousHash as string) ?? "genesis",
+  });
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 

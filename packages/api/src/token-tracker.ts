@@ -9,6 +9,8 @@ import path from "node:path";
 export class TokenTracker {
   private currentDate: string;
   private totalTokens: number;
+  private cacheCreationTokens: number;
+  private cacheReadTokens: number;
   private readonly budget: number;
   private readonly persistPath: string | null;
 
@@ -16,6 +18,8 @@ export class TokenTracker {
     this.budget = budget ?? Number.parseInt(process.env.DOJOPS_DAILY_TOKEN_BUDGET ?? "1000000", 10);
     this.currentDate = this.today();
     this.totalTokens = 0;
+    this.cacheCreationTokens = 0;
+    this.cacheReadTokens = 0;
     this.persistPath = null;
 
     if (persistDir) {
@@ -38,6 +42,8 @@ export class TokenTracker {
     if (date !== this.currentDate) {
       this.currentDate = date;
       this.totalTokens = 0;
+      this.cacheCreationTokens = 0;
+      this.cacheReadTokens = 0;
       this.saveToDisk();
     }
   }
@@ -52,6 +58,8 @@ export class TokenTracker {
         // Only restore if the date matches today — otherwise start fresh
         if (data.date === this.today()) {
           this.totalTokens = data.totalTokens;
+          this.cacheCreationTokens = data.cacheCreationTokens ?? 0;
+          this.cacheReadTokens = data.cacheReadTokens ?? 0;
           this.currentDate = data.date;
         }
       }
@@ -66,7 +74,12 @@ export class TokenTracker {
     try {
       fs.writeFileSync(
         this.persistPath,
-        JSON.stringify({ date: this.currentDate, totalTokens: this.totalTokens }),
+        JSON.stringify({
+          date: this.currentDate,
+          totalTokens: this.totalTokens,
+          cacheCreationTokens: this.cacheCreationTokens,
+          cacheReadTokens: this.cacheReadTokens,
+        }),
       );
     } catch {
       // Ignore write failures
@@ -74,9 +87,14 @@ export class TokenTracker {
   }
 
   /** Record token usage. Returns budgetExceeded flag. */
-  record(tokens: number): { budgetExceeded: boolean } {
+  record(
+    tokens: number,
+    cache?: { cacheCreationTokens?: number; cacheReadTokens?: number },
+  ): { budgetExceeded: boolean } {
     this.maybeReset();
     this.totalTokens += tokens;
+    this.cacheCreationTokens += cache?.cacheCreationTokens ?? 0;
+    this.cacheReadTokens += cache?.cacheReadTokens ?? 0;
     this.saveToDisk();
     if (this.totalTokens > this.budget) {
       console.warn(
@@ -108,6 +126,8 @@ export class TokenTracker {
     budget: number;
     percentUsed: number;
     budgetExceeded: boolean;
+    cacheCreationTokens: number;
+    cacheReadTokens: number;
   } {
     this.maybeReset();
     return {
@@ -116,6 +136,8 @@ export class TokenTracker {
       budget: this.budget,
       percentUsed: this.budget > 0 ? Math.round((this.totalTokens / this.budget) * 10000) / 100 : 0,
       budgetExceeded: this.totalTokens > this.budget,
+      cacheCreationTokens: this.cacheCreationTokens,
+      cacheReadTokens: this.cacheReadTokens,
     };
   }
 }

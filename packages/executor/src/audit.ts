@@ -12,6 +12,11 @@ export function computeAuditHash(entry: ExecutionAuditEntry, previousHash: strin
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
+/** Minimal hook engine interface (matches HookEngine from @dojops/core). */
+interface AuditHookEmitter {
+  emit(event: string, payload?: Record<string, unknown>): Promise<unknown[]>;
+}
+
 /**
  * Persists audit entries as newline-delimited JSON (JSONL) to `.dojops/audit.jsonl`.
  * Each entry includes a `hash` and `previousHash` field forming a hash chain.
@@ -21,8 +26,9 @@ export class AuditPersistence {
   private readonly headFilePath: string;
   private readonly genesisHash: string;
   private lastHash: string;
+  private readonly hookEngine?: AuditHookEmitter;
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, hookEngine?: AuditHookEmitter) {
     const dir = path.join(projectRoot, ".dojops");
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -31,6 +37,7 @@ export class AuditPersistence {
     this.headFilePath = path.join(dir, "audit-head.json");
     this.genesisHash = this.loadGenesisHash();
     this.lastHash = this.readLastHash();
+    this.hookEngine = hookEngine;
   }
 
   /** Append an audit entry with hash chain fields. Mutates the entry in-place. */
@@ -46,6 +53,15 @@ export class AuditPersistence {
     if (isFirstEntry) {
       this.writeHead(entry.hash);
     }
+
+    // Emit AuditEntry hook
+    this.hookEngine
+      ?.emit("AuditEntry", {
+        taskId: entry.taskId,
+        skillName: entry.skillName,
+        status: entry.status,
+      })
+      .catch(() => {});
   }
 
   /** Read all persisted audit entries, skipping corrupt lines. */

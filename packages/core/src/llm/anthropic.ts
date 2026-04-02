@@ -46,10 +46,16 @@ export class AnthropicProvider implements LLMProvider {
 
   private extractUsage(message: Anthropic.Message): LLMUsage | undefined {
     if (!message.usage) return undefined;
+    const usage = message.usage as Anthropic.Usage & {
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+    };
     return {
-      promptTokens: message.usage.input_tokens,
-      completionTokens: message.usage.output_tokens,
-      totalTokens: message.usage.input_tokens + message.usage.output_tokens,
+      promptTokens: usage.input_tokens,
+      completionTokens: usage.output_tokens,
+      totalTokens: usage.input_tokens + usage.output_tokens,
+      cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
+      cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     };
   }
 

@@ -73,6 +73,8 @@ describe("AnthropicProvider.generateStream", () => {
       promptTokens: 100,
       completionTokens: 50,
       totalTokens: 150,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
     });
   });
 

@@ -1207,6 +1207,7 @@ function printExtendedCommandHelp(command: string): boolean {
       console.log(`  ${pc.cyan("--force")}                Skip git dirty working tree check`);
       console.log(`  ${pc.cyan("--allow-all-paths")}      Bypass DevOps file write allowlist`);
       console.log(`  ${pc.cyan("--commit")}               Auto-commit changes to git`);
+      console.log(`  ${pc.cyan("--worktree")}             Run in an isolated git worktree`);
       console.log(
         `  ${pc.cyan("--background")}           Run in background, return run ID immediately`,
       );

@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { scanRepo, RepoContext } from "@dojops/core";
+import { scanRepo, RepoContext, initHookEngine } from "@dojops/core";
 import { createSkillRegistry } from "@dojops/skill-registry";
 import { PlannerExecutor, TaskGraph, TaskNode } from "@dojops/planner";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
@@ -119,10 +119,12 @@ export const ariseCommand = async (args: string[], ctx: CLIContext): Promise<voi
   const taskTimers = new Map<string, number>();
   const progress = jsonOutput ? null : createProgressReporter(graph.tasks.length);
 
+  const ariseHookEngine = initHookEngine(root);
   const executor = new PlannerExecutor(
     tools,
     {
       taskStart(id, desc) {
+        ariseHookEngine.emit("TaskStart", { taskId: id, description: desc }).catch(() => {});
         if (progress) {
           progress.start(id, desc);
         } else {
@@ -131,6 +133,9 @@ export const ariseCommand = async (args: string[], ctx: CLIContext): Promise<voi
         taskTimers.set(id, Date.now());
       },
       taskEnd(id, _status, error) {
+        ariseHookEngine
+          .emit("TaskComplete", { taskId: id, status: _status, error })
+          .catch(() => {});
         if (progress && error) {
           progress.fail(id, error);
         } else if (progress) {
@@ -158,6 +163,7 @@ export const ariseCommand = async (args: string[], ctx: CLIContext): Promise<voi
     // CriticAgent not available
   }
 
+  const hookEngine = initHookEngine(root);
   const safeExecutor = new SafeExecutor({
     policy: {
       allowWrite: true,
@@ -172,6 +178,7 @@ export const ariseCommand = async (args: string[], ctx: CLIContext): Promise<voi
     },
     approvalHandler: autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
     critic,
+    hookEngine,
     progress: jsonOutput
       ? undefined
       : {

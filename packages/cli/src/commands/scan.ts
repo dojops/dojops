@@ -22,6 +22,7 @@ import type {
   ComplianceReport,
 } from "@dojops/scanner";
 import type { RepoContext } from "@dojops/core";
+import { initHookEngine } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { CLIContext } from "../types";
 import { appendActivity } from "../dojops-md";
@@ -71,6 +72,16 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   saveReport(root, report);
+
+  // Emit ScanComplete hook
+  const hookEngine = initHookEngine(root);
+  hookEngine
+    .emit("ScanComplete", {
+      total: report.summary.total,
+      critical: report.summary.critical,
+      high: report.summary.high,
+    })
+    .catch(() => {});
 
   if (flags.compareMode) {
     handleCompareMode(report, root);

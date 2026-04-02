@@ -82,11 +82,18 @@ export async function openaiCompatGenerate(
 
   const content = choice.message.content ?? "";
 
+  const cachedTokens = (
+    completion.usage as typeof completion.usage & {
+      prompt_tokens_details?: { cached_tokens?: number };
+    }
+  )?.prompt_tokens_details?.cached_tokens;
+
   const usage: LLMUsage | undefined = completion.usage
     ? {
         promptTokens: completion.usage.prompt_tokens,
         completionTokens: completion.usage.completion_tokens,
         totalTokens: completion.usage.total_tokens,
+        ...(cachedTokens != null ? { cacheReadTokens: cachedTokens } : {}),
       }
     : undefined;
 
@@ -157,6 +164,7 @@ export async function openaiCompatGenerateStream(
   const chunks: string[] = [];
   let promptTokens = 0;
   let completionTokens = 0;
+  let cacheReadTokens: number | undefined;
 
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta?.content;
@@ -168,13 +176,24 @@ export async function openaiCompatGenerateStream(
     if (chunk.usage) {
       promptTokens = chunk.usage.prompt_tokens;
       completionTokens = chunk.usage.completion_tokens;
+      const details = (
+        chunk.usage as typeof chunk.usage & {
+          prompt_tokens_details?: { cached_tokens?: number };
+        }
+      )?.prompt_tokens_details?.cached_tokens;
+      if (details != null) cacheReadTokens = details;
     }
   }
 
   const content = chunks.join("");
   const usage: LLMUsage | undefined =
     promptTokens > 0
-      ? { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens }
+      ? {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          ...(cacheReadTokens != null ? { cacheReadTokens } : {}),
+        }
       : undefined;
 
   return { content, usage };
@@ -266,11 +285,18 @@ export async function openaiCompatGenerateWithTools(
   if (choice.finish_reason === "tool_calls") stopReason = "tool_use";
   else if (choice.finish_reason === "length") stopReason = "max_tokens";
 
+  const toolCachedTokens = (
+    completion.usage as typeof completion.usage & {
+      prompt_tokens_details?: { cached_tokens?: number };
+    }
+  )?.prompt_tokens_details?.cached_tokens;
+
   const usage = completion.usage
     ? {
         promptTokens: completion.usage.prompt_tokens,
         completionTokens: completion.usage.completion_tokens,
         totalTokens: completion.usage.total_tokens,
+        ...(toolCachedTokens != null ? { cacheReadTokens: toolCachedTokens } : {}),
       }
     : undefined;
 

@@ -129,6 +129,19 @@ export const BINARY_TO_SYSTEM_TOOL: Record<string, string> = {
   promtool: "promtool",
   circleci: "circleci",
   gh: "gh",
+  // DevOps ecosystem tools
+  infracost: "infracost",
+  "pip-audit": "pip-audit",
+  kustomize: "kustomize",
+  flux: "flux",
+  argocd: "argocd",
+  vault: "vault",
+  opa: "opa",
+  istioctl: "istioctl",
+  eksctl: "eksctl",
+  pulumi: "pulumi",
+  snyk: "snyk",
+  // Speech-to-text
   "whisper-cli": "whisper-cpp",
   "whisper-cpp": "whisper-cpp",
 };
@@ -293,6 +306,126 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     archMap: ARCH_AMD64,
     binaryPathInArchive: "circleci-cli_{{version}}_{{platform}}_{{arch}}/circleci",
   }),
+  // ---------------------------------------------------------------------------
+  // DevOps ecosystem tools — used by skills, scanners, and agents
+  // ---------------------------------------------------------------------------
+  defineTool({
+    name: "infracost",
+    description: "Cloud cost estimation for Terraform projects",
+    latestVersion: "0.10.40",
+    archiveType: "tar.gz",
+    urlTemplate:
+      "https://github.com/infracost/infracost/releases/download/v{{version}}/infracost-{{platform}}-{{arch}}.tar.gz",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_AMD64,
+    binaryPathInArchive: "infracost-{{platform}}-{{arch}}",
+  }),
+  defineTool({
+    name: "pip-audit",
+    description: "Python dependency vulnerability scanner",
+    latestVersion: "2.7.3",
+    archiveType: "pipx",
+    urlTemplate: "",
+    platformMap: PLATFORM_LOWER_WIN32,
+    archMap: ARCH_NATIVE,
+  }),
+  defineTool({
+    name: "kustomize",
+    description: "Kubernetes configuration customization tool",
+    latestVersion: "5.6.0",
+    archiveType: "tar.gz",
+    urlTemplate:
+      "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v{{version}}/kustomize_v{{version}}_{{platform}}_{{arch}}.tar.gz",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_AMD64,
+  }),
+  defineTool({
+    name: "flux",
+    description: "Flux CD CLI for GitOps continuous delivery on Kubernetes",
+    latestVersion: "2.4.0",
+    archiveType: "tar.gz",
+    urlTemplate:
+      "https://github.com/fluxcd/flux2/releases/download/v{{version}}/flux_{{version}}_{{platform}}_{{arch}}.tar.gz",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_AMD64,
+  }),
+  defineTool({
+    name: "argocd",
+    description: "Argo CD CLI for GitOps application delivery on Kubernetes",
+    latestVersion: "2.14.0",
+    archiveType: "standalone",
+    urlTemplate:
+      "https://github.com/argoproj/argo-cd/releases/download/v{{version}}/argocd-{{platform}}-{{arch}}",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_AMD64,
+  }),
+  defineTool({
+    name: "vault",
+    description: "HashiCorp Vault CLI for secrets management and data protection",
+    latestVersion: "1.18.4",
+    archiveType: "zip",
+    urlTemplate:
+      "https://releases.hashicorp.com/vault/{{version}}/vault_{{version}}_{{platform}}_{{arch}}.zip",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_AMD64,
+    supportedTargets: UNIX_AND_WIN_TARGETS,
+  }),
+  defineTool({
+    name: "opa",
+    description: "Open Policy Agent for policy-based control across the stack",
+    latestVersion: "1.4.2",
+    archiveType: "standalone",
+    urlTemplate:
+      "https://github.com/open-policy-agent/opa/releases/download/v{{version}}/opa_{{platform}}_{{arch}}_static",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_AMD64,
+    verifyCommand: ["opa", "version"],
+  }),
+  defineTool({
+    name: "istioctl",
+    description: "Istio service mesh CLI for traffic management and security",
+    latestVersion: "1.24.2",
+    archiveType: "tar.gz",
+    urlTemplate:
+      "https://github.com/istio/istio/releases/download/{{version}}/istioctl-{{version}}-{{platform}}-{{arch}}.tar.gz",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_AMD64,
+    verifyCommand: ["istioctl", "version", "--remote=false"],
+  }),
+  defineTool({
+    name: "eksctl",
+    description: "Amazon EKS CLI for creating and managing Kubernetes clusters on AWS",
+    latestVersion: "0.199.0",
+    archiveType: "tar.gz",
+    urlTemplate:
+      "https://github.com/eksctl-io/eksctl/releases/download/v{{version}}/eksctl_{{platform}}_{{arch}}.tar.gz",
+    platformMap: PLATFORM_CAPITALIZED,
+    archMap: ARCH_AMD64,
+  }),
+  defineTool({
+    name: "pulumi",
+    description: "Infrastructure as Code SDK using general-purpose programming languages",
+    latestVersion: "3.145.0",
+    archiveType: "tar.gz",
+    urlTemplate:
+      "https://github.com/pulumi/pulumi/releases/download/v{{version}}/pulumi-v{{version}}-{{platform}}-{{arch}}.tar.gz",
+    platformMap: PLATFORM_LOWER,
+    archMap: { x64: "x64", arm64: "arm64" },
+    binaryPathInArchive: "pulumi/pulumi",
+    verifyCommand: ["pulumi", "version"],
+  }),
+  defineTool({
+    name: "snyk",
+    description: "Developer-first security tool for finding and fixing vulnerabilities",
+    latestVersion: "1.1294.0",
+    archiveType: "standalone",
+    urlTemplate: "https://github.com/snyk/cli/releases/download/v{{version}}/snyk-{{platform}}",
+    platformMap: PLATFORM_LOWER,
+    archMap: ARCH_NATIVE,
+  }),
+  // ---------------------------------------------------------------------------
+  // Speech-to-text (voice input)
+  // ---------------------------------------------------------------------------
   defineTool({
     name: "whisper-cpp",
     description: "Local speech-to-text engine for voice input (whisper.cpp)",

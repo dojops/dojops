@@ -1,5 +1,6 @@
 export { HookEngine, HookExecutionError } from "./engine";
 export { loadHookConfig } from "./loader";
+export { initHookEngine } from "./init";
 export type {
   HookEvent,
   HookExecutionType,

@@ -1,5 +1,6 @@
 import { LLMProvider, LLMRequest, LLMResponse, StreamCallback } from "./provider";
 import type { LLMToolRequest, LLMToolResponse } from "./tool-types";
+import { OverloadedExhaustedError } from "./retry";
 
 // ---------------------------------------------------------------------------
 // Circuit breaker: skip providers that have failed repeatedly
@@ -90,6 +91,7 @@ export class FallbackProvider implements LLMProvider {
       } catch (err) {
         this.recordFailure(i);
         lastError = err;
+        if (err instanceof OverloadedExhaustedError) continue;
       }
     }
     throw lastError ?? new Error("All providers failed");
@@ -132,6 +134,7 @@ export class FallbackProvider implements LLMProvider {
         if (chunksEmitted) {
           throw err;
         }
+        if (err instanceof OverloadedExhaustedError) continue;
       }
     }
     throw lastError ?? new Error("All providers failed");
@@ -159,6 +162,7 @@ export class FallbackProvider implements LLMProvider {
       } catch (err) {
         this.recordFailure(i);
         lastError = err;
+        if (err instanceof OverloadedExhaustedError) continue;
       }
     }
     throw lastError ?? new Error("All providers failed (generateWithTools)");

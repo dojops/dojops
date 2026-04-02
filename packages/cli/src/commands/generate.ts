@@ -3,7 +3,7 @@ import * as path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
-import { sanitizeUserInput, scanRepo } from "@dojops/core";
+import { sanitizeUserInput, scanRepo, initHookEngine } from "@dojops/core";
 import { isDevOpsFile, SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { createSkillRegistry, discoverUserDopsFiles } from "@dojops/skill-registry";
 import { CLIContext } from "../types";
@@ -370,6 +370,7 @@ function buildSafeExecutorForSkill(
   maxRepairAttempts: number,
   critic: import("@dojops/executor").CriticCallback | undefined,
   structured: boolean,
+  hookEngine?: import("@dojops/core").HookEngine,
 ): SafeExecutor {
   const autoApprove = ctx.globalOpts.nonInteractive || ctx.globalOpts.dryRun;
   return new SafeExecutor({
@@ -385,6 +386,7 @@ function buildSafeExecutorForSkill(
     },
     approvalHandler: autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
     critic,
+    hookEngine,
     progress: structured
       ? undefined
       : {
@@ -503,6 +505,7 @@ async function handleSkillDirect(
   const critic = await buildCritic(skillCtx.provider);
   const memoryPrompt = sanitizeUserInput(injectMemoryContext(prompt, skillCtx.projectRoot));
 
+  const hookEngine = skillCtx.projectRoot ? initHookEngine(skillCtx.projectRoot) : undefined;
   const safeExecutor = buildSafeExecutorForSkill(
     ctx,
     writePath,
@@ -510,6 +513,7 @@ async function handleSkillDirect(
     maxRepairAttempts,
     critic,
     structured,
+    hookEngine,
   );
 
   const s = p.spinner();

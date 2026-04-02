@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { withRetry, type RetryOptions } from "../../llm/retry";
+import { withRetry, OverloadedExhaustedError, type RetryOptions } from "../../llm/retry";
 import { LLMProvider, LLMRequest, LLMResponse } from "../../llm/provider";
 import { JsonValidationError } from "../../llm/json-validator";
 
@@ -41,9 +41,9 @@ async function flush(): Promise<void> {
 
 /** Default retry options for transient-error tests. */
 const TRANSIENT_RETRY_OPTS: RetryOptions = {
-  maxRetries: 3,
-  initialDelayMs: 1000,
-  maxDelayMs: 10000,
+  maxRetries: 8,
+  initialDelayMs: 500,
+  maxDelayMs: 32000,
 };
 
 /**
@@ -84,8 +84,8 @@ async function expectTransientRetrySuccess(errorMsg: string): Promise<void> {
  */
 async function expectNoRetry(errorMsg: string): Promise<void> {
   const { generateSpy, retried } = setupRetry([{ reject: new Error(errorMsg) }], {
-    maxRetries: 3,
-    initialDelayMs: 1000,
+    maxRetries: 8,
+    initialDelayMs: 500,
   });
 
   await expect(retried.generate({ prompt: "hello" })).rejects.toThrow(errorMsg);
@@ -119,8 +119,8 @@ describe("withRetry()", () => {
   // ---------------------------------------------------------------
   it("succeeds on first try without retrying", async () => {
     const { generateSpy, retried } = setupRetry([{ resolve: OK_RESPONSE }], {
-      maxRetries: 3,
-      initialDelayMs: 1000,
+      maxRetries: 8,
+      initialDelayMs: 500,
     });
 
     const result = await retried.generate({ prompt: "hello" });
@@ -167,7 +167,7 @@ describe("withRetry()", () => {
         { reject: new Error("service unavailable: second") },
         { reject: new Error("service unavailable: final") },
       ],
-      { maxRetries: 2, initialDelayMs: 1000, maxDelayMs: 10000 },
+      { maxRetries: 2, initialDelayMs: 500, maxDelayMs: 32000 },
     );
 
     const promise = retried.generate({ prompt: "hello" });
@@ -254,7 +254,7 @@ describe("withRetry()", () => {
         { reject: new Error("service unavailable: attempt 3") },
         { reject: new Error("service unavailable: attempt 4") },
       ],
-      { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 30000 },
+      { maxRetries: 3, initialDelayMs: 500, maxDelayMs: 30000 },
     );
 
     const promise = retried.generate({ prompt: "hello" });
@@ -262,19 +262,19 @@ describe("withRetry()", () => {
 
     await expect(promise).rejects.toThrow("service unavailable");
 
-    // Base delays: 1000*2^0=1000, 1000*2^1=2000, 1000*2^2=4000
+    // Base delays: 500*2^0=500, 500*2^1=1000, 500*2^2=2000
     // jitter is crypto.randomInt(500) so 0-499
     const delays = setTimeoutSpy.mock.calls
       .map((call) => call[1])
-      .filter((d): d is number => typeof d === "number" && d >= 1000);
+      .filter((d): d is number => typeof d === "number" && d >= 500);
 
     expect(delays.length).toBe(3);
-    expect(delays[0]).toBeGreaterThanOrEqual(1000);
-    expect(delays[0]).toBeLessThanOrEqual(1500);
-    expect(delays[1]).toBeGreaterThanOrEqual(2000);
-    expect(delays[1]).toBeLessThanOrEqual(2500);
-    expect(delays[2]).toBeGreaterThanOrEqual(4000);
-    expect(delays[2]).toBeLessThanOrEqual(4500);
+    expect(delays[0]).toBeGreaterThanOrEqual(500);
+    expect(delays[0]).toBeLessThanOrEqual(1000);
+    expect(delays[1]).toBeGreaterThanOrEqual(1000);
+    expect(delays[1]).toBeLessThanOrEqual(1500);
+    expect(delays[2]).toBeGreaterThanOrEqual(2000);
+    expect(delays[2]).toBeLessThanOrEqual(2500);
   });
 
   // ---------------------------------------------------------------
@@ -304,7 +304,7 @@ describe("withRetry()", () => {
     // jitter is crypto.randomInt(500) so 0-499
     const delays = setTimeoutSpy.mock.calls
       .map((call) => call[1])
-      .filter((d): d is number => typeof d === "number" && d >= 1000);
+      .filter((d): d is number => typeof d === "number" && d >= 500);
 
     expect(delays.length).toBe(5);
     for (const delay of delays) {
@@ -329,7 +329,7 @@ describe("withRetry()", () => {
     };
     const generateSpy = vi.fn(generate);
     const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, schemaRetries: 1 });
+    const retried = withRetry(provider, { maxRetries: 8, initialDelayMs: 500, schemaRetries: 1 });
 
     const schema = { parse: vi.fn() };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -365,8 +365,8 @@ describe("withRetry()", () => {
     const provider = mockProvider(generateSpy);
     const retried = withRetry(provider, {
       maxRetries: 2,
-      initialDelayMs: 1000,
-      maxDelayMs: 10000,
+      initialDelayMs: 500,
+      maxDelayMs: 32000,
       schemaRetries: 1,
     });
 
@@ -395,7 +395,7 @@ describe("withRetry()", () => {
     const provider = mockProvider(generateSpy);
     const retried = withRetry(provider, {
       maxRetries: 0,
-      initialDelayMs: 1000,
+      initialDelayMs: 500,
       schemaRetries: 1,
     });
 
@@ -432,7 +432,7 @@ describe("withRetry()", () => {
     const provider = mockProvider(generateSpy);
     const retried = withRetry(provider, {
       maxRetries,
-      initialDelayMs: 1000,
+      initialDelayMs: 500,
       schemaRetries,
     });
 
@@ -504,5 +504,216 @@ describe("withRetry()", () => {
   // ---------------------------------------------------------------
   it("retries non-Error string values containing retryable patterns", async () => {
     await expectTransientRetrySuccess("503 service unavailable");
+  });
+
+  // ---------------------------------------------------------------
+  // Retry-After header: uses server-specified delay
+  // ---------------------------------------------------------------
+  it("uses Retry-After header delay instead of exponential backoff", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+
+    const errWithRetryAfter = Object.assign(new Error("429 Too Many Requests"), {
+      headers: { "retry-after": "2" },
+    });
+
+    const { retried } = setupRetry(
+      [{ reject: errWithRetryAfter }, { resolve: OK_RESPONSE }],
+      TRANSIENT_RETRY_OPTS,
+    );
+
+    const promise = retried.generate({ prompt: "hello" });
+    await flush();
+
+    const result = await promise;
+    expect(result).toEqual(OK_RESPONSE);
+
+    const delays = setTimeoutSpy.mock.calls
+      .map((call) => call[1])
+      .filter((d): d is number => typeof d === "number" && d >= 500);
+
+    expect(delays.length).toBe(1);
+    expect(delays[0]).toBe(2000); // 2 seconds
+  });
+
+  // ---------------------------------------------------------------
+  // Retry-After header: caps at 60 seconds
+  // ---------------------------------------------------------------
+  it("caps Retry-After at 60 seconds", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+
+    const errWithRetryAfter = Object.assign(new Error("429 Too Many Requests"), {
+      headers: { "retry-after": "120" },
+    });
+
+    const { retried } = setupRetry(
+      [{ reject: errWithRetryAfter }, { resolve: OK_RESPONSE }],
+      TRANSIENT_RETRY_OPTS,
+    );
+
+    const promise = retried.generate({ prompt: "hello" });
+    await flush();
+
+    await promise;
+
+    const delays = setTimeoutSpy.mock.calls
+      .map((call) => call[1])
+      .filter((d): d is number => typeof d === "number" && d >= 500);
+
+    expect(delays.length).toBe(1);
+    expect(delays[0]).toBe(60_000);
+  });
+
+  // ---------------------------------------------------------------
+  // Overloaded consecutive tracking: throws after 3 consecutive
+  // ---------------------------------------------------------------
+  it("throws OverloadedExhaustedError after 3 consecutive overloaded errors", async () => {
+    const { retried } = setupRetry(
+      [
+        { reject: new Error("API is overloaded") },
+        { reject: new Error("API is overloaded") },
+        { reject: new Error("API is overloaded") },
+      ],
+      TRANSIENT_RETRY_OPTS,
+    );
+
+    const promise = retried.generate({ prompt: "hello" });
+    await flush();
+
+    await expect(promise).rejects.toThrow(OverloadedExhaustedError);
+    await expect(promise).rejects.toThrow("Provider overloaded after 3 consecutive attempts");
+  });
+
+  // ---------------------------------------------------------------
+  // Overloaded counter resets on non-overloaded error
+  // ---------------------------------------------------------------
+  it("resets overloaded counter on non-overloaded errors", async () => {
+    const { generateSpy, retried } = setupRetry(
+      [
+        { reject: new Error("API is overloaded") },
+        { reject: new Error("API is overloaded") },
+        { reject: new Error("500 Internal Server Error") }, // resets counter
+        { reject: new Error("API is overloaded") },
+        { reject: new Error("API is overloaded") },
+        { resolve: OK_RESPONSE },
+      ],
+      TRANSIENT_RETRY_OPTS,
+    );
+
+    const promise = retried.generate({ prompt: "hello" });
+    await flush();
+
+    const result = await promise;
+    expect(result).toEqual(OK_RESPONSE);
+    expect(generateSpy).toHaveBeenCalledTimes(6);
+  });
+
+  // ---------------------------------------------------------------
+  // Overloaded 529 status code
+  // ---------------------------------------------------------------
+  it("detects 529 as overloaded error", async () => {
+    const { retried } = setupRetry(
+      [
+        { reject: new Error("529 Server Overloaded") },
+        { reject: new Error("529 Server Overloaded") },
+        { reject: new Error("529 Server Overloaded") },
+      ],
+      TRANSIENT_RETRY_OPTS,
+    );
+
+    const promise = retried.generate({ prompt: "hello" });
+    await flush();
+
+    await expect(promise).rejects.toThrow(OverloadedExhaustedError);
+  });
+
+  // ---------------------------------------------------------------
+  // Max tokens auto-recovery: halves maxTokens on context overflow
+  // ---------------------------------------------------------------
+  it("halves maxTokens on context overflow and retries", async () => {
+    let callCount = 0;
+
+    const generate = async (req: LLMRequest): Promise<LLMResponse> => {
+      callCount++;
+      if (callCount === 1) throw new Error("context_length_exceeded: reduce your prompt");
+      return { content: `ok with maxTokens=${req.maxTokens}` };
+    };
+    const generateSpy = vi.fn(generate);
+    const provider = mockProvider(generateSpy);
+    const retried = withRetry(provider, TRANSIENT_RETRY_OPTS);
+
+    const promise = retried.generate({ prompt: "hello", maxTokens: 8000 });
+    await flush();
+
+    const result = await promise;
+    expect(result.content).toBe("ok with maxTokens=4000");
+    expect(generateSpy).toHaveBeenCalledTimes(2);
+  });
+
+  // ---------------------------------------------------------------
+  // Max tokens auto-recovery: parses token counts from error message
+  // ---------------------------------------------------------------
+  it("parses token counts from error and sets maxTokens to available", async () => {
+    let callCount = 0;
+
+    const generate = async (req: LLMRequest): Promise<LLMResponse> => {
+      callCount++;
+      if (callCount === 1)
+        throw new Error("context_length_exceeded: input length 6000 + 4000 > 8192");
+      return { content: `ok with maxTokens=${req.maxTokens}` };
+    };
+    const generateSpy = vi.fn(generate);
+    const provider = mockProvider(generateSpy);
+    const retried = withRetry(provider, TRANSIENT_RETRY_OPTS);
+
+    const promise = retried.generate({ prompt: "hello", maxTokens: 4000 });
+    await flush();
+
+    const result = await promise;
+    // available = 8192 - 6000 - 1000 (safety buffer) = 1192
+    expect(result.content).toBe("ok with maxTokens=1192");
+    expect(generateSpy).toHaveBeenCalledTimes(2);
+  });
+
+  // ---------------------------------------------------------------
+  // Max tokens recovery does not count against retry budget
+  // ---------------------------------------------------------------
+  it("max tokens recovery does not count against retry budget", async () => {
+    let callCount = 0;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const generate = async (req: LLMRequest): Promise<LLMResponse> => {
+      callCount++;
+      if (callCount === 1) throw new Error("context_length_exceeded: reduce your prompt");
+      if (callCount === 2) throw new Error("503 Service Unavailable");
+      return OK_RESPONSE;
+    };
+    const generateSpy = vi.fn(generate);
+    const provider = mockProvider(generateSpy);
+    const retried = withRetry(provider, {
+      maxRetries: 2,
+      initialDelayMs: 500,
+      maxDelayMs: 32000,
+    });
+
+    const promise = retried.generate({ prompt: "hello", maxTokens: 8000 });
+    await flush();
+
+    const result = await promise;
+    expect(result).toEqual(OK_RESPONSE);
+    expect(generateSpy).toHaveBeenCalledTimes(3);
+  });
+
+  // ---------------------------------------------------------------
+  // Max tokens recovery gives up if maxTokens too small
+  // ---------------------------------------------------------------
+  it("does not reduce maxTokens below 2000", async () => {
+    const { retried } = setupRetry(
+      [{ reject: new Error("context_length_exceeded: reduce your prompt") }],
+      { maxRetries: 0, initialDelayMs: 500 },
+    );
+
+    const promise = retried.generate({ prompt: "hello", maxTokens: 1500 });
+    await flush();
+
+    await expect(promise).rejects.toThrow("context_length_exceeded");
   });
 });

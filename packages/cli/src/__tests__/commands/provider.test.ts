@@ -134,7 +134,9 @@ describe("provider command", () => {
       expect(output).toHaveLength(7);
       expect(output.find((p: { name: string }) => p.name === "anthropic").configured).toBe(true);
       expect(output.find((p: { name: string }) => p.name === "anthropic").default).toBe(true);
+      expect(output.find((p: { name: string }) => p.name === "anthropic").active).toBe(true);
       expect(output.find((p: { name: string }) => p.name === "openai").configured).toBe(false);
+      expect(output.find((p: { name: string }) => p.name === "openai").active).toBe(false);
       consoleSpy.mockRestore();
     });
 
@@ -142,6 +144,65 @@ describe("provider command", () => {
       mockConfigFile({ defaultProvider: "openai", tokens: { openai: "sk-test" } });
       await providerCommand([], makeCtx());
       expect(clack.note).toHaveBeenCalledTimes(1);
+    });
+
+    it("marks env var provider as active instead of config default", async () => {
+      mockConfigFile({
+        defaultProvider: "ollama",
+        tokens: {},
+      });
+
+      const originalEnv = process.env.DOJOPS_PROVIDER;
+      process.env.DOJOPS_PROVIDER = "deepseek";
+      try {
+        const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+        await providerCommand(["list"], makeCtx({ output: "json" }));
+
+        const output = JSON.parse(consoleSpy.mock.calls[0][0]);
+        const deepseek = output.find((p: { name: string }) => p.name === "deepseek");
+        const ollama = output.find((p: { name: string }) => p.name === "ollama");
+        expect(deepseek.active).toBe(true);
+        expect(ollama.active).toBe(false);
+        // config default is still ollama
+        expect(ollama.default).toBe(true);
+        expect(deepseek.default).toBe(false);
+        consoleSpy.mockRestore();
+      } finally {
+        if (originalEnv === undefined) {
+          delete process.env.DOJOPS_PROVIDER;
+        } else {
+          process.env.DOJOPS_PROVIDER = originalEnv;
+        }
+      }
+    });
+
+    it("marks CLI flag provider as active over env var and config", async () => {
+      mockConfigFile({
+        defaultProvider: "openai",
+        tokens: { openai: "sk-test" },
+      });
+
+      const originalEnv = process.env.DOJOPS_PROVIDER;
+      process.env.DOJOPS_PROVIDER = "deepseek";
+      try {
+        const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+        await providerCommand(["list"], makeCtx({ output: "json", provider: "anthropic" }));
+
+        const output = JSON.parse(consoleSpy.mock.calls[0][0]);
+        const anthropic = output.find((p: { name: string }) => p.name === "anthropic");
+        const deepseek = output.find((p: { name: string }) => p.name === "deepseek");
+        const openai = output.find((p: { name: string }) => p.name === "openai");
+        expect(anthropic.active).toBe(true);
+        expect(deepseek.active).toBe(false);
+        expect(openai.active).toBe(false);
+        consoleSpy.mockRestore();
+      } finally {
+        if (originalEnv === undefined) {
+          delete process.env.DOJOPS_PROVIDER;
+        } else {
+          process.env.DOJOPS_PROVIDER = originalEnv;
+        }
+      }
     });
   });
 

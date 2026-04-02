@@ -3,7 +3,13 @@ import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";
 import { findProjectRoot, initProject } from "../state";
-import { readTokenUsage, summarizeTokenUsage, TokenRecord, TokenSummary } from "../token-store";
+import {
+  readTokenUsage,
+  summarizeTokenUsage,
+  estimateCacheSavings,
+  TokenRecord,
+  TokenSummary,
+} from "../token-store";
 
 export async function tokensCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot() ?? ctx.cwd;
@@ -77,6 +83,24 @@ function displayOverview(summary: TokenSummary, days: number): void {
     `${pc.bold("Total calls:")}   ${summary.totalCalls}`,
     `${pc.bold("Est. cost:")}     ${formatCost(summary.estimatedCost)}`,
   ];
+
+  // Show cache stats when any cache activity has been recorded
+  if (summary.totalCacheReadTokens > 0 || summary.totalCacheCreationTokens > 0) {
+    // Aggregate savings across providers
+    let totalSavings = 0;
+    for (const [providerName, data] of Object.entries(summary.byProvider)) {
+      totalSavings += estimateCacheSavings(providerName, data.cacheReadTokens);
+    }
+    lines.push(
+      `${pc.bold("Cache hits:")}    ${formatTokens(summary.totalCacheReadTokens)} tokens ${pc.green(`(saved ~${formatCost(totalSavings)})`)}`,
+    );
+    if (summary.totalCacheCreationTokens > 0) {
+      lines.push(
+        `${pc.bold("Cache writes:")}  ${formatTokens(summary.totalCacheCreationTokens)} tokens`,
+      );
+    }
+  }
+
   p.note(lines.join("\n"), `Token Usage (${period})`);
 }
 

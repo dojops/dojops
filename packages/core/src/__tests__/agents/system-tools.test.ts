@@ -194,6 +194,20 @@ describe("system-tools", () => {
       expect(BINARY_TO_SYSTEM_TOOL["actionlint"]).toBe("actionlint");
     });
 
+    it("maps new DevOps ecosystem tools", () => {
+      expect(BINARY_TO_SYSTEM_TOOL["infracost"]).toBe("infracost");
+      expect(BINARY_TO_SYSTEM_TOOL["pip-audit"]).toBe("pip-audit");
+      expect(BINARY_TO_SYSTEM_TOOL["kustomize"]).toBe("kustomize");
+      expect(BINARY_TO_SYSTEM_TOOL["flux"]).toBe("flux");
+      expect(BINARY_TO_SYSTEM_TOOL["argocd"]).toBe("argocd");
+      expect(BINARY_TO_SYSTEM_TOOL["vault"]).toBe("vault");
+      expect(BINARY_TO_SYSTEM_TOOL["opa"]).toBe("opa");
+      expect(BINARY_TO_SYSTEM_TOOL["istioctl"]).toBe("istioctl");
+      expect(BINARY_TO_SYSTEM_TOOL["eksctl"]).toBe("eksctl");
+      expect(BINARY_TO_SYSTEM_TOOL["pulumi"]).toBe("pulumi");
+      expect(BINARY_TO_SYSTEM_TOOL["snyk"]).toBe("snyk");
+    });
+
     it("all mapped tool names exist in SYSTEM_TOOLS", () => {
       const skillNames = new Set(SYSTEM_TOOLS.map((t) => t.name));
       for (const skillName of Object.values(BINARY_TO_SYSTEM_TOOL)) {
@@ -202,9 +216,108 @@ describe("system-tools", () => {
     });
   });
 
+  describe("DevOps ecosystem tools", () => {
+    it("finds infracost with tar.gz archive and nested binary path", () => {
+      expectToolProps("infracost", {
+        archiveType: "tar.gz",
+        binaryName: "infracost",
+        binaryPathInArchive: "infracost",
+      });
+    });
+
+    it("builds correct infracost download URL", () => {
+      expectDownloadUrl("infracost", "0.10.40", ["infracost/infracost", "0.10.40", ".tar.gz"]);
+    });
+
+    it("finds pip-audit as pipx tool", () => {
+      expectToolProps("pip-audit", { archiveType: "pipx", binaryName: "pip-audit" });
+    });
+
+    it("returns undefined URL for pip-audit (pipx tool)", () => {
+      const tool = findSystemTool("pip-audit")!;
+      expect(buildDownloadUrl(tool)).toBeUndefined();
+    });
+
+    it("finds kustomize", () => {
+      expectToolProps("kustomize", { archiveType: "tar.gz", binaryName: "kustomize" });
+    });
+
+    it("builds correct kustomize download URL", () => {
+      expectDownloadUrl("kustomize", "5.6.0", ["kubernetes-sigs/kustomize", "5.6.0", ".tar.gz"]);
+    });
+
+    it("finds flux", () => {
+      expectToolProps("flux", { archiveType: "tar.gz", binaryName: "flux" });
+    });
+
+    it("builds correct flux download URL", () => {
+      expectDownloadUrl("flux", "2.4.0", ["fluxcd/flux2", "2.4.0", ".tar.gz"]);
+    });
+
+    it("finds argocd as standalone binary", () => {
+      expectToolProps("argocd", { archiveType: "standalone", binaryName: "argocd" });
+    });
+
+    it("builds correct argocd download URL", () => {
+      expectDownloadUrl("argocd", "2.14.0", ["argoproj/argo-cd", "2.14.0"]);
+    });
+
+    it("finds vault with zip archive", () => {
+      expectToolProps("vault", { archiveType: "zip", binaryName: "vault" });
+    });
+
+    it("builds correct vault download URL", () => {
+      expectDownloadUrl("vault", "1.18.4", ["releases.hashicorp.com/vault", "1.18.4", ".zip"]);
+    });
+
+    it("finds opa as standalone binary", () => {
+      expectToolProps("opa", { archiveType: "standalone", binaryName: "opa" });
+    });
+
+    it("builds correct opa download URL", () => {
+      expectDownloadUrl("opa", "1.4.2", ["open-policy-agent/opa", "1.4.2", "_static"]);
+    });
+
+    it("finds istioctl", () => {
+      expectToolProps("istioctl", { archiveType: "tar.gz", binaryName: "istioctl" });
+    });
+
+    it("builds correct istioctl download URL", () => {
+      expectDownloadUrl("istioctl", "1.24.2", ["istio/istio", "1.24.2", ".tar.gz"]);
+    });
+
+    it("finds eksctl", () => {
+      expectToolProps("eksctl", { archiveType: "tar.gz", binaryName: "eksctl" });
+    });
+
+    it("builds correct eksctl download URL", () => {
+      expectDownloadUrl("eksctl", "0.199.0", ["eksctl-io/eksctl", "0.199.0", ".tar.gz"]);
+    });
+
+    it("finds pulumi with nested binary path", () => {
+      expectToolProps("pulumi", {
+        archiveType: "tar.gz",
+        binaryName: "pulumi",
+        binaryPathInArchive: "pulumi",
+      });
+    });
+
+    it("builds correct pulumi download URL", () => {
+      expectDownloadUrl("pulumi", "3.145.0", ["pulumi/pulumi", "3.145.0", ".tar.gz"]);
+    });
+
+    it("finds snyk as standalone binary", () => {
+      expectToolProps("snyk", { archiveType: "standalone", binaryName: "snyk" });
+    });
+
+    it("builds correct snyk download URL", () => {
+      expectDownloadUrl("snyk", "1.1294.0", ["snyk/cli", "1.1294.0"]);
+    });
+  });
+
   describe("SYSTEM_TOOLS registry", () => {
-    it("contains 16 tool definitions", () => {
-      expect(SYSTEM_TOOLS).toHaveLength(16);
+    it("contains 27 tool definitions", () => {
+      expect(SYSTEM_TOOLS).toHaveLength(27);
     });
 
     it("all tools have required fields", () => {

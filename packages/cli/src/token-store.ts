@@ -17,6 +17,8 @@ export interface TokenRecord {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
 }
 
 function tokenFilePath(rootDir: string): string {
@@ -73,10 +75,18 @@ export function estimateCost(
   return (promptTokens * rates.input + completionTokens * rates.output) / 1_000_000;
 }
 
+/** Estimate cost savings from prompt cache reads (cache reads cost ~10% of input, saving 90%). */
+export function estimateCacheSavings(provider: string, cacheReadTokens: number): number {
+  const rates = COST_PER_MILLION[provider] ?? { input: 2.5, output: 10 };
+  return (cacheReadTokens * rates.input * 0.9) / 1_000_000;
+}
+
 export interface TokenSummary {
   totalTokens: number;
   totalPromptTokens: number;
   totalCompletionTokens: number;
+  totalCacheCreationTokens: number;
+  totalCacheReadTokens: number;
   totalCalls: number;
   estimatedCost: number;
   byProvider: Record<
@@ -85,6 +95,8 @@ export interface TokenSummary {
       tokens: number;
       promptTokens: number;
       completionTokens: number;
+      cacheCreationTokens: number;
+      cacheReadTokens: number;
       calls: number;
       cost: number;
     }
@@ -99,6 +111,8 @@ export function summarizeTokenUsage(records: TokenRecord[]): TokenSummary {
     totalTokens: 0,
     totalPromptTokens: 0,
     totalCompletionTokens: 0,
+    totalCacheCreationTokens: 0,
+    totalCacheReadTokens: 0,
     totalCalls: records.length,
     estimatedCost: 0,
     byProvider: {},
@@ -112,6 +126,8 @@ export function summarizeTokenUsage(records: TokenRecord[]): TokenSummary {
     summary.totalTokens += r.totalTokens;
     summary.totalPromptTokens += r.promptTokens;
     summary.totalCompletionTokens += r.completionTokens;
+    summary.totalCacheCreationTokens += r.cacheCreationTokens ?? 0;
+    summary.totalCacheReadTokens += r.cacheReadTokens ?? 0;
     summary.estimatedCost += cost;
 
     // By provider
@@ -120,6 +136,8 @@ export function summarizeTokenUsage(records: TokenRecord[]): TokenSummary {
         tokens: 0,
         promptTokens: 0,
         completionTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
         calls: 0,
         cost: 0,
       };
@@ -128,6 +146,8 @@ export function summarizeTokenUsage(records: TokenRecord[]): TokenSummary {
     bp.tokens += r.totalTokens;
     bp.promptTokens += r.promptTokens;
     bp.completionTokens += r.completionTokens;
+    bp.cacheCreationTokens += r.cacheCreationTokens ?? 0;
+    bp.cacheReadTokens += r.cacheReadTokens ?? 0;
     bp.calls++;
     bp.cost += cost;
 

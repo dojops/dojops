@@ -249,30 +249,63 @@ export function createApp(deps: AppDependencies): Express {
   // that received deps.store benefit from token tracking automatically.
   const tokenTracker = new TokenTracker();
 
-  /** Extract token count from a history entry for tracking. */
-  function extractTokenCount(entry: Parameters<typeof deps.store.add>[0]): number {
+  /** Extract token count and cache tokens from a history entry for tracking. */
+  function extractTokenInfo(entry: Parameters<typeof deps.store.add>[0]): {
+    total: number;
+    cacheCreationTokens?: number;
+    cacheReadTokens?: number;
+  } {
     const rec = entry as Record<string, unknown>;
+
+    // Try rec.tokens first
     if (rec.tokens && typeof rec.tokens === "object") {
       const tokens = rec.tokens as Record<string, unknown>;
-      return typeof tokens.total === "number" ? tokens.total : 0;
+      const total = typeof tokens.total === "number" ? tokens.total : 0;
+      return {
+        total,
+        cacheCreationTokens:
+          typeof tokens.cacheCreationTokens === "number" ? tokens.cacheCreationTokens : undefined,
+        cacheReadTokens:
+          typeof tokens.cacheReadTokens === "number" ? tokens.cacheReadTokens : undefined,
+      };
     }
-    if (!entry.response || typeof entry.response !== "object") return 0;
-    const resp = entry.response as Record<string, unknown>;
-    if (typeof resp.totalTokens === "number") return resp.totalTokens;
-    if (typeof resp.usage === "object" && resp.usage !== null) {
-      const usage = resp.usage as Record<string, unknown>;
-      if (typeof usage.totalTokens === "number") return usage.totalTokens;
-      if (typeof usage.total_tokens === "number") return usage.total_tokens;
+
+    // Try entry.response.usage
+    if (entry.response && typeof entry.response === "object") {
+      const resp = entry.response as Record<string, unknown>;
+      if (typeof resp.totalTokens === "number") return { total: resp.totalTokens };
+      if (typeof resp.usage === "object" && resp.usage !== null) {
+        const usage = resp.usage as Record<string, unknown>;
+        const total =
+          typeof usage.totalTokens === "number"
+            ? usage.totalTokens
+            : typeof usage.total_tokens === "number"
+              ? usage.total_tokens
+              : 0;
+        return {
+          total,
+          cacheCreationTokens:
+            typeof usage.cacheCreationTokens === "number" ? usage.cacheCreationTokens : undefined,
+          cacheReadTokens:
+            typeof usage.cacheReadTokens === "number" ? usage.cacheReadTokens : undefined,
+        };
+      }
     }
-    return 0;
+
+    return { total: 0 };
   }
 
   // Intercept deps.store.add so every route handler's store.add call triggers token tracking
   const originalAdd = deps.store.add.bind(deps.store);
   deps.store.add = (entry: Parameters<typeof deps.store.add>[0]) => {
     const result = originalAdd(entry);
-    const total = extractTokenCount(entry);
-    if (total > 0) tokenTracker.record(total);
+    const info = extractTokenInfo(entry);
+    if (info.total > 0) {
+      tokenTracker.record(info.total, {
+        cacheCreationTokens: info.cacheCreationTokens,
+        cacheReadTokens: info.cacheReadTokens,
+      });
+    }
     return result;
   };
 
@@ -308,7 +341,13 @@ export function createApp(deps: AppDependencies): Express {
     });
   }
 
-  const planRouter = createPlanRouter(deps.provider, deps.tools, deps.store, agentConfigs);
+  const planRouter = createPlanRouter(
+    deps.provider,
+    deps.tools,
+    deps.store,
+    agentConfigs,
+    deps.rootDir,
+  );
   const debugCIRouter = createDebugCIRouter(deps.debugger, deps.store);
   const diffRouter = createDiffRouter(deps.diffAnalyzer, deps.store);
   const agentsRouter = createAgentsRouter(deps.router, deps.customAgentNames);

@@ -50,6 +50,10 @@ export class PermissionGate {
   private readonly rules: PermissionRule[];
   private readonly hookEngine: HookEmitter | undefined;
 
+  /** Tracks consecutive denials per tool to prevent infinite retry loops. */
+  private readonly denialCounts: Map<string, number> = new Map();
+  private static readonly DENIAL_THRESHOLD = 3;
+
   constructor(opts: PermissionGateOptions) {
     this.mode = opts.mode;
     this.rules = opts.rules ?? [];
@@ -57,70 +61,147 @@ export class PermissionGate {
   }
 
   /**
+   * Record a denial for a tool. Returns true if the denial threshold has been reached.
+   */
+  private recordDenial(toolName: string): boolean {
+    const count = (this.denialCounts.get(toolName) ?? 0) + 1;
+    this.denialCounts.set(toolName, count);
+    return count >= PermissionGate.DENIAL_THRESHOLD;
+  }
+
+  /**
+   * Reset denial count for a tool (called when it gets allowed).
+   */
+  private resetDenials(toolName: string): void {
+    this.denialCounts.delete(toolName);
+  }
+
+  /**
+   * Check if a tool has been denied too many times and should be auto-skipped.
+   */
+  isAutoBlocked(toolName: string): boolean {
+    return (this.denialCounts.get(toolName) ?? 0) >= PermissionGate.DENIAL_THRESHOLD;
+  }
+
+  /**
+   * Get denial info for reporting.
+   */
+  getDenialInfo(): { tool: string; count: number }[] {
+    return [...this.denialCounts.entries()]
+      .filter(([, count]) => count > 0)
+      .map(([tool, count]) => ({ tool, count }));
+  }
+
+  /**
+   * Record an external denial for a tool (e.g., when an "ask" decision is
+   * answered with "deny" by the user/caller). Returns true if the tool is
+   * now auto-blocked.
+   */
+  recordExternalDenial(toolName: string): boolean {
+    return this.recordDenial(toolName);
+  }
+
+  /**
+   * Record an external allow for a tool (e.g., when an "ask" decision is
+   * answered with "allow" by the user/caller). Resets the denial counter.
+   */
+  recordExternalAllow(toolName: string): void {
+    this.resetDenials(toolName);
+  }
+
+  /**
    * Check if a tool call is allowed under the current permission mode.
    * Returns the decision: "allow", "deny", or "ask".
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   check(
     toolName: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     args: Record<string, unknown> = {},
     taskRisk?: RiskLevel,
   ): PermissionDecision {
+    // 0. Auto-block tools that have been denied too many times
+    if (this.isAutoBlocked(toolName)) {
+      return {
+        action: "deny",
+        reason: `Tool "${toolName}" auto-blocked after ${PermissionGate.DENIAL_THRESHOLD} consecutive denials`,
+      };
+    }
+
     // 1. Check per-tool rules first (first match wins)
     for (const rule of this.rules) {
       if (matchToolPattern(rule.tool, toolName)) {
-        return {
+        const decision: PermissionDecision = {
           action: rule.action,
           reason: rule.reason ?? `Matched rule for '${rule.tool}'`,
         };
+        this.trackDenialState(toolName, decision);
+        return decision;
       }
     }
 
     // 2. Apply mode-based logic
+    let decision: PermissionDecision;
     switch (this.mode) {
       case "plan-only":
         if (WRITE_TOOLS.has(toolName)) {
-          return {
+          decision = {
             action: "deny",
             reason: "Write operations are blocked in plan-only mode",
           };
+        } else {
+          decision = { action: "allow" };
         }
-        return { action: "allow" };
+        break;
 
       case "auto-approve":
-        return { action: "allow" };
+        decision = { action: "allow" };
+        break;
 
       case "strict":
         if (READ_ONLY_TOOLS.has(toolName)) {
-          return { action: "allow" };
+          decision = { action: "allow" };
+        } else {
+          decision = {
+            action: "ask",
+            reason: `Strict mode: approval required for '${toolName}'`,
+          };
         }
-        return {
-          action: "ask",
-          reason: `Strict mode: approval required for '${toolName}'`,
-        };
+        break;
 
       case "interactive":
       default:
         // Read-only tools are always allowed
         if (READ_ONLY_TOOLS.has(toolName)) {
-          return { action: "allow" };
-        }
-        // Risk-based: allow low/medium risk, ask for high/critical
-        if (taskRisk && isRiskAtOrBelow(taskRisk, "MEDIUM")) {
-          return { action: "allow" };
-        }
-        if (taskRisk && !isRiskAtOrBelow(taskRisk, "MEDIUM")) {
-          return {
+          decision = { action: "allow" };
+        } else if (taskRisk && isRiskAtOrBelow(taskRisk, "MEDIUM")) {
+          // Risk-based: allow low/medium risk
+          decision = { action: "allow" };
+        } else if (taskRisk && !isRiskAtOrBelow(taskRisk, "MEDIUM")) {
+          decision = {
             action: "ask",
             reason: `High-risk operation: ${toolName} (risk: ${taskRisk})`,
           };
+        } else if (WRITE_TOOLS.has(toolName)) {
+          // No risk info — default to allow for write tools
+          decision = { action: "allow" };
+        } else {
+          decision = { action: "allow" };
         }
-        // No risk info — default to allow for non-write tools, ask for writes
-        if (WRITE_TOOLS.has(toolName)) {
-          return { action: "allow" };
-        }
-        return { action: "allow" };
+        break;
     }
+
+    this.trackDenialState(toolName, decision);
+    return decision;
+  }
+
+  /** Update denial tracking based on a permission decision. */
+  private trackDenialState(toolName: string, decision: PermissionDecision): void {
+    if (decision.action === "deny") {
+      this.recordDenial(toolName);
+    } else if (decision.action === "allow") {
+      this.resetDenials(toolName);
+    }
+    // "ask" decisions don't update denial counts — the caller decides allow/deny
   }
 
   /**

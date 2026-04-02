@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-04-03
+
+### Added
+
+- **11 new system tools in toolchain**: `infracost`, `pip-audit`, `kustomize`, `flux`, `argocd`, `vault`, `opa`, `istioctl`, `eksctl`, `pulumi`, and `snyk` are now installable via `dojops toolchain install <tool>`. Total toolchain grows from 16 to 27 tools, covering IaC cost estimation, GitOps, service mesh, policy engines, and vulnerability scanning
+- **Cron system crontab integration**: `dojops cron install` writes enabled jobs to the user's system crontab. New subcommands: `install`, `uninstall`, `enable`, `disable`, `status`. Crontab entries are namespaced with `# dojops:<job-id>` markers to avoid touching other cron jobs
+- **File state cache** (`@dojops/executor`): LRU cache with mtime-based staleness detection for file state tracking during execution
+- **Config file watcher** (`@dojops/cli`): `fs.watch`-based hot-reload with debouncing for `.dojops/config.json` changes
+- **Undo/redo file history** (`@dojops/executor`): Per-file undo/redo stack with max depth eviction for tracking file modifications during execution
+
+### Fixed
+
+- **Generic skill file writing** (BUG-1): `plan --execute --yes` with generic skill tasks now correctly parses `{"files":{"path":"content"}}` from LLM JSON output and writes files atomically with backup support
+- **Provider list active indicator** (BUG-2): `dojops provider list` now uses `resolveProvider()` to correctly mark the active provider, accounting for `DOJOPS_PROVIDER` env var override
+- **Audit hash algorithm alignment** (BUG-3): API metrics endpoint now uses the same SHA-256 hash algorithm as the executor's audit system, fixing false `valid: false` reports on the dashboard while CLI `history verify` reported intact chains
+- **Token tracking per-command attribution** (BUG-4): `dojops tokens --by-command` now correctly attributes token usage to the actual command (generate, plan, scan, etc.) instead of grouping everything under "cli"
+- **Plan critique blocking with --yes** (BUG-5): Plan critique failures no longer block execution when `--yes` flag is set; critique issues are logged as warnings and execution proceeds
+- **Infracost binary path in archive**: Infracost tar.gz contains `infracost-linux-amd64` (not `infracost`), now handled via `binaryPathInArchive`
+- **Docker build lockfile mismatch**: Dockerfile uses `pnpm install` instead of `--frozen-lockfile` to handle dependency version range differences
+
 ## [1.2.2] - 2026-03-27
 
 ### Added

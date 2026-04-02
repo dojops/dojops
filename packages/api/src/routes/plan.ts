@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { LLMProvider } from "@dojops/core";
+import { LLMProvider, initHookEngine } from "@dojops/core";
 import { DevOpsSkill } from "@dojops/sdk";
 import {
   decompose,
@@ -62,8 +62,10 @@ async function autoApproveExecute(
   tools: DevOpsSkill[],
   signal: AbortSignal,
   provider: LLMProvider,
+  rootDir?: string,
 ): Promise<void> {
   const critic = await buildCritic(provider);
+  const hookEngine = rootDir ? initHookEngine(rootDir) : undefined;
   const safeExecutor = new SafeExecutor({
     policy: {
       allowWrite: true,
@@ -77,6 +79,7 @@ async function autoApproveExecute(
     },
     approvalHandler: new AutoApproveHandler(),
     critic,
+    hookEngine,
   });
 
   const toolMap = new Map(tools.map((t) => [t.name, t]));
@@ -99,6 +102,7 @@ async function executePlanWithTimeout(
   autoApprove: boolean,
   provider: LLMProvider,
   agentConfigs?: Map<string, { systemPrompt: string }>,
+  rootDir?: string,
 ): Promise<PlannerResult> {
   const timeoutMs = Number.parseInt(process.env.DOJOPS_PLAN_TIMEOUT_MS ?? "300000", 10);
 
@@ -115,7 +119,7 @@ async function executePlanWithTimeout(
     planResult = await executor.execute(graph);
 
     if (autoApprove && !controller.signal.aborted) {
-      await autoApproveExecute(graph, planResult, tools, controller.signal, provider);
+      await autoApproveExecute(graph, planResult, tools, controller.signal, provider, rootDir);
     }
   } finally {
     clearTimeout(timer);
@@ -136,6 +140,7 @@ export function createPlanRouter(
     string,
     { name: string; domain: string; description?: string; systemPrompt: string }
   >,
+  rootDir?: string,
 ): Router {
   // Build decomposer agent list and executor agent map from configs
   const agentList: AgentInfo[] = [];
@@ -164,8 +169,21 @@ export function createPlanRouter(
         agents: agentList.length > 0 ? agentList : undefined,
       });
 
+      // Emit PlanCreated hook
+      if (rootDir) {
+        const hookEngine = initHookEngine(rootDir);
+        hookEngine.emit("PlanCreated", { goal, taskCount: graph.tasks.length }).catch(() => {});
+      }
+
       const result = execute
-        ? await executePlanWithTimeout(graph, tools, autoApprove, provider, executorAgentMap)
+        ? await executePlanWithTimeout(
+            graph,
+            tools,
+            autoApprove,
+            provider,
+            executorAgentMap,
+            rootDir,
+          )
         : undefined;
 
       const response = { graph, result };

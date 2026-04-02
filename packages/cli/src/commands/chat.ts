@@ -10,10 +10,23 @@ import {
   generateSessionId,
 } from "@dojops/session";
 import type { ChatSessionState, SessionMode, ChatProgressCallbacks } from "@dojops/session";
+import { initHookEngine } from "@dojops/core";
+import type { HookEngine } from "@dojops/core";
 import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
-import { VALID_PROVIDERS, resolveToken, resolveOllamaHost, resolveOllamaTls } from "../config";
+import {
+  VALID_PROVIDERS,
+  resolveToken,
+  resolveOllamaHost,
+  resolveOllamaTls,
+  loadProfileConfig,
+  resolveProvider,
+  resolveModel,
+  getGlobalConfigPath,
+  getLocalConfigPath,
+} from "../config";
+import { ConfigWatcher } from "../config-watcher";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { expandFileReferences } from "../input-expander";
 import {
@@ -25,6 +38,7 @@ import {
   getTermWidth,
 } from "../tui/status-bar";
 import type { StatusBarState, TurnStats, ContextBarState } from "../tui/status-bar";
+import { LLMSpinner } from "../tui/spinner";
 import { execFileSync } from "node:child_process";
 import { highlightCodeBlocks } from "../tui/code-highlight";
 import { renderMascotWithText } from "../mascot";
@@ -210,7 +224,9 @@ async function handleSingleMessage(
   messageFlag: string,
   rootDir: string,
   ctx: CLIContext,
+  hookEngine?: HookEngine,
 ): Promise<void> {
+  hookEngine?.emit("PromptSubmit", { sessionId: session.id, prompt: messageFlag }).catch(() => {});
   const isStructuredOutput = ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml";
   await sendSingleMessage(session, messageFlag, isStructuredOutput, ctx);
   saveChatSession(rootDir, session.getState());
@@ -579,42 +595,52 @@ async function handleAutoCommand(
   }
 }
 
-// ── Phase line helpers ───────────────────────────────────────────
-
-function writePhaseLine(line: string): void {
-  if (process.stdout.isTTY) process.stdout.write(`\r\x1b[K${line}`);
-}
-
-function clearPhaseLine(): void {
-  if (process.stdout.isTTY) process.stdout.write("\r\x1b[K");
-}
-
 // ── Streaming message handler ───────────────────────────────────
+
+/** Active spinner reference for cleanup on SIGINT. */
+let activeSpinner: LLMSpinner | null = null;
 
 async function handleSendMessage(
   session: ChatSession,
   trimmed: string,
   ctx: CLIContext,
+  hookEngine?: HookEngine,
 ): Promise<void> {
+  hookEngine?.emit("PromptSubmit", { sessionId: session.id, prompt: trimmed }).catch(() => {});
+
   const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
-  const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+
+  const spinner = new LLMSpinner({ model });
+  activeSpinner = spinner;
 
   try {
     const startTime = Date.now();
     let firstChunk = true;
 
-    // Show initial routing phase
-    writePhaseLine(renderPhaseIndicator({ phase: "routing" }));
+    // Start animated spinner in routing phase
+    spinner.setVerb("Routing");
+    spinner.start();
 
     const progress: ChatProgressCallbacks = {
       onPhase: (phase, detail) => {
         if (phase === "done") return;
-        writePhaseLine(renderPhaseIndicator({ phase, detail, provider, model }));
+        if (phase === "routing") {
+          spinner.setVerb("Routing");
+        } else if (phase === "generating") {
+          spinner.setVerb(); // random verb
+          if (detail) spinner.setAgent(detail);
+        } else if (phase === "compacting") {
+          spinner.setVerb("Compacting");
+        }
       },
       onCompaction: (info) => {
-        // Print compaction notice as a permanent line (not overwritten)
-        clearPhaseLine();
+        // Pause spinner, print compaction notice, resume
+        spinner.stop();
         process.stdout.write(`${renderCompactionNotice(info)}\n`);
+        spinner.start();
+      },
+      onTokenDelta: (count) => {
+        spinner.incrementTokens(count);
       },
     };
 
@@ -622,22 +648,27 @@ async function handleSendMessage(
       trimmed,
       (chunk: string) => {
         if (firstChunk) {
-          clearPhaseLine();
+          spinner.stop();
           process.stdout.write("\n");
           firstChunk = false;
         }
         process.stdout.write(chunk);
+        // Count approximate tokens from chunk length (rough: 4 chars ≈ 1 token)
+        spinner.incrementTokens(Math.max(1, Math.ceil(chunk.length / 4)));
       },
       progress,
     );
 
-    // If no chunks came through (empty response), clear phase line
+    // If no chunks came through (empty response), stop spinner
     if (firstChunk) {
-      clearPhaseLine();
+      spinner.stop();
       process.stdout.write(`${pc.green("●")} ${pc.magenta(result.agent)} ${pc.dim("responded")}\n`);
     } else {
       process.stdout.write("\n");
     }
+
+    spinner.dispose();
+    activeSpinner = null;
 
     const durationMs = Date.now() - startTime;
 
@@ -660,7 +691,8 @@ async function handleSendMessage(
       );
     }
   } catch (err) {
-    clearPhaseLine();
+    spinner.dispose();
+    activeSpinner = null;
     p.log.error(formatError(err));
   }
 }
@@ -724,20 +756,31 @@ async function handleChatConfigCommand(
     const { configCommand } = await import("./config-cmd");
     await configCommand([], ctx);
 
-    // After config, try to activate the provider if it wasn't available before
-    if (!session.hasProvider()) {
-      try {
-        const provider = ctx.getProvider();
-        const skipCustomConfigs = await resolveTrustCheck(rootDir, ctx.globalOpts.nonInteractive);
-        const { router } = createRouter(provider, rootDir, docAugmenter, skipCustomConfigs);
-        session.setProvider(provider);
-        session.setRouter(router);
-        p.log.success("Provider activated — you can now send messages.");
-      } catch {
-        p.log.info(
-          pc.dim("Provider not yet available. Use /provider to switch, or re-run /config."),
-        );
-      }
+    // Reload config from disk and recreate the provider so changes take effect immediately
+    try {
+      const freshConfig = loadProfileConfig();
+      const providerName = resolveProvider(ctx.globalOpts.provider, freshConfig);
+      const model = resolveModel(ctx.globalOpts.model, freshConfig);
+      const apiKey = resolveToken(providerName, freshConfig);
+      const ollamaHost =
+        providerName === "ollama" ? resolveOllamaHost(undefined, freshConfig) : undefined;
+      const ollamaTls =
+        providerName === "ollama" ? resolveOllamaTls(undefined, freshConfig) : undefined;
+      const provider = createProvider({
+        provider: providerName,
+        model,
+        apiKey,
+        ollamaHost,
+        ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
+      });
+      const skipCustomConfigs = await resolveTrustCheck(rootDir, ctx.globalOpts.nonInteractive);
+      const { router } = createRouter(provider, rootDir, docAugmenter, skipCustomConfigs);
+      session.setProvider(provider);
+      session.setRouter(router);
+      const modelLabel = model ? ` (${model})` : "";
+      p.log.success(`Provider switched to ${pc.bold(providerName)}${pc.dim(modelLabel)}`);
+    } catch {
+      p.log.info(pc.dim("Provider not yet available. Use /provider to switch, or re-run /config."));
     }
   } catch (err) {
     p.log.error(`Config failed: ${formatError(err)}`);
@@ -1050,6 +1093,7 @@ async function processLoopInput(
   ctx: CLIContext,
   docAugmenter?: DocAugmenter,
   voiceConfig?: VoiceConfig,
+  hookEngine?: HookEngine,
 ): Promise<void> {
   const trimmed = input.trim();
   if (!trimmed) return;
@@ -1082,7 +1126,7 @@ async function processLoopInput(
   }
 
   const expanded = expandFileReferences(trimmed, ctx.cwd);
-  await handleSendMessage(session, expanded, ctx);
+  await handleSendMessage(session, expanded, ctx, hookEngine);
 }
 
 async function runInteractiveLoop(
@@ -1091,9 +1135,16 @@ async function runInteractiveLoop(
   ctx: CLIContext,
   docAugmenter?: DocAugmenter,
   voiceConfig?: VoiceConfig,
+  hookEngine?: HookEngine,
+  configWatcher?: ConfigWatcher,
 ): Promise<void> {
   const saveAndExit = () => {
+    // Dispose any active spinner to restore cursor and clear animation
+    activeSpinner?.dispose();
+    activeSpinner = null;
+    configWatcher?.stop();
     saveChatSession(rootDir, session.getState());
+    hookEngine?.emit("SessionEnd", { sessionId: session.id }).catch(() => {});
     showGoodbye(session);
     process.exit(ExitCode.SUCCESS);
   };
@@ -1121,11 +1172,21 @@ async function runInteractiveLoop(
       break;
     }
 
-    await processLoopInput(input as string, session, rootDir, ctx, docAugmenter, voiceConfig);
+    await processLoopInput(
+      input as string,
+      session,
+      rootDir,
+      ctx,
+      docAugmenter,
+      voiceConfig,
+      hookEngine,
+    );
   }
 
   process.off("SIGINT", saveAndExit);
+  configWatcher?.stop();
   saveChatSession(rootDir, session.getState());
+  hookEngine?.emit("SessionEnd", { sessionId: session.id }).catch(() => {});
   // Force exit — Ollama's axios keep-alive connections prevent natural shutdown
   process.exit(ExitCode.SUCCESS);
 }
@@ -1300,6 +1361,9 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
 
   const session = new ChatSession({ provider, router, state, mode, projectContext: contextInfo });
 
+  const hookEngine = initHookEngine(rootDir);
+  hookEngine.emit("SessionStart", { sessionId: session.id }).catch(() => {});
+
   if (agentFlag) validateAgentFlag(session, agentFlag);
 
   if (messageFlag) {
@@ -1309,10 +1373,51 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
         "No LLM provider configured. Run `dojops config` to set up a provider first.",
       );
     }
-    await handleSingleMessage(session, messageFlag, rootDir, ctx);
+    await handleSingleMessage(session, messageFlag, rootDir, ctx, hookEngine);
+    hookEngine.emit("SessionEnd", { sessionId: session.id }).catch(() => {});
     return;
   }
 
+  // Start config file watcher for live reload during interactive sessions
+  const watchPaths = [getGlobalConfigPath(), getLocalConfigPath()].filter(
+    (p): p is string => p !== null,
+  );
+  const configWatcher = new ConfigWatcher(watchPaths, (changedPath) => {
+    try {
+      const freshConfig = loadProfileConfig();
+      const providerName = resolveProvider(ctx.globalOpts.provider, freshConfig);
+      const model = resolveModel(ctx.globalOpts.model, freshConfig);
+      const apiKey = resolveToken(providerName, freshConfig);
+      const ollamaHost =
+        providerName === "ollama" ? resolveOllamaHost(undefined, freshConfig) : undefined;
+      const ollamaTls =
+        providerName === "ollama" ? resolveOllamaTls(undefined, freshConfig) : undefined;
+      const newProvider = createProvider({
+        provider: providerName,
+        model,
+        apiKey,
+        ollamaHost,
+        ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
+      });
+      const { router: newRouter } = createRouter(newProvider, rootDir, docAugmenter);
+      session.setProvider(newProvider);
+      session.setRouter(newRouter);
+      ctx.config = freshConfig;
+      p.log.info(pc.dim(`Config reloaded from ${changedPath}`));
+    } catch {
+      // Config reload failed — keep existing provider, don't interrupt the session
+    }
+  });
+  configWatcher.start();
+
   showWelcome(session, ctx, contextInfo);
-  await runInteractiveLoop(session, rootDir, ctx, docAugmenter, voiceConfig);
+  await runInteractiveLoop(
+    session,
+    rootDir,
+    ctx,
+    docAugmenter,
+    voiceConfig,
+    hookEngine,
+    configWatcher,
+  );
 }

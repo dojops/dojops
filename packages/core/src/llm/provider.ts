@@ -46,6 +46,10 @@ export interface LLMUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  /** Tokens written to the prompt cache (Anthropic cache_creation_input_tokens). */
+  cacheCreationTokens?: number;
+  /** Tokens read from the prompt cache (Anthropic cache_read_input_tokens, OpenAI cached_tokens). */
+  cacheReadTokens?: number;
 }
 
 export interface LLMResponse<T = unknown> {

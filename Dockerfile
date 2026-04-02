@@ -21,7 +21,7 @@ COPY packages/api/package.json packages/api/
 COPY packages/mcp/package.json packages/mcp/
 COPY packages/cli/package.json packages/cli/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy source and build
 COPY packages/ packages/

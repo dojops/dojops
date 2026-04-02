@@ -139,5 +139,56 @@ describe("token-store", () => {
       expect(summary.totalTokens).toBe(0);
       expect(summary.totalCalls).toBe(0);
     });
+
+    it("breaks down by actual subcommand names", () => {
+      const records: TokenRecord[] = [
+        {
+          timestamp: "2026-03-12T10:00:00.000Z",
+          command: "scan",
+          provider: "openai",
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+        },
+        {
+          timestamp: "2026-03-12T11:00:00.000Z",
+          command: "arise",
+          provider: "openai",
+          promptTokens: 200,
+          completionTokens: 100,
+          totalTokens: 300,
+        },
+        {
+          timestamp: "2026-03-12T12:00:00.000Z",
+          command: "scan",
+          provider: "anthropic",
+          promptTokens: 50,
+          completionTokens: 25,
+          totalTokens: 75,
+        },
+        {
+          timestamp: "2026-03-12T13:00:00.000Z",
+          command: "chat",
+          provider: "ollama",
+          promptTokens: 300,
+          completionTokens: 150,
+          totalTokens: 450,
+        },
+      ];
+
+      const summary = summarizeTokenUsage(records);
+
+      expect(Object.keys(summary.byCommand)).toEqual(
+        expect.arrayContaining(["scan", "arise", "chat"]),
+      );
+      expect(summary.byCommand.scan.calls).toBe(2);
+      expect(summary.byCommand.scan.tokens).toBe(225);
+      expect(summary.byCommand.arise.calls).toBe(1);
+      expect(summary.byCommand.arise.tokens).toBe(300);
+      expect(summary.byCommand.chat.calls).toBe(1);
+      expect(summary.byCommand.chat.tokens).toBe(450);
+      // "cli" should not appear when actual subcommand names are used
+      expect(summary.byCommand.cli).toBeUndefined();
+    });
   });
 });

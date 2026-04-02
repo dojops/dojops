@@ -5,14 +5,19 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { AGENT_TOOLS } from "@dojops/core";
+import { AGENT_TOOLS, initHookEngine } from "@dojops/core";
 import type { ToolCall, ToolDefinition } from "@dojops/core";
-import { ToolExecutor, createCheckpoint } from "@dojops/executor";
+import { ToolExecutor, createCheckpoint, createWorktree, removeWorktree } from "@dojops/executor";
+import type { WorktreeSession } from "@dojops/executor";
 import type { McpToolDispatcher as McpToolDispatcherType } from "@dojops/executor";
 import { AgentLoop } from "@dojops/session";
 import type { AgentLoopResult } from "@dojops/session";
 import { createTools } from "@dojops/api";
 import { CLIContext } from "../types";
+import { LLMSpinner } from "../tui/spinner";
+import { ToolDisplay } from "../tui/tool-display";
+import { ThinkingDisplay } from "../tui/thinking-display";
+import { TaskTree } from "../tui/task-tree";
 import { stripFlags, extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import { readPromptFile } from "../stdin";
@@ -283,6 +288,7 @@ function resolveAutoPrompt(
       "--background",
       "--_background-child",
       "--voice",
+      "--worktree",
     ]),
     new Set(["--timeout", "--repair-attempts", "--max-iterations", "--run-id"]),
   ).join(" ");
@@ -501,7 +507,10 @@ function buildToolExecutor(
   requireApprovalForCommands: boolean,
   allowAllPaths: boolean,
   isStreamJson: boolean,
+  toolDisplay?: ToolDisplay | null,
+  taskTree?: TaskTree | null,
 ): ToolExecutor {
+  const toolStartTimes = new Map<string, number>();
   const sensitiveHomePaths = ["/.ssh", "/.gnupg", "/.aws", "/.config"].map(
     (suffix) => os.homedir() + suffix,
   );
@@ -552,12 +561,19 @@ function buildToolExecutor(
           name: call.name,
           arguments: call.arguments as Record<string, unknown>,
         });
+      } else if (toolDisplay) {
+        toolDisplay.toolStart(call.name, summarizeArgs(call));
+        taskTree?.incrementTools("root");
       } else {
         p.log.step(`${pc.cyan(call.name)} ${summarizeArgs(call)}`);
       }
+      toolStartTimes.set(call.name + (call.id ?? ""), Date.now());
     },
     onToolEnd: (call, result) => {
       // NOSONAR — isStreamJson selects output format, not a behavioral flag
+      const startMs = toolStartTimes.get(call.name + (call.id ?? "")) ?? Date.now();
+      const durationMs = Date.now() - startMs;
+      toolStartTimes.delete(call.name + (call.id ?? ""));
       if (isStreamJson) {
         emitStreamEvent({
           type: "tool_result",
@@ -565,6 +581,9 @@ function buildToolExecutor(
           output: result.output.slice(0, 4096),
           isError: result.isError || undefined,
         });
+      } else if (toolDisplay) {
+        const preview = result.isError ? result.output.split("\n")[0] : undefined;
+        toolDisplay.toolComplete(call.name, durationMs, !!result.isError, preview);
       } else if (result.isError) {
         p.log.warn(pc.dim(`  \u2717 ${result.output.split("\n")[0]}`));
       }
@@ -912,6 +931,24 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   const maxIterations = Number.parseInt(extractFlagValue(args, "--max-iterations") ?? "50", 10);
+  const useWorktree = hasFlag(args, "--worktree");
+
+  // Create isolated worktree when requested
+  let worktreeSession: WorktreeSession | null = null;
+  if (useWorktree) {
+    try {
+      worktreeSession = createWorktree({ cwd: ctx.cwd });
+      p.log.info(
+        `${pc.cyan("Worktree")} created at ${pc.dim(worktreeSession.worktreePath)} (branch: ${worktreeSession.branch})`,
+      );
+    } catch (err) {
+      throw new CLIError(
+        ExitCode.GENERAL_ERROR,
+        `Failed to create worktree: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   p.log.info(
     `${pc.bold(pc.cyan("Autonomous agent mode"))} — iterative tool-use (max ${maxIterations} iterations)`,
   );
@@ -919,7 +956,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
   await applyAutoModelRouting(ctx, prompt);
 
   const provider = ctx.getProvider();
-  const cwd = ctx.cwd;
+  const cwd = worktreeSession ? worktreeSession.worktreePath : ctx.cwd;
   const rootDir = findProjectRoot(cwd);
 
   const { skipCustomConfigs, requireApprovalForCommands } = await resolveAutoTrustCheck(
@@ -935,6 +972,14 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
 
   const isStreamJson = ctx.globalOpts.output === "stream-json";
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
+  const isInteractive = !isBackgroundChild && !isStreamJson;
+
+  // Create TUI components for interactive mode
+  const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+  const spinner = isInteractive ? new LLMSpinner({ model }) : null;
+  const toolDisplay = isInteractive ? new ToolDisplay() : null;
+  const thinkingDisplay = isInteractive ? new ThinkingDisplay() : null;
+  const taskTree = isInteractive ? new TaskTree() : null;
 
   const toolExecutor = buildToolExecutor(
     cwd,
@@ -944,6 +989,8 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     requireApprovalForCommands,
     allowAllPaths,
     isStreamJson,
+    toolDisplay,
+    taskTree,
   );
 
   const availableBinaries = discoverAvailableBinaries();
@@ -961,6 +1008,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
   );
 
   const allTools = [...AGENT_TOOLS, ...mcpResources.mcpTools];
+  const hookEngine = initHookEngine(effectiveRootDir);
 
   const loop = new AgentLoop({
     provider,
@@ -969,14 +1017,47 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     systemPrompt,
     maxIterations,
     thinking: ctx.globalOpts.thinking,
+    hookEngine,
     validateBeforeDone: () => validateWrittenFiles(toolExecutor, skillsMap, cwd),
+    onIteration: (iteration) => {
+      if (spinner) {
+        spinner.setVerb(`Iteration ${iteration + 1}`);
+        if (!spinner.isActive) spinner.start();
+      }
+      if (taskTree && iteration > 0) {
+        taskTree.updateTask(`iter-${iteration - 1}`, "completed");
+        taskTree.addTask(`iter-${iteration}`, `Iteration ${iteration + 1}`);
+        taskTree.updateTask(`iter-${iteration}`, "running");
+      }
+    },
+    onToolCall: () => {
+      // Pause spinner during tool execution
+      spinner?.stop();
+    },
+    onToolResult: () => {
+      // Resume spinner after tool completes
+      if (spinner && !thinkingDisplay?.isActive()) {
+        spinner.start();
+      }
+    },
     onThinking: (text) => {
       if (!text) return;
       const trimmed = text.trim();
       if (trimmed.startsWith("{") || trimmed.startsWith("[")) return;
-      const firstLine = trimmed.split("\n")[0];
-      if (firstLine.length > 0) {
-        p.log.info(pc.dim(firstLine.length > 100 ? firstLine.slice(0, 97) + "..." : firstLine));
+
+      if (isStreamJson) return;
+
+      if (thinkingDisplay) {
+        spinner?.stop();
+        if (!thinkingDisplay.isActive()) {
+          thinkingDisplay.start();
+        }
+        thinkingDisplay.update(trimmed);
+      } else {
+        const firstLine = trimmed.split("\n")[0];
+        if (firstLine.length > 0) {
+          p.log.info(pc.dim(firstLine.length > 100 ? firstLine.slice(0, 97) + "..." : firstLine));
+        }
       }
     },
   });
@@ -987,13 +1068,36 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     emitStreamInit(ctx);
   }
 
-  const isInteractive = !isBackgroundChild && !isStreamJson;
-  const s = isInteractive ? p.spinner() : null;
-  s?.start("Agent working...");
+  // Start TUI components
+  if (taskTree && maxIterations > 1) {
+    taskTree.addTask("iter-0", "Iteration 1");
+    taskTree.updateTask("iter-0", "running");
+    taskTree.start();
+  }
+  spinner?.start();
+
+  const disposeTui = () => {
+    thinkingDisplay?.dispose();
+    spinner?.dispose();
+    toolDisplay?.dispose();
+    taskTree?.dispose();
+  };
 
   try {
     const result = await loop.run(prompt);
-    s?.stop(result.success ? pc.green("Done") : pc.yellow("Stopped"));
+
+    // Stop thinking display if still active
+    if (thinkingDisplay?.isActive()) thinkingDisplay.stop();
+
+    // Finalize task tree
+    if (taskTree) {
+      const lastIter = `iter-${result.iterations - 1}`;
+      taskTree.updateTask(lastIter, result.success ? "completed" : "failed");
+      taskTree.stop();
+    }
+
+    spinner?.stop();
+    disposeTui();
 
     handleAutoSuccess(result, {
       isStreamJson,
@@ -1007,11 +1111,23 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
       startTime,
     });
   } catch (err) {
-    s?.stop("Error");
+    disposeTui();
     handleAutoError(err, isStreamJson, isBackgroundChild, backgroundRunId, effectiveRootDir);
   } finally {
     if (mcpResources.mcpDisconnect) {
       await mcpResources.mcpDisconnect().catch(() => {});
+    }
+    if (worktreeSession) {
+      try {
+        removeWorktree(worktreeSession);
+        p.log.info(pc.dim("Worktree cleaned up."));
+      } catch {
+        p.log.warn(
+          pc.dim(
+            `Failed to clean up worktree at ${worktreeSession.worktreePath}. Remove it manually.`,
+          ),
+        );
+      }
     }
   }
 }

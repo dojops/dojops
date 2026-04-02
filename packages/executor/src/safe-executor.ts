@@ -13,6 +13,7 @@ import { ApprovalHandler, AutoApproveHandler, buildPreview } from "./approval";
 import { DEFAULT_POLICY, PolicyViolationError, checkWriteAllowed } from "./policy";
 import { withTimeout } from "./sandbox";
 import type { AuditPersistence } from "./audit";
+import type { FileHistory } from "./file-history";
 
 /** Critique callback for the self-repair loop (injected from @dojops/core). */
 export interface CriticCallback {
@@ -51,6 +52,9 @@ export interface SafeExecutorOptions {
   auditPersistence?: AuditPersistence;
   /** Optional hook engine for lifecycle events. */
   hookEngine?: HookEmitter;
+  /** Optional per-file undo/redo change tracker. When provided, file changes
+   *  are recorded in addition to existing .bak backup behavior. */
+  fileHistory?: FileHistory;
 }
 
 /** Options for the internal runExecution method. */
@@ -94,6 +98,7 @@ export class SafeExecutor {
   private readonly progress: ExecutorProgressCallback | undefined;
   private readonly auditPersistence: AuditPersistence | undefined;
   private readonly hookEngine: HookEmitter | undefined;
+  readonly fileHistory: FileHistory | undefined;
   private readonly auditLog: ExecutionAuditEntry[] = [];
   private readonly tokenUsage = { prompt: 0, completion: 0, total: 0 };
 
@@ -105,6 +110,7 @@ export class SafeExecutor {
     this.proactiveCritic = options.proactiveCritic;
     this.auditPersistence = options.auditPersistence;
     this.hookEngine = options.hookEngine;
+    this.fileHistory = options.fileHistory;
   }
 
   private handleTimeoutError(
@@ -292,6 +298,9 @@ export class SafeExecutor {
     const filesModified: string[] = [];
     const filesUnchanged: string[] = [];
     try {
+      // Emit PreExecute hook
+      this.hookEngine?.emit("PreExecute", { taskId, skill: tool.name }).catch(() => {});
+
       // Pass pre-generated output to execute so tools can skip redundant LLM calls
       const execInput =
         generateOutput.data !== undefined && typeof input === "object" && input !== null
@@ -337,6 +346,11 @@ export class SafeExecutor {
         });
       }
 
+      // Emit PostExecute hook (success)
+      this.hookEngine
+        ?.emit("PostExecute", { taskId, skill: tool.name, success: true })
+        .catch(() => {});
+
       // Advisory file completeness check
       const completenessWarning = this.checkFileCompleteness(filesWritten, meta);
 
@@ -353,6 +367,11 @@ export class SafeExecutor {
           : meta,
       });
     } catch (err) {
+      // Emit PostExecute hook (failure)
+      this.hookEngine
+        ?.emit("PostExecute", { taskId, skill: tool.name, success: false })
+        .catch(() => {});
+
       const { status, error } = this.handleTimeoutError(err, "Execute");
       return this.buildResult(taskId, tool.name, status, startTime, {
         error,

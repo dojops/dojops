@@ -282,6 +282,7 @@ function applyEnvironmentOverrides(
 function buildLazyProvider(
   globalOpts: ReturnType<typeof parseGlobalOptions>["globalOpts"],
   config: ReturnType<typeof loadProfileConfig>,
+  commandName: string,
 ): () => LLMProvider {
   let cachedProvider: LLMProvider | undefined;
   return () => {
@@ -334,7 +335,7 @@ function buildLazyProvider(
 
     // Wrap with token usage tracking
     const root = findProjectRoot();
-    cachedProvider = withTracking(provider, root, "cli");
+    cachedProvider = withTracking(provider, root, commandName);
     return cachedProvider;
   };
 }
@@ -440,13 +441,14 @@ function handleHelpFlag(rawArgs: string[], command: string[]): void {
 function buildCLIContext(
   globalOpts: ReturnType<typeof parseGlobalOptions>["globalOpts"],
   config: ReturnType<typeof loadProfileConfig>,
+  commandName: string,
 ): CLIContext {
   return {
     globalOpts,
     config,
     cwd: process.cwd(),
     resolvedTemperature: resolveTemperature(globalOpts.temperature, config),
-    getProvider: buildLazyProvider(globalOpts, config),
+    getProvider: buildLazyProvider(globalOpts, config, commandName),
   };
 }
 
@@ -503,7 +505,10 @@ async function main() {
 
   const resolved = resolveCommand(command, positional);
   const config = loadProfileConfig(globalOpts.profile);
-  const ctx = buildCLIContext(globalOpts, config);
+  // Use the first command segment for token tracking, defaulting to "generate"
+  // when no subcommand is given (bare `dojops "prompt"`)
+  const commandName = command[0] ?? "generate";
+  const ctx = buildCLIContext(globalOpts, config, commandName);
 
   const showBanner = shouldShowBanner(command, isCI, globalOpts);
   if (showBanner) printBanner();

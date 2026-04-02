@@ -12,9 +12,13 @@ import {
   parseToolCallsFromContent,
   isContextOverflowError,
 } from "@dojops/core";
-import type { ToolExecutor } from "@dojops/executor";
+import type { ToolExecutor, FileStateCache } from "@dojops/executor";
+import { statSync } from "node:fs";
+import { StreamingToolExecutor } from "./streaming-tool-executor";
 import { ContextBudgetTracker } from "./context-budget";
 import type { BudgetSnapshot } from "./context-budget";
+import { TurnBudgetTracker } from "./turn-budget";
+import type { TurnBudgetOptions, TurnBudgetStatus } from "./turn-budget";
 
 export interface AgentLoopOptions {
   provider: LLMProvider;
@@ -51,6 +55,20 @@ export interface AgentLoopOptions {
   maxTokensContinuations?: number;
   /** Hook engine for lifecycle events (optional). */
   hookEngine?: HookEngine;
+  /**
+   * When true and there are multiple tool calls, leading read-only calls
+   * execute concurrently (up to 5) via StreamingToolExecutor. Write calls
+   * still run serially. When false or there is only one call, the existing
+   * serial path is used. Default: true.
+   */
+  parallelTools?: boolean;
+  /** In-memory file state cache. When provided, read_file results are cached and
+   *  write_file/edit_file invalidate the affected paths. Reduces redundant disk reads. */
+  fileCache?: FileStateCache;
+  /** Per-turn token budget. Opt-in — when set, tracks tokens per turn and stops runaway loops. */
+  turnBudget?: TurnBudgetOptions;
+  /** Called when the turn budget emits a nudge or warning. */
+  onBudgetWarning?: (status: TurnBudgetStatus) => void;
   onIteration?: (iteration: number, message: AgentMessage) => void;
   onToolCall?: (call: ToolCall) => void;
   onToolResult?: (result: ToolResult) => void;
@@ -150,16 +168,26 @@ export class AgentLoop {
   private readonly maxIterations: number;
   private readonly maxTokensContinuations: number;
   private readonly tracker: ContextBudgetTracker;
+  private readonly turnBudget: TurnBudgetTracker | null;
+  private readonly parallelTools: boolean;
+  private readonly streamingExecutor: StreamingToolExecutor | null;
   /** Sliding window of recent tool call signatures for stale-loop detection. */
   private readonly recentCallSignatures: string[] = [];
   /** Number of consecutive repeated signatures before injecting reassessment. */
   private static readonly STALE_THRESHOLD = 3;
   /** How many max_tokens continuations have been used this run. */
   private continuationCount = 0;
+  /** Whether a turn-budget nudge has already been injected this run. */
+  private turnBudgetNudgeInjected = false;
 
   constructor(private readonly opts: AgentLoopOptions) {
     this.maxIterations = opts.maxIterations ?? 50;
     this.maxTokensContinuations = opts.maxTokensContinuations ?? 3;
+    this.turnBudget = opts.turnBudget ? new TurnBudgetTracker(opts.turnBudget) : null;
+    this.parallelTools = opts.parallelTools ?? true;
+    this.streamingExecutor = this.parallelTools
+      ? new StreamingToolExecutor({ toolExecutor: opts.toolExecutor })
+      : null;
     this.tracker =
       opts.budgetTracker ??
       new ContextBudgetTracker({
@@ -170,6 +198,10 @@ export class AgentLoop {
   }
 
   async run(userPrompt: string): Promise<AgentLoopResult> {
+    // Reset turn budget for each run (supports multiple user turns)
+    this.turnBudget?.reset();
+    this.turnBudgetNudgeInjected = false;
+
     const messages: AgentMessage[] = [{ role: "user", content: userPrompt }];
     const allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
     const thinkingParts: string[] = [];
@@ -216,6 +248,14 @@ export class AgentLoop {
 
       if (response.usage) {
         this.tracker.recordUsage(response.usage);
+
+        // Record turn-level token usage when the tracker is enabled
+        if (this.turnBudget) {
+          const turnStatus = this.turnBudget.record(response.usage.totalTokens);
+          if (turnStatus.nudgeMessage) {
+            this.opts.onBudgetWarning?.(turnStatus);
+          }
+        }
       }
 
       this.appendAssistantMessage(messages, response, iteration);
@@ -334,6 +374,26 @@ export class AgentLoop {
         });
       }
 
+      // Turn-level token budget: nudge once, then force stop
+      if (this.turnBudget?.shouldStop()) {
+        if (this.turnBudgetNudgeInjected) {
+          const turnStatus = this.turnBudget.getStatus();
+          summary = turnStatus.exhausted
+            ? `Stopped: turn token budget exhausted (${turnStatus.totalTokens}/${turnStatus.totalTokens + turnStatus.remaining} tokens).`
+            : `Stopped: diminishing returns (${turnStatus.lowProgressCount} low-progress continuations).`;
+          break;
+        }
+        // First time — inject a nudge and give the agent one more chance
+        const turnStatus = this.turnBudget.getStatus();
+        messages.push({
+          role: "user",
+          content:
+            turnStatus.nudgeMessage ??
+            "You are running low on turn budget. Wrap up your current task and call 'done'.",
+        });
+        this.turnBudgetNudgeInjected = true;
+      }
+
       // Check hard token budget
       if (this.tracker.isBudgetExhausted()) {
         const snap = this.tracker.getSnapshot();
@@ -438,6 +498,21 @@ export class AgentLoop {
     messages: AgentMessage[],
     allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
   ): Promise<void> {
+    // Use parallel execution when enabled and there are multiple calls
+    if (this.streamingExecutor && toolCalls.length > 1) {
+      await this.executeToolCallsParallel(toolCalls, messages, allToolCalls);
+      return;
+    }
+
+    await this.executeToolCallsSerial(toolCalls, messages, allToolCalls);
+  }
+
+  /** Serial execution path — one tool at a time, in order. */
+  private async executeToolCallsSerial(
+    toolCalls: ToolCall[],
+    messages: AgentMessage[],
+    allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+  ): Promise<void> {
     for (const call of toolCalls) {
       this.opts.onToolCall?.(call);
       allToolCalls.push({ name: call.name, arguments: call.arguments });
@@ -447,7 +522,13 @@ export class AgentLoop {
         ?.emit("PreExecute", { tool: call.name, arguments: call.arguments })
         .catch(() => {});
 
-      const result = await this.opts.toolExecutor.execute(call);
+      // Check file cache for read_file calls without offset/limit
+      const cached = this.getCachedReadResult(call);
+      const result = cached ?? (await this.opts.toolExecutor.execute(call));
+
+      // Store successful full-file reads in cache; invalidate on writes
+      this.updateFileCache(call, result);
+
       this.opts.onToolResult?.(result);
 
       // Emit PostExecute hook (non-blocking)
@@ -465,6 +546,93 @@ export class AgentLoop {
         content: result.output,
         isError: result.isError,
       });
+    }
+  }
+
+  /**
+   * Parallel execution path — leading read-only tools run concurrently,
+   * write tools run serially. Results appended in original call order.
+   */
+  private async executeToolCallsParallel(
+    toolCalls: ToolCall[],
+    messages: AgentMessage[],
+    allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+  ): Promise<void> {
+    // Record tool calls and fire onToolCall/PreExecute before batch starts
+    for (const call of toolCalls) {
+      this.opts.onToolCall?.(call);
+      allToolCalls.push({ name: call.name, arguments: call.arguments });
+      this.opts.hookEngine
+        ?.emit("PreExecute", { tool: call.name, arguments: call.arguments })
+        .catch(() => {});
+    }
+
+    const batch = await this.streamingExecutor!.executeBatch(toolCalls);
+
+    // Append results in original order and fire PostExecute hooks
+    for (let i = 0; i < toolCalls.length; i++) {
+      const call = toolCalls[i];
+      const result = batch.results[i];
+
+      // Store successful reads in cache; invalidate on writes
+      this.updateFileCache(call, result);
+
+      this.opts.onToolResult?.(result);
+
+      this.opts.hookEngine
+        ?.emit("PostExecute", {
+          tool: call.name,
+          success: !result.isError,
+          outputLength: result.output.length,
+        })
+        .catch(() => {});
+
+      messages.push({
+        role: "tool",
+        callId: call.id,
+        content: result.output,
+        isError: result.isError,
+      });
+    }
+  }
+
+  // ── File cache helpers ──────────────────────────────────────────
+
+  /** Check file cache for a read_file call with no offset/limit. Returns a cached ToolResult or null. */
+  private getCachedReadResult(call: ToolCall): ToolResult | null {
+    if (!this.opts.fileCache) return null;
+    if (call.name !== "read_file") return null;
+    // Only cache full-file reads (no offset/limit) to avoid stale partial results
+    if (call.arguments.offset != null || call.arguments.limit != null) return null;
+
+    const filePath = call.arguments.path as string;
+    const cached = this.opts.fileCache.get(filePath);
+    if (!cached) return null;
+
+    return { callId: call.id, output: cached.content };
+  }
+
+  /** After tool execution, update the file cache: store reads, invalidate writes. */
+  private updateFileCache(call: ToolCall, result: ToolResult): void {
+    if (!this.opts.fileCache) return;
+
+    const filePath = call.arguments.path as string | undefined;
+    if (!filePath) return;
+
+    if (call.name === "write_file" || call.name === "edit_file") {
+      this.opts.fileCache.invalidate(filePath);
+      return;
+    }
+
+    if (call.name === "read_file" && !result.isError) {
+      // Only cache full-file reads
+      if (call.arguments.offset != null || call.arguments.limit != null) return;
+      try {
+        const stat = statSync(filePath);
+        this.opts.fileCache.set(filePath, result.output, stat.mtimeMs);
+      } catch {
+        // Path unresolvable (relative, missing, etc.) — skip caching
+      }
     }
   }
 
