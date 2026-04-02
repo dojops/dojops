@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { LLMSpinner } from "../tui/spinner";
 
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9;]*[a-zA-Z]/g, "");
+}
+
 const writeMock = vi.fn();
 const originalWrite = process.stdout.write;
 const originalIsTTY = process.stdout.isTTY;
@@ -39,7 +44,8 @@ describe("LLMSpinner", () => {
     spinner.start();
 
     const output = writeMock.mock.calls.map((c) => c[0]).join("");
-    expect(output).toContain("Routing");
+    // Shimmer effect may insert ANSI codes between characters, so strip before checking
+    expect(stripAnsi(output)).toContain("Routing");
 
     spinner.dispose();
   });
