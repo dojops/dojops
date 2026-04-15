@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-04-16
+
+### Fixed
+
+- **`dojops arise` silently dropping task outputs** (`@dojops/planner`): `PlannerExecutor.execute()` called `pruneCompletedOutputs()` unconditionally between waves, nulling `result.output` on any completed task that wasn't referenced via `$ref:taskId` by an unprocessed downstream task. Because the decomposer emits plain-prompt inputs (no `$ref`s), every completed output in earlier waves was discarded before the final results were returned. This caused `arise` to misreport tasks as "generation failed (no output)" and skip file creation for all but the last wave, even though the LLM had generated valid output. Pruning is now opt-in via `pruneUnreferencedOutputs?: boolean` in `PlannerExecuteOptions` (default: `false`). Callers that consume `result.output` after `execute()` resolves no longer lose data.
+
 ## [1.2.3] - 2026-04-03
 
 ### Added

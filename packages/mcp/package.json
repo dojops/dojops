@@ -1,6 +1,6 @@
 {
   "name": "@dojops/mcp",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "MCP (Model Context Protocol) client and server for DojOps — connect external tool servers and expose DojOps as an MCP server",
   "license": "MIT",
   "repository": {

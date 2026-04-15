@@ -1,6 +1,6 @@
 {
   "name": "@dojops/runtime",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "38 built-in .dops v2 skill runtime for DojOps",
   "license": "MIT",
   "repository": {
