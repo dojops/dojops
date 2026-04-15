@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`dojops arise` silently dropping task outputs** (`@dojops/planner`): `PlannerExecutor.execute()` called `pruneCompletedOutputs()` unconditionally between waves, nulling `result.output` on any completed task that wasn't referenced via `$ref:taskId` by an unprocessed downstream task. Because the decomposer emits plain-prompt inputs (no `$ref`s), every completed output in earlier waves was discarded before the final results were returned. This caused `arise` to misreport tasks as "generation failed (no output)" and skip file creation for all but the last wave, even though the LLM had generated valid output. Pruning is now opt-in via `pruneUnreferencedOutputs?: boolean` in `PlannerExecuteOptions` (default: `false`). Callers that consume `result.output` after `execute()` resolves no longer lose data.
 
+### Security
+
+- **Axios bumped to 1.15.0** (`@dojops/core`): patches two CRITICAL advisories — GHSA-fvcv-3m26-pcqx (unrestricted cloud metadata exfiltration via header injection chain) and the NO_PROXY hostname normalization bypass that enables SSRF. Both affected every axios 1.0.0–1.14.x release. Pin style preserved (`=1.15.0`).
+
 ## [1.2.3] - 2026-04-03
 
 ### Added
