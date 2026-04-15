@@ -758,12 +758,26 @@ describe("PlannerExecutor", () => {
       ]);
 
       const executor = makeExecutor("success");
-      const result = await executor.execute(graph);
+      const result = await executor.execute(graph, { pruneUnreferencedOutputs: true });
 
       // t1's output should have been pruned (t2 doesn't $ref it)
       const t1Result = result.results.find((r) => r.taskId === "t1");
       expect(t1Result?.status).toBe("completed");
       expect(t1Result?.output).toBeUndefined();
+    });
+
+    it("preserves completed task output by default (no prune without opt-in)", async () => {
+      const graph = makeGraph("no-prune default", [
+        { id: "t1", description: "early task" },
+        { id: "t2", description: "later task", dependsOn: ["t1"] },
+      ]);
+
+      const executor = makeExecutor("success");
+      const result = await executor.execute(graph);
+
+      const t1Result = result.results.find((r) => r.taskId === "t1");
+      expect(t1Result?.status).toBe("completed");
+      expect(t1Result?.output).toBeDefined();
     });
 
     it("preserves $ref'd task output until dependants execute", async () => {

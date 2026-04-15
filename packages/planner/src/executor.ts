@@ -191,6 +191,13 @@ export interface PlannerExecuteOptions {
   completedTaskIds?: Set<string>;
   /** Maximum number of tasks to execute in parallel within a wave (default: 3) */
   maxConcurrency?: number;
+  /**
+   * When true, null out completed task outputs that no unprocessed task references via `$ref:`.
+   * Callers that consume `result.output` after `execute()` resolves (e.g. arise's verification
+   * + file-write loop) must leave this false, otherwise their outputs will be dropped between
+   * waves. Default: false.
+   */
+  pruneUnreferencedOutputs?: boolean;
 }
 
 /**
@@ -612,6 +619,7 @@ export class PlannerExecutor {
     const failed = new Set<string>();
     const completedTaskIds = options?.completedTaskIds ?? new Set<string>();
     const maxConcurrency = options?.maxConcurrency ?? 3;
+    const pruneUnreferencedOutputs = options?.pruneUnreferencedOutputs ?? false;
 
     const { inDegree, adjacency: dependants } = buildGraphMaps(graph.tasks);
 
@@ -635,7 +643,7 @@ export class PlannerExecutor {
       this.warnOnMixedWave(wave, failed);
       this.aggregateWaveResults(wave, results);
       this.advanceReadyTasks(wave, dependants, inDegree, processed, ready);
-      if (ready.size > 0) {
+      if (pruneUnreferencedOutputs && ready.size > 0) {
         this.pruneCompletedOutputs(results, graph.tasks, processed);
       }
     }
