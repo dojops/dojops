@@ -4,8 +4,8 @@ kind: skill
 
 meta:
   name: dockerfile
-  version: 2.2.0
-  description: "Generate multi-stage Dockerfiles and .dockerignore files"
+  version: 2.3.0
+  description: "Generate multi-stage Dockerfiles and .dockerignore files with inline explanatory comments"
   author: dojops
   license: MIT
   tags: [docker, dockerfile, container, build, image]
@@ -36,18 +36,18 @@ context:
     - **PHP**: php:8.3-fpm or php:8.3-apache, composer install
     - **Static site**: node for build, nginx:alpine for serving
 
-    EXAMPLE — Node.js multi-stage Dockerfile:
+    EXAMPLE — Node.js multi-stage Dockerfile (note the inline comments — match this density):
     {
       "files": {
-        "Dockerfile": "FROM node:20-slim AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\n\nFROM node:20-slim AS runner\nWORKDIR /app\nRUN addgroup --system app && adduser --system --ingroup app app\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nCOPY --from=builder /app/package.json ./\nUSER app\nEXPOSE 3000\nHEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost:3000/health || exit 1\nENTRYPOINT [\"node\"]\nCMD [\"dist/index.js\"]",
+        "Dockerfile": "# ── stage: builder — compile TypeScript and install full deps ─\nFROM node:20-slim AS builder\nWORKDIR /app\n# Copy manifests first so npm ci is cached when only source changes\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\n\n# ── stage: runner — minimal runtime image ─\nFROM node:20-slim AS runner\nWORKDIR /app\n# Dedicated non-root user for the final stage\nRUN addgroup --system app && adduser --system --ingroup app app\n# Copy only the compiled output and production node_modules from builder\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nCOPY --from=builder /app/package.json ./\n# Drop root before the app starts\nUSER app\nEXPOSE 3000\n# Liveness probe for orchestrators; keep lightweight\nHEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost:3000/health || exit 1\nENTRYPOINT [\"node\"]\nCMD [\"dist/index.js\"]",
         ".dockerignore": "node_modules\ndist\n.git\n.gitignore\n.env*\n*.md\nLICENSE\n.dockerignore\nDockerfile\ncoverage\n.next\n.turbo"
       }
     }
 
-    EXAMPLE — Go static binary:
+    EXAMPLE — Go static binary (same comment density, different language):
     {
       "files": {
-        "Dockerfile": "FROM golang:1.22-alpine AS builder\nWORKDIR /app\nCOPY go.mod go.sum ./\nRUN go mod download\nCOPY . .\nRUN CGO_ENABLED=0 GOOS=linux go build -ldflags='-s -w' -o /app/server ./cmd/server\n\nFROM scratch\nCOPY --from=builder /app/server /server\nCOPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/\nEXPOSE 8080\nENTRYPOINT [\"/server\"]",
+        "Dockerfile": "# ── stage: builder — produce a static binary ─\nFROM golang:1.22-alpine AS builder\nWORKDIR /app\n# Copy module files first so `go mod download` is cached when source changes\nCOPY go.mod go.sum ./\nRUN go mod download\nCOPY . .\n# CGO disabled + -s -w strips symbols for a smaller static binary\nRUN CGO_ENABLED=0 GOOS=linux go build -ldflags='-s -w' -o /app/server ./cmd/server\n\n# ── stage: runtime — scratch for minimal attack surface ─\nFROM scratch\n# Only the compiled binary and TLS roots end up in the final image\nCOPY --from=builder /app/server /server\nCOPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/\nEXPOSE 8080\nENTRYPOINT [\"/server\"]",
         ".dockerignore": ".git\n*.md\nLICENSE\n.env*\n.dockerignore\nDockerfile\nvendor\n*_test.go"
       }
     }
@@ -73,6 +73,7 @@ context:
     - Set appropriate EXPOSE for documented ports
     - Use ENTRYPOINT for the main process, CMD for default arguments
     - For compiled languages, use scratch or distroless as final base for minimal attack surface
+    - "REQUIRED inline comments. Prefix each stage with a `# ── stage <name> ─` banner describing its role. Add a short `#` comment above every non-trivial COPY, RUN, ENV, USER, HEALTHCHECK, and ENTRYPOINT line explaining why it is there (layer caching, security, runtime config). Comments must be specific — no generic filler like `# install dependencies`."
   context7Libraries:
     - name: docker
       query: "Dockerfile syntax multi-stage builds, best practices layer caching, HEALTHCHECK USER directive, .dockerignore patterns, non-root containers, distroless images"

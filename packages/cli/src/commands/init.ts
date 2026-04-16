@@ -3,8 +3,14 @@ import path from "node:path";
 import { runBin } from "@dojops/sdk";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { scanRepo, enrichWithLLM } from "@dojops/core";
-import type { RepoContext, LLMInsights } from "@dojops/core";
+import {
+  scanRepo,
+  enrichWithLLM,
+  RepoProfiler,
+  generateDirectoryTree,
+  readKeyFiles,
+} from "@dojops/core";
+import type { RepoContext, LLMInsights, RepoProfile } from "@dojops/core";
 import { CLIContext, CommandHandler } from "../types";
 import { toErrorMessage } from "../exit-codes";
 import { initProject, findProjectRoot } from "../state";
@@ -349,6 +355,63 @@ function ensureInsightDescription(insights: LLMInsights, ctx: RepoContext): void
       : `A ${langPart}software project.`;
 }
 
+/**
+ * Merge a RepoProfile from the LLM into the heuristic RepoContext.
+ * The heuristic scanner is authoritative for fields it can see directly
+ * (lockfile → packageManager, on-disk Dockerfile → container). The LLM
+ * only fills gaps — never overrides a non-null heuristic result.
+ */
+function applyRepoProfile(ctx: RepoContext, profile: RepoProfile): void {
+  if (!ctx.primaryLanguage && profile.primaryLanguage) {
+    ctx.primaryLanguage = profile.primaryLanguage;
+  }
+  if (!ctx.packageManager && profile.packageManager) {
+    ctx.packageManager = profile.packageManager;
+  }
+  if (!ctx.meta.isMonorepo && profile.isMonorepo) {
+    ctx.meta.isMonorepo = true;
+  }
+}
+
+function formatProfileNote(profile: RepoProfile): string {
+  const pmName = profile.packageManager?.name ?? "unknown";
+  const lines = [
+    `Primary language: ${profile.primaryLanguage ?? "unknown"}`,
+    `Package manager: ${pmName}`,
+    `Project type: ${profile.projectType ?? "unknown"}`,
+  ];
+  if (profile.buildTool) lines.push(`Build tool: ${profile.buildTool}`);
+  if (profile.testFramework) lines.push(`Test framework: ${profile.testFramework}`);
+  if (profile.frameworks.length > 0) lines.push(`Frameworks: ${profile.frameworks.join(", ")}`);
+  lines.push(`Confidence: ${(profile.confidence * 100).toFixed(0)}%`);
+  if (profile.rationale) lines.push(`Rationale: ${profile.rationale}`);
+  return lines.join("\n");
+}
+
+async function runRepoProfiler(
+  provider: Parameters<typeof enrichWithLLM>[1],
+  ctx: RepoContext,
+  rootDir: string,
+  isStructured: boolean,
+): Promise<void> {
+  const spinner = p.spinner();
+  if (!isStructured) spinner.start("Profiling repository nature...");
+  try {
+    const tree = generateDirectoryTree(rootDir, 3);
+    const keyFiles = readKeyFiles(rootDir);
+    const listing = keyFiles ? `${tree}\n\n## Key files\n\n${keyFiles}` : tree;
+
+    const profile = await new RepoProfiler(provider).profile(ctx, listing);
+    applyRepoProfile(ctx, profile);
+
+    if (!isStructured) spinner.stop("Repository profile ready.");
+    p.note(wrapForNote(formatProfileNote(profile)), "Repo profile");
+  } catch (err) {
+    if (!isStructured) spinner.stop("Repository profiling failed.");
+    p.log.warn(`Repo profiler skipped: ${toErrorMessage(err)}`);
+  }
+}
+
 async function runLLMEnrichment(
   provider: Parameters<typeof enrichWithLLM>[1] | undefined,
   ctx: RepoContext,
@@ -364,6 +427,10 @@ async function runLLMEnrichment(
     p.log.info(pc.dim("No project files detected. Skipping LLM analysis."));
     return;
   }
+
+  // Run the structured profiler first so its output can patch gaps in
+  // the heuristic scan before enrichWithLLM consumes the final context.
+  await runRepoProfiler(provider, ctx, rootDir, isStructured);
 
   const enrichSpinner = p.spinner();
   if (!isStructured) enrichSpinner.start("Analyzing project with LLM...");

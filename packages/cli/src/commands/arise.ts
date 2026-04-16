@@ -571,8 +571,12 @@ async function gatherPreferences(ctx: RepoContext): Promise<PipelinePreferences 
 
 function buildAriseTaskGraph(prefs: PipelinePreferences, ctx: RepoContext): TaskGraph {
   const tasks: TaskNode[] = [];
-  const lang = ctx.primaryLanguage ?? "the project";
-  const pkgMgr = ctx.packageManager?.name ?? "make";
+  const lang = ctx.primaryLanguage;
+  const pkgMgr = ctx.packageManager?.name ?? null;
+  const projectLabel = lang ? `a ${lang} project` : "this project";
+  const pkgMgrClause = pkgMgr
+    ? ` using ${pkgMgr}`
+    : " (detect the toolchain from the repo contents)";
   const envLabel =
     prefs.envStrategy === "single"
       ? "single environment"
@@ -583,7 +587,7 @@ function buildAriseTaskGraph(prefs: PipelinePreferences, ctx: RepoContext): Task
   // Always: the CI workflow
   const stageList = prefs.stages.join(", ");
   const ciPrompt = [
-    `Generate a ${prefs.ciPlatform} CI/CD pipeline for a ${lang} project using ${pkgMgr}.`,
+    `Generate a ${prefs.ciPlatform} CI/CD pipeline for ${projectLabel}${pkgMgrClause}.`,
     `Include these stages: ${stageList}.`,
     prefs.stages.includes("test") ? "Run tests in the pipeline." : "",
     prefs.stages.includes("lint") ? "Run linting in the pipeline." : "",
@@ -598,6 +602,9 @@ function buildAriseTaskGraph(prefs: PipelinePreferences, ctx: RepoContext): Task
       : "",
     prefs.notifications !== "none" ? `Send ${prefs.notifications} notifications on failure.` : "",
     ctx.meta.isMonorepo ? "This is a monorepo; set up matrix or per-package jobs." : "",
+    pkgMgr
+      ? `Use the ${pkgMgr} toolchain for install/build/test steps — do not invoke make unless a Makefile is actually present.`
+      : "Do not invoke make unless a Makefile is actually present; otherwise use the native toolchain of the detected language.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -612,7 +619,27 @@ function buildAriseTaskGraph(prefs: PipelinePreferences, ctx: RepoContext): Task
 
   // Dockerfile (parallel with CI)
   if (prefs.stages.includes("containerize")) {
-    const dockerPrompt = `Generate a production Dockerfile for a ${lang} project using ${pkgMgr}. Use multi-stage build, non-root user, and minimal image. Include a .dockerignore file.`;
+    const dockerPrompt = [
+      `Generate a production Dockerfile for ${projectLabel}${pkgMgrClause}.`,
+      "Requirements:",
+      "- Multi-stage build (separate build stage from runtime stage).",
+      "- Pin base images to specific versions (no `:latest`).",
+      "- Run as a non-root user in the final stage.",
+      "- Minimal final image (distroless, alpine, or slim where appropriate).",
+      "- Use BuildKit cache mounts for dependency installation when the syntax is supported.",
+      "- Set a HEALTHCHECK when the app exposes a port.",
+      pkgMgr
+        ? `- Install dependencies with ${pkgMgr}; do NOT invoke make unless a Makefile is present.`
+        : "- Do NOT invoke make unless a Makefile is present; use the native toolchain of the detected language.",
+      "",
+      "Inline comments (REQUIRED):",
+      "- Prefix every stage with a comment block explaining that stage's role.",
+      "- Add a short comment above each non-trivial RUN, COPY, ENV, and USER instruction explaining why it is there.",
+      "- Note any caching or layer-ordering decisions (e.g., why deps are copied before source).",
+      "- Comments must be accurate — no generic filler like `# install dependencies` when the line does more than that.",
+      "",
+      "Also output a matching .dockerignore that excludes build artefacts, node_modules / target / dist / .venv, local env files, and VCS metadata.",
+    ].join("\n");
     tasks.push({
       id: "dockerfile",
       tool: "dockerfile",

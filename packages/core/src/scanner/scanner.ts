@@ -1015,7 +1015,7 @@ const KEY_FILES = [
 const MAX_FILE_SIZE = 4096;
 
 /** Read key project files for LLM analysis, truncating large files. */
-function readKeyFiles(root: string): string {
+export function readKeyFiles(root: string): string {
   const parts: string[] = [];
   for (const rel of KEY_FILES) {
     const full = path.join(root, rel);

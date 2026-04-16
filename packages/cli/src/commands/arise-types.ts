@@ -69,7 +69,15 @@ export interface StageDisplay {
 export const STAGE_DISPLAY: Record<PipelineStage, StageDisplay> = {
   build: {
     label: "Build",
-    toolFn: (_p, ctx) => ctx.packageManager?.name ?? "make",
+    toolFn: (_p, ctx) => {
+      if (ctx.packageManager?.name) return ctx.packageManager.name;
+      const lang = ctx.primaryLanguage;
+      if (lang === "go") return "go build";
+      if (lang === "rust") return "cargo";
+      if (lang === "java") return "maven";
+      if (lang === "python") return "python";
+      return ctx.meta.hasMakefile ? "make" : "build";
+    },
   },
   test: {
     label: "Test",

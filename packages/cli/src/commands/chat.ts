@@ -1291,15 +1291,25 @@ async function resolveTrustCheck(rootDir: string, nonInteractive: boolean): Prom
   const { isFolderTrusted, trustFolder } = await import("../trust");
   const trustCheck = isFolderTrusted(rootDir);
   if (trustCheck.trusted) return false;
+  if (nonInteractive) return false;
 
   const cfgs = trustCheck.configs;
   const hasConfigs = cfgs.agents.length > 0 || cfgs.mcpServers.length > 0 || cfgs.skills.length > 0;
-  if (!hasConfigs || nonInteractive) return false;
 
-  logUntrustedConfigs(cfgs);
+  if (hasConfigs) {
+    logUntrustedConfigs(cfgs);
+  } else {
+    p.log.warn(`This workspace has not been trusted yet: ${pc.cyan(rootDir)}`);
+    p.log.info(pc.dim("Chat can read files and, when you ask, write to this folder."));
+  }
+
   const trustDecision = await p.confirm({ message: "Trust this workspace?" });
   if (p.isCancel(trustDecision) || !trustDecision) {
-    p.log.info(pc.dim("Skipping custom agents/MCP/skills for this session."));
+    if (hasConfigs) {
+      p.log.info(pc.dim("Skipping custom agents/MCP/skills for this session."));
+    } else {
+      p.log.info(pc.dim("Workspace remains untrusted; file writes will be blocked."));
+    }
     return true;
   }
   trustFolder(rootDir);

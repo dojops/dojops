@@ -3,6 +3,7 @@ export * from "./specialists";
 export * from "./router";
 export * from "./ci-debugger";
 export * from "./infra-diff";
+export * from "./repo-profiler";
 export * from "./devops-checker";
 export * from "./devsecops-reviewer";
 export * from "./review-tool-map";
