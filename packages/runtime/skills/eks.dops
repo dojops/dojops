@@ -4,7 +4,7 @@ kind: skill
 
 meta:
   name: eks
-  version: 2.2.0
+  version: 2.3.0
   description: "Generate Amazon EKS cluster configs, node groups, add-ons, and IAM roles"
   author: dojops
   license: MIT
@@ -85,6 +85,22 @@ context:
             namespace: kube-system
           attachPolicyARNs:
             - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/ExternalDNSRoute53Access
+      # EKS Pod Identity — preferred over IRSA on 1.28+ (no OIDC hop, direct STS via agent)
+      podIdentityAssociations:
+        - namespace: default
+          serviceAccountName: app-worker
+          permissionPolicyARNs:
+            - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AppWorkerS3Access
+          roleName: app-worker-role
+        - namespace: monitoring
+          serviceAccountName: cloudwatch-agent
+          wellKnownPolicies:
+            cloudWatch: true
+    addons:
+      - name: eks-pod-identity-agent
+      - name: vpc-cni
+      - name: coredns
+      - name: kube-proxy
   bestPractices:
     - Use managed node groups over self-managed for automatic AMI updates and draining
     - Enable IRSA (IAM Roles for Service Accounts) instead of node-level IAM roles

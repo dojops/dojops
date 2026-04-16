@@ -4,7 +4,7 @@ kind: skill
 
 meta:
   name: systemd
-  version: 2.2.0
+  version: 2.3.0
   description: "Generate systemd service unit files"
   author: dojops
   license: MIT
@@ -12,7 +12,7 @@ meta:
 
 context:
   technology: systemd
-  fileFormat: raw
+  fileFormat: ini
   outputGuidance: |
     Generate a valid systemd unit file in INI format.
     Output raw unit file content directly — do NOT wrap in JSON or code fences.

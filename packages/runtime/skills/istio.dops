@@ -4,7 +4,7 @@ kind: skill
 
 meta:
   name: istio
-  version: 2.2.0
+  version: 2.3.0
   description: "Generate Istio service mesh manifests for traffic management and security"
   author: dojops
   license: MIT
@@ -82,6 +82,45 @@ context:
         - name: v2
           labels:
             version: v2
+
+    Example — Istio ambient mode with a Waypoint proxy (L7 policies applied without sidecars):
+    ---
+    apiVersion: gateway.networking.k8s.io/v1
+    kind: Gateway
+    metadata:
+      name: reviews-waypoint
+      namespace: bookinfo
+      labels:
+        istio.io/waypoint-for: service
+    spec:
+      gatewayClassName: istio-waypoint
+      listeners:
+        - name: mesh
+          port: 15008
+          protocol: HBONE
+    ---
+    # Opt the namespace into ambient mode
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: bookinfo
+      labels:
+        istio.io/dataplane-mode: ambient
+    ---
+    # Attach the waypoint to the reviews Service for L7 routing/policies
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: reviews
+      namespace: bookinfo
+      labels:
+        istio.io/use-waypoint: reviews-waypoint
+    spec:
+      selector:
+        app: reviews
+      ports:
+        - port: 9080
+          targetPort: 9080
   bestPractices:
     - Use STRICT mTLS via PeerAuthentication for all production namespaces
     - Configure retries with retryOn conditions and perTryTimeout in VirtualService
@@ -95,6 +134,7 @@ context:
     - Always specify exportTo to control cross-namespace visibility of configs
     - Use consistent labeling (app, version) for traffic routing and telemetry
     - Avoid EnvoyFilter unless VirtualService/DestinationRule cannot achieve the goal
+    - For ambient mode, label namespaces with istio.io/dataplane-mode=ambient and attach L7 policy via a Waypoint proxy (Gateway with gatewayClassName=istio-waypoint) referenced from the Service by istio.io/use-waypoint
   context7Libraries:
     - name: istio
       query: "Istio VirtualService DestinationRule Gateway AuthorizationPolicy PeerAuthentication mTLS traffic management, retries timeout fault injection circuit breaker"

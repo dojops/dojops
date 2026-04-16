@@ -4,7 +4,7 @@ kind: skill
 
 meta:
   name: vault
-  version: 2.2.0
+  version: 2.3.0
   description: "Generate HashiCorp Vault server configs, policies, secret engines, and auth methods"
   author: dojops
   license: MIT
@@ -84,11 +84,8 @@ detection:
   paths: ["vault.hcl", "**/vault/*.hcl", "**/vault/policies/*.hcl"]
   updateMode: true
 
-verification:
-  structural:
-    - path: "listener"
-      required: false
-      message: "Vault server config should include a listener block"
+# No verification block: output is multi-file HCL wrapped in JSON, which structural rules cannot evaluate.
+# Rely on Vault's own config loader at deploy time for syntactic validation.
 
 permissions:
   filesystem: write

@@ -4,7 +4,7 @@ kind: skill
 
 meta:
   name: kubernetes
-  version: 2.2.0
+  version: 2.3.0
   description: "Generate Kubernetes deployment manifests"
   author: dojops
   license: MIT
@@ -114,7 +114,15 @@ files:
     format: raw
 
 detection:
-  paths: ["k8s/*.yaml", "k8s/*.yml", "*.yaml", "*.yml"]
+  paths:
+    - "k8s/**/*.yaml"
+    - "k8s/**/*.yml"
+    - "kubernetes/**/*.yaml"
+    - "kubernetes/**/*.yml"
+    - "manifests/**/*.yaml"
+    - "manifests/**/*.yml"
+    - "deploy/**/*.yaml"
+    - "deploy/**/*.yml"
   updateMode: true
 
 verification:

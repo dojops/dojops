@@ -4,7 +4,7 @@ kind: skill
 
 meta:
   name: ansible
-  version: 2.2.0
+  version: 2.3.0
   description: "Generate Ansible playbooks, roles, and inventory for configuration management"
   author: dojops
   license: MIT
@@ -23,14 +23,18 @@ context:
        Output format: { "files": { "playbook.yml": "...", "inventory.yml": "..." } }
 
     3. **Role-based project**: When the user asks for a role, reusable automation, or structured project.
+       Generate a COMPLETE role skeleton — tasks, handlers with at least one real handler, defaults, meta, and a template when config files are touched. Never emit an empty handler file (`[]`) — omit the file instead.
        Output format: { "files": {
-         "site.yml": "---\n- hosts: all\n  become: true\n  roles:\n    - common\n    - appname",
-         "roles/common/tasks/main.yml": "---\n- name: Update apt cache\n  ansible.builtin.apt:\n    update_cache: true",
-         "roles/common/handlers/main.yml": "---\n[]",
-         "roles/common/defaults/main.yml": "---\ncommon_packages:\n  - curl\n  - git",
-         "roles/appname/tasks/main.yml": "---\n- name: Install app\n  ansible.builtin.apt:\n    name: \"{{ app_package }}\"",
-         "roles/appname/defaults/main.yml": "---\napp_package: myapp",
-         "inventory.yml": "---\nall:\n  hosts:\n    server1:\n      ansible_host: 192.168.1.10"
+         "site.yml": "---\n- hosts: webservers\n  become: true\n  roles:\n    - common\n    - appname",
+         "roles/common/tasks/main.yml": "---\n- name: Update apt cache\n  ansible.builtin.apt:\n    update_cache: true\n    cache_valid_time: 3600\n\n- name: Install baseline packages\n  ansible.builtin.apt:\n    name: \"{{ common_packages }}\"\n    state: present",
+         "roles/common/defaults/main.yml": "---\ncommon_packages:\n  - curl\n  - git\n  - vim",
+         "roles/common/meta/main.yml": "---\ngalaxy_info:\n  role_name: common\n  author: dojops\n  description: Baseline packages and apt cache\n  license: MIT\n  min_ansible_version: \"2.14\"\n  platforms:\n    - name: Ubuntu\n      versions: [\"22.04\", \"24.04\"]\ndependencies: []",
+         "roles/appname/tasks/main.yml": "---\n- name: Install appname package\n  ansible.builtin.apt:\n    name: \"{{ app_package }}\"\n    state: present\n\n- name: Render appname config\n  ansible.builtin.template:\n    src: app.conf.j2\n    dest: /etc/appname/app.conf\n    owner: root\n    group: root\n    mode: \"0644\"\n  notify: Restart appname\n\n- name: Ensure appname service is running\n  ansible.builtin.service:\n    name: \"{{ app_service }}\"\n    state: started\n    enabled: true",
+         "roles/appname/handlers/main.yml": "---\n- name: Restart appname\n  ansible.builtin.service:\n    name: \"{{ app_service }}\"\n    state: restarted",
+         "roles/appname/defaults/main.yml": "---\napp_package: myapp\napp_service: myapp\napp_port: 8080",
+         "roles/appname/templates/app.conf.j2": "# Managed by Ansible — do not edit\nlisten = 0.0.0.0:{{ app_port }}\nservice_name = {{ app_service }}",
+         "roles/appname/meta/main.yml": "---\ngalaxy_info:\n  role_name: appname\n  author: dojops\n  description: Installs and configures appname\n  license: MIT\n  min_ansible_version: \"2.14\"\n  platforms:\n    - name: Ubuntu\n      versions: [\"22.04\", \"24.04\"]\ndependencies:\n  - role: common",
+         "inventory.yml": "---\nall:\n  children:\n    webservers:\n      hosts:\n        server1:\n          ansible_host: 192.168.1.10"
        } }
 
     4. **Multi-playbook project**: For complex setups with separate plays for different server groups.

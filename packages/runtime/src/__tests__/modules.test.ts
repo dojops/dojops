@@ -340,8 +340,8 @@ describe("prometheus.dops", () => {
 });
 
 describe("systemd.dops", () => {
-  it("has context with systemd technology and raw format", () => {
-    expectContext("systemd.dops", "systemd", "raw");
+  it("has context with systemd technology and ini format", () => {
+    expectContext("systemd.dops", "systemd", "ini");
   });
 
   it("generates raw .service file", () => {

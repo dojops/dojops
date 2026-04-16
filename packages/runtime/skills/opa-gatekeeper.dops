@@ -4,7 +4,7 @@ kind: skill
 
 meta:
   name: opa-gatekeeper
-  version: 2.2.0
+  version: 2.3.0
   description: "Generate OPA Gatekeeper constraint templates, constraints, and configs for Kubernetes admission control"
   author: dojops
   license: MIT
@@ -34,7 +34,7 @@ context:
     - spec.targets[].rego: Rego policy code with violation[msg] rule
 
     Structure Constraint with:
-    - apiVersion: constraints.gatekeeper.sh/v1beta1
+    - apiVersion: constraints.gatekeeper.sh/v1
     - kind: matching ConstraintTemplate name
     - spec.match: kinds, namespaces, excludedNamespaces, labelSelector
     - spec.parameters: values matching template CRD schema
@@ -72,7 +72,7 @@ context:
               msg := sprintf("Missing required labels: %v on %v/%v", [missing, input.review.object.kind, input.review.object.metadata.name])
             }
     ---
-    apiVersion: constraints.gatekeeper.sh/v1beta1
+    apiVersion: constraints.gatekeeper.sh/v1
     kind: K8sRequiredLabels
     metadata:
       name: all-must-have-owner

@@ -4,7 +4,7 @@ kind: skill
 
 meta:
   name: helm
-  version: 2.2.0
+  version: 2.3.0
   description: "Generate Helm chart scaffolding with values, templates, and dependencies"
   author: dojops
   license: MIT
@@ -32,7 +32,7 @@ context:
 
     CRITICAL OUTPUT RULES:
     - Always output a JSON object with "files" key.
-    - FLAT structure: All keys start from chart root (Chart.yaml, values.yaml, templates/...) — NEVER wrap in mychart/ or helm/ subfolder.
+    - Keys are RELATIVE to the chart root. Use "Chart.yaml", "values.yaml", "templates/deployment.yaml" — NEVER prefix with a chart name (no "mychart/Chart.yaml"). The runtime writes these into the chart directory the user chose.
     - Do NOT generate .gitkeep files, directory-only paths, or empty files.
     - Every file value must be non-empty valid YAML, TOML, or template content.
   bestPractices:
