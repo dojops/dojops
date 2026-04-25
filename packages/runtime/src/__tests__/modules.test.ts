@@ -352,3 +352,71 @@ describe("systemd.dops", () => {
     expectBinaryParser("systemd.dops", "systemd-analyze");
   });
 });
+
+// ── Detection path specificity (post-v2.3.0 fixes) ─────────────────
+
+describe("kubernetes.dops detection", () => {
+  it("does not use bare *.yaml or *.yml globs", () => {
+    const skill = parseV2Module("kubernetes.dops");
+    const paths = skill.frontmatter.detection?.paths ?? [];
+    for (const p of paths) {
+      expect(p).not.toBe("*.yaml");
+      expect(p).not.toBe("*.yml");
+    }
+  });
+
+  it("includes k8s-specific directories", () => {
+    const skill = parseV2Module("kubernetes.dops");
+    const paths = skill.frontmatter.detection?.paths ?? [];
+    const joined = paths.join(" ");
+    expect(joined).toContain("k8s/");
+    expect(joined).toContain("kubernetes/");
+    expect(joined).toContain("manifests/");
+    expect(joined).toContain("deploy/");
+  });
+});
+
+describe("opa-gatekeeper.dops Constraint apiVersion", () => {
+  it("uses constraints.gatekeeper.sh/v1 (not v1beta1)", () => {
+    const skill = parseV2Module("opa-gatekeeper.dops");
+    const raw = skill.raw;
+    expect(raw).not.toContain("constraints.gatekeeper.sh/v1beta1");
+    expect(raw).toContain("constraints.gatekeeper.sh/v1");
+  });
+});
+
+describe("vault.dops verification", () => {
+  it("has no structural verification rules", () => {
+    const skill = parseV2Module("vault.dops");
+    expect(skill.frontmatter.verification?.structural).toBeUndefined();
+  });
+});
+
+describe("ansible.dops role example", () => {
+  it("includes handlers and meta in the role-based example", () => {
+    const skill = parseV2Module("ansible.dops");
+    const guidance = skill.frontmatter.context.outputGuidance;
+    expect(guidance).toContain("handlers/main.yml");
+    expect(guidance).toContain("meta/main.yml");
+    expect(guidance).toContain("templates/");
+  });
+});
+
+describe("istio.dops ambient mode", () => {
+  it("mentions waypoint and ambient mode in outputGuidance or bestPractices", () => {
+    const skill = parseV2Module("istio.dops");
+    const guidance = skill.frontmatter.context.outputGuidance;
+    const practices = skill.frontmatter.context.bestPractices.join(" ");
+    const combined = guidance + " " + practices;
+    expect(combined).toContain("ambient");
+    expect(combined).toContain("waypoint");
+  });
+});
+
+describe("eks.dops Pod Identity", () => {
+  it("mentions podIdentityAssociations in outputGuidance", () => {
+    const skill = parseV2Module("eks.dops");
+    const guidance = skill.frontmatter.context.outputGuidance;
+    expect(guidance).toContain("podIdentityAssociations");
+  });
+});

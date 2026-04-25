@@ -161,6 +161,66 @@ describe("STAGE_DISPLAY", () => {
     const helmPrefs = { ...prefs, deployTarget: "helm" as const };
     expect(STAGE_DISPLAY.deploy.toolFn(helmPrefs, makeRepoCtx())).toBe("helm");
   });
+
+  it("falls back to go build for go projects without a package manager", () => {
+    const ctx = makeRepoCtx({ primaryLanguage: "go", packageManager: null });
+    expect(STAGE_DISPLAY.build.toolFn(prefs, ctx)).toBe("go build");
+  });
+
+  it("falls back to cargo for rust projects without a package manager", () => {
+    const ctx = makeRepoCtx({ primaryLanguage: "rust", packageManager: null });
+    expect(STAGE_DISPLAY.build.toolFn(prefs, ctx)).toBe("cargo");
+  });
+
+  it("falls back to make when Makefile exists and no package manager", () => {
+    const ctx = makeRepoCtx({
+      packageManager: null,
+      primaryLanguage: null,
+      meta: {
+        isGitRepo: true,
+        isMonorepo: false,
+        hasMakefile: true,
+        hasReadme: true,
+        hasEnvFile: false,
+      },
+    });
+    expect(STAGE_DISPLAY.build.toolFn(prefs, ctx)).toBe("make");
+  });
+
+  it("does NOT default to make when no Makefile and no package manager", () => {
+    const ctx = makeRepoCtx({
+      packageManager: null,
+      primaryLanguage: null,
+      meta: {
+        isGitRepo: true,
+        isMonorepo: false,
+        hasMakefile: false,
+        hasReadme: true,
+        hasEnvFile: false,
+      },
+    });
+    const result = STAGE_DISPLAY.build.toolFn(prefs, ctx);
+    expect(result).not.toBe("make");
+    expect(result).toBe("build");
+  });
+
+  it("prefers package manager over language fallback", () => {
+    const ctx = makeRepoCtx({
+      primaryLanguage: "go",
+      packageManager: { name: "npm", lockfile: "package-lock.json" },
+    });
+    expect(STAGE_DISPLAY.build.toolFn(prefs, ctx)).toBe("npm");
+  });
+
+  it("resolves deploy to k8s as default", () => {
+    const k8sPrefs = { ...prefs, deployTarget: "kubernetes" as const };
+    expect(STAGE_DISPLAY.deploy.toolFn(k8sPrefs, makeRepoCtx())).toBe("k8s");
+  });
+
+  it("resolves deploy to ssh for bare-metal", () => {
+    const bmPrefs = { ...prefs, deployTarget: "bare-metal" as const };
+    expect(STAGE_DISPLAY.deploy.toolFn(bmPrefs, makeRepoCtx())).toBe("ssh");
+  });
 });
 
 describe("PARALLEL_STAGES", () => {
