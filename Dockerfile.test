@@ -48,6 +48,11 @@ RUN chmod +x /dojops/packages/cli/dist/index.js \
     && git config --global user.name "DojOps Test" \
     && git config --global init.defaultBranch main
 
+RUN useradd --create-home --shell /bin/bash --uid 1001 dojops \
+    && chown -R dojops:dojops /workspace /dojops
+
+USER dojops
+
 WORKDIR /workspace
 
 ENV NODE_PATH=/dojops/node_modules

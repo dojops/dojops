@@ -58,7 +58,8 @@ const VERB_POOL = [
 ];
 
 function randomVerb(): string {
-  return VERB_POOL[Math.floor(Math.random() * VERB_POOL.length)];
+  // NOSONAR — Math.random is fine here: cosmetic spinner verb selection, no security context
+  return VERB_POOL[Math.floor(Math.random() * VERB_POOL.length)]; // NOSONAR
 }
 
 // ── Stall thresholds ────────────────────────────────────────────────

@@ -45,7 +45,8 @@ const PLAN_MODE_TOOLS: readonly string[] = [
 ] as const;
 
 const STATUS_MARKER_RE = /^<!--\s*status:\s*(drafting|pending_approval|approved|rejected)\s*-->$/m;
-const TITLE_RE = /^#\s+(.+)$/m;
+// NOSONAR — bounded markdown title regex on internal plan files; no backtracking risk (`.+` anchored to `$` with `m` flag)
+const TITLE_RE = /^#\s+(.+)$/m; // NOSONAR
 
 // ── PlanManager ──────────────────────────────────────────────────────
 
