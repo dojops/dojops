@@ -77,8 +77,8 @@ const SECRET_PATTERNS: SecretPattern[] = [
   // HashiCorp Vault
   { regex: /hvs\.[a-zA-Z0-9_-]{24,}/, name: "HashiCorp Vault Token", severity: "error" },
   // Slack tokens
-  { regex: /xoxb-[0-9]{10,}-[a-zA-Z0-9]+/, name: "Slack Bot Token", severity: "error" },
-  { regex: /xoxp-[0-9]{10,}-[a-zA-Z0-9]+/, name: "Slack User Token", severity: "error" },
+  { regex: /xoxb-\d{10,}-[a-zA-Z0-9]+/, name: "Slack Bot Token", severity: "error" },
+  { regex: /xoxp-\d{10,}-[a-zA-Z0-9]+/, name: "Slack User Token", severity: "error" },
   // Anthropic keys
   { regex: /sk-ant-[a-zA-Z0-9_-]{20,}/, name: "Anthropic API Key", severity: "error" },
   // Hardcoded credentials (check for placeholders)

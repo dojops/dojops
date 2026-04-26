@@ -245,7 +245,7 @@ describe("MemoryScanner", () => {
     });
     const results = await scanner.scan(store, "context");
     expect(results).toHaveLength(2);
-    expect(results.every((r) => r.score === 1.0)).toBe(true);
+    expect(results.every((r) => r.score === 1)).toBe(true);
   });
 
   it("uses LLM to rank when more entries than topK", async () => {

@@ -99,7 +99,7 @@ describe("OpenAI-compat generateWithTools", () => {
     mockOpenAICreate.mockResolvedValue(openAIToolResponse("done"));
 
     const provider = new OpenAIProvider("key");
-    await provider.generateWithTools!(makeToolRequest());
+    await provider.generateWithTools(makeToolRequest());
 
     const call = mockOpenAICreate.mock.calls[0][0];
     expect(call.tools).toHaveLength(2);
@@ -117,7 +117,7 @@ describe("OpenAI-compat generateWithTools", () => {
     mockOpenAICreate.mockResolvedValue(openAIToolResponse("done"));
 
     const provider = new OpenAIProvider("key");
-    await provider.generateWithTools!(makeToolRequest());
+    await provider.generateWithTools(makeToolRequest());
 
     const call = mockOpenAICreate.mock.calls[0][0];
     expect(call.messages[0]).toEqual({
@@ -141,7 +141,7 @@ describe("OpenAI-compat generateWithTools", () => {
     );
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.toolCalls).toHaveLength(1);
     expect(res.toolCalls[0].id).toBe("call_abc123");
@@ -163,7 +163,7 @@ describe("OpenAI-compat generateWithTools", () => {
     );
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.toolCalls).toHaveLength(2);
     expect(res.toolCalls[0].id).toBe("call_1");
@@ -174,7 +174,7 @@ describe("OpenAI-compat generateWithTools", () => {
     mockOpenAICreate.mockResolvedValue(openAIToolResponse("All done!", undefined, "stop"));
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.content).toBe("All done!");
     expect(res.toolCalls).toHaveLength(0);
@@ -185,7 +185,7 @@ describe("OpenAI-compat generateWithTools", () => {
     mockOpenAICreate.mockResolvedValue(openAIToolResponse("partial", undefined, "length"));
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.stopReason).toBe("max_tokens");
   });
@@ -200,7 +200,7 @@ describe("OpenAI-compat generateWithTools", () => {
     );
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.usage).toEqual({
       promptTokens: 100,
@@ -221,7 +221,7 @@ describe("OpenAI-compat generateWithTools", () => {
     });
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.usage?.cacheReadTokens).toBe(80);
   });
@@ -236,7 +236,7 @@ describe("OpenAI-compat generateWithTools", () => {
     );
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.toolCalls[0].arguments).toEqual({});
   });
@@ -245,7 +245,7 @@ describe("OpenAI-compat generateWithTools", () => {
     mockOpenAICreate.mockResolvedValue({ choices: [] });
 
     const provider = new OpenAIProvider("key");
-    await expect(provider.generateWithTools!(makeToolRequest())).rejects.toThrow(/empty choices/);
+    await expect(provider.generateWithTools(makeToolRequest())).rejects.toThrow(/empty choices/);
   });
 
   it("throws on API error with readable message", async () => {
@@ -254,7 +254,7 @@ describe("OpenAI-compat generateWithTools", () => {
     );
 
     const provider = new OpenAIProvider("key");
-    await expect(provider.generateWithTools!(makeToolRequest())).rejects.toThrow(
+    await expect(provider.generateWithTools(makeToolRequest())).rejects.toThrow(
       "Rate limit exceeded",
     );
   });
@@ -263,7 +263,7 @@ describe("OpenAI-compat generateWithTools", () => {
     mockOpenAICreate.mockResolvedValue(openAIToolResponse("Fixed it"));
 
     const provider = new OpenAIProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "Read this file" },
@@ -286,7 +286,7 @@ describe("OpenAI-compat generateWithTools", () => {
     mockOpenAICreate.mockResolvedValue(openAIToolResponse("ok"));
 
     const provider = new OpenAIProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "Hello" },
@@ -311,7 +311,7 @@ describe("OpenAI-compat generateWithTools", () => {
     mockOpenAICreate.mockResolvedValue(openAIToolResponse("ok"));
 
     const provider = new OpenAIProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       temperature: 0.2,
       maxTokens: 4096,
@@ -332,7 +332,7 @@ describe("OpenAI-compat generateWithTools", () => {
     );
 
     const provider = new DeepSeekProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.toolCalls).toHaveLength(1);
     expect(res.toolCalls[0].name).toBe("read_file");
@@ -361,7 +361,7 @@ describe("Anthropic generateWithTools", () => {
     mockAnthropicCreate.mockResolvedValue(anthropicToolResponse([{ type: "text", text: "done" }]));
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!(makeToolRequest());
+    await provider.generateWithTools(makeToolRequest());
 
     const call = mockAnthropicCreate.mock.calls[0][0];
     expect(call.tools).toHaveLength(2);
@@ -386,7 +386,7 @@ describe("Anthropic generateWithTools", () => {
     );
 
     const provider = new AnthropicProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.content).toBe("Reading the file...");
     expect(res.toolCalls).toHaveLength(1);
@@ -408,7 +408,7 @@ describe("Anthropic generateWithTools", () => {
     );
 
     const provider = new AnthropicProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.toolCalls).toHaveLength(2);
     expect(res.toolCalls[0].name).toBe("read_file");
@@ -428,7 +428,7 @@ describe("Anthropic generateWithTools", () => {
       );
 
       const provider = new AnthropicProvider("key");
-      const res = await provider.generateWithTools!(makeToolRequest());
+      const res = await provider.generateWithTools(makeToolRequest());
       expect(res.stopReason).toBe(expected);
     }
   });
@@ -439,7 +439,7 @@ describe("Anthropic generateWithTools", () => {
     );
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "Read the file" },
@@ -467,7 +467,7 @@ describe("Anthropic generateWithTools", () => {
     mockAnthropicCreate.mockResolvedValue(anthropicToolResponse([{ type: "text", text: "retry" }]));
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "try" },
@@ -491,7 +491,7 @@ describe("Anthropic generateWithTools", () => {
     mockAnthropicCreate.mockResolvedValue(anthropicToolResponse([{ type: "text", text: "ok" }]));
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "do it" },
@@ -526,7 +526,7 @@ describe("Anthropic generateWithTools", () => {
     );
 
     const provider = new AnthropicProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.usage).toEqual({
       promptTokens: 200,
@@ -550,7 +550,7 @@ describe("Anthropic generateWithTools", () => {
     );
 
     const provider = new AnthropicProvider("key");
-    const res = await provider.generateWithTools!({
+    const res = await provider.generateWithTools({
       ...makeToolRequest(),
       thinking: "medium",
     });
@@ -564,7 +564,7 @@ describe("Anthropic generateWithTools", () => {
     mockAnthropicCreate.mockResolvedValue(anthropicToolResponse([{ type: "text", text: "ok" }]));
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       thinking: "high",
       maxTokens: 4096,
@@ -580,7 +580,7 @@ describe("Anthropic generateWithTools", () => {
     mockAnthropicCreate.mockResolvedValue(anthropicToolResponse([{ type: "text", text: "ok" }]));
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       thinking: "low",
       temperature: 0.5,
@@ -595,7 +595,7 @@ describe("Anthropic generateWithTools", () => {
     mockAnthropicCreate.mockResolvedValue(anthropicToolResponse([{ type: "text", text: "ok" }]));
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       thinking: "none",
       temperature: 0.7,
@@ -610,7 +610,7 @@ describe("Anthropic generateWithTools", () => {
     mockAnthropicCreate.mockResolvedValue(anthropicToolResponse([{ type: "text", text: "ok" }]));
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "system", content: "Should be filtered" },
@@ -629,7 +629,7 @@ describe("Anthropic generateWithTools", () => {
     mockAnthropicCreate.mockRejectedValue(new Error('{"error":{"message":"Overloaded"}}'));
 
     const provider = new AnthropicProvider("key");
-    await expect(provider.generateWithTools!(makeToolRequest())).rejects.toThrow("Overloaded");
+    await expect(provider.generateWithTools(makeToolRequest())).rejects.toThrow("Overloaded");
   });
 });
 
@@ -663,7 +663,7 @@ describe("Gemini generateWithTools", () => {
     mockFetch.mockResolvedValue(geminiToolResponse([{ text: "done" }]));
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    await provider.generateWithTools!(makeToolRequest());
+    await provider.generateWithTools(makeToolRequest());
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.tools).toHaveLength(1);
@@ -675,7 +675,7 @@ describe("Gemini generateWithTools", () => {
     mockFetch.mockResolvedValue(geminiToolResponse([{ text: "done" }]));
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    await provider.generateWithTools!(makeToolRequest());
+    await provider.generateWithTools(makeToolRequest());
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.systemInstruction.parts[0].text).toBe("You are a DevOps assistant");
@@ -690,7 +690,7 @@ describe("Gemini generateWithTools", () => {
     );
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.content).toBe("I'll read the file");
     expect(res.toolCalls).toHaveLength(1);
@@ -709,7 +709,7 @@ describe("Gemini generateWithTools", () => {
     );
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.toolCalls).toHaveLength(2);
     expect(res.toolCalls[0].id).toBe("gemini-call-0");
@@ -720,7 +720,7 @@ describe("Gemini generateWithTools", () => {
     mockFetch.mockResolvedValue(geminiToolResponse([{ text: "All done" }]));
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.content).toBe("All done");
     expect(res.toolCalls).toHaveLength(0);
@@ -731,7 +731,7 @@ describe("Gemini generateWithTools", () => {
     mockFetch.mockResolvedValue(geminiToolResponse([{ text: "partial" }], "MAX_TOKENS"));
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.stopReason).toBe("max_tokens");
   });
@@ -746,7 +746,7 @@ describe("Gemini generateWithTools", () => {
     );
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.usage).toEqual({
       promptTokens: 150,
@@ -759,7 +759,7 @@ describe("Gemini generateWithTools", () => {
     mockFetch.mockResolvedValue(geminiToolResponse([{ text: "ok" }]));
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "Read the file" },
@@ -783,7 +783,7 @@ describe("Gemini generateWithTools", () => {
     mockFetch.mockResolvedValue(geminiToolResponse([{ text: "ok" }]));
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "do it" },
@@ -811,7 +811,7 @@ describe("Gemini generateWithTools", () => {
     mockFetch.mockResolvedValue(geminiToolResponse([{ functionCall: { name: "read_file" } }]));
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.toolCalls[0].arguments).toEqual({});
   });
@@ -824,7 +824,7 @@ describe("Gemini generateWithTools", () => {
     });
 
     const provider = new (await import("../../llm/gemini")).GeminiProvider("key");
-    await expect(provider.generateWithTools!(makeToolRequest())).rejects.toThrow(
+    await expect(provider.generateWithTools(makeToolRequest())).rejects.toThrow(
       "Gemini API error 400",
     );
   });
@@ -841,7 +841,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    await provider.generateWithTools!(makeToolRequest());
+    await provider.generateWithTools(makeToolRequest());
 
     const call = mockAxiosPost.mock.calls[0];
     const systemMsg = call[1].messages.find((m: { role: string }) => m.role === "system");
@@ -861,7 +861,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.toolCalls).toHaveLength(1);
     expect(res.toolCalls[0].name).toBe("read_file");
@@ -875,7 +875,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.content).toBe("The build succeeded");
     expect(res.toolCalls).toHaveLength(0);
@@ -892,7 +892,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.stopReason).toBe("end_turn");
     expect(res.toolCalls[0].name).toBe("done");
@@ -904,7 +904,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.content).toBe("I can help you with that.");
     expect(res.toolCalls).toHaveLength(0);
@@ -916,7 +916,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "Read it" },
@@ -947,7 +947,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       messages: [
         { role: "user", content: "do" },
@@ -980,7 +980,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    const res = await provider.generateWithTools!(makeToolRequest());
+    const res = await provider.generateWithTools(makeToolRequest());
 
     expect(res.usage).toEqual({
       promptTokens: 100,
@@ -995,7 +995,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider();
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       ...makeToolRequest(),
       temperature: 0.3,
     });
@@ -1010,7 +1010,7 @@ describe("Ollama generateWithTools", () => {
     });
 
     const provider = new OllamaProvider(undefined, undefined, "10m");
-    await provider.generateWithTools!(makeToolRequest());
+    await provider.generateWithTools(makeToolRequest());
 
     const call = mockAxiosPost.mock.calls[0];
     expect(call[1].keep_alive).toBe("10m");
@@ -1026,7 +1026,7 @@ describe("Ollama generateWithTools", () => {
     mockAxiosPost.mockRejectedValue(err);
 
     const provider = new OllamaProvider();
-    await expect(provider.generateWithTools!(makeToolRequest())).rejects.toThrow(
+    await expect(provider.generateWithTools(makeToolRequest())).rejects.toThrow(
       /Cannot connect to Ollama/,
     );
   });

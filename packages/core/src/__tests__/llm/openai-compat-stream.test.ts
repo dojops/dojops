@@ -46,7 +46,7 @@ describe("OpenAIProvider.generateStream", () => {
 
     const provider = new OpenAIProvider("key");
     const chunks: string[] = [];
-    const res = await provider.generateStream!({ prompt: "Hi" }, (c) => chunks.push(c));
+    const res = await provider.generateStream({ prompt: "Hi" }, (c) => chunks.push(c));
 
     expect(chunks).toEqual(["Hello", " world", "!"]);
     expect(res.content).toBe("Hello world!");
@@ -64,7 +64,7 @@ describe("OpenAIProvider.generateStream", () => {
     });
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateStream!({ prompt: "Hi" }, () => {});
+    const res = await provider.generateStream({ prompt: "Hi" }, () => {});
 
     expect(res.usage).toEqual({
       promptTokens: 25,
@@ -91,7 +91,7 @@ describe("OpenAIProvider.generateStream", () => {
     });
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateStream!({ prompt: "Hi" }, () => {});
+    const res = await provider.generateStream({ prompt: "Hi" }, () => {});
 
     expect(res.usage?.cacheReadTokens).toBe(60);
   });
@@ -105,7 +105,7 @@ describe("OpenAIProvider.generateStream", () => {
     });
 
     const provider = new OpenAIProvider("key");
-    const res = await provider.generateStream!({ prompt: "Hi" }, () => {});
+    const res = await provider.generateStream({ prompt: "Hi" }, () => {});
 
     expect(res.usage).toBeUndefined();
   });
@@ -117,7 +117,7 @@ describe("OpenAIProvider.generateStream", () => {
 
     const provider = new OpenAIProvider("key");
     const chunks: string[] = [];
-    const res = await provider.generateStream!({ prompt: "q", schema: TestSchema }, (c) =>
+    const res = await provider.generateStream({ prompt: "q", schema: TestSchema }, (c) =>
       chunks.push(c),
     );
 
@@ -137,7 +137,7 @@ describe("OpenAIProvider.generateStream", () => {
     });
 
     const provider = new OpenAIProvider("key");
-    await provider.generateStream!({ prompt: "Hi" }, () => {});
+    await provider.generateStream({ prompt: "Hi" }, () => {});
 
     const call = mockCreate.mock.calls[0][0];
     expect(call.stream).toBe(true);
@@ -152,7 +152,7 @@ describe("OpenAIProvider.generateStream", () => {
     });
 
     const provider = new OpenAIProvider("key");
-    await provider.generateStream!({ prompt: "Hi", temperature: 0.3 }, () => {});
+    await provider.generateStream({ prompt: "Hi", temperature: 0.3 }, () => {});
 
     const call = mockCreate.mock.calls[0][0];
     expect(call.temperature).toBe(0.3);
@@ -167,7 +167,7 @@ describe("OpenAIProvider.generateStream", () => {
     });
 
     const provider = new OpenAIProvider("key");
-    await provider.generateStream!(
+    await provider.generateStream(
       {
         prompt: "",
         system: "Be helpful",
@@ -189,7 +189,7 @@ describe("OpenAIProvider.generateStream", () => {
     mockCreate.mockRejectedValue(new Error('429 {"error":{"message":"Rate limit exceeded"}}'));
 
     const provider = new OpenAIProvider("key");
-    await expect(provider.generateStream!({ prompt: "Hi" }, () => {})).rejects.toThrow(
+    await expect(provider.generateStream({ prompt: "Hi" }, () => {})).rejects.toThrow(
       "Rate limit exceeded",
     );
   });
@@ -208,7 +208,7 @@ describe("OpenAIProvider.generateStream", () => {
 
     const provider = new OpenAIProvider("key");
     const chunks: string[] = [];
-    const res = await provider.generateStream!({ prompt: "Hi" }, (c) => chunks.push(c));
+    const res = await provider.generateStream({ prompt: "Hi" }, (c) => chunks.push(c));
 
     expect(chunks).toEqual(["first", "second"]);
     expect(res.content).toBe("firstsecond");
@@ -235,7 +235,7 @@ describe("DeepSeekProvider.generateStream", () => {
 
     const provider = new DeepSeekProvider("key");
     const chunks: string[] = [];
-    const res = await provider.generateStream!({ prompt: "Hi" }, (c) => chunks.push(c));
+    const res = await provider.generateStream({ prompt: "Hi" }, (c) => chunks.push(c));
 
     expect(chunks).toEqual(["DeepSeek ", "response"]);
     expect(res.content).toBe("DeepSeek response");

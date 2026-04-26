@@ -14,7 +14,7 @@ describe("Generate pipeline — full request-to-response", () => {
   });
 
   it("routes prompt to specialist agent and returns structured response", async () => {
-    const mockGenerate = deps.provider.generate as ReturnType<typeof vi.fn>;
+    const mockGenerate = vi.mocked(deps.provider.generate);
     mockGenerate.mockResolvedValue({
       content: 'resource "aws_s3_bucket" "main" {\n  bucket = "my-bucket"\n}',
     });
@@ -47,7 +47,7 @@ describe("Generate pipeline — full request-to-response", () => {
   });
 
   it("passes temperature to provider", async () => {
-    const mockGenerate = deps.provider.generate as ReturnType<typeof vi.fn>;
+    const mockGenerate = vi.mocked(deps.provider.generate);
     const app = createApp(deps);
 
     await request(app)
@@ -71,7 +71,7 @@ describe("Generate pipeline — full request-to-response", () => {
   });
 
   it("records provider error in history as failed", async () => {
-    const mockGenerate = deps.provider.generate as ReturnType<typeof vi.fn>;
+    const mockGenerate = vi.mocked(deps.provider.generate);
     mockGenerate.mockRejectedValue(new Error("API key invalid"));
 
     const app = createApp(deps);
@@ -95,7 +95,7 @@ describe("Plan pipeline — goal decomposition", () => {
   });
 
   it("decomposes goal into task graph", async () => {
-    const mockGenerate = deps.provider.generate as ReturnType<typeof vi.fn>;
+    const mockGenerate = vi.mocked(deps.provider.generate);
     mockGenerate.mockResolvedValue({
       content: JSON.stringify({
         tasks: [
@@ -160,7 +160,7 @@ describe("Plan pipeline — goal decomposition", () => {
   });
 
   it("records plan in history", async () => {
-    const mockGenerate = deps.provider.generate as ReturnType<typeof vi.fn>;
+    const mockGenerate = vi.mocked(deps.provider.generate);
     mockGenerate.mockResolvedValue({
       content: JSON.stringify({
         tasks: [{ id: "t1", title: "Test", tool: "shell", description: "echo", dependencies: [] }],
@@ -189,7 +189,7 @@ describe("Debug-CI pipeline — log diagnosis", () => {
   });
 
   it("diagnoses CI log and returns structured analysis", async () => {
-    const mockGenerate = deps.provider.generate as ReturnType<typeof vi.fn>;
+    const mockGenerate = vi.mocked(deps.provider.generate);
     mockGenerate.mockResolvedValue({
       content: JSON.stringify({
         rootCause: "Missing npm dependency 'typescript'",
@@ -213,7 +213,7 @@ describe("Debug-CI pipeline — log diagnosis", () => {
   });
 
   it("records debug-ci in history", async () => {
-    const mockGenerate = deps.provider.generate as ReturnType<typeof vi.fn>;
+    const mockGenerate = vi.mocked(deps.provider.generate);
     mockGenerate.mockResolvedValue({
       content: JSON.stringify({ rootCause: "test", fix: "fix", confidence: 0.5 }),
       parsed: { rootCause: "test", fix: "fix", confidence: 0.5 },
@@ -237,7 +237,7 @@ describe("Diff pipeline — infrastructure change analysis", () => {
   });
 
   it("analyzes diff and returns risk assessment", async () => {
-    const mockGenerate = deps.provider.generate as ReturnType<typeof vi.fn>;
+    const mockGenerate = vi.mocked(deps.provider.generate);
     mockGenerate.mockResolvedValue({
       content: JSON.stringify({
         risk: "MEDIUM",

@@ -63,63 +63,66 @@ function renderLinear(
 
 // ── Parallel layout (fork/join bracket for multi-item columns) ───────
 
-function renderWithParallel(
-  columns: PipelineStage[][],
+function renderSingleColumn(
+  col: PipelineStage[],
   resolve: (s: PipelineStage) => { label: string; tool: string },
-): string {
-  // Find max height across all columns (for vertical alignment)
-  const maxParallel = Math.max(...columns.map((c) => c.length));
-  // Each box is 3 lines tall; parallel boxes are stacked with 1-line gap
-  const totalHeight = maxParallel * 3 + (maxParallel - 1);
+  totalHeight: number,
+): string[] {
+  const { label } = resolve(col[0]);
+  const box = makeBox(label);
+  const boxWidth = stripAnsi(box[0]).length;
+  return centerVertically(box, totalHeight, boxWidth);
+}
 
-  // Build each column as an array of strings (one per line)
-  const rendered: string[][] = [];
-
-  for (const col of columns) {
-    if (col.length === 1) {
-      // Single box: center vertically in totalHeight
-      const { label } = resolve(col[0]);
-      const box = makeBox(label);
-      const boxWidth = stripAnsi(box[0]).length;
-      const padded = centerVertically(box, totalHeight, boxWidth);
-      rendered.push(padded);
-    } else {
-      // Parallel: stack boxes vertically
-      const colLines: string[] = [];
-      for (let i = 0; i < col.length; i++) {
-        if (i > 0) colLines.push(""); // gap between boxes
-        const { label } = resolve(col[i]);
-        const box = makeBox(label);
-        colLines.push(...box);
-      }
-      // Pad to totalHeight
-      while (colLines.length < totalHeight) colLines.push("");
-      rendered.push(colLines);
-    }
+function renderParallelColumn(
+  col: PipelineStage[],
+  resolve: (s: PipelineStage) => { label: string; tool: string },
+  totalHeight: number,
+): string[] {
+  const colLines: string[] = [];
+  for (let i = 0; i < col.length; i++) {
+    if (i > 0) colLines.push(""); // gap between boxes
+    const { label } = resolve(col[i]);
+    colLines.push(...makeBox(label));
   }
+  while (colLines.length < totalHeight) colLines.push("");
+  return colLines;
+}
 
-  // Build connectors between columns
+function combineColumnsWithConnectors(
+  columns: PipelineStage[][],
+  rendered: string[][],
+  totalHeight: number,
+): string {
   const result: string[][] = [];
   for (let ci = 0; ci < rendered.length; ci++) {
     if (ci > 0) {
-      const prevCol = columns[ci - 1];
-      const nextCol = columns[ci];
-      result.push(buildConnector(prevCol.length, nextCol.length, totalHeight));
+      result.push(buildConnector(columns[ci - 1].length, columns[ci].length, totalHeight));
     }
     result.push(rendered[ci]);
   }
 
-  // Combine all column-arrays line by line
   const output: string[] = [];
   for (let row = 0; row < totalHeight; row++) {
-    let line = "";
-    for (const colArr of result) {
-      line += colArr[row] ?? "";
-    }
-    output.push(line);
+    output.push(result.map((colArr) => colArr[row] ?? "").join(""));
   }
-
   return output.join("\n");
+}
+
+function renderWithParallel(
+  columns: PipelineStage[][],
+  resolve: (s: PipelineStage) => { label: string; tool: string },
+): string {
+  const maxParallel = Math.max(...columns.map((c) => c.length));
+  const totalHeight = maxParallel * 3 + (maxParallel - 1);
+
+  const rendered = columns.map((col) =>
+    col.length === 1
+      ? renderSingleColumn(col, resolve, totalHeight)
+      : renderParallelColumn(col, resolve, totalHeight),
+  );
+
+  return combineColumnsWithConnectors(columns, rendered, totalHeight);
 }
 
 // ── Box rendering ────────────────────────────────────────────────────
@@ -191,7 +194,7 @@ function centerVertically(box: string[], totalHeight: number, boxWidth: number):
 
 function stripAnsi(str: string): string {
   // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b\[[0-9;]*m/g, "");
+  return str.replaceAll(/\x1b\[[\d;]*m/g, "");
 }
 
 // ── Planned files list ───────────────────────────────────────────────

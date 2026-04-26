@@ -425,8 +425,7 @@ describe("AgentLoop", () => {
       expect(provider.generateWithTools).toHaveBeenCalledTimes(4);
 
       // Verify the nudge was injected by checking the 4th call's messages
-      const fourthCallArgs = (provider.generateWithTools as ReturnType<typeof vi.fn>).mock
-        .calls[3][0];
+      const fourthCallArgs = provider.generateWithTools.mock.calls[3][0];
       const userMessages = fourthCallArgs.messages.filter(
         (m: { role: string; content?: string }) =>
           m.role === "user" && m.content?.includes("repeating the same action"),
@@ -449,7 +448,7 @@ describe("AgentLoop", () => {
       expect(result.success).toBe(true);
 
       // Check that a "Do NOT call" restrict message was injected
-      const allCalls = (provider.generateWithTools as ReturnType<typeof vi.fn>).mock.calls;
+      const allCalls = provider.generateWithTools.mock.calls;
       const lastCallMessages = allCalls[allCalls.length - 1][0].messages;
       const restrictMessages = lastCallMessages.filter(
         (m: { role: string; content?: string }) =>
@@ -637,7 +636,7 @@ describe("AgentLoop", () => {
 
       // Verify the provider always sees the original user message first.
       // Check the last call to generateWithTools — messages[0] should be the original prompt.
-      const allCalls = (provider.generateWithTools as ReturnType<typeof vi.fn>).mock.calls;
+      const allCalls = provider.generateWithTools.mock.calls;
       const lastCallMessages = allCalls[allCalls.length - 1][0].messages;
       expect(lastCallMessages[0].role).toBe("user");
       expect(lastCallMessages[0].content).toBe("My original task prompt");

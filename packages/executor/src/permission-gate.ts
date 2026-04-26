@@ -140,58 +140,24 @@ export class PermissionGate {
     }
 
     // 2. Apply mode-based logic
-    let decision: PermissionDecision;
-    switch (this.mode) {
-      case "plan-only":
-        if (WRITE_TOOLS.has(toolName)) {
-          decision = {
-            action: "deny",
-            reason: "Write operations are blocked in plan-only mode",
-          };
-        } else {
-          decision = { action: "allow" };
-        }
-        break;
-
-      case "auto-approve":
-        decision = { action: "allow" };
-        break;
-
-      case "strict":
-        if (READ_ONLY_TOOLS.has(toolName)) {
-          decision = { action: "allow" };
-        } else {
-          decision = {
-            action: "ask",
-            reason: `Strict mode: approval required for '${toolName}'`,
-          };
-        }
-        break;
-
-      case "interactive":
-      default:
-        // Read-only tools are always allowed
-        if (READ_ONLY_TOOLS.has(toolName)) {
-          decision = { action: "allow" };
-        } else if (taskRisk && isRiskAtOrBelow(taskRisk, "MEDIUM")) {
-          // Risk-based: allow low/medium risk
-          decision = { action: "allow" };
-        } else if (taskRisk && !isRiskAtOrBelow(taskRisk, "MEDIUM")) {
-          decision = {
-            action: "ask",
-            reason: `High-risk operation: ${toolName} (risk: ${taskRisk})`,
-          };
-        } else if (WRITE_TOOLS.has(toolName)) {
-          // No risk info — default to allow for write tools
-          decision = { action: "allow" };
-        } else {
-          decision = { action: "allow" };
-        }
-        break;
-    }
-
+    const decision = this.decideByMode(toolName, taskRisk);
     this.trackDenialState(toolName, decision);
     return decision;
+  }
+
+  /** Resolve the permission decision based on the active mode. */
+  private decideByMode(toolName: string, taskRisk?: RiskLevel): PermissionDecision {
+    switch (this.mode) {
+      case "plan-only":
+        return decidePlanOnly(toolName);
+      case "auto-approve":
+        return { action: "allow" };
+      case "strict":
+        return decideStrict(toolName);
+      case "interactive":
+      default:
+        return decideInteractive(toolName, taskRisk);
+    }
   }
 
   /** Update denial tracking based on a permission decision. */
@@ -274,6 +240,30 @@ export class PermissionGate {
 export interface PermissionDecision {
   action: "allow" | "deny" | "ask";
   reason?: string;
+}
+
+/** Resolve permission for plan-only mode: deny writes, allow reads. */
+function decidePlanOnly(toolName: string): PermissionDecision {
+  if (WRITE_TOOLS.has(toolName)) {
+    return { action: "deny", reason: "Write operations are blocked in plan-only mode" };
+  }
+  return { action: "allow" };
+}
+
+/** Resolve permission for strict mode: allow reads, ask for everything else. */
+function decideStrict(toolName: string): PermissionDecision {
+  if (READ_ONLY_TOOLS.has(toolName)) return { action: "allow" };
+  return { action: "ask", reason: `Strict mode: approval required for '${toolName}'` };
+}
+
+/** Resolve permission for interactive mode: risk-based decision on writes. */
+function decideInteractive(toolName: string, taskRisk?: RiskLevel): PermissionDecision {
+  if (READ_ONLY_TOOLS.has(toolName)) return { action: "allow" };
+  const isHighRisk = taskRisk && !isRiskAtOrBelow(taskRisk, "MEDIUM");
+  if (isHighRisk) {
+    return { action: "ask", reason: `High-risk operation: ${toolName} (risk: ${taskRisk})` };
+  }
+  return { action: "allow" };
 }
 
 /** Match a tool name against a pattern (supports "*" wildcard). */

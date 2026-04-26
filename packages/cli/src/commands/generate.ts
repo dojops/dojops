@@ -439,7 +439,7 @@ function trackToolActivity(
     model: "",
     tier: "",
     status: "success",
-    quality_score: 1.0,
+    quality_score: 1,
     duration_ms: durationMs ?? 0,
     input_tokens: 0,
     output_tokens: 0,

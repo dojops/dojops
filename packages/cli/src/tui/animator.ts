@@ -218,7 +218,7 @@ const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 /** Strip ANSI escape codes for length calculation. */
 export function stripAnsi(s: string): string {
-  return s.replace(ANSI_RE, "");
+  return s.replaceAll(ANSI_RE, "");
 }
 
 /** Format duration from ms: "23ms", "1.2s", "1:23". */

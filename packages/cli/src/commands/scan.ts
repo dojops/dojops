@@ -622,8 +622,7 @@ function displayAutoRemediationPlan(findings: ScanFinding[], showCommands: boole
   }
 
   const lines: string[] = [];
-  lines.push(`${pc.bold("Summary:")} ${plan.summary}`);
-  lines.push("");
+  lines.push(`${pc.bold("Summary:")} ${plan.summary}`, "");
 
   // Group by action type
   const autoActions = plan.actions.filter((a) => a.command && a.confidence !== "low");
@@ -651,8 +650,7 @@ function displayAutoRemediationPlan(findings: ScanFinding[], showCommands: boole
   }
 
   if (!showCommands && autoActions.length > 0) {
-    lines.push("");
-    lines.push(pc.dim("Pass --yes to display the commands that would be run."));
+    lines.push("", pc.dim("Pass --yes to display the commands that would be run."));
   }
 
   p.note(wrapForNote(lines.join("\n")), "Auto-Remediation Plan");

@@ -168,36 +168,20 @@ export class TaskTree {
     return lines;
   }
 
-  private renderNode(node: TaskNode, isLast: boolean, frame: number): string {
-    const connector = isLast ? TREE_END : TREE_MID;
+  private statusIcon(status: TaskStatus, frame: number): string {
+    const iconMap: Record<TaskStatus, () => string> = {
+      running: () => pc.cyan(cycleGlyph(frame, SPINNER_GLYPHS)),
+      completed: () => pc.green(STATUS_ICONS.completed),
+      failed: () => pc.red(STATUS_ICONS.failed),
+      pending: () => pc.dim(STATUS_ICONS.pending),
+    };
+    return iconMap[status]();
+  }
 
-    // Status icon — running tasks get animated glyph
-    let icon: string;
-    switch (node.status) {
-      case "running":
-        icon = pc.cyan(cycleGlyph(frame, SPINNER_GLYPHS));
-        break;
-      case "completed":
-        icon = pc.green(STATUS_ICONS.completed);
-        break;
-      case "failed":
-        icon = pc.red(STATUS_ICONS.failed);
-        break;
-      default:
-        icon = pc.dim(STATUS_ICONS.pending);
-    }
-
-    // Agent badge with color
-    let agentBadge = "";
-    if (node.agent) {
-      const colorFn = this.colorMap.get(node.agent) ?? pc.dim;
-      agentBadge = ` ${colorFn(`(@${node.agent})`)}`;
-    }
-
-    // Stats
+  private nodeStats(node: TaskNode): string[] {
     const stats: string[] = [];
     if (node.toolCount > 0) {
-      stats.push(`${node.toolCount} tool${node.toolCount !== 1 ? "s" : ""}`);
+      stats.push(`${node.toolCount} tool${node.toolCount === 1 ? "" : "s"}`);
     }
     if (node.tokenCount > 0) {
       const count =
@@ -206,17 +190,25 @@ export class TaskTree {
           : `${(node.tokenCount / 1000).toFixed(1).replace(/\.0$/, "")}K`;
       stats.push(`${count} tokens`);
     }
-
-    // Duration for completed/failed tasks
     if (node.endMs && (node.status === "completed" || node.status === "failed")) {
       stats.push(formatDuration(node.endMs - node.startMs));
     } else if (node.status === "running") {
       stats.push(formatDuration(Date.now() - node.startMs));
     }
+    return stats;
+  }
 
+  private renderNode(node: TaskNode, isLast: boolean, frame: number): string {
+    const connector = isLast ? TREE_END : TREE_MID;
+    const icon = this.statusIcon(node.status, frame);
+
+    const agentBadge = node.agent
+      ? ` ${(this.colorMap.get(node.agent) ?? pc.dim)(`(@${node.agent})`)}`
+      : "";
+
+    const stats = this.nodeStats(node);
     const statsStr = stats.length > 0 ? `${pc.dim(" · ")}${pc.dim(stats.join(" · "))}` : "";
 
-    // Label color
     const label =
       node.status === "pending"
         ? pc.dim(node.label)

@@ -200,9 +200,11 @@ describe("AgentContext", () => {
         systemPrompt: "test",
       });
 
-      ctx.messages.push({ role: "assistant", content: "First response" });
-      ctx.messages.push({ role: "user", content: "Follow up" });
-      ctx.messages.push({ role: "assistant", content: "Final answer" });
+      ctx.messages.push(
+        { role: "assistant", content: "First response" },
+        { role: "user", content: "Follow up" },
+        { role: "assistant", content: "Final answer" },
+      );
 
       expect(ctx.summarizeResults()).toBe("Final answer");
     });

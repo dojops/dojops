@@ -219,13 +219,13 @@ export class SafeExecutor {
     const writtenBasenames = new Set(
       filesWritten.map((f) => {
         const parts = f.split("/");
-        return parts[parts.length - 1];
+        return parts.at(-1)!;
       }),
     );
 
     const missing = expectedFiles.filter((f) => {
       const parts = f.split("/");
-      const basename = parts[parts.length - 1];
+      const basename = parts.at(-1)!;
       return !writtenBasenames.has(basename);
     });
 

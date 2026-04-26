@@ -489,11 +489,10 @@ describe("OllamaProvider", () => {
     });
 
     afterEach(() => {
-      if (savedOllamaTimeout !== undefined) process.env.OLLAMA_TIMEOUT = savedOllamaTimeout;
-      else delete process.env.OLLAMA_TIMEOUT;
-      if (savedRequestTimeout !== undefined)
-        process.env.DOJOPS_REQUEST_TIMEOUT = savedRequestTimeout;
-      else delete process.env.DOJOPS_REQUEST_TIMEOUT;
+      if (savedOllamaTimeout === undefined) delete process.env.OLLAMA_TIMEOUT;
+      else process.env.OLLAMA_TIMEOUT = savedOllamaTimeout;
+      if (savedRequestTimeout === undefined) delete process.env.DOJOPS_REQUEST_TIMEOUT;
+      else process.env.DOJOPS_REQUEST_TIMEOUT = savedRequestTimeout;
     });
 
     it("passes timeout config to axios.post for generate", async () => {

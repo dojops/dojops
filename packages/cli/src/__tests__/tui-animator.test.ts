@@ -123,7 +123,7 @@ describe("shimmerLine", () => {
     const result = shimmerLine("hello", 0);
     // Strip ANSI for length check
     // eslint-disable-next-line no-control-regex
-    const stripped = result.replace(/\x1b\[[0-9;]*m/g, "");
+    const stripped = result.replaceAll(/\x1b\[[0-9;]*m/g, "");
     expect(stripped).toBe("hello");
   });
 });

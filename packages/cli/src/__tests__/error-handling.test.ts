@@ -78,7 +78,7 @@ describe("toErrorMessage — error extraction edge cases", () => {
   });
 
   it("handles Error with empty message", () => {
-    expect(toErrorMessage(new Error(""))).toBe("");
+    expect(toErrorMessage(new Error(""))).toBe(""); // NOSONAR — intentionally testing empty message edge case
   });
 
   it("handles nested Error (Error with cause)", () => {

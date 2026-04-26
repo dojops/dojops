@@ -990,6 +990,42 @@ function logUpgradeIfExists(destPath: string, version: string): void {
   }
 }
 
+function tryInstallFromCache(skillName: string, destDir: string): void {
+  const projectRoot = findProjectRoot() ?? process.cwd();
+  ensureSkillCache(projectRoot);
+  const cachedPath = findCachedSkill(projectRoot, skillName);
+  if (cachedPath) {
+    fs.mkdirSync(destDir, { recursive: true });
+    const destPath = path.join(destDir, `${skillName}.dops`);
+    fs.copyFileSync(cachedPath, destPath);
+    p.log.success(`Installed ${pc.cyan(skillName)} from offline cache`);
+    p.log.info(`${pc.dim("Path:")} ${pc.underline(destPath)}`);
+    return;
+  }
+  throw new CLIError(
+    ExitCode.GENERAL_ERROR,
+    `Skill "${skillName}" not found in offline cache. Cache skills first with: dojops skills export <path>`,
+  );
+}
+
+function warnIfTampered(
+  manifestScope: "global" | "project",
+  skillName: string,
+  destPath: string,
+): void {
+  const manifest = loadManifest(manifestScope);
+  const existingEntry = manifest.skills[skillName];
+  if (!existingEntry?.sha256 || !fs.existsSync(destPath)) return;
+
+  const diskHash = crypto.createHash("sha256").update(fs.readFileSync(destPath)).digest("hex");
+  if (diskHash !== existingEntry.sha256) {
+    p.log.warn(
+      `Local file has been modified since last install (expected ${existingEntry.sha256.slice(0, 12)}..., got ${diskHash.slice(0, 12)}...).`,
+    );
+    p.log.warn("Overwriting with verified hub download.");
+  }
+}
+
 export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
   const skillName = args[0];
   if (!skillName) {
@@ -1016,24 +1052,7 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
     loc = scope;
   }
 
-  // Offline mode: check cache before reaching out to hub
-  if (isOfflineMode()) {
-    const projectRoot = findProjectRoot() ?? process.cwd();
-    ensureSkillCache(projectRoot);
-    const cachedPath = findCachedSkill(projectRoot, skillName);
-    if (cachedPath) {
-      fs.mkdirSync(destDir, { recursive: true });
-      const destPath = path.join(destDir, `${skillName}.dops`);
-      fs.copyFileSync(cachedPath, destPath);
-      p.log.success(`Installed ${pc.cyan(skillName)} from offline cache`);
-      p.log.info(`${pc.dim("Path:")} ${pc.underline(destPath)}`);
-      return;
-    }
-    throw new CLIError(
-      ExitCode.GENERAL_ERROR,
-      `Skill "${skillName}" not found in offline cache. Cache skills first with: dojops skills export <path>`,
-    );
-  }
+  if (isOfflineMode()) return tryInstallFromCache(skillName, destDir);
 
   const spinner = p.spinner();
   spinner.start(`Fetching ${pc.cyan(skillName)} from hub...`);
@@ -1057,7 +1076,6 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
     spinner.message("Validating...");
     const skill = await parseDownloadedSkill(fileBuffer);
 
-    // Validate skill name is a safe filename (no path separators or special chars)
     const parsedName = skill.frontmatter.meta.name;
     if (!/^[a-z0-9][a-z0-9_-]*$/.test(parsedName)) {
       throw new CLIError(
@@ -1070,26 +1088,12 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
 
     logUpgradeIfExists(destPath, version);
 
-    // Check for local tampering: if manifest has a hash for this skill,
-    // verify the file on disk still matches before overwriting
     const manifestScope = loc as "global" | "project";
-    const manifest = loadManifest(manifestScope);
-    const existingEntry = manifest.skills[skillName];
-    if (existingEntry?.sha256 && fs.existsSync(destPath)) {
-      const diskHash = crypto.createHash("sha256").update(fs.readFileSync(destPath)).digest("hex");
-      if (diskHash !== existingEntry.sha256) {
-        p.log.warn(
-          `Local file has been modified since last install (expected ${existingEntry.sha256.slice(0, 12)}..., got ${diskHash.slice(0, 12)}...).`,
-        );
-        p.log.warn("Overwriting with verified hub download.");
-      }
-    }
+    warnIfTampered(manifestScope, skillName, destPath);
 
     fs.writeFileSync(destPath, fileBuffer);
-    // Persist SHA-256 sidecar for load-time re-verification
     fs.writeFileSync(`${destPath}.sha256`, actualHash, "utf-8");
 
-    // Record in the skill manifest for integrity tracking
     recordInstall(manifestScope, {
       name: skillName,
       version,

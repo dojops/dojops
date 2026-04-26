@@ -117,9 +117,11 @@ function changeTypeLabel(changeType: FileRiskScore["changeType"]): string {
 function formatRiskReport(report: DiffRiskReport): string[] {
   const lines: string[] = [];
 
-  lines.push(`${pc.bold("Overall Risk:")} ${riskLevelLabel(report.overallRisk)}`);
-  lines.push(`${pc.bold("Summary:")}      ${report.summary}`);
-  lines.push("");
+  lines.push(
+    `${pc.bold("Overall Risk:")} ${riskLevelLabel(report.overallRisk)}`,
+    `${pc.bold("Summary:")}      ${report.summary}`,
+    "",
+  );
 
   if (report.files.length > 0) {
     lines.push(pc.bold("Files:"));
@@ -141,8 +143,7 @@ function formatRiskReport(report: DiffRiskReport): string[] {
   }
 
   if (report.suggestedReviewers.length > 0) {
-    lines.push("");
-    lines.push(pc.bold("Suggested reviewers:"));
+    lines.push("", pc.bold("Suggested reviewers:"));
     for (const reviewer of report.suggestedReviewers) {
       lines.push(`  ${pc.cyan("-")} ${reviewer}`);
     }

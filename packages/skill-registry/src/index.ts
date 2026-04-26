@@ -101,6 +101,52 @@ function verifySkillIntegrity(filePath: string): { valid: boolean; reason?: stri
 }
 
 /**
+ * Process a single user .dops file entry: verify integrity, parse, validate, and check for injection.
+ * Returns a DevOpsSkill on success, or pushes a warning and returns null.
+ */
+function processUserDopsEntry(
+  entry: { filePath: string },
+  provider: LLMProvider,
+  options: CreateSkillRegistryOptions | undefined,
+  warnings: string[],
+): DevOpsSkill | null {
+  // Re-verify SHA-256 for hub-installed skills
+  const integrity = verifySkillIntegrity(entry.filePath);
+  if (!integrity.valid) {
+    warnings.push(`Blocked .dops file ${entry.filePath}: ${integrity.reason}`);
+    return null;
+  }
+
+  const module = parseDopsFile(entry.filePath);
+  const validation = validateDopsSkill(module);
+  if (!validation.valid) {
+    warnings.push(`Invalid .dops file ${entry.filePath}: ${(validation.errors ?? []).join(", ")}`);
+    return null;
+  }
+
+  // Run injection detection on custom skill prompts
+  const promptCheck = validateSystemPrompt(module.sections.prompt);
+  if (promptCheck.block) {
+    warnings.push(
+      `Blocked .dops file ${entry.filePath}: injection pattern detected (confidence: ${promptCheck.confidence.toFixed(2)}). ${promptCheck.warnings.join("; ")}`,
+    );
+    return null;
+  }
+  if (!promptCheck.safe) {
+    warnings.push(
+      `Warning for .dops file ${entry.filePath}: suspicious patterns detected — ${promptCheck.warnings.join("; ")}`,
+    );
+  }
+
+  return new DopsRuntimeV2(module, provider, {
+    docAugmenter: options?.docAugmenter,
+    context7Provider: options?.context7Provider,
+    projectContext: options?.projectContext,
+    trustLevel: "custom",
+  });
+}
+
+/**
  * Load user .dops files from global/project directories.
  * Only v2 .dops modules are supported.
  * Custom skills are loaded with trustLevel "custom" and undergo injection detection + integrity checks.
@@ -121,43 +167,8 @@ export function loadUserModules(
 
   for (const entry of dopsFiles) {
     try {
-      // Re-verify SHA-256 for hub-installed skills
-      const integrity = verifySkillIntegrity(entry.filePath);
-      if (!integrity.valid) {
-        warnings.push(`Blocked .dops file ${entry.filePath}: ${integrity.reason}`);
-        continue;
-      }
-
-      const module = parseDopsFile(entry.filePath);
-      const validation = validateDopsSkill(module);
-      if (validation.valid) {
-        // Run injection detection on custom skill prompts
-        const promptCheck = validateSystemPrompt(module.sections.prompt);
-        if (promptCheck.block) {
-          warnings.push(
-            `Blocked .dops file ${entry.filePath}: injection pattern detected (confidence: ${promptCheck.confidence.toFixed(2)}). ${promptCheck.warnings.join("; ")}`,
-          );
-          continue;
-        }
-        if (!promptCheck.safe) {
-          warnings.push(
-            `Warning for .dops file ${entry.filePath}: suspicious patterns detected — ${promptCheck.warnings.join("; ")}`,
-          );
-        }
-
-        modules.push(
-          new DopsRuntimeV2(module, provider, {
-            docAugmenter: options?.docAugmenter,
-            context7Provider: options?.context7Provider,
-            projectContext: options?.projectContext,
-            trustLevel: "custom",
-          }),
-        );
-      } else {
-        warnings.push(
-          `Invalid .dops file ${entry.filePath}: ${(validation.errors ?? []).join(", ")}`,
-        );
-      }
+      const skill = processUserDopsEntry(entry, provider, options, warnings);
+      if (skill) modules.push(skill);
     } catch (err) {
       warnings.push(
         `Failed to load .dops file ${entry.filePath}: ${err instanceof Error ? err.message : String(err)}`,

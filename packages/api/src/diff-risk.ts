@@ -167,7 +167,7 @@ const PATH_RULES: PathRule[] = [
 
 const CHANGE_TYPE_MULTIPLIER: Record<FileRiskScore["changeType"], number> = {
   deleted: 1.5,
-  modified: 1.0,
+  modified: 1,
   added: 0.8,
   renamed: 0.7,
 };
@@ -188,36 +188,17 @@ export function parseDiff(diffContent: string): ParsedFile[] {
   let currentFile: ParsedFile | null = null;
 
   for (const line of lines) {
-    // Match "diff --git a/path b/path"
-    const diffHeader = /^diff --git a\/(.+?) b\/(.+?)$/.exec(line);
-    if (diffHeader) {
+    const result = processDiffLine(line, currentFile);
+    if (result.newFile !== undefined) {
       if (currentFile) files.push(currentFile);
-      const aPath = diffHeader[1];
-      const bPath = diffHeader[2];
-      currentFile = {
-        path: bPath,
-        changeType: aPath !== bPath ? "renamed" : "modified",
-        linesChanged: 0,
-      };
+      currentFile = result.newFile;
       continue;
     }
-
-    // Detect new files
-    if (line === "--- /dev/null" && currentFile) {
-      currentFile.changeType = "added";
+    if (result.updatedType && currentFile) {
+      currentFile.changeType = result.updatedType;
       continue;
     }
-
-    // Detect deleted files
-    if (line === "+++ /dev/null" && currentFile) {
-      currentFile.changeType = "deleted";
-      continue;
-    }
-
-    // Count changed lines (additions and deletions)
-    if (currentFile && (line.startsWith("+") || line.startsWith("-"))) {
-      // Skip diff metadata lines
-      if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (result.countLine && currentFile) {
       currentFile.linesChanged++;
     }
   }
@@ -225,6 +206,39 @@ export function parseDiff(diffContent: string): ParsedFile[] {
   if (currentFile) files.push(currentFile);
 
   return files;
+}
+
+function processDiffLine(
+  line: string,
+  currentFile: ParsedFile | null,
+): {
+  newFile?: ParsedFile;
+  updatedType?: FileRiskScore["changeType"];
+  countLine?: boolean;
+} {
+  // Match "diff --git a/path b/path"
+  const diffHeader = /^diff --git a\/(.+?) b\/(.+?)$/.exec(line);
+  if (diffHeader) {
+    const aPath = diffHeader[1];
+    const bPath = diffHeader[2];
+    return {
+      newFile: {
+        path: bPath,
+        changeType: aPath === bPath ? "modified" : "renamed",
+        linesChanged: 0,
+      },
+    };
+  }
+
+  if (line === "--- /dev/null" && currentFile) return { updatedType: "added" };
+  if (line === "+++ /dev/null" && currentFile) return { updatedType: "deleted" };
+
+  // Count changed lines (additions and deletions), skip diff metadata
+  const isChangeLine = line.startsWith("+") || line.startsWith("-");
+  const isMetadata = line.startsWith("+++") || line.startsWith("---");
+  if (currentFile && isChangeLine && !isMetadata) return { countLine: true };
+
+  return {};
 }
 
 // ── Risk scoring ──────────────────────────────────────────────────
@@ -332,7 +346,7 @@ function collectReviewers(files: FileRiskScore[]): string[] {
       }
     }
   }
-  return [...reviewerSet].sort();
+  return [...reviewerSet].sort((a, b) => a.localeCompare(b));
 }
 
 // ── Main entry point ──────────────────────────────────────────────

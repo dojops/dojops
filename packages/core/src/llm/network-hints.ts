@@ -26,7 +26,11 @@ export function extractConnectionError(
   for (let i = 0; i < maxDepth && current; i++) {
     const e = current as { code?: string; message?: string; cause?: unknown };
     if (e.code && typeof e.code === "string") {
-      return { code: e.code, message: e.message ?? String(current) };
+      return {
+        code: e.code,
+        message:
+          e.message ?? (current instanceof Error ? current.message : JSON.stringify(current)),
+      };
     }
     current = e.cause;
   }

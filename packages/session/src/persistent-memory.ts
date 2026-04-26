@@ -239,7 +239,7 @@ export class MemoryScanner {
 
     // If fewer than topK, return all with score 1.0
     if (all.length <= this.topK) {
-      return all.map((entry) => ({ entry, score: 1.0 }));
+      return all.map((entry) => ({ entry, score: 1 }));
     }
 
     try {
@@ -248,7 +248,7 @@ export class MemoryScanner {
       // Fallback: return most recent entries
       return all.slice(0, this.topK).map((entry, i) => ({
         entry,
-        score: 1.0 - i * 0.1,
+        score: 1 - i * 0.1,
       }));
     }
   }
@@ -276,13 +276,13 @@ export class MemoryScanner {
 
     // Parse the JSON array of indices
     const cleaned = response
-      .replace(/```json?\s*/g, "")
-      .replace(/```/g, "")
+      .replaceAll(/```json?\s*/g, "")
+      .replaceAll("```", "")
       .trim();
     const indices: number[] = JSON.parse(cleaned);
 
     if (!Array.isArray(indices)) {
-      throw new Error("Expected JSON array of indices");
+      throw new TypeError("Expected JSON array of indices");
     }
 
     return indices
@@ -290,7 +290,7 @@ export class MemoryScanner {
       .slice(0, this.topK)
       .map((idx, rank) => ({
         entry: entries[idx],
-        score: 1.0 - rank * (0.8 / this.topK),
+        score: 1 - rank * (0.8 / this.topK),
       }));
   }
 }
@@ -306,7 +306,7 @@ function homedir(): string {
 export function toMemoryId(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "") // NOSONAR: two independent anchored alternatives (^-+ and -+$) with no overlapping quantifiers; linear runtime
     .slice(0, 60);
 }

@@ -112,7 +112,7 @@ describe("parseAndValidate — JSON parsing edge cases", () => {
   });
 
   it("handles escaped quotes in JSON strings", () => {
-    const raw = '{"name": "has \\"quotes\\"", "count": 11}';
+    const raw = String.raw`{"name": "has \"quotes\"", "count": 11}`;
     expect(parseAndValidate(raw, Simple)).toEqual({ name: 'has "quotes"', count: 11 });
   });
 });

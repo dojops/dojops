@@ -77,21 +77,30 @@ export function saveSession(rootDir: string, session: ChatSessionState): void {
   }
 }
 
+/**
+ * Decode a raw session file string, handling encryption transparently.
+ * Returns the parsed session, or null if decryption is unavailable.
+ */
+function decodeSessionData(raw: string): ChatSessionState | null {
+  if (!raw.startsWith("DOJOPS_ENC:")) {
+    return JSON.parse(raw) as ChatSessionState;
+  }
+  const key = getEncryptionKey();
+  if (!key) return null;
+  const json = decrypt(raw.slice("DOJOPS_ENC:".length), key);
+  return JSON.parse(json) as ChatSessionState;
+}
+
 export function loadSession(rootDir: string, sessionId: string): ChatSessionState | null {
   if (!isValidSessionId(sessionId)) return null;
   const file = path.join(sessionsDir(rootDir), `${sessionId}.json`);
   try {
     const raw = fs.readFileSync(file, "utf-8");
-    if (raw.startsWith("DOJOPS_ENC:")) {
-      const key = getEncryptionKey();
-      if (!key) {
-        console.warn(`[session] Encrypted session ${sessionId} but DOJOPS_SESSION_KEY not set`);
-        return null;
-      }
-      const json = decrypt(raw.slice("DOJOPS_ENC:".length), key);
-      return JSON.parse(json) as ChatSessionState;
+    const session = decodeSessionData(raw);
+    if (!session && raw.startsWith("DOJOPS_ENC:")) {
+      console.warn(`[session] Encrypted session ${sessionId} but DOJOPS_SESSION_KEY not set`);
     }
-    return JSON.parse(raw) as ChatSessionState;
+    return session;
   } catch {
     return null;
   }
@@ -103,20 +112,11 @@ export function listSessions(rootDir: string): ChatSessionState[] {
   return fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
-    .filter((f) => {
-      const sessionId = f.replace(/\.json$/, "");
-      return isValidSessionId(sessionId);
-    })
+    .filter((f) => isValidSessionId(f.replace(/\.json$/, "")))
     .map((f) => {
       try {
         const raw = fs.readFileSync(path.join(dir, f), "utf-8");
-        if (raw.startsWith("DOJOPS_ENC:")) {
-          const key = getEncryptionKey();
-          if (!key) return null;
-          const json = decrypt(raw.slice("DOJOPS_ENC:".length), key);
-          return JSON.parse(json) as ChatSessionState;
-        }
-        return JSON.parse(raw) as ChatSessionState;
+        return decodeSessionData(raw);
       } catch {
         return null;
       }
@@ -170,14 +170,8 @@ export function cleanExpiredSessions(rootDir: string, ttlMs?: number): number {
     try {
       const filePath = path.join(dir, file);
       const raw = fs.readFileSync(filePath, "utf-8");
-      let data: ChatSessionState;
-      if (raw.startsWith("DOJOPS_ENC:")) {
-        const key = getEncryptionKey();
-        if (!key) continue;
-        data = JSON.parse(decrypt(raw.slice("DOJOPS_ENC:".length), key));
-      } else {
-        data = JSON.parse(raw);
-      }
+      const data = decodeSessionData(raw);
+      if (!data) continue;
       const updatedAt = new Date(data.updatedAt).getTime();
       if (Number.isFinite(updatedAt) && now - updatedAt > ttl) {
         fs.unlinkSync(filePath);

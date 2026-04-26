@@ -161,7 +161,7 @@ describe("AuditPersistence", () => {
     persistence.append(makeEntry({ taskId: "a" }));
     persistence.append(makeEntry({ taskId: "b" }));
     const entries = persistence.readAll();
-    const lastHash = entries[entries.length - 1].hash;
+    const lastHash = entries.at(-1)!.hash;
 
     // Create a new persistence instance (simulating process restart)
     const resumed = new AuditPersistence(tmpDir);

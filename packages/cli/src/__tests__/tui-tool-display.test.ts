@@ -71,7 +71,7 @@ describe("ToolDisplay", () => {
 
     const output = writeMock.mock.calls.map((c) => c[0]).join("");
     // eslint-disable-next-line no-control-regex
-    const stripped = output.replace(/\x1b\[[0-9;]*m/g, "");
+    const stripped = output.replaceAll(/\x1b\[[0-9;]*m/g, "");
     expect(stripped.length).toBeLessThan(200); // should be truncated
 
     display.dispose();

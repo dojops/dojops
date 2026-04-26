@@ -258,7 +258,7 @@ export class ContextBudgetTracker {
   isIterationOverBudget(): boolean {
     if (this.iterationUsages.length < 2) return false;
     const avg = this.averagePerIteration();
-    const last = this.iterationUsages[this.iterationUsages.length - 1];
+    const last = this.iterationUsages.at(-1)!;
     return last > avg * 3;
   }
 

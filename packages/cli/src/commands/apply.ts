@@ -3,14 +3,13 @@ import * as path from "node:path";
 import { runBin, atomicWriteFileSync, backupFile } from "@dojops/sdk";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { DeterministicProvider, initHookEngine } from "@dojops/core";
+import { DeterministicProvider, initHookEngine, ALL_SPECIALIST_CONFIGS } from "@dojops/core";
 import type { LLMProvider, HookEngine } from "@dojops/core";
 import { appendActivity } from "../dojops-md";
 import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { createSkillRegistry } from "@dojops/skill-registry";
 import { PlannerExecutor, AgentCoordinator, critiquePlan } from "@dojops/planner";
-import { ALL_SPECIALIST_CONFIGS } from "@dojops/core";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";
 import {
@@ -135,9 +134,7 @@ function createGenericSkill(
     },
     async execute(input: Record<string, unknown>) {
       // Use pre-generated output from SafeExecutor when available
-      const preGen = (input as Record<string, unknown>)._generatedOutput as
-        | { success: boolean; data: unknown }
-        | undefined;
+      const preGen = input._generatedOutput as { success: boolean; data: unknown } | undefined;
       let content: string;
       let files: Record<string, string> | null;
 
@@ -1368,15 +1365,16 @@ function handleExecutionStatus(status: string): void {
   }
 }
 
-async function executeApplyPlan(
+function initExecutionTools(
   ctx: CLIContext,
   root: string,
   plan: PlanState,
   flags: ApplyFlags,
-  completedTaskIds: Set<string>,
-  interrupted: { value: boolean },
-  startTime: number,
-): Promise<void> {
+): {
+  provider: LLMProvider;
+  registry: ReturnType<typeof createSkillRegistry>;
+  tools: ReturnType<ReturnType<typeof createSkillRegistry>["getAll"]>;
+} {
   let provider = ctx.getProvider();
   if (flags.replay) {
     provider = new DeterministicProvider(provider);
@@ -1388,46 +1386,114 @@ async function executeApplyPlan(
   });
   const tools = registry.getAll();
 
-  if (plan.tasks.some((t) => t.tool === "generic")) {
+  const needsGenericSkill = plan.tasks.some((t) => t.tool === "generic");
+  if (needsGenericSkill) {
     tools.push(createGenericSkill(provider, root));
   }
 
-  if (flags.replay) {
-    handleReplayValidation(plan, provider, ctx.globalOpts.model, registry, flags.force, root);
-  }
+  return { provider, registry, tools };
+}
 
+async function runPreExecutionChecks(
+  plan: PlanState,
+  flags: ApplyFlags,
+  provider: LLMProvider,
+  model: string | undefined,
+  registry: ReturnType<typeof createSkillRegistry>,
+  tools: ReturnType<ReturnType<typeof createSkillRegistry>["getAll"]>,
+  root: string,
+): Promise<void> {
+  if (flags.replay) {
+    handleReplayValidation(plan, provider, model, registry, flags.force, root);
+  }
   if (flags.resume) {
     await handleToolIntegrityCheck(plan, tools, flags.autoApprove, root);
   }
+}
 
-  let critic: import("@dojops/executor").CriticCallback | undefined;
+async function loadCriticAgent(
+  provider: LLMProvider,
+): Promise<import("@dojops/executor").CriticCallback | undefined> {
   try {
     const { CriticAgent } = await import("@dojops/core");
-    critic = new CriticAgent(provider);
+    return new CriticAgent(provider);
   } catch {
     // CriticAgent not available — self-repair will use raw verification feedback
+    return undefined;
+  }
+}
+
+/** Run plan critique and return whether execution should proceed. */
+async function runCritiqueGate(
+  graph: ReturnType<typeof buildTaskGraph>,
+  tools: ReturnType<ReturnType<typeof createSkillRegistry>["getAll"]>,
+  provider: LLMProvider,
+  flags: ApplyFlags,
+): Promise<boolean> {
+  if (flags.skipVerify) return true;
+
+  const approved = await runPlanCritique(graph, tools, provider);
+  if (approved) return true;
+
+  if (flags.autoApprove) {
+    p.log.warn("Proceeding despite critique issues (--yes).");
+    return true;
+  }
+  return false;
+}
+
+function emitApplyOutput(
+  root: string,
+  plan: PlanState,
+  flags: ApplyFlags,
+  status: string,
+  newResults: TaskResultEntry[],
+  allFilesCreated: string[],
+  allFilesModified: string[],
+  durationMs: number,
+  safeExecutor: SafeExecutor,
+): void {
+  if (flags.jsonOutput) {
+    outputJsonResult(plan, status, newResults, allFilesCreated, allFilesModified, durationMs);
+  } else {
+    outputHumanResult(status, allFilesCreated, allFilesModified, durationMs);
   }
 
+  handleExecutionStatus(status);
+
+  if (!flags.jsonOutput) {
+    displayTokenUsage(safeExecutor);
+  }
+
+  if (flags.installPackages && status === "SUCCESS") {
+    runPostApplyInstall(root);
+  }
+}
+
+async function executeApplyPlan(
+  ctx: CLIContext,
+  root: string,
+  plan: PlanState,
+  flags: ApplyFlags,
+  completedTaskIds: Set<string>,
+  interrupted: { value: boolean },
+  startTime: number,
+): Promise<void> {
+  const { provider, registry, tools } = initExecutionTools(ctx, root, plan, flags);
+  await runPreExecutionChecks(plan, flags, provider, ctx.globalOpts.model, registry, tools, root);
+
+  const critic = await loadCriticAgent(provider);
   const hookEngine = initHookEngine(root);
   const safeExecutor = buildSafeExecutor(flags, critic, hookEngine);
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const graph = buildTaskGraph(plan);
 
-  // Emit PlanCreated hook
   hookEngine
     .emit("PlanCreated", { goal: plan.goal, taskCount: graph.tasks.length })
     .catch(() => {});
 
-  if (!flags.skipVerify) {
-    const approved = await runPlanCritique(graph, tools, provider);
-    if (!approved) {
-      if (flags.autoApprove) {
-        p.log.warn("Proceeding despite critique issues (--yes).");
-      } else {
-        return;
-      }
-    }
-  }
+  const shouldProceed = await runCritiqueGate(graph, tools, provider, flags);
+  if (!shouldProceed) return;
 
   const { executor, progress } = createExecutorWithCallbacks(
     tools,
@@ -1477,21 +1543,17 @@ async function executeApplyPlan(
     { root, plan, durationMs, replay: flags.replay, planSuccess: planResult.success },
   );
 
-  if (flags.jsonOutput) {
-    outputJsonResult(plan, status, newResults, allFilesCreated, allFilesModified, durationMs);
-  } else {
-    outputHumanResult(status, allFilesCreated, allFilesModified, durationMs);
-  }
-
-  handleExecutionStatus(status);
-
-  if (!flags.jsonOutput) {
-    displayTokenUsage(safeExecutor);
-  }
-
-  if (flags.installPackages && status === "SUCCESS") {
-    runPostApplyInstall(root);
-  }
+  emitApplyOutput(
+    root,
+    plan,
+    flags,
+    status,
+    newResults,
+    allFilesCreated,
+    allFilesModified,
+    durationMs,
+    safeExecutor,
+  );
 }
 
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {

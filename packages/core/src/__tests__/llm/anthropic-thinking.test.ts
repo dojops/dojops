@@ -29,7 +29,7 @@ describe("Anthropic thinking budget mapping", () => {
     });
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       system: "test",
       messages: [{ role: "user", content: "hi" }],
       tools: [{ name: "t", description: "d", parameters: { type: "object", properties: {} } }],
@@ -47,7 +47,7 @@ describe("Anthropic thinking budget mapping", () => {
     });
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       system: "test",
       messages: [{ role: "user", content: "hi" }],
       tools: [{ name: "t", description: "d", parameters: { type: "object", properties: {} } }],
@@ -66,7 +66,7 @@ describe("Anthropic thinking budget mapping", () => {
     });
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       system: "test",
       messages: [{ role: "user", content: "hi" }],
       tools: [{ name: "t", description: "d", parameters: { type: "object", properties: {} } }],
@@ -84,7 +84,7 @@ describe("Anthropic thinking budget mapping", () => {
     });
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       system: "test",
       messages: [{ role: "user", content: "hi" }],
       tools: [{ name: "t", description: "d", parameters: { type: "object", properties: {} } }],
@@ -101,7 +101,7 @@ describe("Anthropic thinking budget mapping", () => {
     });
 
     const provider = new AnthropicProvider("key");
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       system: "test",
       messages: [{ role: "user", content: "hi" }],
       tools: [{ name: "t", description: "d", parameters: { type: "object", properties: {} } }],

@@ -46,7 +46,7 @@ function padLine(content: string, width: number): string {
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 function stripAnsi(s: string): string {
-  return s.replace(ANSI_RE, "");
+  return s.replaceAll(ANSI_RE, "");
 }
 
 function termWidth(): number {
@@ -82,11 +82,12 @@ export function renderToolCallPanel(tools: ToolCallInfo[]): string {
   const width = Math.min(termWidth(), 72);
   const lines: string[] = [];
 
-  lines.push(pc.dim(boxLine(width, BOX.topLeft, BOX.topRight)));
-
   const header = `${pc.bold("Tool Calls")} ${pc.dim(`(${tools.length})`)}`;
-  lines.push(pc.dim(padLine(header, width)));
-  lines.push(pc.dim(boxLine(width, BOX.teeRight, BOX.teeLeft)));
+  lines.push(
+    pc.dim(boxLine(width, BOX.topLeft, BOX.topRight)),
+    pc.dim(padLine(header, width)),
+    pc.dim(boxLine(width, BOX.teeRight, BOX.teeLeft)),
+  );
 
   for (const tool of tools) {
     const icon = STATUS_ICONS[tool.status];
@@ -165,17 +166,20 @@ export function renderApprovalDialog(opts: ApprovalDialogOptions): string {
   const riskColor = RISK_COLORS[opts.risk];
   const riskLabel = riskColor(`${opts.risk.toUpperCase()} RISK`);
 
-  lines.push(pc.dim(boxLine(width, BOX.topLeft, BOX.topRight)));
-  lines.push(pc.dim(padLine(`${pc.bold("Approval Required")} ${riskLabel}`, width)));
-  lines.push(pc.dim(boxLine(width, BOX.teeRight, BOX.teeLeft)));
-
-  lines.push(pc.dim(padLine(`${pc.dim("Task:")}    ${opts.taskId}`, width)));
-  lines.push(pc.dim(padLine(`${pc.dim("Skill:")}   ${opts.skillName}`, width)));
-  lines.push(pc.dim(padLine(`${pc.dim("Summary:")} ${opts.summary.slice(0, width - 16)}`, width)));
+  lines.push(
+    pc.dim(boxLine(width, BOX.topLeft, BOX.topRight)),
+    pc.dim(padLine(`${pc.bold("Approval Required")} ${riskLabel}`, width)),
+    pc.dim(boxLine(width, BOX.teeRight, BOX.teeLeft)),
+    pc.dim(padLine(`${pc.dim("Task:")}    ${opts.taskId}`, width)),
+    pc.dim(padLine(`${pc.dim("Skill:")}   ${opts.skillName}`, width)),
+    pc.dim(padLine(`${pc.dim("Summary:")} ${opts.summary.slice(0, width - 16)}`, width)),
+  );
 
   if (opts.filesCreated.length > 0) {
-    lines.push(pc.dim(padLine("", width)));
-    lines.push(pc.dim(padLine(pc.green(`Creates ${opts.filesCreated.length} file(s):`), width)));
+    lines.push(
+      pc.dim(padLine("", width)),
+      pc.dim(padLine(pc.green(`Creates ${opts.filesCreated.length} file(s):`), width)),
+    );
     for (const f of opts.filesCreated.slice(0, 5)) {
       lines.push(pc.dim(padLine(`  ${pc.green("+")} ${f}`, width)));
     }
@@ -185,8 +189,10 @@ export function renderApprovalDialog(opts: ApprovalDialogOptions): string {
   }
 
   if (opts.filesModified.length > 0) {
-    lines.push(pc.dim(padLine("", width)));
-    lines.push(pc.dim(padLine(pc.yellow(`Modifies ${opts.filesModified.length} file(s):`), width)));
+    lines.push(
+      pc.dim(padLine("", width)),
+      pc.dim(padLine(pc.yellow(`Modifies ${opts.filesModified.length} file(s):`), width)),
+    );
     for (const f of opts.filesModified.slice(0, 5)) {
       lines.push(pc.dim(padLine(`  ${pc.yellow("~")} ${f}`, width)));
     }
@@ -220,7 +226,7 @@ export function renderProgressBar(opts: ProgressBarOptions): string {
   const empty = barWidth - filled;
 
   const bar = pc.green("█".repeat(filled)) + pc.dim("░".repeat(empty));
-  const pct = opts.showPercent !== false ? pc.dim(` ${Math.round(ratio * 100)}%`) : "";
+  const pct = opts.showPercent === false ? "" : pc.dim(` ${Math.round(ratio * 100)}%`);
   const count = pc.dim(` ${opts.current}/${opts.total}`);
 
   return `${pc.dim(opts.label)} ${bar}${pct}${count}`;

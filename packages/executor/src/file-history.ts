@@ -40,17 +40,17 @@ export class FileHistory {
   record(filePath: string, beforeContent: string, afterContent: string): void {
     let stack = this.stacks.get(filePath);
 
-    if (!stack) {
-      // First change for this file: store both before and after.
-      stack = { entries: [beforeContent, afterContent], cursor: 1 };
-      this.stacks.set(filePath, stack);
-    } else {
+    if (stack) {
       // Discard any redo entries beyond the current cursor
       stack.entries.length = stack.cursor + 1;
 
       // Append the new after-content
       stack.entries.push(afterContent);
       stack.cursor = stack.entries.length - 1;
+    } else {
+      // First change for this file: store both before and after.
+      stack = { entries: [beforeContent, afterContent], cursor: 1 };
+      this.stacks.set(filePath, stack);
     }
 
     // Evict oldest entries if we exceed maxDepth.

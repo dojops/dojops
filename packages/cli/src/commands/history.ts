@@ -156,6 +156,24 @@ function formatResultLine(r: {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- scan reports are untyped JSON */
+function formatScannerLine(s: any): string {
+  const name = typeof s === "string" ? s : (s.name ?? s.scanner ?? "unknown");
+  const count = typeof s === "object" && s.findings != null ? ` (${s.findings} findings)` : "";
+  return `  ${pc.dim("-")} ${name}${count}`;
+}
+
+function colorizeSeverity(sev: string): string {
+  if (sev === "critical" || sev === "high") return pc.red(sev);
+  if (sev === "medium") return pc.yellow(sev);
+  return pc.dim(sev);
+}
+
+function formatFindingLine(f: any): string {
+  const sev = f.severity ?? f.level ?? "info";
+  const desc = f.description ?? f.message ?? f.title ?? "";
+  return `  ${colorizeSeverity(sev).padEnd(20)} ${desc}`;
+}
+
 function showScanReport(scan: Record<string, unknown>, scanId: string, ctx: CLIContext): void {
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify(scan, null, 2));
@@ -175,26 +193,12 @@ function showScanReport(scan: Record<string, unknown>, scanId: string, ctx: CLIC
 
   if (scanners.length > 0) {
     lines.push("", pc.bold("Scanners:"));
-    for (const s of scanners) {
-      const name = typeof s === "string" ? s : (s.name ?? s.scanner ?? "unknown");
-      const count = typeof s === "object" && s.findings != null ? ` (${s.findings} findings)` : "";
-      lines.push(`  ${pc.dim("-")} ${name}${count}`);
-    }
+    for (const s of scanners) lines.push(formatScannerLine(s));
   }
 
   if (findings.length > 0) {
     lines.push("", pc.bold("Findings:"));
-    for (const f of findings.slice(0, 20)) {
-      const sev = f.severity ?? f.level ?? "info";
-      const sevColor =
-        sev === "critical" || sev === "high"
-          ? pc.red(sev)
-          : sev === "medium"
-            ? pc.yellow(sev)
-            : pc.dim(sev);
-      const desc = f.description ?? f.message ?? f.title ?? "";
-      lines.push(`  ${sevColor.padEnd(20)} ${desc}`);
-    }
+    for (const f of findings.slice(0, 20)) lines.push(formatFindingLine(f));
     if (findings.length > 20) {
       lines.push(pc.dim(`  ... and ${findings.length - 20} more`));
     }
@@ -204,39 +208,17 @@ function showScanReport(scan: Record<string, unknown>, scanId: string, ctx: CLIC
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-function historyShow(args: string[], ctx: CLIContext): void {
-  const root = findProjectRoot();
-  if (!root) {
-    p.log.info("No .dojops/ project found. Run `dojops init` first.");
-    return;
-  }
+function tryShowScanReport(root: string, planId: string, ctx: CLIContext): boolean {
+  if (!isValidScanId(planId)) return false;
+  const scan = loadScanReport(root, planId);
+  if (!scan) return false;
+  showScanReport(scan, planId, ctx);
+  return true;
+}
 
-  const planId = args[0];
-  if (!planId) {
-    p.log.info(`  ${pc.dim("$")} dojops history show <plan-id>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required.");
-  }
-
-  const plan = loadPlan(root, planId);
-
-  // If not a plan, check if it's a scan report
-  if (!plan) {
-    if (isValidScanId(planId)) {
-      const scan = loadScanReport(root, planId);
-      if (scan) {
-        return showScanReport(scan, planId, ctx);
-      }
-    }
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan or scan report "${planId}" not found.`);
-  }
-
-  if (ctx.globalOpts.output === "json") {
-    const executions = listExecutions(root).filter((e) => e.planId === planId);
-    console.log(JSON.stringify({ plan, executions }, null, 2));
-    return;
-  }
-
-  const taskLines = plan.tasks.map((t) => {
+/* eslint-disable @typescript-eslint/no-explicit-any -- plan objects are untyped JSON */
+function formatPlanDetails(plan: any): string[] {
+  const taskLines = plan.tasks.map((t: any) => {
     const deps = t.dependsOn.length > 0 ? pc.dim(` (after: ${t.dependsOn.join(", ")})`) : "";
     return `  ${pc.blue(t.id)} ${pc.bold(t.tool)}: ${t.description}${deps}`;
   });
@@ -254,30 +236,57 @@ function historyShow(args: string[], ctx: CLIContext): void {
 
   if (plan.files.length > 0) {
     infoLines.push("", pc.bold("Files:"));
-    for (const f of plan.files) {
-      infoLines.push(`  ${pc.dim("-")} ${f}`);
-    }
+    for (const f of plan.files) infoLines.push(`  ${pc.dim("-")} ${f}`);
   }
 
   if (plan.results && plan.results.length > 0) {
     infoLines.push("", pc.bold("Results:"));
-    for (const r of plan.results) {
-      infoLines.push(formatResultLine(r));
-    }
+    for (const r of plan.results) infoLines.push(formatResultLine(r));
   }
 
-  p.note(infoLines.join("\n"), `Plan: ${plan.id}`);
+  return infoLines;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
-  // Show execution records
+function showExecutionRecords(root: string, planId: string): void {
   const executions = listExecutions(root).filter((e) => e.planId === planId);
-  if (executions.length > 0) {
-    const execLines = executions.map((e) => {
-      const status = e.status === "SUCCESS" ? pc.green(e.status) : pc.red(e.status);
-      const duration = pc.dim(`(${e.durationMs}ms)`);
-      return `  ${status}  ${e.executedAt}  ${duration}`;
-    });
-    p.note(execLines.join("\n"), "Execution History");
+  if (executions.length === 0) return;
+  const execLines = executions.map((e) => {
+    const status = e.status === "SUCCESS" ? pc.green(e.status) : pc.red(e.status);
+    const duration = pc.dim(`(${e.durationMs}ms)`);
+    return `  ${status}  ${e.executedAt}  ${duration}`;
+  });
+  p.note(execLines.join("\n"), "Execution History");
+}
+
+function historyShow(args: string[], ctx: CLIContext): void {
+  const root = findProjectRoot();
+  if (!root) {
+    p.log.info("No .dojops/ project found. Run `dojops init` first.");
+    return;
   }
+
+  const planId = args[0];
+  if (!planId) {
+    p.log.info(`  ${pc.dim("$")} dojops history show <plan-id>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required.");
+  }
+
+  const plan = loadPlan(root, planId);
+
+  if (!plan) {
+    if (tryShowScanReport(root, planId, ctx)) return;
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan or scan report "${planId}" not found.`);
+  }
+
+  if (ctx.globalOpts.output === "json") {
+    const executions = listExecutions(root).filter((e) => e.planId === planId);
+    console.log(JSON.stringify({ plan, executions }, null, 2));
+    return;
+  }
+
+  p.note(formatPlanDetails(plan).join("\n"), `Plan: ${plan.id}`);
+  showExecutionRecords(root, planId);
 }
 
 function historyAudit(args: string[], ctx: CLIContext): void {

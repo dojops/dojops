@@ -76,10 +76,10 @@ function extractRetryAfterMs(err: unknown): number | undefined {
 
 function reduceMaxTokens(req: LLMRequest, err: unknown): LLMRequest | null {
   const msg = String(err);
-  const match = msg.match(/(\d+)\s*\+\s*(\d+)\s*>\s*(\d+)/);
+  const match = /(\d+)\s*\+\s*(\d+)\s*>\s*(\d+)/.exec(msg); // NOSONAR: disjoint literal tokens with no nested quantifiers; not vulnerable to ReDoS
   if (match) {
-    const inputTokens = parseInt(match[1], 10);
-    const contextLimit = parseInt(match[3], 10);
+    const inputTokens = Number.parseInt(match[1], 10);
+    const contextLimit = Number.parseInt(match[3], 10);
     const available = contextLimit - inputTokens - 1000;
     if (available >= 1000) {
       return { ...req, maxTokens: available };
@@ -117,6 +117,64 @@ function computeDelay(
 }
 
 /**
+ * Track and enforce the overloaded-error consecutive limit.
+ * Resets on non-overloaded errors. Throws OverloadedExhaustedError when the limit is hit.
+ */
+function handleOverloadedCheck(err: unknown, counter: { value: number }): void {
+  if (isOverloadedError(err)) {
+    counter.value++;
+    if (counter.value >= MAX_OVERLOADED_CONSECUTIVE) {
+      throw new OverloadedExhaustedError(
+        `Provider overloaded after ${MAX_OVERLOADED_CONSECUTIVE} consecutive attempts`,
+        err as Error,
+      );
+    }
+  } else {
+    counter.value = 0;
+  }
+}
+
+/** Build a stricter request after a schema validation failure. */
+function buildStricterRequest(req: LLMRequest, validationErr: JsonValidationError): LLMRequest {
+  const stricterSystem =
+    `${req.system ?? ""}\n\nIMPORTANT: Your previous response failed JSON schema validation: ${validationErr.message}. You MUST respond with valid JSON that matches the required schema exactly. No markdown fences, no extra text outside JSON.`.trim();
+  return { ...req, system: stricterSystem };
+}
+
+/**
+ * Generic retry loop for provider calls that don't need schema or context-overflow recovery.
+ * Used by generateStream and generateWithTools.
+ */
+async function retryLoop<T>(
+  fn: () => Promise<T>,
+  maxRetries: number,
+  initialDelayMs: number,
+  maxDelayMs: number,
+): Promise<T> {
+  let lastError: unknown;
+  const overloaded = { value: 0 };
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await fn();
+      overloaded.value = 0;
+      return result;
+    } catch (err) {
+      lastError = err;
+      handleOverloadedCheck(err, overloaded);
+
+      if (attempt < maxRetries && isRetryableError(err)) {
+        const delay = computeDelay(err, attempt, initialDelayMs, maxDelayMs);
+        await sleep(delay);
+        continue;
+      }
+      throwRedactedError(err);
+    }
+  }
+  throw lastError;
+}
+
+/**
  * Wraps an LLMProvider with automatic retry + exponential backoff.
  * Retries on 429/5xx/transient network errors.
  * Also retries once on schema validation failure with a stricter prompt.
@@ -133,9 +191,9 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
     async generate(request: LLMRequest): Promise<LLMResponse> {
       let lastError: unknown;
       let schemaAttempt = 0;
-      let consecutiveOverloaded = 0;
       let maxTokensRecoveryAttempt = 0;
       let currentRequest = request;
+      const overloaded = { value: 0 };
       // Hard cap prevents infinite loops if schemaRetries is misconfigured
       const maxTotalAttempts = maxRetries + schemaRetries + MAX_TOKENS_RECOVERY_ATTEMPTS + 1;
       let totalAttempts = 0;
@@ -145,24 +203,18 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
 
         try {
           const response = await provider.generate(currentRequest);
-          consecutiveOverloaded = 0;
+          overloaded.value = 0;
           return response;
         } catch (err) {
           lastError = err;
+          handleOverloadedCheck(err, overloaded);
 
-          if (isOverloadedError(err)) {
-            consecutiveOverloaded++;
-            if (consecutiveOverloaded >= MAX_OVERLOADED_CONSECUTIVE) {
-              throw new OverloadedExhaustedError(
-                `Provider overloaded after ${MAX_OVERLOADED_CONSECUTIVE} consecutive attempts`,
-                err as Error,
-              );
-            }
-          } else {
-            consecutiveOverloaded = 0;
-          }
-
-          if (handleSchemaRetry(currentRequest, err)) {
+          // Schema validation retry: rebuild with a stricter prompt
+          const canRetrySchema =
+            !!currentRequest.schema &&
+            isSchemaValidationError(err) &&
+            schemaAttempt < schemaRetries;
+          if (canRetrySchema) {
             schemaAttempt++;
             currentRequest = buildStricterRequest(currentRequest, err as JsonValidationError);
             attempt--;
@@ -170,6 +222,7 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
             continue;
           }
 
+          // Context overflow recovery: reduce maxTokens
           const category = classifyProviderError(err);
           if (
             category === "context_overflow" &&
@@ -194,90 +247,27 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
         }
       }
       throw lastError;
-
-      function handleSchemaRetry(req: LLMRequest, err: unknown): boolean {
-        return !!req.schema && isSchemaValidationError(err) && schemaAttempt < schemaRetries;
-      }
-
-      function buildStricterRequest(
-        req: LLMRequest,
-        validationErr: JsonValidationError,
-      ): LLMRequest {
-        const stricterSystem =
-          `${req.system ?? ""}\n\nIMPORTANT: Your previous response failed JSON schema validation: ${validationErr.message}. You MUST respond with valid JSON that matches the required schema exactly. No markdown fences, no extra text outside JSON.`.trim();
-        return { ...req, system: stricterSystem };
-      }
     },
 
     generateStream: provider.generateStream
       ? async (request: LLMRequest, onChunk: StreamCallback): Promise<LLMResponse> => {
-          let lastError: unknown;
-          let consecutiveOverloaded = 0;
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            try {
-              const response = await provider.generateStream!(request, onChunk);
-              consecutiveOverloaded = 0;
-              return response;
-            } catch (err) {
-              lastError = err;
-
-              if (isOverloadedError(err)) {
-                consecutiveOverloaded++;
-                if (consecutiveOverloaded >= MAX_OVERLOADED_CONSECUTIVE) {
-                  throw new OverloadedExhaustedError(
-                    `Provider overloaded after ${MAX_OVERLOADED_CONSECUTIVE} consecutive attempts`,
-                    err as Error,
-                  );
-                }
-              } else {
-                consecutiveOverloaded = 0;
-              }
-
-              if (attempt < maxRetries && isRetryableError(err)) {
-                const delay = computeDelay(err, attempt, initialDelayMs, maxDelayMs);
-                await sleep(delay);
-                continue;
-              }
-              throwRedactedError(err);
-            }
-          }
-          throw lastError;
+          return retryLoop(
+            () => provider.generateStream!(request, onChunk),
+            maxRetries,
+            initialDelayMs,
+            maxDelayMs,
+          );
         }
       : undefined,
 
     generateWithTools: provider.generateWithTools
       ? async (request: LLMToolRequest): Promise<LLMToolResponse> => {
-          let lastError: unknown;
-          let consecutiveOverloaded = 0;
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            try {
-              const response = await provider.generateWithTools!(request);
-              consecutiveOverloaded = 0;
-              return response;
-            } catch (err) {
-              lastError = err;
-
-              if (isOverloadedError(err)) {
-                consecutiveOverloaded++;
-                if (consecutiveOverloaded >= MAX_OVERLOADED_CONSECUTIVE) {
-                  throw new OverloadedExhaustedError(
-                    `Provider overloaded after ${MAX_OVERLOADED_CONSECUTIVE} consecutive attempts`,
-                    err as Error,
-                  );
-                }
-              } else {
-                consecutiveOverloaded = 0;
-              }
-
-              if (attempt < maxRetries && isRetryableError(err)) {
-                const delay = computeDelay(err, attempt, initialDelayMs, maxDelayMs);
-                await sleep(delay);
-                continue;
-              }
-              throwRedactedError(err);
-            }
-          }
-          throw lastError;
+          return retryLoop(
+            () => provider.generateWithTools!(request),
+            maxRetries,
+            initialDelayMs,
+            maxDelayMs,
+          );
         }
       : undefined,
 

@@ -78,6 +78,15 @@ function extractScopePatterns(skill: DevOpsSkill): string[] {
 
 // ── Scoring ─────────────────────────────────────────────────────────
 
+/** Check if a query term matches any keyword/tag (exact or partial substring). */
+function matchesTermSet(qt: string, termSet: Set<string>): boolean {
+  if (termSet.has(qt)) return true;
+  for (const kw of termSet) {
+    if (kw.includes(qt) || qt.includes(kw)) return true;
+  }
+  return false;
+}
+
 /**
  * Score a skill against a query using keyword overlap.
  * Returns a normalized score (0-1) and the list of matched terms.
@@ -86,40 +95,20 @@ function scoreSkill(skill: DevOpsSkill, queryTerms: string[]): SkillScore {
   const keywords = extractKeywords(skill);
   const tags = extractTags(skill);
   const allTerms = new Set([...keywords, ...tags]);
-  const matchedTerms: string[] = [];
+  const matched = new Set<string>();
 
-  for (const qt of queryTerms) {
-    // Exact match in keywords/tags
-    if (allTerms.has(qt)) {
-      matchedTerms.push(qt);
-      continue;
-    }
-    // Partial match: query term is a substring of a keyword or vice versa
-    for (const kw of allTerms) {
-      if (kw.includes(qt) || qt.includes(kw)) {
-        matchedTerms.push(qt);
-        break;
-      }
-    }
-  }
-
-  // Also check name and description for direct matches
   const nameLower = skill.name.toLowerCase();
   const descLower = skill.description.toLowerCase();
+
   for (const qt of queryTerms) {
-    if (!matchedTerms.includes(qt)) {
-      if (nameLower.includes(qt) || descLower.includes(qt)) {
-        matchedTerms.push(qt);
-      }
-    }
+    const inTerms = matchesTermSet(qt, allTerms);
+    const inNameOrDesc = nameLower.includes(qt) || descLower.includes(qt);
+    if (inTerms || inNameOrDesc) matched.add(qt);
   }
 
-  // Deduplicate
-  const unique = [...new Set(matchedTerms)];
-
-  // Score: ratio of matched query terms, with a bonus for name-exact match
+  const unique = [...matched];
   let score = queryTerms.length > 0 ? unique.length / queryTerms.length : 0;
-  if (queryTerms.some((qt) => qt === nameLower)) {
+  if (queryTerms.includes(nameLower)) {
     score = Math.min(1, score + 0.3); // name-exact match bonus
   }
 

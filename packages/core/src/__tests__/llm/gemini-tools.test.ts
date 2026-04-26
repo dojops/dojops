@@ -267,7 +267,7 @@ describe("GeminiProvider tool-calling content mapping", () => {
     });
 
     const provider = await getProvider();
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       system: "Agent",
       messages: [
         { role: "user", content: "Read the config" },
@@ -319,7 +319,7 @@ describe("GeminiProvider tool-calling content mapping", () => {
     });
 
     const provider = await getProvider();
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       messages: [
         { role: "user", content: "go" },
         {
@@ -355,7 +355,7 @@ describe("GeminiProvider tool-calling content mapping", () => {
     });
 
     const provider = await getProvider();
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       messages: [
         { role: "user", content: "go" },
         { role: "tool", callId: "unknown_id", content: "data" },
@@ -377,7 +377,7 @@ describe("GeminiProvider tool-calling content mapping", () => {
     });
 
     const provider = await getProvider();
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       messages: [{ role: "user", content: "Hi" }],
       tools: [readFileTool],
       temperature: 0.1,
@@ -396,7 +396,7 @@ describe("GeminiProvider tool-calling content mapping", () => {
     });
 
     const provider = await getProvider();
-    await provider.generateWithTools!({
+    await provider.generateWithTools({
       messages: [{ role: "user", content: "Hi" }],
       tools: [readFileTool],
     });

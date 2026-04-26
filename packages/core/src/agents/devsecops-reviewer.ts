@@ -120,8 +120,7 @@ IMPORTANT: Do NOT ask follow-up questions. This is a single-shot interaction. Pr
 function buildFileSection(files: ReviewInput["files"]): string[] {
   const parts: string[] = ["## Configuration Files\n"];
   for (const file of files) {
-    parts.push(wrapAsData(sanitizeUserInput(file.content), file.path));
-    parts.push("");
+    parts.push(wrapAsData(sanitizeUserInput(file.content), file.path), "");
   }
   return parts;
 }

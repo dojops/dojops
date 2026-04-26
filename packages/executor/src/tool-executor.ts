@@ -84,11 +84,11 @@ const DANGEROUS_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /base64.*\|\s*(sh|bash)/, reason: "Base64 decode piped to shell" },
   { pattern: /<\(/, reason: "Process substitution" },
   // C-3: Destructive system commands
-  { pattern: /\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?\/($|\s)/, reason: "rm targeting filesystem root" },
+  { pattern: /\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?\/($|\s)/, reason: "rm targeting filesystem root" }, // NOSONAR: no overlapping alternatives or nested quantifiers; the optional flag group is a single non-repeating occurrence
   { pattern: /\bmkfs\b/, reason: "Filesystem format command" },
-  { pattern: /\bdd\s+.*\bof=\/dev\//, reason: "dd writing to block device" },
+  { pattern: /\bdd\s+.*\bof=\/dev\//, reason: "dd writing to block device" }, // NOSONAR: .* is not nested inside a repeating group; input is bounded LLM-generated shell text processed by the policy engine, not raw user HTTP input
   { pattern: /\bchmod\s+(-R\s+)?777\s/, reason: "chmod 777 (world-writable)" },
-  { pattern: /:\(\)\s*\{\s*:\|:&\s*\}\s*;?\s*:/, reason: "Fork bomb" },
+  { pattern: /:\(\)\s*\{\s*:\|:&\s*\}\s*;?\s*:/, reason: "Fork bomb" }, // NOSONAR: all quantifiers are on disjoint whitespace tokens between fixed literals; no nested or overlapping quantifiers
   { pattern: /\bcrontab\s+-r\b/, reason: "Crontab removal" },
   { pattern: /\bsystemctl\s+(disable|mask|stop)\s/, reason: "Systemd service disruption" },
   { pattern: /\biptables\s+-F\b/, reason: "Firewall flush" },
@@ -205,9 +205,9 @@ function validateSearchPatterns(
 }
 
 /** Callback for searching skills by keyword query. */
-export interface SkillSearchFn {
-  (query: string): Array<{ name: string; description: string; score: number }>;
-}
+export type SkillSearchFn = (
+  query: string,
+) => Array<{ name: string; description: string; score: number }>;
 
 export interface ToolExecutorOptions {
   policy: ExecutionPolicy;
@@ -275,7 +275,7 @@ function normalizeSearchPattern(
   }
 
   // Last segment is the filename pattern
-  const lastSeg = segments[segments.length - 1];
+  const lastSeg = segments.at(-1);
   const filePattern = lastSeg && lastSeg !== "**" ? lastSeg : "*";
 
   if (dirSegments.length === 0) {
@@ -703,7 +703,7 @@ export class ToolExecutor {
         timeout,
         maxBuffer: MAX_OUTPUT_BYTES * 2,
         stdio: ["pipe", "pipe", "pipe"],
-        ...(env !== undefined ? { env } : {}),
+        ...(env === undefined ? {} : { env }),
       });
       return { callId: call.id, output: truncateOutput(output) };
     } catch (err) {
@@ -921,7 +921,7 @@ export class ToolExecutor {
     if (!this.opts.skillSearchFn) {
       // Fallback: list all skill names from the skills map
       if (this.opts.skills) {
-        const names = [...this.opts.skills.keys()].sort();
+        const names = [...this.opts.skills.keys()].sort((a, b) => a.localeCompare(b));
         return {
           callId: call.id,
           output: `Available skills (${names.length}): ${names.join(", ")}`,

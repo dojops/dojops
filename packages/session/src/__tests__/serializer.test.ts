@@ -310,7 +310,7 @@ describe("serializer", () => {
 
       const sessions = listSessions(tmpDir);
       expect(sessions).toHaveLength(2);
-      const ids = sessions.map((s) => s.id).sort();
+      const ids = sessions.map((s) => s.id).sort((a, b) => a.localeCompare(b));
       expect(ids).toEqual(["chat-e0c1a0b001", "chat-e0c1a0b002"]);
     });
 

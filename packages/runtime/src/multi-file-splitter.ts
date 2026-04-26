@@ -13,7 +13,7 @@ export interface SplitFile {
  * Content between markers belongs to the preceding file.
  */
 export function splitMultiFileOutput(output: string): SplitFile[] {
-  const FILE_MARKER = /^(?:---\s*FILE:\s*(.+?)\s*---|#\s*FILE:\s*(.+?)\s*)$/gm;
+  const FILE_MARKER = /^(?:---\s*FILE:\s*(.+?)\s*---|#\s*FILE:\s*(.+?)\s*)$/gm; // NOSONAR: anchored to full line (^...$) with multiline flag; lazy .+? and trailing \s* are bounded by the line anchor, preventing catastrophic backtracking
   const files: SplitFile[] = [];
   let lastIndex = 0;
   let currentPath: string | null = null;

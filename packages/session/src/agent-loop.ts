@@ -115,10 +115,10 @@ function extractSummaryByRegex(text: string): string | null {
   const match = /"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text);
   if (!match) return null;
   return match[1]
-    .replace(/\\"/g, '"')
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t")
-    .replace(/\\\\/g, "\\");
+    .replaceAll('\\"', '"')
+    .replaceAll("\\n", "\n")
+    .replaceAll("\\t", "\t")
+    .replaceAll("\\\\", "\\");
 }
 
 /**
@@ -159,6 +159,19 @@ function extractSummaryFromContent(content: string): string {
   return trimmed;
 }
 
+/** Mutable state carried across loop iterations. */
+interface LoopContext {
+  messages: AgentMessage[];
+  allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>;
+  thinkingParts: string[];
+  summary: string;
+  success: boolean;
+  iterationCount: number;
+}
+
+/** Control flow signal returned by extracted loop phases. */
+type LoopSignal = "break" | "continue" | "proceed";
+
 /**
  * ReAct agent loop controller.
  * Iteratively: calls LLM with tools -> executes tool calls -> appends results -> repeats.
@@ -198,239 +211,313 @@ export class AgentLoop {
   }
 
   async run(userPrompt: string): Promise<AgentLoopResult> {
-    // Reset turn budget for each run (supports multiple user turns)
     this.turnBudget?.reset();
     this.turnBudgetNudgeInjected = false;
 
-    const messages: AgentMessage[] = [{ role: "user", content: userPrompt }];
-    const allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
-    const thinkingParts: string[] = [];
-    let summary = "";
-    let success = false;
-    let iterationCount = 0;
+    const ctx: LoopContext = {
+      messages: [{ role: "user", content: userPrompt }],
+      allToolCalls: [],
+      thinkingParts: [],
+      summary: "",
+      success: false,
+      iterationCount: 0,
+    };
 
     for (let iteration = 0; iteration < this.maxIterations; iteration++) {
-      iterationCount++;
+      ctx.iterationCount++;
+      this.emitIterationHook(iteration);
 
-      // Emit AgentIteration hook (fire-and-forget, non-blocking)
-      this.opts.hookEngine
-        ?.emit("AgentIteration", {
-          iteration,
-          totalTokens: this.tracker.getSnapshot().totalConsumed,
-        })
-        .catch(() => {});
+      const response = await this.generateWithOverflowRecovery(ctx.messages);
+      if (!response) {
+        ctx.summary = "Stopped: context overflow persists after compaction.";
+        break;
+      }
 
-      // Generate with context overflow recovery
-      let response: LLMToolResponse;
+      this.captureThinkingTrace(response, ctx.thinkingParts);
+      this.recordUsageAndTurnBudget(response);
+      this.appendAssistantMessage(ctx.messages, response, iteration);
+      this.emitThinkingCallback(response);
+      await this.executePreDoneToolCalls(response, ctx);
+
+      const iterSignal = await this.processIterationResult(response, ctx, iteration);
+      if (iterSignal === "break") break;
+      if (iterSignal === "continue") continue;
+
+      await this.executeToolCalls(response.toolCalls, ctx.messages, ctx.allToolCalls);
+
+      const postExecSignal = this.processPostExecution(response, ctx);
+      if (postExecSignal === "break") break;
+
+      await this.compactByTier(ctx.messages);
+    }
+
+    if (ctx.iterationCount >= this.maxIterations && !ctx.success) {
+      ctx.summary = `Stopped: reached maximum iterations (${this.maxIterations}).`;
+    }
+
+    return this.buildResult(ctx);
+  }
+
+  // ── Extracted loop phases ────────────────────────────────────────
+
+  /** Fire-and-forget AgentIteration hook. */
+  private emitIterationHook(iteration: number): void {
+    this.opts.hookEngine
+      ?.emit("AgentIteration", {
+        iteration,
+        totalTokens: this.tracker.getSnapshot().totalConsumed,
+      })
+      .catch(() => {});
+  }
+
+  /** Generate LLM response, retrying once after context overflow compaction. Returns null on unrecoverable overflow. */
+  private async generateWithOverflowRecovery(
+    messages: AgentMessage[],
+  ): Promise<LLMToolResponse | null> {
+    try {
+      return await this.generateWithTools(messages);
+    } catch (err) {
+      if (!isContextOverflowError(err)) throw err;
+
+      this.tracker.forceFullCompaction();
+      await this.fullCompact(messages);
+      this.tracker.recordCompaction(messages);
       try {
-        response = await this.generateWithTools(messages);
-      } catch (err) {
-        if (isContextOverflowError(err)) {
-          // Reactive compaction: force full compaction and retry once
-          this.tracker.forceFullCompaction();
-          await this.fullCompact(messages);
-          this.tracker.recordCompaction(messages);
-          try {
-            response = await this.generateWithTools(messages);
-          } catch {
-            summary = "Stopped: context overflow persists after compaction.";
-            break;
-          }
-        } else {
-          throw err;
-        }
+        return await this.generateWithTools(messages);
+      } catch {
+        return null;
       }
+    }
+  }
 
-      // Capture reasoning trace from extended thinking
-      if (response.thinking) {
-        thinkingParts.push(response.thinking);
-      }
+  /** Store reasoning trace from extended thinking. */
+  private captureThinkingTrace(response: LLMToolResponse, thinkingParts: string[]): void {
+    if (response.thinking) {
+      thinkingParts.push(response.thinking);
+    }
+  }
 
-      if (response.usage) {
-        this.tracker.recordUsage(response.usage);
+  /** Record token usage in both the context budget tracker and the turn budget tracker. */
+  private recordUsageAndTurnBudget(response: LLMToolResponse): void {
+    if (!response.usage) return;
 
-        // Record turn-level token usage when the tracker is enabled
-        if (this.turnBudget) {
-          const turnStatus = this.turnBudget.record(response.usage.totalTokens);
-          if (turnStatus.nudgeMessage) {
-            this.opts.onBudgetWarning?.(turnStatus);
-          }
-        }
-      }
+    this.tracker.recordUsage(response.usage);
 
-      this.appendAssistantMessage(messages, response, iteration);
+    if (!this.turnBudget) return;
+    const turnStatus = this.turnBudget.record(response.usage.totalTokens);
+    if (turnStatus.nudgeMessage) {
+      this.opts.onBudgetWarning?.(turnStatus);
+    }
+  }
 
-      if (response.content && this.opts.onThinking) {
-        this.opts.onThinking(response.content);
-      }
+  /** Fire the onThinking callback when the response has content. */
+  private emitThinkingCallback(response: LLMToolResponse): void {
+    if (response.content && this.opts.onThinking) {
+      this.opts.onThinking(response.content);
+    }
+  }
 
-      // H-23: Execute non-done tool calls before checking stop conditions.
-      // When the LLM returns [write_file, done] in the same response, execute
-      // the write_file first so work isn't silently dropped.
-      const doneCall = response.toolCalls.find((tc) => tc.name === "done");
-      const nonDoneCalls = response.toolCalls.filter((tc) => tc.name !== "done");
-      if (doneCall && nonDoneCalls.length > 0) {
-        await this.executeToolCalls(nonDoneCalls, messages, allToolCalls);
-      }
+  /**
+   * H-23: When the LLM returns [write_file, done] in the same response,
+   * execute the non-done calls first so work is not silently dropped.
+   */
+  private async executePreDoneToolCalls(
+    response: LLMToolResponse,
+    ctx: LoopContext,
+  ): Promise<void> {
+    const doneCall = response.toolCalls.find((tc) => tc.name === "done");
+    const nonDoneCalls = response.toolCalls.filter((tc) => tc.name !== "done");
+    if (doneCall && nonDoneCalls.length > 0) {
+      await this.executeToolCalls(nonDoneCalls, ctx.messages, ctx.allToolCalls);
+    }
+  }
 
-      // Check stop conditions
-      const stopResult = this.checkStopConditions(response, allToolCalls, iteration);
-      if (stopResult) {
-        // Output validation gate: verify work before declaring success
-        if (stopResult.success && this.opts.validateBeforeDone) {
-          const issues = await this.opts.validateBeforeDone();
-          if (issues.length > 0) {
-            // Don't terminate — feed issues back so the agent can fix them
-            messages.push({
-              role: "user",
-              content:
-                "Before completing, validation found issues with the generated files:\n" +
-                issues.map((i) => `- ${i}`).join("\n") +
-                "\n\nFix these issues, then call 'done' again when resolved.",
-            });
-            continue;
-          }
-        }
-        summary = stopResult.summary;
-        success = stopResult.success;
-        break;
-      }
+  /**
+   * Process the iteration result: check stop conditions, handle validation,
+   * max_tokens recovery, and no-tool nudges. Returns a loop signal.
+   */
+  private async processIterationResult(
+    response: LLMToolResponse,
+    ctx: LoopContext,
+    iteration: number,
+  ): Promise<LoopSignal> {
+    const stopResult = this.checkStopConditions(response, ctx.allToolCalls, iteration);
+    if (stopResult) {
+      return this.handleStopResult(stopResult, ctx);
+    }
 
-      // Max tokens recovery: inject continuation prompt to resume where the LLM left off
-      if (response.stopReason === "max_tokens") {
-        messages.push({
+    if (response.stopReason === "max_tokens") {
+      this.injectMaxTokensContinuation(ctx.messages);
+      return "continue";
+    }
+
+    if (response.toolCalls.length === 0) {
+      this.injectNoToolsNudge(ctx);
+      return "continue";
+    }
+
+    return "proceed";
+  }
+
+  /** Handle a stop result, running validation if configured. */
+  private async handleStopResult(
+    stopResult: { summary: string; success: boolean },
+    ctx: LoopContext,
+  ): Promise<LoopSignal> {
+    if (stopResult.success && this.opts.validateBeforeDone) {
+      const issues = await this.opts.validateBeforeDone();
+      if (issues.length > 0) {
+        ctx.messages.push({
           role: "user",
           content:
-            "Your response was cut off by the token limit. Resume directly from where you stopped. " +
-            "Do not repeat what you already said. Continue working on the task.",
+            "Before completing, validation found issues with the generated files:\n" +
+            issues.map((i) => `- ${i}`).join("\n") +
+            "\n\nFix these issues, then call 'done' again when resolved.",
         });
-        continue;
+        return "continue";
       }
+    }
+    ctx.summary = stopResult.summary;
+    ctx.success = stopResult.success;
+    return "break";
+  }
 
-      // If LLM returned text-only without using tools, nudge it to use tools
-      if (response.toolCalls.length === 0) {
-        if (allToolCalls.length === 0) {
-          messages.push({
-            role: "user",
-            content:
-              "You must use the provided tools (write_file, edit_file, run_command, etc.) to complete this task. " +
-              "Do not output file contents as text. Use write_file to create each file on disk.",
-          });
-        } else {
-          // Agent made tool calls before but stopped outputting text without tools.
-          // Nudge it to continue working — it may have described intent without acting.
-          const hasFileWrites =
-            this.opts.toolExecutor.getFilesWritten().length > 0 ||
-            this.opts.toolExecutor.getFilesModified().length > 0;
-          if (!hasFileWrites) {
-            messages.push({
-              role: "user",
-              content:
-                "You have not written any files to disk yet. Use write_file to create the requested files. " +
-                "If you used run_skill, the generated content was returned as text — you must write it to disk with write_file. " +
-                "Do not call done until all requested files exist on disk.",
-            });
-          } else {
-            messages.push({
-              role: "user",
-              content:
-                "Continue working. If all requested files have been created, call 'done' with a summary. " +
-                "Otherwise, create the remaining files with write_file.",
-            });
-          }
-        }
-        continue;
-      }
+  /** Inject a continuation prompt after a max_tokens truncation. */
+  private injectMaxTokensContinuation(messages: AgentMessage[]): void {
+    messages.push({
+      role: "user",
+      content:
+        "Your response was cut off by the token limit. Resume directly from where you stopped. " +
+        "Do not repeat what you already said. Continue working on the task.",
+    });
+  }
 
-      // Execute tool calls
-      await this.executeToolCalls(response.toolCalls, messages, allToolCalls);
+  /** Nudge the LLM to use tools when it responded with text only. */
+  private injectNoToolsNudge(ctx: LoopContext): void {
+    if (ctx.allToolCalls.length === 0) {
+      ctx.messages.push({
+        role: "user",
+        content:
+          "You must use the provided tools (write_file, edit_file, run_command, etc.) to complete this task. " +
+          "Do not output file contents as text. Use write_file to create each file on disk.",
+      });
+      return;
+    }
 
-      // Escalating stall detection: progressively stronger interventions
-      const staleLevel = this.detectStaleLevel(response.toolCalls);
-      if (staleLevel === "terminate") {
-        const lastSig =
-          this.recentCallSignatures[this.recentCallSignatures.length - 1] ?? "unknown";
-        const toolName = lastSig.split(":")[0];
-        summary = `Terminated: stuck in loop on ${toolName}`;
-        success = false;
-        break;
-      } else if (staleLevel === "restrict") {
-        const lastSig =
-          this.recentCallSignatures[this.recentCallSignatures.length - 1] ?? "unknown";
-        const toolName = lastSig.split(":")[0];
-        messages.push({
-          role: "user",
-          content:
-            `Do NOT call ${toolName} with these arguments again. ` +
-            "Try a completely different approach or call 'done' if the task is finished.",
-        });
-      } else if (staleLevel === "nudge") {
-        messages.push({
-          role: "user",
-          content:
-            "You appear to be repeating the same action. Stop and reassess: " +
+    const hasFileWrites =
+      this.opts.toolExecutor.getFilesWritten().length > 0 ||
+      this.opts.toolExecutor.getFilesModified().length > 0;
+
+    ctx.messages.push({
+      role: "user",
+      content: hasFileWrites
+        ? "Continue working. If all requested files have been created, call 'done' with a summary. " +
+          "Otherwise, create the remaining files with write_file."
+        : "You have not written any files to disk yet. Use write_file to create the requested files. " +
+          "If you used run_skill, the generated content was returned as text — you must write it to disk with write_file. " +
+          "Do not call done until all requested files exist on disk.",
+    });
+  }
+
+  /**
+   * After tool execution: stale loop detection, turn budget, hard budget,
+   * iteration budget warning. Returns "break" to stop the loop or "proceed" to continue.
+   */
+  private processPostExecution(response: LLMToolResponse, ctx: LoopContext): LoopSignal {
+    const staleSignal = this.handleStaleLoop(response, ctx);
+    if (staleSignal === "break") return "break";
+
+    const turnSignal = this.checkTurnBudgetStop(ctx);
+    if (turnSignal === "break") return "break";
+
+    if (this.tracker.isBudgetExhausted()) {
+      const snap = this.tracker.getSnapshot();
+      ctx.summary = `Stopped: token budget exhausted (${snap.totalConsumed}/${snap.contextLimit}).`;
+      return "break";
+    }
+
+    this.injectIterationBudgetWarning(ctx.messages);
+    return "proceed";
+  }
+
+  /** Detect stale loops and inject escalating interventions. Returns "break" on terminate. */
+  private handleStaleLoop(response: LLMToolResponse, ctx: LoopContext): LoopSignal {
+    const staleLevel = this.detectStaleLevel(response.toolCalls);
+    if (staleLevel === "none") return "proceed";
+
+    if (staleLevel === "terminate") {
+      const lastSig = this.recentCallSignatures.at(-1) ?? "unknown";
+      const toolName = lastSig.split(":")[0];
+      ctx.summary = `Terminated: stuck in loop on ${toolName}`;
+      ctx.success = false;
+      return "break";
+    }
+
+    const lastSig = this.recentCallSignatures.at(-1) ?? "unknown";
+    const toolName = lastSig.split(":")[0];
+
+    ctx.messages.push({
+      role: "user",
+      content:
+        staleLevel === "restrict"
+          ? `Do NOT call ${toolName} with these arguments again. ` +
+            "Try a completely different approach or call 'done' if the task is finished."
+          : "You appear to be repeating the same action. Stop and reassess: " +
             "Is there a different approach? Are you stuck in a loop? " +
             "If the task is complete, call 'done'. If you need a different strategy, explain your reasoning.",
-        });
-      }
+    });
 
-      // Turn-level token budget: nudge once, then force stop
-      if (this.turnBudget?.shouldStop()) {
-        if (this.turnBudgetNudgeInjected) {
-          const turnStatus = this.turnBudget.getStatus();
-          summary = turnStatus.exhausted
-            ? `Stopped: turn token budget exhausted (${turnStatus.totalTokens}/${turnStatus.totalTokens + turnStatus.remaining} tokens).`
-            : `Stopped: diminishing returns (${turnStatus.lowProgressCount} low-progress continuations).`;
-          break;
-        }
-        // First time — inject a nudge and give the agent one more chance
-        const turnStatus = this.turnBudget.getStatus();
-        messages.push({
-          role: "user",
-          content:
-            turnStatus.nudgeMessage ??
-            "You are running low on turn budget. Wrap up your current task and call 'done'.",
-        });
-        this.turnBudgetNudgeInjected = true;
-      }
+    return "proceed";
+  }
 
-      // Check hard token budget
-      if (this.tracker.isBudgetExhausted()) {
-        const snap = this.tracker.getSnapshot();
-        summary = `Stopped: token budget exhausted (${snap.totalConsumed}/${snap.contextLimit}).`;
-        break;
-      }
+  /** Check turn-level token budget: nudge once, then force stop. */
+  private checkTurnBudgetStop(ctx: LoopContext): LoopSignal {
+    if (!this.turnBudget?.shouldStop()) return "proceed";
 
-      // Per-iteration budget check: if last iteration used 3x the average,
-      // warn the agent to be more concise
-      if (this.tracker.isIterationOverBudget()) {
-        messages.push({
-          role: "user",
-          content:
-            "Warning: the last iteration consumed significantly more tokens than average. " +
-            "Be more concise in tool arguments and avoid reading large files unnecessarily. " +
-            `Estimated iterations remaining: ${this.tracker.estimatedIterationsRemaining()}.`,
-        });
-      }
-
-      // Three-tier context compaction
-      await this.compactByTier(messages);
+    if (this.turnBudgetNudgeInjected) {
+      const turnStatus = this.turnBudget.getStatus();
+      ctx.summary = turnStatus.exhausted
+        ? `Stopped: turn token budget exhausted (${turnStatus.totalTokens}/${turnStatus.totalTokens + turnStatus.remaining} tokens).`
+        : `Stopped: diminishing returns (${turnStatus.lowProgressCount} low-progress continuations).`;
+      return "break";
     }
 
-    if (iterationCount >= this.maxIterations && !success) {
-      summary = `Stopped: reached maximum iterations (${this.maxIterations}).`;
-    }
+    const turnStatus = this.turnBudget.getStatus();
+    ctx.messages.push({
+      role: "user",
+      content:
+        turnStatus.nudgeMessage ??
+        "You are running low on turn budget. Wrap up your current task and call 'done'.",
+    });
+    this.turnBudgetNudgeInjected = true;
+    return "proceed";
+  }
 
+  /** Warn the agent when the last iteration consumed significantly more tokens than average. */
+  private injectIterationBudgetWarning(messages: AgentMessage[]): void {
+    if (!this.tracker.isIterationOverBudget()) return;
+    messages.push({
+      role: "user",
+      content:
+        "Warning: the last iteration consumed significantly more tokens than average. " +
+        "Be more concise in tool arguments and avoid reading large files unnecessarily. " +
+        `Estimated iterations remaining: ${this.tracker.estimatedIterationsRemaining()}.`,
+    });
+  }
+
+  /** Construct the final AgentLoopResult from accumulated loop context. */
+  private buildResult(ctx: LoopContext): AgentLoopResult {
     const budgetSnapshot = this.tracker.getSnapshot();
     return {
-      success,
-      summary,
-      iterations: iterationCount,
+      success: ctx.success,
+      summary: ctx.summary,
+      iterations: ctx.iterationCount,
       totalTokens: budgetSnapshot.totalConsumed,
-      toolCalls: allToolCalls,
+      toolCalls: ctx.allToolCalls,
       filesWritten: this.opts.toolExecutor.getFilesWritten(),
       filesModified: this.opts.toolExecutor.getFilesModified(),
-      reasoningTrace: thinkingParts.length > 0 ? thinkingParts.join("\n\n---\n\n") : undefined,
+      reasoningTrace:
+        ctx.thinkingParts.length > 0 ? ctx.thinkingParts.join("\n\n---\n\n") : undefined,
       budgetSnapshot,
     };
   }
@@ -660,7 +747,7 @@ export class AgentLoop {
 
     if (this.recentCallSignatures.length < AgentLoop.STALE_THRESHOLD) return "none";
 
-    const last = this.recentCallSignatures[this.recentCallSignatures.length - 1];
+    const last = this.recentCallSignatures.at(-1);
     let consecutiveCount = 0;
     for (let i = this.recentCallSignatures.length - 1; i >= 0; i--) {
       if (this.recentCallSignatures[i] === last) {

@@ -259,40 +259,56 @@ export function createApp(deps: AppDependencies): Express {
 
     // Try rec.tokens first
     if (rec.tokens && typeof rec.tokens === "object") {
-      const tokens = rec.tokens as Record<string, unknown>;
-      const total = typeof tokens.total === "number" ? tokens.total : 0;
-      return {
-        total,
-        cacheCreationTokens:
-          typeof tokens.cacheCreationTokens === "number" ? tokens.cacheCreationTokens : undefined,
-        cacheReadTokens:
-          typeof tokens.cacheReadTokens === "number" ? tokens.cacheReadTokens : undefined,
-      };
+      return extractFromTokensObject(rec.tokens as Record<string, unknown>);
     }
 
     // Try entry.response.usage
     if (entry.response && typeof entry.response === "object") {
-      const resp = entry.response as Record<string, unknown>;
-      if (typeof resp.totalTokens === "number") return { total: resp.totalTokens };
-      if (typeof resp.usage === "object" && resp.usage !== null) {
-        const usage = resp.usage as Record<string, unknown>;
-        const total =
-          typeof usage.totalTokens === "number"
-            ? usage.totalTokens
-            : typeof usage.total_tokens === "number"
-              ? usage.total_tokens
-              : 0;
-        return {
-          total,
-          cacheCreationTokens:
-            typeof usage.cacheCreationTokens === "number" ? usage.cacheCreationTokens : undefined,
-          cacheReadTokens:
-            typeof usage.cacheReadTokens === "number" ? usage.cacheReadTokens : undefined,
-        };
-      }
+      return extractFromResponse(entry.response as Record<string, unknown>);
     }
 
     return { total: 0 };
+  }
+
+  function extractFromTokensObject(tokens: Record<string, unknown>): {
+    total: number;
+    cacheCreationTokens?: number;
+    cacheReadTokens?: number;
+  } {
+    return {
+      total: numericField(tokens, "total"),
+      cacheCreationTokens: optionalNumericField(tokens, "cacheCreationTokens"),
+      cacheReadTokens: optionalNumericField(tokens, "cacheReadTokens"),
+    };
+  }
+
+  function extractFromResponse(resp: Record<string, unknown>): {
+    total: number;
+    cacheCreationTokens?: number;
+    cacheReadTokens?: number;
+  } {
+    if (typeof resp.totalTokens === "number") return { total: resp.totalTokens };
+    if (typeof resp.usage === "object" && resp.usage !== null) {
+      const usage = resp.usage as Record<string, unknown>;
+      const total =
+        typeof usage.totalTokens === "number"
+          ? usage.totalTokens
+          : numericField(usage, "total_tokens");
+      return {
+        total,
+        cacheCreationTokens: optionalNumericField(usage, "cacheCreationTokens"),
+        cacheReadTokens: optionalNumericField(usage, "cacheReadTokens"),
+      };
+    }
+    return { total: 0 };
+  }
+
+  function numericField(obj: Record<string, unknown>, key: string): number {
+    return typeof obj[key] === "number" ? (obj[key] as number) : 0;
+  }
+
+  function optionalNumericField(obj: Record<string, unknown>, key: string): number | undefined {
+    return typeof obj[key] === "number" ? (obj[key] as number) : undefined;
   }
 
   // Intercept deps.store.add so every route handler's store.add call triggers token tracking

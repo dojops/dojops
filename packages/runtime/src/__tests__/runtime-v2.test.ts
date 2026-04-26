@@ -899,7 +899,7 @@ describe("DopsRuntimeV2 trust envelope", () => {
       trustLevel: "custom",
     });
     await runtime.generate({ prompt: "Create S3 bucket" });
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = provider.generate.mock.calls[0][0];
     expect(call.system).toContain("<skill-guidance>");
     expect(call.system).toContain("</skill-guidance>");
     expect(call.system).toContain("supplementary reference material");

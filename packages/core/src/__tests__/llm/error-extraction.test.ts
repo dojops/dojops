@@ -48,7 +48,7 @@ describe("extractApiError — JSON error body extraction", () => {
   });
 
   it("handles empty error message", () => {
-    const err = new Error("");
+    const err = new Error(""); // NOSONAR — intentionally testing empty message edge case
     expect(extractApiError(err)).toBe("");
   });
 

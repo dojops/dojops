@@ -283,7 +283,7 @@ function homedir(): string {
 function toSlug(title: string): string {
   return title
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "") // NOSONAR: two independent anchored alternatives (^-+ and -+$) with no overlapping quantifiers; linear runtime
     .slice(0, 60);
 }

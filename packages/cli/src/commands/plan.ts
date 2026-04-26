@@ -375,6 +375,17 @@ async function handleGenericTasks(
   return "skip";
 }
 
+async function resolveVoicePrompt(): Promise<string | undefined> {
+  const { resolveVoiceConfig, voiceInput } = await import("../voice");
+  const voiceConfig = resolveVoiceConfig();
+  p.log.info(`${pc.cyan("Recording...")} Speak your plan goal (press Enter to stop, max 30s)`);
+  const transcribed = await voiceInput(voiceConfig);
+  if (transcribed) {
+    p.log.info(`${pc.dim("Transcribed:")} ${transcribed}`);
+  }
+  return transcribed;
+}
+
 export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
   const {
     prompt: textPrompt,
@@ -385,19 +396,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     timeout,
   } = parsePlanArgs(args, ctx);
 
-  let prompt = textPrompt;
-
-  // Voice input: record + transcribe when --voice flag is set
-  if (useVoice && !prompt) {
-    const { resolveVoiceConfig, voiceInput } = await import("../voice");
-    const voiceConfig = resolveVoiceConfig();
-    p.log.info(`${pc.cyan("Recording...")} Speak your plan goal (press Enter to stop, max 30s)`);
-    const transcribed = await voiceInput(voiceConfig);
-    if (transcribed) {
-      p.log.info(`${pc.dim("Transcribed:")} ${transcribed}`);
-      prompt = transcribed;
-    }
-  }
+  const prompt = textPrompt || (useVoice ? await resolveVoicePrompt() : undefined);
 
   if (!prompt) {
     p.log.info(`  ${pc.dim("$")} dojops plan <prompt>`);

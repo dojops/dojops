@@ -845,7 +845,7 @@ describe("PlannerExecutor", () => {
         {
           id: "t1",
           description: "missing pattern",
-          successCriteria: { requiredPatterns: ['resource\\s+"aws_'] },
+          successCriteria: { requiredPatterns: [String.raw`resource\s+"aws_`] },
         },
       ]);
 
@@ -920,7 +920,7 @@ describe("PlannerExecutor", () => {
       const result = await executor.execute(graph);
 
       expect(result.quality).toBeDefined();
-      expect(result.quality!.score).toBe(1.0);
+      expect(result.quality!.score).toBe(1);
       expect(result.quality!.skippedTasks).toEqual([]);
       expect(result.quality!.summary).toContain("3/3");
     });

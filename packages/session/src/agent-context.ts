@@ -132,7 +132,7 @@ export class AgentContext {
     if (assistantMsgs.length === 0) return "(no results)";
 
     // Return the last assistant message content (most relevant)
-    const last = assistantMsgs[assistantMsgs.length - 1];
+    const last = assistantMsgs.at(-1)!;
     if (last.content.length <= 2000) return last.content;
     return last.content.slice(0, 2000) + "\n[result truncated]";
   }

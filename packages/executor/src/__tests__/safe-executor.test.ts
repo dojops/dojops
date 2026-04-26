@@ -1118,7 +1118,7 @@ describe("SafeExecutor", () => {
         { expectedFiles: ["Dockerfile", "docker-compose.yml"] },
       );
       expect(result.status).toBe("completed");
-      const meta = result.metadata as Record<string, unknown> | undefined;
+      const meta = result.metadata;
       expect(meta?._completenessWarning).toBeUndefined();
     });
 
@@ -1133,7 +1133,7 @@ describe("SafeExecutor", () => {
         { expectedFiles: ["Dockerfile", "docker-compose.yml", "nginx.conf"] },
       );
       expect(result.status).toBe("completed");
-      const meta = result.metadata as Record<string, unknown> | undefined;
+      const meta = result.metadata;
       expect(meta?._completenessWarning).toContain("nginx.conf");
     });
 

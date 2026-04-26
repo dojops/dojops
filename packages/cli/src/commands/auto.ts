@@ -8,8 +8,7 @@ import * as p from "@clack/prompts";
 import { AGENT_TOOLS, initHookEngine } from "@dojops/core";
 import type { ToolCall, ToolDefinition } from "@dojops/core";
 import { ToolExecutor, createCheckpoint, createWorktree, removeWorktree } from "@dojops/executor";
-import type { WorktreeSession } from "@dojops/executor";
-import type { McpToolDispatcher as McpToolDispatcherType } from "@dojops/executor";
+import type { WorktreeSession, McpToolDispatcher as McpToolDispatcherType } from "@dojops/executor";
 import { AgentLoop } from "@dojops/session";
 import type { AgentLoopResult } from "@dojops/session";
 import { createTools } from "@dojops/api";
@@ -63,7 +62,7 @@ function cleanDisplayText(text: string): string {
   // Regex fallback for "summary" value in truncated JSON
   const match = /"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(trimmed);
   if (match) {
-    return match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\");
+    return match[1].replaceAll('\\"', '"').replaceAll("\\n", "\n").replaceAll("\\\\", "\\");
   }
 
   return text;
@@ -636,7 +635,7 @@ function findMatchingSkill(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   skillsMap: Map<string, any>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any | null {
+): any {
   for (const { pattern, skill: skillName } of COMPLETION_SKILL_PATTERNS) {
     if (!pattern.test(basename) && !pattern.test(relPath)) continue;
     const skill = skillsMap.get(skillName);
@@ -912,6 +911,139 @@ async function resolvePromptFromArgs(args: string[], ctx: CLIContext): Promise<s
   return expandFileReferences(prompt, ctx.cwd);
 }
 
+// ── Worktree setup ─────────────────────────────────────────────
+
+function initWorktreeSession(cwd: string): WorktreeSession {
+  try {
+    const session = createWorktree({ cwd });
+    p.log.info(
+      `${pc.cyan("Worktree")} created at ${pc.dim(session.worktreePath)} (branch: ${session.branch})`,
+    );
+    return session;
+  } catch (err) {
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `Failed to create worktree: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+// ── TUI lifecycle ──────────────────────────────────────────────
+
+interface TuiComponents {
+  spinner: LLMSpinner | null;
+  toolDisplay: ToolDisplay | null;
+  thinkingDisplay: ThinkingDisplay | null;
+  taskTree: TaskTree | null;
+}
+
+function createTuiComponents(isInteractive: boolean, model: string): TuiComponents {
+  if (!isInteractive) {
+    return { spinner: null, toolDisplay: null, thinkingDisplay: null, taskTree: null };
+  }
+  return {
+    spinner: new LLMSpinner({ model }),
+    toolDisplay: new ToolDisplay(),
+    thinkingDisplay: new ThinkingDisplay(),
+    taskTree: new TaskTree(),
+  };
+}
+
+function startTuiComponents(tui: TuiComponents, maxIterations: number): void {
+  if (tui.taskTree && maxIterations > 1) {
+    tui.taskTree.addTask("iter-0", "Iteration 1");
+    tui.taskTree.updateTask("iter-0", "running");
+    tui.taskTree.start();
+  }
+  tui.spinner?.start();
+}
+
+function disposeTuiComponents(tui: TuiComponents): void {
+  tui.thinkingDisplay?.dispose();
+  tui.spinner?.dispose();
+  tui.toolDisplay?.dispose();
+  tui.taskTree?.dispose();
+}
+
+function finalizeTuiOnSuccess(tui: TuiComponents, result: AgentLoopResult): void {
+  if (tui.thinkingDisplay?.isActive()) tui.thinkingDisplay.stop();
+  if (tui.taskTree) {
+    const lastIter = `iter-${result.iterations - 1}`;
+    tui.taskTree.updateTask(lastIter, result.success ? "completed" : "failed");
+    tui.taskTree.stop();
+  }
+  tui.spinner?.stop();
+}
+
+// ── Agent loop callbacks ───────────────────────────────────────
+
+function buildAgentLoopCallbacks(
+  tui: TuiComponents,
+  isStreamJson: boolean,
+): Pick<
+  ConstructorParameters<typeof AgentLoop>[0],
+  "onIteration" | "onToolCall" | "onToolResult" | "onThinking"
+> {
+  return {
+    onIteration: (iteration) => {
+      if (tui.spinner) {
+        tui.spinner.setVerb(`Iteration ${iteration + 1}`);
+        if (!tui.spinner.isActive) tui.spinner.start();
+      }
+      if (tui.taskTree && iteration > 0) {
+        tui.taskTree.updateTask(`iter-${iteration - 1}`, "completed");
+        tui.taskTree.addTask(`iter-${iteration}`, `Iteration ${iteration + 1}`);
+        tui.taskTree.updateTask(`iter-${iteration}`, "running");
+      }
+    },
+    onToolCall: () => {
+      tui.spinner?.stop();
+    },
+    onToolResult: () => {
+      if (tui.spinner && !tui.thinkingDisplay?.isActive()) {
+        tui.spinner.start();
+      }
+    },
+    onThinking: (text) => {
+      if (!text) return;
+      const trimmed = text.trim();
+      const looksLikeJson = trimmed.startsWith("{") || trimmed.startsWith("[");
+      if (looksLikeJson || isStreamJson) return;
+
+      if (tui.thinkingDisplay) {
+        tui.spinner?.stop();
+        if (!tui.thinkingDisplay.isActive()) tui.thinkingDisplay.start();
+        tui.thinkingDisplay.update(trimmed);
+        return;
+      }
+      const firstLine = trimmed.split("\n")[0];
+      if (firstLine.length > 0) {
+        p.log.info(pc.dim(firstLine.length > 100 ? firstLine.slice(0, 97) + "..." : firstLine));
+      }
+    },
+  };
+}
+
+// ── Cleanup ────────────────────────────────────────────────────
+
+async function cleanupAutoResources(
+  mcpResources: McpResources,
+  worktreeSession: WorktreeSession | null,
+): Promise<void> {
+  if (mcpResources.mcpDisconnect) {
+    await mcpResources.mcpDisconnect().catch(() => {});
+  }
+  if (!worktreeSession) return;
+  try {
+    removeWorktree(worktreeSession);
+    p.log.info(pc.dim("Worktree cleaned up."));
+  } catch {
+    p.log.warn(
+      pc.dim(`Failed to clean up worktree at ${worktreeSession.worktreePath}. Remove it manually.`),
+    );
+  }
+}
+
 /**
  * Autonomous agent mode: iterative tool-use loop (ReAct pattern).
  * The LLM reads files, makes changes, runs commands, and verifies — all autonomously.
@@ -932,22 +1064,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
 
   const maxIterations = Number.parseInt(extractFlagValue(args, "--max-iterations") ?? "50", 10);
   const useWorktree = hasFlag(args, "--worktree");
-
-  // Create isolated worktree when requested
-  let worktreeSession: WorktreeSession | null = null;
-  if (useWorktree) {
-    try {
-      worktreeSession = createWorktree({ cwd: ctx.cwd });
-      p.log.info(
-        `${pc.cyan("Worktree")} created at ${pc.dim(worktreeSession.worktreePath)} (branch: ${worktreeSession.branch})`,
-      );
-    } catch (err) {
-      throw new CLIError(
-        ExitCode.GENERAL_ERROR,
-        `Failed to create worktree: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
+  const worktreeSession = useWorktree ? initWorktreeSession(ctx.cwd) : null;
 
   p.log.info(
     `${pc.bold(pc.cyan("Autonomous agent mode"))} — iterative tool-use (max ${maxIterations} iterations)`,
@@ -974,12 +1091,8 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
   const isInteractive = !isBackgroundChild && !isStreamJson;
 
-  // Create TUI components for interactive mode
   const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
-  const spinner = isInteractive ? new LLMSpinner({ model }) : null;
-  const toolDisplay = isInteractive ? new ToolDisplay() : null;
-  const thinkingDisplay = isInteractive ? new ThinkingDisplay() : null;
-  const taskTree = isInteractive ? new TaskTree() : null;
+  const tui = createTuiComponents(isInteractive, model);
 
   const toolExecutor = buildToolExecutor(
     cwd,
@@ -989,8 +1102,8 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     requireApprovalForCommands,
     allowAllPaths,
     isStreamJson,
-    toolDisplay,
-    taskTree,
+    tui.toolDisplay,
+    tui.taskTree,
   );
 
   const availableBinaries = discoverAvailableBinaries();
@@ -1009,6 +1122,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
 
   const allTools = [...AGENT_TOOLS, ...mcpResources.mcpTools];
   const hookEngine = initHookEngine(effectiveRootDir);
+  const callbacks = buildAgentLoopCallbacks(tui, isStreamJson);
 
   const loop = new AgentLoop({
     provider,
@@ -1019,47 +1133,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     thinking: ctx.globalOpts.thinking,
     hookEngine,
     validateBeforeDone: () => validateWrittenFiles(toolExecutor, skillsMap, cwd),
-    onIteration: (iteration) => {
-      if (spinner) {
-        spinner.setVerb(`Iteration ${iteration + 1}`);
-        if (!spinner.isActive) spinner.start();
-      }
-      if (taskTree && iteration > 0) {
-        taskTree.updateTask(`iter-${iteration - 1}`, "completed");
-        taskTree.addTask(`iter-${iteration}`, `Iteration ${iteration + 1}`);
-        taskTree.updateTask(`iter-${iteration}`, "running");
-      }
-    },
-    onToolCall: () => {
-      // Pause spinner during tool execution
-      spinner?.stop();
-    },
-    onToolResult: () => {
-      // Resume spinner after tool completes
-      if (spinner && !thinkingDisplay?.isActive()) {
-        spinner.start();
-      }
-    },
-    onThinking: (text) => {
-      if (!text) return;
-      const trimmed = text.trim();
-      if (trimmed.startsWith("{") || trimmed.startsWith("[")) return;
-
-      if (isStreamJson) return;
-
-      if (thinkingDisplay) {
-        spinner?.stop();
-        if (!thinkingDisplay.isActive()) {
-          thinkingDisplay.start();
-        }
-        thinkingDisplay.update(trimmed);
-      } else {
-        const firstLine = trimmed.split("\n")[0];
-        if (firstLine.length > 0) {
-          p.log.info(pc.dim(firstLine.length > 100 ? firstLine.slice(0, 97) + "..." : firstLine));
-        }
-      }
-    },
+    ...callbacks,
   });
 
   const startTime = Date.now();
@@ -1068,36 +1142,13 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     emitStreamInit(ctx);
   }
 
-  // Start TUI components
-  if (taskTree && maxIterations > 1) {
-    taskTree.addTask("iter-0", "Iteration 1");
-    taskTree.updateTask("iter-0", "running");
-    taskTree.start();
-  }
-  spinner?.start();
-
-  const disposeTui = () => {
-    thinkingDisplay?.dispose();
-    spinner?.dispose();
-    toolDisplay?.dispose();
-    taskTree?.dispose();
-  };
+  startTuiComponents(tui, maxIterations);
 
   try {
     const result = await loop.run(prompt);
 
-    // Stop thinking display if still active
-    if (thinkingDisplay?.isActive()) thinkingDisplay.stop();
-
-    // Finalize task tree
-    if (taskTree) {
-      const lastIter = `iter-${result.iterations - 1}`;
-      taskTree.updateTask(lastIter, result.success ? "completed" : "failed");
-      taskTree.stop();
-    }
-
-    spinner?.stop();
-    disposeTui();
+    finalizeTuiOnSuccess(tui, result);
+    disposeTuiComponents(tui);
 
     handleAutoSuccess(result, {
       isStreamJson,
@@ -1111,23 +1162,9 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
       startTime,
     });
   } catch (err) {
-    disposeTui();
+    disposeTuiComponents(tui);
     handleAutoError(err, isStreamJson, isBackgroundChild, backgroundRunId, effectiveRootDir);
   } finally {
-    if (mcpResources.mcpDisconnect) {
-      await mcpResources.mcpDisconnect().catch(() => {});
-    }
-    if (worktreeSession) {
-      try {
-        removeWorktree(worktreeSession);
-        p.log.info(pc.dim("Worktree cleaned up."));
-      } catch {
-        p.log.warn(
-          pc.dim(
-            `Failed to clean up worktree at ${worktreeSession.worktreePath}. Remove it manually.`,
-          ),
-        );
-      }
-    }
+    await cleanupAutoResources(mcpResources, worktreeSession);
   }
 }

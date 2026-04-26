@@ -47,7 +47,7 @@ for (const entry of entries) {
   // Check if source already has a shebang (avoid duplicates)
   const src = readFileSync(entry.src, "utf8");
   const hasShebang = src.startsWith("#!");
-  const isBin = pkg.bin && Object.values(pkg.bin).some((b) => b === `dist/${entry.out}.js`);
+  const isBin = pkg.bin && Object.values(pkg.bin).includes(`dist/${entry.out}.js`);
   const needsBanner = isBin && !hasShebang;
 
   await build({

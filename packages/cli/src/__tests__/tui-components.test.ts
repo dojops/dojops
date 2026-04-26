@@ -10,7 +10,7 @@ import {
 // eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 function strip(s: string): string {
-  return s.replace(ANSI_RE, "");
+  return s.replaceAll(ANSI_RE, "");
 }
 
 describe("renderToolCallPanel", () => {

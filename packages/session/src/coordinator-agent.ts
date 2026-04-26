@@ -459,9 +459,7 @@ Rules:
 
     const lines = ["Results from completed workers:", ""];
     for (const w of completed) {
-      lines.push(`## ${w.id}: ${w.description}`);
-      lines.push(w.result ?? "(no output)");
-      lines.push("");
+      lines.push(`## ${w.id}: ${w.description}`, w.result ?? "(no output)", "");
     }
 
     if (failed.length > 0) {

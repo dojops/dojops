@@ -605,8 +605,10 @@ function resolveAnsibleBinDir(ansibleBinaryPath: string, ctx?: ToolchainContext)
   }
 
   // 3. pipx venv internals (fallback)
-  dirs.push(path.join(home, ".local", "share", "pipx", "venvs", "ansible", "bin"));
-  dirs.push(path.join(home, ".local", "pipx", "venvs", "ansible", "bin"));
+  dirs.push(
+    path.join(home, ".local", "share", "pipx", "venvs", "ansible", "bin"),
+    path.join(home, ".local", "pipx", "venvs", "ansible", "bin"),
+  );
 
   // 4. pipx exposed scripts
   dirs.push(path.join(home, ".local", "bin"));

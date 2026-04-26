@@ -93,7 +93,7 @@ export class AuditPersistence {
       if (entry.previousHash !== expectedPrevious) {
         return { valid: false, brokenAt: i };
       }
-      const recomputed = computeAuditHash(entry, entry.previousHash!);
+      const recomputed = computeAuditHash(entry, entry.previousHash);
       if (entry.hash !== recomputed) {
         return { valid: false, brokenAt: i };
       }

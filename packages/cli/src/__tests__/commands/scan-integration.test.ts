@@ -184,7 +184,7 @@ describe("scanCommand — clean scan", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRunHooks.mockReturnValue(true);
-    (runScan as ReturnType<typeof vi.fn>).mockResolvedValue(cleanReport);
+    vi.mocked(runScan).mockResolvedValue(cleanReport);
   });
 
   it("completes without error on clean scan", async () => {
@@ -208,7 +208,7 @@ describe("scanCommand — low-only findings (below default threshold)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRunHooks.mockReturnValue(true);
-    (runScan as ReturnType<typeof vi.fn>).mockResolvedValue(lowOnlyReport);
+    vi.mocked(runScan).mockResolvedValue(lowOnlyReport);
   });
 
   it("completes without error (low findings below default HIGH threshold)", async () => {
@@ -236,7 +236,7 @@ describe("scanCommand — critical findings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRunHooks.mockReturnValue(true);
-    (runScan as ReturnType<typeof vi.fn>).mockResolvedValue(findingsReport);
+    vi.mocked(runScan).mockResolvedValue(findingsReport);
   });
 
   it("fails with default threshold (HIGH) when critical findings exist", async () => {

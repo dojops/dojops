@@ -704,7 +704,7 @@ function getEntryPrompt(entry) {
 
 function truncatePrompt(text, maxLen) {
   if (!text) return "";
-  const single = text.replace(/\n/g, " ").trim();
+  const single = text.replaceAll("\n", " ").trim();
   if (single.length <= maxLen) return single;
   return single.slice(0, maxLen) + "...";
 }
@@ -922,7 +922,7 @@ async function loadOverview() {
   const container = $("overview-content");
   try {
     const data = await apiCall("/metrics/overview");
-    container.innerHTML = renderOverview(data);
+    container.innerHTML = renderOverview(data); // NOSONAR — values from own API, all user-visible strings are escapeHtml-sanitized inside render functions
   } catch (err) {
     if (err.message.includes("404") || err.message.includes("Cannot GET")) {
       container.innerHTML = renderMetricsEmpty(
@@ -1094,7 +1094,7 @@ function renderRecentActivityPage() {
   html += "</div>";
   wrap.innerHTML = html; // NOSONAR — values from own API, escapeHtml-sanitized
   let pag = $("recent-activity-pagination");
-  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goRecentActivityPage");
+  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goRecentActivityPage"); // NOSONAR — fn name is a source-code literal resolved via PAGINATE_FUNCTIONS allowlist; numeric values are integers, not user input
 }
 
 function goRecentActivityPage(p) {
@@ -1139,7 +1139,7 @@ function renderCommandsPage() {
   html += "</tbody></table>";
   wrap.innerHTML = html; // NOSONAR — values from own API, escapeHtml-sanitized
   let pag = $("commands-pagination");
-  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goCommandsPage");
+  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goCommandsPage"); // NOSONAR — fn name is a source-code literal resolved via PAGINATE_FUNCTIONS allowlist; numeric values are integers, not user input
 }
 
 function goCommandsPage(p) {
@@ -1186,7 +1186,7 @@ function renderFailuresPage() {
   html += "</tbody></table>";
   wrap.innerHTML = html; // NOSONAR — values from own API, escapeHtml-sanitized
   let pag = $("failures-pagination");
-  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goFailuresPage");
+  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goFailuresPage"); // NOSONAR — fn name is a source-code literal resolved via PAGINATE_FUNCTIONS allowlist; numeric values are integers, not user input
 }
 
 function goFailuresPage(p) {

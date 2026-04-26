@@ -70,23 +70,26 @@ export class FallbackProvider implements LLMProvider {
     }
   }
 
+  /** Log a warning when a fallback provider is used instead of a primary. */
+  private logFallback(providerIndex: number): void {
+    if (providerIndex <= 0) return;
+    const failed = this.providers
+      .slice(0, providerIndex)
+      .map((p) => p.name)
+      .join(", ");
+    console.warn(
+      `[dojops] Primary provider(s) failed (${failed}). Using fallback: ${this.providers[providerIndex].name}`,
+    );
+  }
+
   async generate(request: LLMRequest): Promise<LLMResponse> {
     let lastError: unknown;
     for (let i = 0; i < this.providers.length; i++) {
       if (this.isCircuitOpen(i)) continue;
-      const provider = this.providers[i];
       try {
-        const response = await provider.generate(request);
+        const response = await this.providers[i].generate(request);
         this.recordSuccess(i);
-        if (i > 0) {
-          const failed = this.providers
-            .slice(0, i)
-            .map((p) => p.name)
-            .join(", ");
-          console.warn(
-            `[dojops] Primary provider(s) failed (${failed}). Using fallback: ${provider.name}`,
-          );
-        }
+        this.logFallback(i);
         return response;
       } catch (err) {
         this.recordFailure(i);
@@ -104,60 +107,50 @@ export class FallbackProvider implements LLMProvider {
       if (this.isCircuitOpen(i)) continue;
       const provider = this.providers[i];
       try {
-        let response: LLMResponse;
-        if (provider.generateStream) {
-          response = await provider.generateStream(request, (chunk) => {
-            chunksEmitted = true;
-            onChunk(chunk);
-          });
-        } else {
-          // Provider lacks streaming — fall back to non-streaming
-          response = await provider.generate(request);
-          chunksEmitted = true;
-          onChunk(response.content);
-        }
+        const response = provider.generateStream
+          ? await provider.generateStream(request, (chunk) => {
+              chunksEmitted = true;
+              onChunk(chunk);
+            })
+          : await this.nonStreamingFallback(provider, request, onChunk, () => {
+              chunksEmitted = true;
+            });
         this.recordSuccess(i);
-        if (i > 0) {
-          const failed = this.providers
-            .slice(0, i)
-            .map((p) => p.name)
-            .join(", ");
-          console.warn(
-            `[dojops] Primary provider(s) failed (${failed}). Using fallback: ${provider.name}`,
-          );
-        }
+        this.logFallback(i);
         return response;
       } catch (err) {
         this.recordFailure(i);
         lastError = err;
         // If chunks were already emitted, the stream is corrupted — don't retry
-        if (chunksEmitted) {
-          throw err;
-        }
+        if (chunksEmitted) throw err;
         if (err instanceof OverloadedExhaustedError) continue;
       }
     }
     throw lastError ?? new Error("All providers failed");
   }
 
+  /** Fall back to non-streaming generate when a provider lacks streaming support. */
+  private async nonStreamingFallback(
+    provider: LLMProvider,
+    request: LLMRequest,
+    onChunk: StreamCallback,
+    markEmitted: () => void,
+  ): Promise<LLMResponse> {
+    const response = await provider.generate(request);
+    markEmitted();
+    onChunk(response.content);
+    return response;
+  }
+
   async generateWithTools(request: LLMToolRequest): Promise<LLMToolResponse> {
     let lastError: unknown;
     for (let i = 0; i < this.providers.length; i++) {
       if (this.isCircuitOpen(i)) continue;
-      const provider = this.providers[i];
-      if (!provider.generateWithTools) continue;
+      if (!this.providers[i].generateWithTools) continue;
       try {
-        const response = await provider.generateWithTools(request);
+        const response = await this.providers[i].generateWithTools!(request);
         this.recordSuccess(i);
-        if (i > 0) {
-          const failed = this.providers
-            .slice(0, i)
-            .map((p) => p.name)
-            .join(", ");
-          console.warn(
-            `[dojops] Primary provider(s) failed (${failed}). Using fallback: ${provider.name}`,
-          );
-        }
+        this.logFallback(i);
         return response;
       } catch (err) {
         this.recordFailure(i);
