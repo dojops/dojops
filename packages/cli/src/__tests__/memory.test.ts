@@ -636,7 +636,7 @@ function makeOutcome(overrides?: Partial<SkillOutcome>): SkillOutcome {
     model: "gpt-4o-mini",
     tier: "fast",
     status: "success",
-    quality_score: 1.0,
+    quality_score: 1,
     duration_ms: 500,
     input_tokens: 200,
     output_tokens: 300,
@@ -749,7 +749,7 @@ describe("recordPreference", () => {
     }
 
     const prefs = getPreferences(tmpDir);
-    expect(prefs[0].confidence).toBeLessThanOrEqual(1.0);
+    expect(prefs[0].confidence).toBeLessThanOrEqual(1);
   });
 });
 

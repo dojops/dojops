@@ -93,7 +93,7 @@ describe("classifyPromptComplexity", () => {
         "first create the namespace, then deploy the app, next set up monitoring, " +
         "finally configure autoscaling. Reference @deployment.yaml @service.yaml @ingress.yaml " +
         "@values.yaml @chart.yaml for the existing setup. " +
-        Array(80).fill("additional context word").join(" "),
+        new Array(80).fill("additional context word").join(" "),
     );
     expect(complex.score).toBeGreaterThanOrEqual(0);
     expect(complex.score).toBeLessThanOrEqual(1);
@@ -103,7 +103,7 @@ describe("classifyPromptComplexity", () => {
     // A prompt that dodges all regex patterns: no question starters,
     // no simple/complex keywords, no code indicators, no multi-step,
     // and >= 20 words to avoid the "short prompt" signal
-    const filler = Array(20).fill("word").join(" ");
+    const filler = new Array(20).fill("word").join(" ");
     const result = classifyPromptComplexity(`status of the cluster ${filler} right now`);
 
     expect(result.reason).toBe("baseline");

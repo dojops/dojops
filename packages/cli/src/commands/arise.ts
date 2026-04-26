@@ -95,7 +95,6 @@ function createPlannerExecutor(
   executor: PlannerExecutor;
   progress: ReturnType<typeof createProgressReporter> | null;
 } {
-  const taskTimers = new Map<string, number>();
   const progress = jsonOutput ? null : createProgressReporter(taskCount);
   const ariseHookEngine = initHookEngine(root);
 
@@ -109,7 +108,6 @@ function createPlannerExecutor(
         } else {
           p.log.step(`Running ${pc.blue(id)}: ${desc}`);
         }
-        taskTimers.set(id, Date.now());
       },
       taskEnd(id, _status, error) {
         ariseHookEngine
@@ -251,7 +249,8 @@ function formatVerifyLine(r: VerifyEntry): string[] {
     }
     if (r.errors.length > 5) {
       const moreCount = r.errors.length - 5;
-      lines.push(`    ${pc.dim(`... and ${moreCount} more`)}`);
+      const moreText = `... and ${moreCount} more`;
+      lines.push(`    ${pc.dim(moreText)}`);
     }
   }
   return lines;

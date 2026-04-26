@@ -455,7 +455,7 @@ export class SpecialistAgent {
           });
           return { role: "assistant" as const, content: callsJson };
         }
-        return { role: m.role as "user" | "assistant", content: m.content };
+        return { role: m.role, content: m.content };
       });
     const response = await this.provider.generate({
       system: augmented,
@@ -470,7 +470,7 @@ export class SpecialistAgent {
   /** Check if the last N signatures are all identical (stall detection). */
   private isStale(signatures: string[]): boolean {
     if (signatures.length < AGENTIC_STALE_THRESHOLD) return false;
-    const last = signatures[signatures.length - 1];
+    const last = signatures.at(-1);
     let count = 0;
     for (let i = signatures.length - 1; i >= 0; i--) {
       if (signatures[i] === last) count++;

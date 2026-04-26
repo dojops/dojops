@@ -174,6 +174,78 @@ async function retryLoop<T>(
   throw lastError;
 }
 
+interface GenerateRetryState {
+  currentRequest: LLMRequest;
+  schemaAttempt: number;
+  maxTokensRecoveryAttempt: number;
+  overloaded: { value: number };
+  lastError: unknown;
+}
+
+interface RetryLimits {
+  attempt: number;
+  maxRetries: number;
+  schemaRetries: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+}
+
+type RetryAction = "retry" | "retry-no-attempt-increment" | "throw";
+
+/** Try a schema-validation recovery; returns true if the request was rewritten. */
+function trySchemaRecovery(
+  err: unknown,
+  state: GenerateRetryState,
+  schemaRetries: number,
+): boolean {
+  const canRetry =
+    !!state.currentRequest.schema &&
+    isSchemaValidationError(err) &&
+    state.schemaAttempt < schemaRetries;
+  if (!canRetry) return false;
+  state.schemaAttempt++;
+  state.currentRequest = buildStricterRequest(state.currentRequest, err as JsonValidationError);
+  return true;
+}
+
+/** Try a context-overflow recovery; returns true if maxTokens was reduced. */
+function tryContextOverflowRecovery(err: unknown, state: GenerateRetryState): boolean {
+  if (classifyProviderError(err) !== "context_overflow") return false;
+  if (state.maxTokensRecoveryAttempt >= MAX_TOKENS_RECOVERY_ATTEMPTS) return false;
+  const reduced = reduceMaxTokens(state.currentRequest, err);
+  if (!reduced) return false;
+  state.maxTokensRecoveryAttempt++;
+  state.currentRequest = reduced;
+  return true;
+}
+
+/** Decide what the catch block should do next. */
+async function handleGenerateError(
+  err: unknown,
+  state: GenerateRetryState,
+  limits: RetryLimits,
+): Promise<RetryAction> {
+  state.lastError = err;
+  handleOverloadedCheck(err, state.overloaded);
+
+  if (trySchemaRecovery(err, state, limits.schemaRetries)) {
+    await sleep(500);
+    return "retry-no-attempt-increment";
+  }
+
+  if (tryContextOverflowRecovery(err, state)) {
+    return "retry-no-attempt-increment";
+  }
+
+  if (limits.attempt < limits.maxRetries && isRetryableError(err)) {
+    const delay = computeDelay(err, limits.attempt, limits.initialDelayMs, limits.maxDelayMs);
+    await sleep(delay);
+    return "retry";
+  }
+
+  return "throw";
+}
+
 /**
  * Wraps an LLMProvider with automatic retry + exponential backoff.
  * Retries on 429/5xx/transient network errors.
@@ -189,11 +261,13 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
     name: provider.name,
 
     async generate(request: LLMRequest): Promise<LLMResponse> {
-      let lastError: unknown;
-      let schemaAttempt = 0;
-      let maxTokensRecoveryAttempt = 0;
-      let currentRequest = request;
-      const overloaded = { value: 0 };
+      const state: GenerateRetryState = {
+        currentRequest: request,
+        schemaAttempt: 0,
+        maxTokensRecoveryAttempt: 0,
+        overloaded: { value: 0 },
+        lastError: undefined,
+      };
       // Hard cap prevents infinite loops if schemaRetries is misconfigured
       const maxTotalAttempts = maxRetries + schemaRetries + MAX_TOKENS_RECOVERY_ATTEMPTS + 1;
       let totalAttempts = 0;
@@ -202,51 +276,27 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
         if (++totalAttempts > maxTotalAttempts) break;
 
         try {
-          const response = await provider.generate(currentRequest);
-          overloaded.value = 0;
+          const response = await provider.generate(state.currentRequest);
+          state.overloaded.value = 0;
           return response;
         } catch (err) {
-          lastError = err;
-          handleOverloadedCheck(err, overloaded);
-
-          // Schema validation retry: rebuild with a stricter prompt
-          const canRetrySchema =
-            !!currentRequest.schema &&
-            isSchemaValidationError(err) &&
-            schemaAttempt < schemaRetries;
-          if (canRetrySchema) {
-            schemaAttempt++;
-            currentRequest = buildStricterRequest(currentRequest, err as JsonValidationError);
+          const action = await handleGenerateError(err, state, {
+            attempt,
+            maxRetries,
+            schemaRetries,
+            initialDelayMs,
+            maxDelayMs,
+          });
+          if (action === "retry-no-attempt-increment") {
             attempt--;
-            await sleep(500);
             continue;
           }
-
-          // Context overflow recovery: reduce maxTokens
-          const category = classifyProviderError(err);
-          if (
-            category === "context_overflow" &&
-            maxTokensRecoveryAttempt < MAX_TOKENS_RECOVERY_ATTEMPTS
-          ) {
-            maxTokensRecoveryAttempt++;
-            const reduced = reduceMaxTokens(currentRequest, err);
-            if (reduced) {
-              currentRequest = reduced;
-              attempt--;
-              continue;
-            }
-          }
-
-          if (attempt < maxRetries && isRetryableError(err)) {
-            const delay = computeDelay(err, attempt, initialDelayMs, maxDelayMs);
-            await sleep(delay);
-            continue;
-          }
-
+          if (action === "retry") continue;
+          // action === "throw"
           throwRedactedError(err);
         }
       }
-      throw lastError;
+      throw state.lastError;
     },
 
     generateStream: provider.generateStream

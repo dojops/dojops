@@ -8,8 +8,8 @@ export type ConfigChangeCallback = (changedPath: string) => void;
  * to avoid rapid-fire reloads when editors perform multiple writes.
  */
 export class ConfigWatcher {
-  private watchers = new Map<string, fs.FSWatcher>();
-  private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly watchers = new Map<string, fs.FSWatcher>();
+  private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly debounceMs: number;
   private readonly paths: string[];
   private readonly onChange: ConfigChangeCallback;

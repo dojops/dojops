@@ -1442,17 +1442,31 @@ async function runCritiqueGate(
   return false;
 }
 
-function emitApplyOutput(
-  root: string,
-  plan: PlanState,
-  flags: ApplyFlags,
-  status: string,
-  newResults: TaskResultEntry[],
-  allFilesCreated: string[],
-  allFilesModified: string[],
-  durationMs: number,
-  safeExecutor: SafeExecutor,
-): void {
+interface EmitApplyOutputOptions {
+  root: string;
+  plan: PlanState;
+  flags: ApplyFlags;
+  status: string;
+  newResults: TaskResultEntry[];
+  allFilesCreated: string[];
+  allFilesModified: string[];
+  durationMs: number;
+  safeExecutor: SafeExecutor;
+}
+
+function emitApplyOutput(opts: EmitApplyOutputOptions): void {
+  const {
+    root,
+    plan,
+    flags,
+    status,
+    newResults,
+    allFilesCreated,
+    allFilesModified,
+    durationMs,
+    safeExecutor,
+  } = opts;
+
   if (flags.jsonOutput) {
     outputJsonResult(plan, status, newResults, allFilesCreated, allFilesModified, durationMs);
   } else {
@@ -1543,7 +1557,7 @@ async function executeApplyPlan(
     { root, plan, durationMs, replay: flags.replay, planSuccess: planResult.success },
   );
 
-  emitApplyOutput(
+  emitApplyOutput({
     root,
     plan,
     flags,
@@ -1553,7 +1567,7 @@ async function executeApplyPlan(
     allFilesModified,
     durationMs,
     safeExecutor,
-  );
+  });
 }
 
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {

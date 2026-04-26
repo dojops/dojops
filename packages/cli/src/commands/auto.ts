@@ -62,7 +62,10 @@ function cleanDisplayText(text: string): string {
   // Regex fallback for "summary" value in truncated JSON
   const match = /"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(trimmed);
   if (match) {
-    return match[1].replaceAll('\\"', '"').replaceAll("\\n", "\n").replaceAll("\\\\", "\\");
+    return match[1]
+      .replaceAll(String.raw`\"`, '"')
+      .replaceAll(String.raw`\n`, "\n")
+      .replaceAll(String.raw`\\`, "\\");
   }
 
   return text;
@@ -497,18 +500,31 @@ async function loadMcpResources(rootDir: string): Promise<McpResources> {
 
 // ── Tool executor setup ─────────────────────────────────────────
 
-function buildToolExecutor(
-  cwd: string,
-  rootDir: string | null,
+interface BuildToolExecutorOptions {
+  cwd: string;
+  rootDir: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  skillsMap: Map<string, any>,
-  mcpDispatcher: McpToolDispatcherType | undefined,
-  requireApprovalForCommands: boolean,
-  allowAllPaths: boolean,
-  isStreamJson: boolean,
-  toolDisplay?: ToolDisplay | null,
-  taskTree?: TaskTree | null,
-): ToolExecutor {
+  skillsMap: Map<string, any>;
+  mcpDispatcher: McpToolDispatcherType | undefined;
+  requireApprovalForCommands: boolean;
+  allowAllPaths: boolean;
+  isStreamJson: boolean;
+  toolDisplay?: ToolDisplay | null;
+  taskTree?: TaskTree | null;
+}
+
+function buildToolExecutor(opts: BuildToolExecutorOptions): ToolExecutor {
+  const {
+    cwd,
+    rootDir,
+    skillsMap,
+    mcpDispatcher,
+    requireApprovalForCommands,
+    allowAllPaths,
+    isStreamJson,
+    toolDisplay,
+    taskTree,
+  } = opts;
   const toolStartTimes = new Map<string, number>();
   const sensitiveHomePaths = ["/.ssh", "/.gnupg", "/.aws", "/.config"].map(
     (suffix) => os.homedir() + suffix,
@@ -1094,17 +1110,17 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
   const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
   const tui = createTuiComponents(isInteractive, model);
 
-  const toolExecutor = buildToolExecutor(
+  const toolExecutor = buildToolExecutor({
     cwd,
     rootDir,
     skillsMap,
-    mcpResources.mcpDispatcher,
+    mcpDispatcher: mcpResources.mcpDispatcher,
     requireApprovalForCommands,
     allowAllPaths,
     isStreamJson,
-    tui.toolDisplay,
-    tui.taskTree,
-  );
+    toolDisplay: tui.toolDisplay,
+    taskTree: tui.taskTree,
+  });
 
   const availableBinaries = discoverAvailableBinaries();
   const skillNames = [...skillsMap.keys()];

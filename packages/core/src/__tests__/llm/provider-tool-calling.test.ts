@@ -70,30 +70,56 @@ function makeToolRequest(overrides?: Partial<LLMToolRequest>): LLMToolRequest {
   };
 }
 
+function openAIToolResponse(
+  content: string | null,
+  toolCalls?: Array<{ id: string; function: { name: string; arguments: string } }>,
+  finishReason = "stop",
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number },
+) {
+  return {
+    choices: [
+      {
+        message: {
+          content,
+          tool_calls: toolCalls?.map((tc) => ({ ...tc, type: "function" })),
+        },
+        finish_reason: finishReason,
+      },
+    ],
+    ...(usage ? { usage } : {}),
+  };
+}
+
+function anthropicToolResponse(
+  blocks: Array<Record<string, unknown>>,
+  stopReason = "end_turn",
+  usage?: { input_tokens: number; output_tokens: number },
+) {
+  return {
+    content: blocks,
+    stop_reason: stopReason,
+    ...(usage ? { usage } : {}),
+  };
+}
+
+function geminiToolResponse(
+  parts: Array<Record<string, unknown>>,
+  finishReason = "STOP",
+  usageMetadata?: Record<string, number>,
+) {
+  return {
+    ok: true,
+    json: vi.fn().mockResolvedValue({
+      candidates: [{ content: { parts }, finishReason }],
+      ...(usageMetadata ? { usageMetadata } : {}),
+    }),
+  };
+}
+
 // ── OpenAI-compat tool calling (OpenAI, DeepSeek, Mistral, Copilot) ─
 
 describe("OpenAI-compat generateWithTools", () => {
   beforeEach(() => vi.clearAllMocks());
-
-  function openAIToolResponse(
-    content: string | null,
-    toolCalls?: Array<{ id: string; function: { name: string; arguments: string } }>,
-    finishReason = "stop",
-    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number },
-  ) {
-    return {
-      choices: [
-        {
-          message: {
-            content,
-            tool_calls: toolCalls?.map((tc) => ({ ...tc, type: "function" })),
-          },
-          finish_reason: finishReason,
-        },
-      ],
-      ...(usage ? { usage } : {}),
-    };
-  }
 
   it("sends tools as function declarations in OpenAI format", async () => {
     mockOpenAICreate.mockResolvedValue(openAIToolResponse("done"));
@@ -344,18 +370,6 @@ describe("OpenAI-compat generateWithTools", () => {
 
 describe("Anthropic generateWithTools", () => {
   beforeEach(() => vi.clearAllMocks());
-
-  function anthropicToolResponse(
-    blocks: Array<Record<string, unknown>>,
-    stopReason = "end_turn",
-    usage?: { input_tokens: number; output_tokens: number },
-  ) {
-    return {
-      content: blocks,
-      stop_reason: stopReason,
-      ...(usage ? { usage } : {}),
-    };
-  }
 
   it("sends tools as Anthropic-formatted input_schema", async () => {
     mockAnthropicCreate.mockResolvedValue(anthropicToolResponse([{ type: "text", text: "done" }]));
@@ -644,20 +658,6 @@ describe("Gemini generateWithTools", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  function geminiToolResponse(
-    parts: Array<Record<string, unknown>>,
-    finishReason = "STOP",
-    usageMetadata?: Record<string, number>,
-  ) {
-    return {
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        candidates: [{ content: { parts }, finishReason }],
-        ...(usageMetadata ? { usageMetadata } : {}),
-      }),
-    };
-  }
 
   it("sends tools as functionDeclarations", async () => {
     mockFetch.mockResolvedValue(geminiToolResponse([{ text: "done" }]));

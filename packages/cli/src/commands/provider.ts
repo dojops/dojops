@@ -89,7 +89,8 @@ async function providerList(args: string[], ctx: CLIContext): Promise<void> {
   const lines: string[] = [];
   for (const name of VALID_PROVIDERS) {
     const isActive = activeProvider === name;
-    const icon = isActive ? pc.green("*") : configured.has(name) ? pc.cyan("o") : pc.dim("o");
+    const inactiveIcon = configured.has(name) ? pc.cyan("o") : pc.dim("o");
+    const icon = isActive ? pc.green("*") : inactiveIcon;
     const activeBadge = isActive ? pc.cyan(" (active)") : "";
     const detail = getProviderDetail(name, config);
     const model =

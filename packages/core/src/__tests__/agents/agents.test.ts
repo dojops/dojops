@@ -562,7 +562,7 @@ function mockToolCallingProvider(responses: LLMToolResponse[]): LLMProvider {
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     }),
     generateWithTools: vi.fn().mockImplementation(async () => {
-      const resp = responses[callIndex] ?? responses[responses.length - 1];
+      const resp = responses[callIndex] ?? responses.at(-1);
       callIndex++;
       return resp;
     }),

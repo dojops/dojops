@@ -91,8 +91,9 @@ function displayOverview(summary: TokenSummary, days: number): void {
     for (const [providerName, data] of Object.entries(summary.byProvider)) {
       totalSavings += estimateCacheSavings(providerName, data.cacheReadTokens);
     }
+    const savingsLabel = `(saved ~${formatCost(totalSavings)})`;
     lines.push(
-      `${pc.bold("Cache hits:")}    ${formatTokens(summary.totalCacheReadTokens)} tokens ${pc.green(`(saved ~${formatCost(totalSavings)})`)}`,
+      `${pc.bold("Cache hits:")}    ${formatTokens(summary.totalCacheReadTokens)} tokens ${pc.green(savingsLabel)}`,
     );
     if (summary.totalCacheCreationTokens > 0) {
       lines.push(

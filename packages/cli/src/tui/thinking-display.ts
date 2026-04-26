@@ -18,7 +18,7 @@ const PULSE_PERIOD_FRAMES = 40; // 2 seconds at 50ms per frame
 // ── ThinkingDisplay ─────────────────────────────────────────────────
 
 export class ThinkingDisplay {
-  private animator: Animator;
+  private readonly animator: Animator;
   private startMs = 0;
   private active = false;
   private disposed = false;
@@ -48,7 +48,8 @@ export class ThinkingDisplay {
     this.animator.stop();
 
     const durationMs = Date.now() - this.startMs;
-    const final = `${pc.dim(THEREFORE)} ${pc.dim(`thought for ${formatDuration(durationMs)}`)}`;
+    const thoughtFor = `thought for ${formatDuration(durationMs)}`;
+    const final = `${pc.dim(THEREFORE)} ${pc.dim(thoughtFor)}`;
     process.stdout.write(`${final}\n`);
     return final;
   }
@@ -90,10 +91,19 @@ export class ThinkingDisplay {
     const symbol = brightness > 0.5 ? pc.cyan(THEREFORE) : pc.dim(THEREFORE);
 
     // Animate dots: . → .. → ...
-    const dotCount = frame % 15 < 5 ? 1 : frame % 15 < 10 ? 2 : 3;
+    const dotPhase = frame % 15;
+    let dotCount: number;
+    if (dotPhase < 5) {
+      dotCount = 1;
+    } else if (dotPhase < 10) {
+      dotCount = 2;
+    } else {
+      dotCount = 3;
+    }
     const dots = ".".repeat(dotCount);
 
-    const label = `${symbol} ${pc.dim(`Thinking${dots}`)}`;
+    const thinkingText = `Thinking${dots}`;
+    const label = `${symbol} ${pc.dim(thinkingText)}`;
 
     if (this.previewText) {
       return [label, `  ${pc.dim(this.previewText)}`];

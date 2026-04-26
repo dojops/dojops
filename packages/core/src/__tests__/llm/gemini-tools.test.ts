@@ -3,6 +3,11 @@ import { z } from "zod";
 
 const mockFetch = vi.fn();
 
+async function getProvider() {
+  const { GeminiProvider } = await import("../../llm/gemini");
+  return new GeminiProvider("key", "gemini-2.5-flash");
+}
+
 // ── Gemini response helpers tested through public API ───────────────
 
 describe("GeminiProvider response helpers", () => {
@@ -14,11 +19,6 @@ describe("GeminiProvider response helpers", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  async function getProvider() {
-    const { GeminiProvider } = await import("../../llm/gemini");
-    return new GeminiProvider("key", "gemini-2.5-flash");
-  }
 
   // ── extractText ─────────────────────────────────────────────────
 
@@ -246,11 +246,6 @@ describe("GeminiProvider tool-calling content mapping", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  async function getProvider() {
-    const { GeminiProvider } = await import("../../llm/gemini");
-    return new GeminiProvider("key", "gemini-2.5-flash");
-  }
 
   const readFileTool = {
     name: "read_file",

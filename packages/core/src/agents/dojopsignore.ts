@@ -34,7 +34,7 @@ function matchIgnorePattern(filePath: string, pattern: string): boolean {
   const re = new RegExp(
     "^" +
       p
-        .replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`)
+        .replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`)
         .replaceAll("**", "{{GLOBSTAR}}")
         .replaceAll("*", "[^/]*")
         .replaceAll("?", "[^/]")

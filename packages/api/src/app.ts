@@ -103,6 +103,16 @@ export function createRateLimiter(windowMs: number, maxRequests: number) {
   };
 }
 
+function numericField(obj: Record<string, unknown>, key: string): number {
+  const value = obj[key];
+  return typeof value === "number" ? value : 0;
+}
+
+function optionalNumericField(obj: Record<string, unknown>, key: string): number | undefined {
+  const value = obj[key];
+  return typeof value === "number" ? value : undefined;
+}
+
 export function createApp(deps: AppDependencies): Express {
   const app = express();
 
@@ -301,14 +311,6 @@ export function createApp(deps: AppDependencies): Express {
       };
     }
     return { total: 0 };
-  }
-
-  function numericField(obj: Record<string, unknown>, key: string): number {
-    return typeof obj[key] === "number" ? (obj[key] as number) : 0;
-  }
-
-  function optionalNumericField(obj: Record<string, unknown>, key: string): number | undefined {
-    return typeof obj[key] === "number" ? (obj[key] as number) : undefined;
   }
 
   // Intercept deps.store.add so every route handler's store.add call triggers token tracking

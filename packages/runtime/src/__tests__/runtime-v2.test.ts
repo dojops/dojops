@@ -889,7 +889,7 @@ describe("DopsRuntimeV2 trust envelope", () => {
       trustLevel: "built-in",
     });
     await runtime.generate({ prompt: "Create S3 bucket" });
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
     expect(call.system).not.toContain("<skill-guidance>");
     expect(call.system).toContain("Terraform expert");
   });
@@ -911,7 +911,7 @@ describe("DopsRuntimeV2 trust envelope", () => {
       trustLevel: "custom",
     });
     await runtime.generate({ prompt: "Create config" });
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
     // The original skill prompt should be inside the envelope
     expect(call.system).toContain("Terraform expert");
     expect(call.system).toContain("Generate valid HCL code.");
@@ -920,7 +920,7 @@ describe("DopsRuntimeV2 trust envelope", () => {
   it("defaults to built-in trust level when not specified", async () => {
     const { provider, runtime } = createRuntime("output content");
     await runtime.generate({ prompt: "Create config" });
-    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
     expect(call.system).not.toContain("<skill-guidance>");
   });
 

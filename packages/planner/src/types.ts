@@ -49,7 +49,7 @@ export interface TaskSuccessCriteria {
   minOutputLength?: number;
   /** Regex patterns that must appear in the output. */
   requiredPatterns?: string[];
-  /** Regex patterns that must NOT appear (e.g., "TODO", "FIXME"). */
+  /** Regex patterns that must not appear in the output (e.g., placeholder markers). */
   forbiddenPatterns?: string[];
 }
 

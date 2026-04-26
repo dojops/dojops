@@ -83,10 +83,10 @@ export interface LLMSpinnerOptions {
 }
 
 export class LLMSpinner {
-  private animator: Animator;
+  private readonly animator: Animator;
   private verb = "";
   private agentName = "";
-  private model: string;
+  private readonly model: string;
 
   private startMs = 0;
   private actualTokens = 0;

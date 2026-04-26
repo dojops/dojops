@@ -82,7 +82,8 @@ export function renderToolCallPanel(tools: ToolCallInfo[]): string {
   const width = Math.min(termWidth(), 72);
   const lines: string[] = [];
 
-  const header = `${pc.bold("Tool Calls")} ${pc.dim(`(${tools.length})`)}`;
+  const toolCount = `(${tools.length})`;
+  const header = `${pc.bold("Tool Calls")} ${pc.dim(toolCount)}`;
   lines.push(
     pc.dim(boxLine(width, BOX.topLeft, BOX.topRight)),
     pc.dim(padLine(header, width)),

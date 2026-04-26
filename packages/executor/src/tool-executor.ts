@@ -128,8 +128,7 @@ function parseCommandArgs(command: string): string[] {
   let inSingleQuote = false;
   let inDoubleQuote = false;
 
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i];
+  for (const ch of command) {
     const result = processCommandChar(ch, inSingleQuote, inDoubleQuote, current, args);
     inSingleQuote = result.inSingleQuote;
     inDoubleQuote = result.inDoubleQuote;

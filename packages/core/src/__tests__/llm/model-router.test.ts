@@ -44,7 +44,7 @@ describe("classifyTaskComplexity", () => {
 
   describe("moderate tasks", () => {
     it("classifies prompts between 100-500 words as moderate", () => {
-      const filler = Array(150).fill("context").join(" ");
+      const filler = new Array(150).fill("context").join(" ");
       expect(classifyTaskComplexity(`Create a deployment configuration ${filler}`)).toBe(
         "moderate",
       );
@@ -69,7 +69,7 @@ describe("classifyTaskComplexity", () => {
     });
 
     it("classifies prompts over 500 words as complex", () => {
-      const longPrompt = Array(510).fill("word").join(" ");
+      const longPrompt = new Array(510).fill("word").join(" ");
       expect(classifyTaskComplexity(longPrompt)).toBe("complex");
     });
 
@@ -77,7 +77,7 @@ describe("classifyTaskComplexity", () => {
       expect(
         classifyTaskComplexity(
           "I need Terraform for infra, Kubernetes for orchestration, and Helm for packaging " +
-            Array(80).fill("additional context").join(" "),
+            new Array(80).fill("additional context").join(" "),
         ),
       ).toBe("complex");
     });
@@ -258,7 +258,7 @@ describe("routeModel", () => {
   });
 
   it("routes moderate prompt to standard tier", () => {
-    const filler = Array(150).fill("context").join(" ");
+    const filler = new Array(150).fill("context").join(" ");
     const result = routeModel("mistral", `Configure the deployment ${filler}`);
     expect(result.complexity).toBe("moderate");
     expect(result.tier).toBe("standard");

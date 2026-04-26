@@ -51,6 +51,11 @@ function makeCtx(outputFormat?: string): CLIContext {
   } as unknown as CLIContext;
 }
 
+async function runCron(args: string[], ctx?: CLIContext) {
+  const { cronCommand } = await import("../../commands/cron");
+  return cronCommand(args, ctx ?? makeCtx());
+}
+
 describe("cron command", () => {
   let tmpDir: string;
 
@@ -66,11 +71,6 @@ describe("cron command", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     mockProjectRoot = null;
   });
-
-  async function runCron(args: string[], ctx?: CLIContext) {
-    const { cronCommand } = await import("../../commands/cron");
-    return cronCommand(args, ctx ?? makeCtx());
-  }
 
   function readCronConfig() {
     const configPath = path.join(tmpDir, ".dojops", "cron.json");

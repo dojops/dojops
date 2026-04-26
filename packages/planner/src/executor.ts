@@ -363,48 +363,68 @@ export class PlannerExecutor {
     let lastError: string | undefined;
 
     for (let attempt = 0; attempt <= this.maxRepairAttempts; attempt++) {
-      try {
-        const resolvedInput = this.buildTaskInput(task, results, attempt, lastError);
-
-        const validation = tool.validate(resolvedInput);
-        if (!validation.valid) {
-          this.recordResult(
-            task,
-            "failed",
-            results,
-            failed,
-            `Validation failed: ${validation.error}`,
-          );
-          return;
-        }
-
-        const output = await this.generateWithTimeout(tool, resolvedInput);
-
-        if (!output.success) {
-          lastError = output.error;
-          if (attempt < this.maxRepairAttempts) continue;
-          this.recordResult(task, "failed", results, failed, output.error);
-          return;
-        }
-
-        const data = this.embedUsageInData(output);
-        const validationError = await this.validateTaskOutput(task, tool, data);
-        if (validationError) {
-          lastError = validationError;
-          if (attempt < this.maxRepairAttempts) continue;
-          this.recordResult(task, "failed", results, failed, lastError);
-          return;
-        }
-
-        this.publishSharedContext(task.id, data);
-        this.recordResult(task, "completed", results, failed, undefined, data);
-        return;
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err);
-        if (attempt < this.maxRepairAttempts) continue;
-        this.recordResult(task, "failed", results, failed, lastError);
-      }
+      const outcome = await this.tryRunAttempt(task, tool, results, failed, attempt, lastError);
+      if (outcome.kind === "done") return;
+      lastError = outcome.error;
     }
+  }
+
+  /** Run a single attempt; return whether to stop the loop or what error to retry with. */
+  private async tryRunAttempt(
+    task: TaskNode,
+    tool: DevOpsSkill,
+    results: Map<string, TaskResult>,
+    failed: Set<string>,
+    attempt: number,
+    lastError: string | undefined,
+  ): Promise<{ kind: "done" } | { kind: "retry"; error: string }> {
+    const isLastAttempt = attempt >= this.maxRepairAttempts;
+    try {
+      const resolvedInput = this.buildTaskInput(task, results, attempt, lastError);
+
+      const validation = tool.validate(resolvedInput);
+      if (!validation.valid) {
+        this.recordResult(
+          task,
+          "failed",
+          results,
+          failed,
+          `Validation failed: ${validation.error}`,
+        );
+        return { kind: "done" };
+      }
+
+      const output = await this.generateWithTimeout(tool, resolvedInput);
+      if (!output.success) {
+        return this.handleAttemptFailure(task, results, failed, output.error, isLastAttempt);
+      }
+
+      const data = this.embedUsageInData(output);
+      const validationError = await this.validateTaskOutput(task, tool, data);
+      if (validationError) {
+        return this.handleAttemptFailure(task, results, failed, validationError, isLastAttempt);
+      }
+
+      this.publishSharedContext(task.id, data);
+      this.recordResult(task, "completed", results, failed, undefined, data);
+      return { kind: "done" };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return this.handleAttemptFailure(task, results, failed, message, isLastAttempt);
+    }
+  }
+
+  /** Either retry with the captured error, or finalize as failure on the last attempt. */
+  private handleAttemptFailure(
+    task: TaskNode,
+    results: Map<string, TaskResult>,
+    failed: Set<string>,
+    error: string | undefined,
+    isLastAttempt: boolean,
+  ): { kind: "done" } | { kind: "retry"; error: string } {
+    if (!isLastAttempt) return { kind: "retry", error: error ?? "" };
+    this.recordResult(task, "failed", results, failed, error);
+    return { kind: "done" };
   }
 
   /** Resolve $refs, inject agent context, dependencies, coordinator data, and repair context. */

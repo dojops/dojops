@@ -100,13 +100,13 @@ export class ContextBudgetTracker {
   /** Cumulative token usage from actual provider responses. */
   private totalConsumed = 0;
   /** Per-iteration usage for tracking spending rate. */
-  private iterationUsages: number[] = [];
+  private readonly iterationUsages: number[] = [];
   /** How many compaction events have occurred. */
   private compactionCount = 0;
   /** Last known context token estimate (set after each evaluate() call). */
   private lastEstimate = 0;
   /** Track which alert levels have already been emitted to avoid duplicates. */
-  private emittedAlerts = new Set<"warning" | "critical">();
+  private readonly emittedAlerts = new Set<"warning" | "critical">();
 
   constructor(opts: ContextBudgetTrackerOptions = {}) {
     const providerLimit = opts.providerName

@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ToolDefinition } from "@dojops/core";
-import type { McpConfig, McpServerConfig, StdioServerConfig } from "./types";
+import type { McpConfig, McpServerConfig } from "./types";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PKG_VERSION: string = (require("../package.json") as { version: string }).version;
@@ -77,8 +77,8 @@ export class McpClientManager {
       entries.map(([name, serverConfig]) => this.connectServer(name, serverConfig)),
     );
 
-    for (let i = 0; i < results.length; i++) {
-      if (results[i].status === "rejected") {
+    for (const result of results) {
+      if (result.status === "rejected") {
         // Server failed to connect — skip silently (MCP is optional)
       }
     }
@@ -169,8 +169,6 @@ export class McpClientManager {
     config: McpServerConfig,
   ): StdioClientTransport | StreamableHTTPClientTransport {
     if (config.transport === "stdio") {
-      const stdioConfig = config as StdioServerConfig;
-
       // H-2: Restrict MCP commands to known-safe binaries
       const ALLOWED_MCP_COMMANDS = new Set([
         "npx",
@@ -190,7 +188,7 @@ export class McpClientManager {
       }
 
       // Sanitize env: strip sensitive vars from process.env
-      const sanitized = sanitizeEnvForMcp(process.env, stdioConfig.allowEnvPassthrough);
+      const sanitized = sanitizeEnvForMcp(process.env, config.allowEnvPassthrough);
 
       // H-6: Also sanitize config.env overrides and block dangerous env vars
       const BLOCKED_ENV_KEYS = new Set([
@@ -202,7 +200,7 @@ export class McpClientManager {
       ]);
       let mergedEnv = sanitized;
       if (config.env) {
-        const sanitizedConfigEnv = sanitizeEnvForMcp(config.env as Record<string, string>);
+        const sanitizedConfigEnv = sanitizeEnvForMcp(config.env);
         // Remove blocked keys from config.env
         for (const key of BLOCKED_ENV_KEYS) {
           delete sanitizedConfigEnv[key];

@@ -13,7 +13,7 @@ function mockGenerateResponse(text: string | null, extra?: Record<string, unknow
     json: vi.fn().mockResolvedValue({
       candidates: [
         {
-          content: { parts: text !== null ? [{ text }] : [] },
+          content: { parts: text === null ? [] : [{ text }] },
           finishReason: "STOP",
         },
       ],

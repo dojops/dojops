@@ -37,6 +37,29 @@ function mockToolExecutor(results?: Map<string, string>): ToolExecutor {
   } as unknown as ToolExecutor;
 }
 
+/** Build N identical tool call responses followed by a done response. */
+function repeatedCallResponses(count: number, name = "read_file", path = "same.ts") {
+  const repeated: Array<{
+    content: string;
+    toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+    stopReason: string;
+  }> = [];
+  for (let i = 0; i < count; i++) {
+    repeated.push({
+      content: "",
+      toolCalls: [{ id: `c${i}`, name, arguments: { path } }],
+      stopReason: "tool_use",
+    });
+  }
+  // Terminal done response (may or may not be reached)
+  repeated.push({
+    content: "",
+    toolCalls: [{ id: "done1", name: "done", arguments: { summary: "finished" } }],
+    stopReason: "tool_use",
+  });
+  return repeated;
+}
+
 describe("AgentLoop", () => {
   const tools: ToolDefinition[] = [READ_FILE_TOOL, DONE_TOOL];
 
@@ -384,29 +407,6 @@ describe("AgentLoop", () => {
   });
 
   describe("escalating stall detection", () => {
-    /** Build N identical tool call responses followed by a done response. */
-    function repeatedCallResponses(count: number, name = "read_file", path = "same.ts") {
-      const repeated: Array<{
-        content: string;
-        toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
-        stopReason: string;
-      }> = [];
-      for (let i = 0; i < count; i++) {
-        repeated.push({
-          content: "",
-          toolCalls: [{ id: `c${i}`, name, arguments: { path } }],
-          stopReason: "tool_use",
-        });
-      }
-      // Terminal done response (may or may not be reached)
-      repeated.push({
-        content: "",
-        toolCalls: [{ id: "done1", name: "done", arguments: { summary: "finished" } }],
-        stopReason: "tool_use",
-      });
-      return repeated;
-    }
-
     it("injects nudge message at 3 consecutive identical calls", async () => {
       // 3 identical + done = 4 responses
       const responses = repeatedCallResponses(3);

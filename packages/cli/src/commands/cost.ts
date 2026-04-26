@@ -104,9 +104,11 @@ function displayCostSummary(data: InfracostOutput): void {
 
   for (const project of data.projects) {
     const lines: string[] = [];
-    lines.push(`${pc.bold("Path:")}     ${project.path}`);
-    lines.push(`${pc.bold("Currency:")} ${currency}`);
-    lines.push("");
+    lines.push(
+      `${pc.bold("Path:")}     ${project.path}`,
+      `${pc.bold("Currency:")} ${currency}`,
+      "",
+    );
 
     if (project.resources.length > 0) {
       lines.push(...buildResourceTable(project.resources, currency));

@@ -42,10 +42,10 @@ const AGENT_COLORS = [pc.magenta, pc.cyan, pc.yellow, pc.blue, pc.green] as cons
 // ── TaskTree ────────────────────────────────────────────────────────
 
 export class TaskTree {
-  private animator: Animator;
-  private nodes: Map<string, TaskNode> = new Map();
-  private order: string[] = []; // insertion order for rendering
-  private colorMap: Map<string, (s: string) => string> = new Map();
+  private readonly animator: Animator;
+  private readonly nodes: Map<string, TaskNode> = new Map();
+  private readonly order: string[] = []; // insertion order for rendering
+  private readonly colorMap: Map<string, (s: string) => string> = new Map();
   private colorIndex = 0;
   private active = false;
   private disposed = false;
@@ -202,19 +202,24 @@ export class TaskTree {
     const connector = isLast ? TREE_END : TREE_MID;
     const icon = this.statusIcon(node.status, frame);
 
-    const agentBadge = node.agent
-      ? ` ${(this.colorMap.get(node.agent) ?? pc.dim)(`(@${node.agent})`)}`
-      : "";
+    let agentBadge = "";
+    if (node.agent) {
+      const agentLabel = `(@${node.agent})`;
+      const colorFn = this.colorMap.get(node.agent) ?? pc.dim;
+      agentBadge = ` ${colorFn(agentLabel)}`;
+    }
 
     const stats = this.nodeStats(node);
     const statsStr = stats.length > 0 ? `${pc.dim(" · ")}${pc.dim(stats.join(" · "))}` : "";
 
-    const label =
-      node.status === "pending"
-        ? pc.dim(node.label)
-        : node.status === "failed"
-          ? pc.red(node.label)
-          : node.label;
+    let label: string;
+    if (node.status === "pending") {
+      label = pc.dim(node.label);
+    } else if (node.status === "failed") {
+      label = pc.red(node.label);
+    } else {
+      label = node.label;
+    }
 
     return `${pc.dim(connector)} ${icon} ${label}${agentBadge}${statsStr}`;
   }

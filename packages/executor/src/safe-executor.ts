@@ -69,6 +69,18 @@ interface RunExecutionContext {
   meta?: Record<string, unknown>;
 }
 
+/** Options for the internal runApprovalAndExecution method. */
+interface ApprovalAndExecutionOptions {
+  taskId: string;
+  tool: DevOpsSkill;
+  input: unknown;
+  generateOutput: SkillOutput;
+  verification: VerificationResult | undefined;
+  taskRisk: RiskLevel | undefined;
+  startTime: number;
+  meta?: Record<string, unknown>;
+}
+
 /**
  * Preserve _peerFiles from the initial output so verification can find
  * files written by prior tasks (e.g., role files needed by a playbook task).
@@ -622,16 +634,16 @@ export class SafeExecutor {
     // Emit PreApproval hook
     this.hookEngine?.emit("PreApproval", { taskId, skill: tool.name }).catch(() => {});
 
-    return this.runApprovalAndExecution(
+    return this.runApprovalAndExecution({
       taskId,
       tool,
       input,
       generateOutput,
-      verified.verification,
+      verification: verified.verification,
       taskRisk,
       startTime,
       meta,
-    );
+    });
   }
 
   /**
@@ -719,15 +731,9 @@ export class SafeExecutor {
 
   /** Run approval checks and execution phase. */
   private async runApprovalAndExecution(
-    taskId: string,
-    tool: DevOpsSkill,
-    input: unknown,
-    generateOutput: SkillOutput,
-    verification: VerificationResult | undefined,
-    taskRisk: RiskLevel | undefined,
-    startTime: number,
-    meta?: Record<string, unknown>,
+    opts: ApprovalAndExecutionOptions,
   ): Promise<ExecutionResult> {
+    const { taskId, tool, input, generateOutput, verification, taskRisk, startTime, meta } = opts;
     if (!tool.execute) {
       return this.buildResult(taskId, tool.name, "completed", startTime, {
         output: generateOutput.data,

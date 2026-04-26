@@ -32,10 +32,10 @@ interface ActiveTool {
 }
 
 export class ToolDisplay {
-  private animator: Animator;
+  private readonly animator: Animator;
   private activeTool: ActiveTool | null = null;
-  private maxPreview: number;
-  private showTimings: boolean;
+  private readonly maxPreview: number;
+  private readonly showTimings: boolean;
   private disposed = false;
 
   constructor(opts?: ToolDisplayOptions) {

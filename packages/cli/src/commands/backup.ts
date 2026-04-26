@@ -71,7 +71,8 @@ function handleBackup(args: string[], ctx: CLIContext): void {
 
   p.log.success(`Backup created: ${pc.cyan(archivePath)}`);
   const hashPrefix = hash.slice(0, 16);
-  p.log.info(`${pc.dim(`Size: ${sizeKB} KB  SHA-256: ${hashPrefix}…`)}`);
+  const sizeAndHash = `Size: ${sizeKB} KB  SHA-256: ${hashPrefix}…`;
+  p.log.info(`${pc.dim(sizeAndHash)}`);
   p.log.info(pc.dim(`Checksum: ${checksumPath}`));
 }
 

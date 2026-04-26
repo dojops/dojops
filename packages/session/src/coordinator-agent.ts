@@ -333,7 +333,7 @@ export class CoordinatorAgent {
       if (w.status !== "pending") return false;
       return w.dependsOn.every((dep) => {
         const depWorker = this.workers.get(dep);
-        return depWorker && depWorker.status === "completed";
+        return depWorker?.status === "completed";
       });
     });
   }

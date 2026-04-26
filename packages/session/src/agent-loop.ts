@@ -115,10 +115,10 @@ function extractSummaryByRegex(text: string): string | null {
   const match = /"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text);
   if (!match) return null;
   return match[1]
-    .replaceAll('\\"', '"')
-    .replaceAll("\\n", "\n")
-    .replaceAll("\\t", "\t")
-    .replaceAll("\\\\", "\\");
+    .replaceAll(String.raw`\"`, '"')
+    .replaceAll(String.raw`\n`, "\n")
+    .replaceAll(String.raw`\t`, "\t")
+    .replaceAll(String.raw`\\`, "\\");
 }
 
 /**

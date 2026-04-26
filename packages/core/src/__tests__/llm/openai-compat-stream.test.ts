@@ -18,23 +18,21 @@ vi.mock("openai", () => ({
 
 // ── OpenAI streaming tests ──────────────────────────────────────────
 
+function mockStreamResponse(chunks: Array<{ content?: string; usage?: Record<string, unknown> }>) {
+  return {
+    [Symbol.asyncIterator]: async function* () {
+      for (const chunk of chunks) {
+        yield {
+          choices: [{ delta: { content: chunk.content } }],
+          ...(chunk.usage ? { usage: chunk.usage } : {}),
+        };
+      }
+    },
+  };
+}
+
 describe("OpenAIProvider.generateStream", () => {
   beforeEach(() => vi.clearAllMocks());
-
-  function mockStreamResponse(
-    chunks: Array<{ content?: string; usage?: Record<string, unknown> }>,
-  ) {
-    return {
-      [Symbol.asyncIterator]: async function* () {
-        for (const chunk of chunks) {
-          yield {
-            choices: [{ delta: { content: chunk.content } }],
-            ...(chunk.usage ? { usage: chunk.usage } : {}),
-          };
-        }
-      },
-    };
-  }
 
   it("accumulates streamed chunks into full response", async () => {
     mockCreate.mockImplementation((params: Record<string, unknown>) => {

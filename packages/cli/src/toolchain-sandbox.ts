@@ -312,12 +312,14 @@ export function extractTarGz(archivePath: string, destDir: string): void {
  */
 export function extractTarXz(archivePath: string, destDir: string): void {
   if (!commandExists("xz")) {
+    const nonLinuxHint =
+      process.platform === "darwin"
+        ? "Install with: brew install xz"
+        : "Install xz-utils for your platform";
     const hint =
       process.platform === "linux"
         ? "Install with: apt-get install xz-utils  (or: yum install xz)"
-        : process.platform === "darwin"
-          ? "Install with: brew install xz"
-          : "Install xz-utils for your platform";
+        : nonLinuxHint;
     throw new Error(
       `xz is required to extract .tar.xz archives but was not found on PATH. ${hint}`,
     );
@@ -604,14 +606,12 @@ function resolveAnsibleBinDir(ansibleBinaryPath: string, ctx?: ToolchainContext)
     }
   }
 
-  // 3. pipx venv internals (fallback)
+  // 3. pipx venv internals (fallback) and 4. pipx exposed scripts
   dirs.push(
     path.join(home, ".local", "share", "pipx", "venvs", "ansible", "bin"),
     path.join(home, ".local", "pipx", "venvs", "ansible", "bin"),
+    path.join(home, ".local", "bin"),
   );
-
-  // 4. pipx exposed scripts
-  dirs.push(path.join(home, ".local", "bin"));
 
   return dirs;
 }

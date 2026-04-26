@@ -147,7 +147,7 @@ function parseKubeDiffResources(diffOutput: string, target: string): DriftedReso
 
   for (const line of diffLines) {
     if (!line.startsWith("diff -u")) continue;
-    const match = line.match(/\/([^/]+)\/([^/]+)$/);
+    const match = /\/([^/]+)\/([^/]+)$/.exec(line);
     if (match) {
       resources.push({
         type: match[1] || "Resource",

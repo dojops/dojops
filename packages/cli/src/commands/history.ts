@@ -182,7 +182,7 @@ function showScanReport(scan: Record<string, unknown>, scanId: string, ctx: CLIC
 
   const findings = (scan.findings ?? scan.results ?? []) as any[];
   const scanners = (scan.scanners ?? []) as any[];
-  const ts = scan.timestamp ?? scan.createdAt ?? "unknown";
+  const ts = String(scan.timestamp ?? scan.createdAt ?? "unknown");
 
   const lines = [
     `${pc.bold("ID:")}        ${scanId}`,
