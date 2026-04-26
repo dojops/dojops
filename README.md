@@ -29,10 +29,6 @@
 </p>
 
 <p align="center">
-  <a href="https://sonarcloud.io/summary/new_code?id=dojops_dojops"><img src="https://sonarcloud.io/api/project_badges/measure?project=dojops_dojops&metric=alert_status" alt="Quality Gate Status" /></a>
-</p>
-
-<p align="center">
   <img src="assets/demo.svg" alt="DojOps CLI Demo" width="800" />
 </p>
 
