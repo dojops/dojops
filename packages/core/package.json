@@ -43,11 +43,11 @@
     "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
-    "axios": "=1.15.0",
+    "@anthropic-ai/sdk": "^0.98.0",
+    "axios": "=1.16.1",
     "js-yaml": "^4.1.0",
-    "openai": "^6.0.0",
-    "zod": "^4.0.0"
+    "openai": "^6.39.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9"
