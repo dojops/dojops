@@ -48,7 +48,7 @@
     "prepublishOnly": "test -f dist/index.js && test -f dist/index.d.ts"
   },
   "dependencies": {
-    "@clack/prompts": "^0.11.0",
+    "@clack/prompts": "^1.5.1",
     "@dojops/api": "workspace:*",
     "@dojops/context": "workspace:*",
     "@dojops/core": "workspace:*",
@@ -61,10 +61,10 @@
     "@dojops/session": "workspace:*",
     "@dojops/skill-registry": "workspace:*",
     "sql.js": "^1.12.0",
-    "dotenv": "^17.0.0",
-    "js-yaml": "^4.1.0",
+    "dotenv": "^17.4.2",
+    "js-yaml": "^4.2.0",
     "picocolors": "^1.1.1",
-    "zod": "^4.0.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9"

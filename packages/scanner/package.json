@@ -43,6 +43,6 @@
   "dependencies": {
     "@dojops/core": "workspace:*",
     "@dojops/sdk": "workspace:*",
-    "zod": "^4.0.0"
+    "zod": "^4.4.3"
   }
 }
